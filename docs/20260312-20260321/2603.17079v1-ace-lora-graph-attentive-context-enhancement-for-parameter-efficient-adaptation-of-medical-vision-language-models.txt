@@ -1,0 +1,499 @@
+Title: ACE-LoRA: Graph-Attentive Context Enhancement for Parameter-Efficient Adaptation of Medical Vision-Language Models
+
+URL Source: https://arxiv.org/pdf/2603.17079v1
+
+Published Time: Thu, 19 Mar 2026 00:11:34 GMT
+
+Number of Pages: 26
+
+Markdown Content:
+# ACE-LoRA: Graph-Attentive Context Enhancement for Parameter-Efficient Adaptation of Medical Vision-Language Models 
+
+M. Arda Aydın 1,2, Melih B. Yilmaz 1,2, Aykut Koç 1,2, and Tolga Çukur 1,2 
+
+> 1
+
+Bilkent University  
+
+> 2
+
+National Magnetic Resonance Research Center (UMRAM) 
+
+{arda.aydin, melih.yilmaz, aykut.koc}@bilkent.edu.tr, cukur@ee.bilkent.edu.tr 
+
+Abstract. The success of CLIP-like vision-language models (VLMs) on natural images has inspired medical counterparts, yet existing ap-proaches largely fall into two extremes: specialist models trained on single-domain data, which capture domain-specific details but general-ize poorly, and generalist medical VLMs trained on multi-domain data, which retain broad semantics but dilute fine-grained diagnostic cues. Bridging this specialization–generalization trade-off remains challenging. To address this problem, we propose ACE-LoRA, a parameter-efficient adaptation framework for generalist medical VLMs that maintains ro-bust zero-shot generalization. ACE-LoRA integrates Low-Rank Adap-tation (LoRA) modules into frozen image-text encoders and introduces an Attention-based Context Enhancement Hypergraph Neural Network (ACE-HGNN) module that captures higher-order contextual interactions beyond pairwise similarity to enrich global representations with localized diagnostic cues, addressing a key limitation of prior Parameter-Efficient Fine-Tuning (PEFT) methods that overlook fine-grained details. To fur-ther enhance cross-modal alignment, we formulate a label-guided In-foNCE loss to effectively suppress false negatives between semantically related image-text pairs. Despite adding only 0.95M trainable parame-ters, ACE-LoRA consistently outperforms state-of-the-art medical VLMs and PEFT baselines across zero-shot classification, segmentation, and de-tection benchmarks spanning multiple domains. Our code is available at 
+
+https://github.com/icon-lab/ACE-LoRA .
+
+## 1 Introduction 
+
+Vision-Language Models (VLMs) [6,22,39] have rapidly advanced in recent years by learning joint image-text representations at scale. In particular, CLIP [39] has achieved remarkable performance in zero-shot classification and has been successfully adapted to a variety of downstream computer vision tasks, including object detection [9,12,31,54], semantic segmentation [1,29,48,66,71], and image generation [7,45]. This success has sparked growing interest in developing medical VLMs, particularly for radiology and pathology, where large volumes of images and reports must be interpreted as part of routine clinical workflows.  
+
+> arXiv:2603.17079v1 [cs.CV] 17 Mar 2026 2M.A. Aydın et al.
+
+Early efforts in this area aimed to develop specialist medical VLMs trained on modality-specific datasets to capture domain-relevant visual and textual pat-terns [5, 18, 49]. However, even one of the most widely used radiology datasets, MIMIC-CXR [23], contains only about 377K image-report pairs, orders of mag-nitude fewer than CLIP’s 400M pairs, limiting the generalization capacity of such models beyond their training data. To alleviate this data bottleneck, re-cent generalist medical VLMs, such as BiomedCLIP [62] and BMC-CLIP [36], leverage large-scale multimodal corpora derived from PubMed [41]. While these generalist models are semantically broad, they often lose fine-grained anatomi-cal cues crucial for domain-specific evaluations (e.g., subtle opacity variations in chest X-rays) [42]. This fundamental trade-off between specialization and gen-eralization continues to limit the ability of existing medical VLMs to perform robustly in zero-shot settings across new datasets and tasks. To balance specialization and generalization, we propose to adapt a generalist medical VLM to a specific biomedical domain where visual-textual correspon-dences are inherently more fine-grained. Capturing such diagnostic cues typically requires domain adaptation; however, retraining or fully fine-tuning large models for every dataset or task is computationally burdensome and clinically impracti-cal. To address this challenge, we fine-tune a generalist foundation model, such as BiomedCLIP [62], on a paired image-report dataset representative of the do-main (e.g., MIMIC-CXR [23]) to learn domain-specific visual-textual priors. The adapted model can then be transferred to unseen datasets for zero-shot classifi-cation without additional dataset-specific training. A natural approach for efficient model adaptation is Parameter-Efficient Fine-Tuning (PEFT), which updates a small subset of parameters while keeping the pre-trained backbone frozen. Compared to full fine-tuning, PEFT methods are more practical and less prone to overfitting, particularly in data-scarce med-ical settings [30]. However, techniques originally developed for natural-image VLMs [11,24,59,69] face two key limitations in medical imaging. First, they pri-marily capture global contextual features while overlooking localized patterns that are critical for diagnostic evaluation. Second, most PEFT approaches are designed for few-shot settings that rely on explicitly labeled samples, whereas large-scale medical datasets typically provide image-report pairs rather than cu-rated task labels. This reliance on labeled supervision limits their applicability in low-annotation settings and restricts generalization to unseen datasets. To address these limitations, we introduce ACE-LoRA , a parameter-efficient framework that enhances generalist medical VLMs by combining Low-Rank Adaptation ( LoRA ) [16] with a novel ACE -HGNN ( Attention-based Context 
+
+Enhancement HGNN) module. Our approach bridges the gap between the do-main-specific expertise of specialist models and the strong generalization capabil-ity of generalist models through efficient adaptation. Built on BiomedCLIP [62], ACE-LoRA inserts LoRA modules into both image and text encoders while keeping the backbone frozen. ACE-HGNN then integrates local and global em-beddings within each encoder through hypergraph message passing, where hy-peredges are constructed from transformer-derived attention affinities and token ACE-LoRA 3
+
+similarity, enabling structured interactions among groups of semantically related tokens beyond pairwise attention. This allows the model to capture higher-order dependencies among groups of image regions and textual tokens, strengthening cross-modal alignment. In addition, we introduce a label-guided InfoNCE loss that mitigates the false-negative issue common in medical contrastive learning, where distinct samples may share identical clinical semantics. Despite intro-ducing only ∼0.95M trainable parameters (approximately 0.48% of those re-quired for full fine-tuning), ACE-LoRA achieves superior zero-shot performance compared to medical VLMs trained from scratch, highlighting the potential of parameter-efficient adaptation of foundation models for medical imaging. Our main contributions are summarized as follows: 
+
+– We demonstrate that parameter-efficient adaptation of a generalist medical VLM enables robust zero-shot transfer across unseen datasets while requiring only minimal additional computation. 
+
+– We propose hypergraph-based context enhancement to model higher-order interactions among global and local embeddings for improved image-text alignment, and introduce a label-guided InfoNCE loss to mitigate false neg-atives in medical contrastive learning. 
+
+– We benchmark ACE-LoRA against state-of-the-art medical VLMs and PEFT approaches on zero-shot classification, segmentation, and detection tasks. 
+
+## 2 Related Work 
+
+2.1 Medical Vision-Language Pretraining 
+
+Recently, medical vision-language pretraining [2, 5, 19, 20, 28, 32, 38, 39, 51, 53, 63, 65,67] has emerged as a prominent research area. Existing medical VLMs can be categorized into specialist and generalist models. Specialist medical VLMs are trained on modality-specific datasets containing a relatively limited number of image-text pairs. The pioneering work ConVIRT [64] employs a contrastive learning approach that encourages the model to bring matched radiograph-report pairs closer in the embedding space while simultaneously pushing apart mis-matched pairs. GLoRIA [18] jointly learns global and local features by aligning image sub-regions with corresponding words. MGCA [49] aligns image and text embeddings at region, instance, and disease levels. Yet, specialist models typi-cally fail in generalizing to unseen datasets in the absence of further fine-tuning. To enhance model generalization, generalist medical VLMs are trained on broader datasets encompassing multiple imaging modalities. PMC-CLIP [33] builds the multimodal PMC-OA dataset, comprising 1.6M image–text pairs col-lected from PubMed Central’s Open Access repository. BiomedCLIP [62] curates PMC-15M, a dataset containing 15M image–text pairs, and adapts the original CLIP model to the medical domain by extending the context length. BMC-CLIP [36] introduces BIOMEDICA, a large-scale dataset with 24M image-text pairs. Despite these efforts, generalist models still struggle to capture the fine-grained nuances of images within specific imaging modalities. 4 M.A. Aydın et al. 
+
+2.2 Parameter-Efficient Fine-Tuning for VLMs 
+
+Efficient fine-tuning strategies for natural-image VLMs have gained significant attention [11, 13, 24, 56, 57, 69, 72], largely due to the substantial computational demands and increased risk of overfitting associated with full fine-tuning. Most current PEFT methods for VLMs employ either prompt learning or adapter-based techniques. In prompt learning , learnable tokens are added to the input or inserted at intermediate layers to better adapt the pre-trained encoders. For instance, CoOp [69] learns optimized tokens that are fed into the text encoder, while CoCoOp [68] extends CoOp by conditioning the prompts on the corre-sponding image features to improve generalization. In contrast, adapter-based methods use lightweight trainable modules within or on top of frozen encoders. CLIP-Adapter [11] appends small residual-style adapters to image-text encoders, while TaskRes [58] adds a learnable bias to the original text features from the frozen text encoder. Distinct from prompt-learning and adapter-based approaches, CLIP-LoRA [59] integrates LoRA [16] modules into the query, key, and value projection matrices of both encoders across all layers, resulting in superior performance. Despite these advances, PEFT strategies for medical VLMs remain underex-plored. A recent study, BiomedCoOp [27], utilizes a large language model (LLM) to generate ensemble descriptions for class labels and aligns these descriptions with learnable context tokens to adapt BiomedCLIP. However, this approach, like many PEFT frameworks, is designed for few-shot classification and relies on labeled medical data. In contrast, large-scale medical datasets predominantly provide image-report pairs rather than curated task labels, limiting the appli-cability of label-dependent adaptation strategies. Furthermore, existing PEFT methods primarily operate on global representations and do not explicitly model the structured relationships among local visual and textual tokens that often con-vey diagnostic cues. While graph-based modeling has recently gained traction for capturing such structured dependencies, most formulations rely on pairwise interactions between nodes [4, 25, 47]. ACE-LoRA addresses this limitation by integrating both local and global embeddings and modeling their contextual relationships through the ACE-HGNN module, which captures higher-order in-teractions among tokens while retaining parameter-efficient adaptation. 
+
+## 3 Method 
+
+The framework of ACE-LoRA is illustrated in Figure 1. First, we integrate LoRA modules into the projection matrices of self-attention layers while keeping the image-text encoders of BiomedCLIP frozen (§3.2). To capture higher-order struc-tural dependencies in medical images, we introduce the ACE-HGNN module, which models structured token relationships through hypergraph construction (§3.3). Finally, we introduce a label-guided InfoNCE loss to mitigate the false-negative issue in contrastive learning (§3.4). ACE-LoRA 5LoRA Image Encoder Layer 1 ... 
+
+> Text Encoder Layer 1
+
+...  
+
+> Image Encoder Layer  L
+> Text Encoder Layer  L
+> Patch Embed Text Embed
+> Chest X-Ray Image Radiology Report ...
+> ACE-HGNN Module ...
+> ACE-HGNN Module
+> Label-Guided InfoNCE Loss
+> LoRA
+> LoRA LoRA
+> Global Embedding Local Embedding
+> Re�ined Global
+> Embedding ...
+> global-to-local context local-to-local context
+> row-wise softmax
+> ACE-HGNN
+
+Fig. 1: Overview of ACE-LoRA. ACE-LoRA integrates low-rank adaptation mod-ules into self-attention blocks of image and text encoders in a generalist medical VLM, and introduces ACE-HGNN, a hypergraph-based module that models high-order topo-logical dependencies between local (e.g., image patches or report snippets) and global embeddings. For clarity, ACE-HGNN is described using image embeddings, though the same procedure is applied to text embeddings. 
+
+3.1 Preliminaries 
+
+The ViT-based [8] CLIP variant employs transformer encoders [46] for both im-age and text modalities. The image encoder processes N non-overlapping patches with a prepended [CLS] token. For an input z(l−1) ∈ R(N +1) ×d at layer l, the update is formulated as: 
+
+z′ = z(l−1) + SA (LN (z(l−1) )) , z(l) = z′ + MLP (LN (z′)) , (1) where self-attention (SA) is defined by projection matrices W{Q,K,V,O } ∈ Rd×d:
+
+SA (X) = softmax 
+
+ XW QW TK XT
+
+√d
+
+
+
+XW V WO . (2) The final normalized global image and text embeddings are extracted from the last encoder layers. CLIP is trained to maximize the cosine similarity between matched image-text pairs in a shared latent space. Building on this foundation, BiomedCLIP [62] adapts the original CLIP for medical applications by training on the PMC-15M dataset with extended context length. Nevertheless, it falls short in capturing domain-specific details within specialized subdomains, under-scoring the need for effective fine-tuning to achieve robust domain adaptation. 
+
+3.2 Integrating LoRA modules 
+
+Motivated by the success of LoRA [16] in VLMs for natural images [26, 59], we integrate LoRA modules into the query ( WQ), key ( WK ), and value ( WV )6 M.A. Aydın et al. 
+
+projection matrices within the self-attention modules of both the image and text encoders of BiomedCLIP [62]. Given a pre-trained weight matrix W0 ∈ Rd×k and an input x, the LoRA integration can be expressed as: 
+
+h = W0x + γ∆W x = W0x + γBAx  (3) where A ∈ Rr×k and B ∈ Rd×r are low-rank decomposition matrices, h denotes hidden state, r ≪ min ( d, k ) denotes rank, and γ is the scaling factor. Following [59], A uses Kaiming initialization [15] while B is initialized to zero, ensuring that h remains equivalent to W0x at the start of training. Since the original parameters of BiomedCLIP remain frozen and only the decomposition matrices are trainable, injecting LoRA modules introduces minimal memory overhead compared to full fine-tuning. 
+
+3.3 ACE-HGNN Module 
+
+While LoRA fine-tuning enhances model adaptability, contrastive training with LoRA modules primarily targets global embeddings, capturing coarse anatomi-cal priors but potentially failing to refine fine-grained cues such as lesion bound-aries. The self-attention mechanism in transformers can effectively model pair-wise dependencies among tokens, yet remains limited in capturing higher-order interactions across multiple tokens that characterize localized structures [14, 44]. 
+
+Hypergraph Neural Networks (HGNNs) [10] offer a natural mechanism to capture such higher-order relations. 
+
+To leverage these strengths, we draw inspiration from UniGNN [17] and intro-duce ACE-HGNN (Attention-based Context Enhancement HGNN), a single-layer hypergraph module that treats encoder outputs as vertices and constructs hyperedges from transformer-derived token affinities. This module is applied to both the image and text encoders of BiomedCLIP; we focus on describing the image encoder case below for brevity. 
+
+Hypergraph Construction. Let v ∈ R(N +1) ×d denote the image encoder out-put, consisting of one global and N local embeddings. We construct a hypergraph 
+
+G = ( V, E), where the vertex set V = {vi}Ni=0 corresponds to the tokens (i.e., global and local embeddings), and E denotes the hyperedge set. Each hyperedge 
+
+ei ∈ E captures the contextual neighborhood of the i-th token. This allows each token to aggregate information from a set of semantically related tokens rather than from isolated pairwise connections, enabling the model to capture structured interactions among groups of patches and the global representation. 
+
+To model the relationships between global and local embeddings, we con-struct a raw affinity matrix S ∈ R(N +1) ×(N +1) . The first row of S, which char-acterizes the global-to-local context, is derived from the transformer’s intrinsic attention maps. We first extract head-wise attention maps Ah ∈ R(N +1) ×(N +1) 
+
+from each head h of the encoder’s final transformer block. After normalizing these maps, they are aggregated by averaging over all heads: 
+
+A = 1
+
+H
+
+> H
+
+X
+
+> h=1
+
+Norm L2 (Ah), (4) ACE-LoRA 7
+
+where H is the number of heads. αi = A[0 , i ] quantifies the affinity between the global token and local token i. We initialize the first row of S as 3:
+
+S[0 , i ] = αi, i ∈ { 1, . . . , N }. (5) For local-to-local relationships, we measure semantic alignment via cosine similarity between normalized patch features: 
+
+Si,j = vi · vj
+
+∥vi∥2∥vj ∥2
+
+for i, j ∈ { 1, . . . , N } (6) where vi denotes the i-th token in the vertex set. To filter irrelevant noise and focus on the most informative connections, we apply a top-k filtering mechanism based on S, where k is a hyperparameter. For each node i, we retain only the set of indices Ωi corresponding to the top-k values in row Si, :. We then apply a softmax normalization over these selected elements to obtain normalized hyperedge weights, while enforcing strict self-connections to preserve the identity of pre-trained features ( Hi,i = 1 ). Consequently, the entries of our incidence matrix H ∈ R(N +1) ×(N +1) are defined as: 
+
+Hi,j =
+
+
+
+1 if i = j    
+
+> exp( Si,j )P
+> k∈Ωiexp( Si,k )
+
+if j ∈ Ωi and i̸ = j
+
+0 otherwise 
+
+(7) Finally, to maintain consistency between global-to-local and local-to-global con-nections, we enforce symmetry by setting H[i, 0] = H[0 , i ].
+
+Hypergraph Message Passing. We define the information propagation through the hypergraph using two learnable projection functions, ϕ1 and ϕ2. Both func-tions share a bottleneck architecture consisting of a linear projection to a lower dimension d′, a non-linear activation, and a projection back to d:
+
+ϕ(z) = Wup (σ (Wdown z))  (8) where σ(·) is the LeakyReLU activation. The message passing occurs in two stages: 
+
+Vertex-to-Hyperedge. We first aggregate information from the nodes to con-struct hyperedge features. This step captures the contextual information defined by the incidence matrix H:
+
+hE = ϕ1(Hv) (9) 
+
+Hyperedge-to-Vertex. Finally, we map the hyperedge features back to the vertex domain, allowing nodes to incorporate higher-order feedback from the hyperedges they influence: 
+
+v′ = ϕ2(H⊤hE ) (10) The final output v′ serves as the refined feature representation, enriched with both attention-guided context and local patch-similarity structures. Unlike the   
+
+> 3Indices are defined starting from zero ( {0, . . . , N }).
+
+8 M.A. Aydın et al. ...Mild basilar atelectasis is seen without focal consolidation. No pleural effusion or pneumotho-rax is seen...    
+
+> ...Moderate to large bilateral pleural effusions are again seen, likely right greater than left...
+> ...There is mild basilar atelectasis without evidence of focal consoli-dation. No pleural effusion or pneumothorax is seen...
+> Label: atelectasis
+> Label: atelectasis
+> Label: pleural effusion
+> PFN
+> RTN
+> Pull
+> Falsely Push
+> Push
+> FN RTN PReference Positive False Negative True Negative
+
+Fig. 2: False negatives in contrastive learning. The CLIP loss treats all non-matching pairs as negatives, which can falsely push apart semantically similar samples, whereas our formulation avoids separating pairs that share the same disease label. 
+
+original UniGAT architecture [17], ACE-HGNN does not learn attention co-efficients independently; instead, it leverages transformer-derived affinities to define the underlying hypergraph topology. By coupling self-attention with hy-pergraph message passing, our approach preserves transformer-based global con-text modeling while enabling structured aggregation over groups of semantically related tokens. This formulation enables the model to emphasize informative local regions while maintaining coherent global representations. Furthermore, our HGNN formulation naturally reduces to a standard Graph Neural Network (GNN) when ϕ1(z) = z; we also evaluate this simplified variant in §4.4. 
+
+3.4 Label-Guided InfoNCE Loss 
+
+CLIP-like VLMs assume that all non-matching image-text pairs are negative samples; however, reports from different images may describe the same disease pathology and are thus incorrectly treated as false negatives (see Figure 2), leading to suboptimal results, as discussed in [51]. To alleviate this issue, we incorporate disease labels extracted from each report using the CheXpert [21] labeler on the MIMIC-CXR v2.0.0 dataset [23]. We then reformulate the InfoNCE loss [37] such that, when a non-matching image-text pair shares the same disease label as the reference pair, the model neither attracts nor repels their embeddings but instead excludes the pair from contributing to the loss. The overall loss over a minibatch of size B is formulated as: 
+
+L = − 12B
+
+> B
+
+X
+
+> i=1
+
+log exp  ⟨v′(i)0 , t ′(i)0 ⟩/τ PBk=1 1i,k exp  ⟨v′(i)0 , t ′(k)0 ⟩/τ 
+
++
+
+> B
+
+X
+
+> i=1
+
+log exp  ⟨t′(i)0 , v ′(i)0 ⟩/τ PBk=1 1i,k exp  ⟨t′(i)0 , v ′(k)0 ⟩/τ ! (11) 
+
+where 1i,k ∈ { 0, 1} denotes an indicator function that equals 1 when the dis-ease label of the i-th pair differs from that of the k-th pair or when i = k,ACE-LoRA 9
+
+and 0 otherwise. v′(i)0 and t′(i)0 represent the refined global image and text em-beddings of the i-th pair, respectively. ⟨., . ⟩ denotes cosine similarity, and τ is a temperature parameter initialized to the pre-trained value from BiomedCLIP and updated during fine-tuning. Note that the refined global embeddings in the above equation are normalized across the embedding dimension, although this normalization is omitted from the notation for simplicity. 
+
+## 4 Experiments 
+
+4.1 Training Setup Dataset. Taking BiomedCLIP [62] as our base model, we adapt it on the MIMIC-CXR dataset [23] for radiology. The dataset comprises 377,110 radio-graphs from 227,827 imaging studies. Following previous studies [5, 49], we ex-clude lateral images, as our target downstream datasets contain only frontal-view chest radiographs. For histopathology, we construct a dedicated adaptation dataset by extracting histopathology-related images from the PMC-OA [33] cor-pus. This process yields a refined subset of 160K image-text pairs; further details on the dataset construction process are provided in the Appendix (§B.2). 
+
+Implementation Details. Images are resized to 224 × 224 to ensure compati-bility with the model architecture. We train the model for 40 epochs (15 epochs for histopathology) on the MIMIC-CXR dataset using three RTX 3090 GPUs, with a batch size of 64 per device. We employ the AdamW [35] optimizer with a learning rate of 1e −3 and a weight decay of 1e −2. A linear warmup is applied during the first epoch, followed by a cosine annealing learning rate scheduler [34]. For LoRA, we set the rank parameter r to 4 and the scaling factor γ to 1. For the top-k operation, we set k to 5. 
+
+4.2 Downstream Tasks and Experimental Setup Zero-Shot Image Classification. We evaluate ACE-LoRA on zero-shot im-age classification to assess its generalization capabilities. In the following exper-iments, for medical VLMs trained from scratch, we do not perform additional retraining; instead, we utilize the publicly available checkpoints from the official implementations to benchmark their performance on downstream datasets. We compare ACE-LoRA against both state-of-the-art medical VLMs trained from scratch and PEFT methods for VLMs. Accuracy (ACC) and area under the ROC curve (AUC) are used as evaluation metrics across all datasets. 
+
+a) Radiology. Similar to CLIP, we construct two prompt templates to guide the mapping from text to image features: "a chest X-ray image of {disease}" and "Findings suggesting {disease}" . We conduct experiments on three datasets: (1) CheXpert 5 ×200 : consistent with prior studies [5, 18], we use a subset of the CheXpert [21] dataset containing 200 images per disease class, with each image annotated with a single disease, (2) RSNA Pneumo-nia [43], which comprises 29,684 frontal-view chest X-ray images, each labeled as 10 M.A. Aydın et al.                                                                        
+
+> Method CheXpert 5 ×200 RSNA SIIM
+> ACC (%) AUC (%) ACC (%) AUC (%) ACC (%) AUC (%) BiomedCLIP [62] 35.50 67.46 74.34 81.14 61.40 64.31 CoOp [69] 40.90 69.32 75.07 79.92 65.69 69.87 CoCoOp [68] 40.10 69.74 75.02 79.95 67.24 71.21 CLIP-Adapter [11] 42.70 77.55 68.47 75.14 60.38 61.26 TaskRes [58] 36.50 68.17 74.77 81.36 63.53 67.14 MaPLe [24] 45.90 77.45 73.34 83.34 71.47 80.59 MMA [56] 44.00 79.34 74.89 83.39 63.97 67.12 CLIP-LoRA [59] 45.80 77.51 72.85 77.74 72.50 80.35 MMRL [13] 45.20 75.22 71.62 80.55 68.15 76.19 Full FT 47.40 71.63 73.94 77.33 70.50 72.28 ACE-LoRA 49.80 80.87 79.54 87.19 73.35 81.51 Table 1: Comparison of zero-shot classification performance across different fine-tuning methods. Full FT represents full fine-tuning, in which all parameters of the pre-trained model are updated. All methods are trained using Label-guided InfoNCE loss to ensure a fair comparison. The best results are highlighted in bold ,and the second-best are underlined.
+
+either pneumonia or normal. For the classification task, we randomly sample 15% of the images as the test set, and (3) SIIM-ACR Pneumothorax [61], which contains over 12,000 chest radiographs, each categorized as either pneumothorax or normal. To obtain a comparable number of test images to the RSNA dataset, we randomly select 30% of the SIIM dataset as the test set. We utilize 20% of the NIH ChestX-ray14 [50] test set for hyperparameter tuning, given its status as a representative and large-scale radiology benchmark. 
+
+b) Histopathology. To demonstrate generalizability beyond radiology, we evaluate our method on histopathology benchmarks. For fair comparison, we adopt the prompt templates from the QuiltNet [20] method. Experiments are conducted on three datasets: (1) LC25000 (Lung) and (2) LC25000 (Colon) ,subsets of LC25000 [3] containing 15,000 and 10,000 images of lung and colon adenocarcinomas, respectively (with 5,000 images per class), and (3) MHIST 
+
+[52], a binary classification dataset consisting of 3,152 images of colorectal polyps. For validation, we use 10% of the filtered PMC-OA dataset. We employ the original CLIP loss during training, as the inherent complexity of histopathology reports and the absence of a standardized labeler, analogous to CheXpert for ra-diology, limit the applicability of automated label extraction. Additional details about the datasets and the exact prompts are provided in the Appendix (§B.3). 
+
+Semantic Segmentation. To maintain compatibility with different image en-coder architectures used in medical VLMs (CNNs and ViTs), we employ UPer-Net [55] as the segmentation decoder across all methods, following [70]. We keep the pre-trained image encoder frozen as the backbone while fine-tuning only the UperNet decoder parameters. We use images containing pneumothorax from the ACE-LoRA 11                                                                         
+
+> Method CheXpert 5 ×200 RSNA SIIM
+> ACC (%) AUC (%) ACC (%) AUC (%) ACC (%) AUC (%)
+> Specialist Medical VLMs
+> ConVIRT [64] 45.10 75.82 42.64 42.13 46.54 49.09 GLoRIA [18] 24.80 71.60 68.42 76.73 48.67 50.13 MGCA [49] 21.40 52.62 63.75 68.21 58.52 62.55 BioVIL [2] 48.40 76.99 56.66 62.23 53.32 59.99 PRIOR [5] 40.10 72.68 60.33 62.71 60.38 63.25 KAD [63] 23.50 51.54 70.17 66.75 57.19 51.22
+> Generalist Medical VLMs
+> PMC-CLIP [33] 23.00 52.58 60.93 64.59 51.02 51.57 BMC-CLIP [36] 24.70 55.99 53.83 56.18 48.67 47.07 BiomedCLIP [62] 35.50 67.46 74.34 81.14 61.40 64.31 ACE-LoRA 49.80 80.87 79.54 87.19 73.35 81.51 Table 2: Zero-shot classification performance on the CheXpert 5×200, RSNA, and SIIM datasets. Competing methods are categorized into specialist and generalist medical VLMs.
+
+SIIM [61] dataset and split the dataset into 70%/15%/15% for training, valida-tion, and testing, respectively. The Dice score is used as the evaluation metric. 
+
+Object Detection. Following [49], we use YOLOv3 [40] as the detection net-work, keeping the pre-trained image encoder frozen as the backbone. As in the segmentation task, RSNA [43] images annotated with pneumonia are analyzed, and the dataset is split into 70%/15%/15% for training, validation, and testing, respectively. We evaluate performance using mean average precision (mAP), cal-culated across IoU thresholds of 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, and 0.75. 
+
+4.3 Results Results on Zero-Shot Image Classification. To demonstrate ACE-LoRA over existing PEFT methods, we conduct a comparative analysis against estab-lished approaches. As listed in Table 1, our method surpasses other PEFT strate-gies in zero-shot classification across all datasets. Among competing methods, multimodal PEFT methods (e.g., MaPLe [24], MMA [56]) generally outperform unimodal approaches (e.g., CoOp [68]), suggesting that cross-modal alignment benefits medical VLMs. While full fine-tuning updates all ∼197M parameters of the pre-trained bacbkbone, ACE-LoRA achieves superior performance with only 
+
+∼0.95M trainable parameters, demonstrating superior parameter efficiency. To further benchmark ACE-LoRA, we evaluate our method against state-of-the-art medical VLMs on the zero-shot classification task, with results reported in Table 2. Our method achieves notable performance improvements over both specialist and generalist medical VLMs on the CheXpert 5 ×200, RSNA, and SIIM datasets. Consistent with prior studies [5, 32], we observe that specialist medical VLMs [2, 5, 18, 49, 63, 64] frequently fail to generalize beyond their pre-training datasets when evaluated in zero-shot settings using simple prompt tem-plates. Although some methods achieve strong performance on a single dataset, 12 M.A. Aydın et al.                                                                          
+
+> Method Lung Colon MHIST
+> Specialist Medical VLMs
+> PLIP [19] 78.77 77.79 56.63 QuiltNet [20] 81.87 87.10 56.82
+> Generalist Medical VLMs
+> BMC-CLIP [36] 76.71 87.43 41.78 BiomedCLIP [62] 72.90 85.33 34.04 ACE-LoRA 84.03 90.39 57.27 Table 3: Zero-shot classification ac-curacy on histopathology datasets.
+> “Lung” and “Colon” denote the respective subsets of the LC25000 dataset.
+> Method SIIM RSNA Dice (%) mAP (%)
+> GLoRIA [18] 40.02 20.42 MGCA [49] 44.53 20.30 BiomedCLIP [62] 44.63 20.25 KAD [63] 45.17 18.10 BioVIL [2] 45.73 19.31 PRIOR [5] 45.85 18.89 ACE-LoRA 46.34 21.29 Table 4: Semantic segmentation and object detection results on the SIIM and RSNA datasets. Dice scores are re-ported for the Pneumothorax class.
+> Components Datasets LoRA ACE-HGNN Label CheXpert RSNA SIIM
+> ✗✗✗35.50 74.34 61.40
+> ✓✗✗45.60 67.07 68.29
+> ✓✓✗49.20 74.64 70.56
+> ✓✗✓45.80 72.85 72.50
+> ✓✓✓49.80 79.54 73.35
+> Table 5: Impact of each component in ACE-LoRA on classification accuracy. “Label” denotes the Label-guided InfoNCE loss. When this loss is not applied ( ✗), the CLIP loss is used during training.
+
+they struggle to maintain consistent results across different datasets. Further-more, we find that generalist medical VLMs [33, 36, 62] tend to underperform on chest X-ray datasets, likely due to the domain-specific characteristics of ra-diographs. Note that many PEFT methods yield more competitive results than VLMs trained from scratch, highlighting the efficacy of fine-tuning approaches. Finally, we evaluate our framework on histopathology benchmarks, compar-ing it against both pathology-specialized and generalist medical VLMs (Table 3). Our approach yields substantial improvements over the BiomedCLIP baseline across three datasets and even outperforms specialized models such as PLIP [19] and QuiltNet [20]. Notably, ACE-LoRA achieves these results while using signif-icantly fewer image-text pairs (140K) during training compared to PLIP (210K) and QuiltNet (1M), demonstrating superior data efficiency. 
+
+Results on Semantic Segmentation. We evaluate our approach against ex-isting methods on the semantic segmentation task using the SIIM dataset to as-sess its dense prediction performance (Table 4). Although the performance gap among methods is more moderate than the previous task, ACE-LoRA still re-ACE-LoRA 13                             
+
+> Method CheXpert RSNA SIIM
+> GAT 46.90 76.27 71.22 GATv2 46.90 75.89 71.08 Ours 49.80 79.54 73.35 Table 6: Effect of using attention maps as edge weights. Detailed formu-lations of GAT [47] and GATv2 [4] are provided in the Appendix (§A.1).
+> Method CheXpert RSNA SIIM
+> GNN 48.10 76.94 69.40 HGNN 49.80 79.54 73.35 Table 7: Importance of the hyper-graph formulation. Zero-shot accuracy results are reported.
+
+mains the top performer, with its design sensitive to local context and high-order topological interactions substantially improving the base model, BiomedCLIP. 
+
+Results on Object Detection. Table 4 also reports the object detection per-formance of medical VLMs on the RSNA dataset. ACE-LoRA outperforms com-peting medical VLMs in detecting pneumonia, demonstrating its ability to cap-ture subtle pathological patterns in radiographs. Notably, models that emphasize local alignment (e.g., GLoRIA [18] and MGCA [49]) yield second-best results af-ter ACE-LoRA, underscoring the importance of local information. 
+
+4.4 Ablation Studies Impact of method components. We analyze the contribution of each com-ponent in Table 5. The first row corresponds to the pre-trained BiomedCLIP model, which serves as our baseline. Injecting LoRA modules improves overall performance, particularly on the CheXpert 5 ×200 dataset, although it leads to a slight performance degradation on the RSNA dataset. Incorporating the ACE-HGNN module further enhances the performance on the CheXpert 5 ×200 and SIIM datasets, while restoring performance on RSNA. Notably, ACE-LoRA out-performs all medical VLMs trained from scratch even without the Label-guided InfoNCE loss, demonstrating that our method achieves strong performance us-ing the original CLIP loss alone. Finally, the combination of all modules with the Label-guided InfoNCE loss achieves the best overall results, significantly surpassing the initial baseline. 
+
+Importance of attention-driven hyperedge weights. We conduct an ab-lation study to evaluate the effectiveness of using attention maps as hyperedge representations (Table 6). We compare our approach with alternative designs that learn attention coefficients from scratch, adopting the attention formula-tions of GAT [47] and GATv2 [4]. For a fair comparison, the overall architecture is kept identical, and only the mechanism for computing attention scores in the constructed hypergraph is modified. Results demonstrate that using attention maps as hyperedge representations leads to improved performance, thereby val-idating the proposed design. 
+
+Importance of hypergraph formulation. To assess the importance of cap-turing high-order interactions among groups of tokens via HGNNs compared to pairwise interactions in GNNs, we benchmark a variant where ϕ1(z) = z (Ta-ble 7). This constraint reduces our hypergraph formulation to a conventional 14 M.A. Aydın et al.                      
+
+> Method CheXpert RSNA SIIM
+> BMC-CLIP 24.70 53.83 48.67
+> +ACE-LoRA 50.50 67.35 70.70
+> ∆+25.80 +13.52 +22.03 Table 8: Performance of ACE-LoRA when deployed on an alternative gen-eralist medical VLM (BMC-CLIP). ∆denotes the performance boost in zero-shot accuracy that ACE-LoRA provides when adopted for BMC-CLIP. BiomedCLIP ACE-LoRA GT BiomedCLIP ACE-LoRA GT
+> (a) (b)
+> Fig. 3: Comparison of cross-modal similarity maps on the RSNA Dataset.
+> Similarity maps show the correspondence between image regions and the text query
+> “Pneumonia” , with red boxes indicating ground-truth (GT) abnormal regions.
+
+GNN. We observe that the HGNN variant consistently achieves superior results across all three benchmarks, confirming that higher-order relationship modeling is essential for capturing the complex dependencies in medical images. 
+
+Generalization to alternative generalist VLMs. To analyze the perfor-mance of our method when integrated with alternative generalist medical VLMs, we apply our framework to BMC-CLIP. The results, reported in Table 8, show that ACE-LoRA consistently improves zero-shot performance across all three benchmarks. Notably, the performance gains observed with BMC-CLIP are highly competitive with those achieved using BiomedCLIP, indicating that our ap-proach remains robust and flexible across different medical VLM backbones. 
+
+Visualization of cross-modal similarity maps. To assess the localization capabilities of our method, we evaluate the visual similarity maps generated by ACE-LoRA and BiomedCLIP against ground-truth detection labels from the RSNA dataset. As illustrated in Figure 3(a), ACE-LoRA successfully highlights abnormal regions in a case of distributed pathology, whereas BiomedCLIP fails to identify the relevant findings. Similarly, in a case involving localized bilateral pathology (Figure 3(b)), ACE-LoRA accurately localizes both abnormalities, while BiomedCLIP is unable to focus on pathological regions of interest. 
+
+## 5 Conclusion 
+
+In this study, we present ACE-LoRA, an efficient fine-tuning strategy that adapts a generalist medical VLM for robust zero-shot transfer to unseen domain-specific datasets. By refining both local and global embeddings, ACE-LoRA more effec-tively captures the semantic complexity of medical images. Our results show ACE-LoRA 15 
+
+that this lightweight, locality-aware approach enables BiomedCLIP to achieve strong performance in data-limited clinical settings. Moreover, the strong zero-shot generalization of PEFT-based methods over medical VLMs trained from scratch underscores the promise of this research direction. 
+
+## References 
+
+1. Aydın, M.A., Cırpar, E.M., Abdinli, E., Unal, G., Sahin, Y.H.: Itaclip: Boosting training-free semantic segmentation with image, text, and architectural enhance-ments. In: Proceedings of the Computer Vision and Pattern Recognition Confer-ence. pp. 4142–4152 (2025) 1 2. Bannur, S., Hyland, S., Liu, Q., Perez-Garcia, F., Ilse, M., Castro, D.C., Boecking, B., Sharma, H., Bouzid, K., Thieme, A., et al.: Learning to exploit temporal struc-ture for biomedical vision-language processing. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition. pp. 15016–15027 (2023) 3, 11, 12 3. Borkowski, A.A., Bui, M.M., Thomas, L.B., Wilson, C.P., DeLand, L.A., Mas-torides, S.M.: Lung and colon cancer histopathological image dataset (lc25000). arXiv preprint arXiv:1912.12142 (2019) 10, 21, 22 4. Brody, S., Alon, U., Yahav, E.: How attentive are graph attention networks? In: International Conference on Learning Representations (2022) 4, 13, 20 5. Cheng, P., Lin, L., Lyu, J., Huang, Y., Luo, W., Tang, X.: Prior: Prototype rep-resentation joint learning from medical images and reports. In: Proceedings of the IEEE/CVF international conference on computer vision. pp. 21361–21371 (2023) 2, 3, 9, 11, 12, 25, 26 6. Cherti, M., Beaumont, R., Wightman, R., Wortsman, M., Ilharco, G., Gordon, C., Schuhmann, C., Schmidt, L., Jitsev, J.: Reproducible scaling laws for contrastive language-image learning. In: Proceedings of the IEEE/CVF conference on com-puter vision and pattern recognition. pp. 2818–2829 (2023) 1 7. Crowson, K., Biderman, S., Kornis, D., Stander, D., Hallahan, E., Castricato, L., Raff, E.: Vqgan-clip: Open domain image generation and editing with natural lan-guage guidance. In: European conference on computer vision. pp. 88–105. Springer (2022) 1 8. Dosovitskiy, A., Beyer, L., Kolesnikov, A., Weissenborn, D., Zhai, X., Unterthiner, T., Dehghani, M., Minderer, M., Heigold, G., Gelly, S., et al.: An image is worth 16x16 words: Transformers for image recognition at scale. In: International Con-ference on Learning Representations (2021) 5 9. Du, Y., Wei, F., Zhang, Z., Shi, M., Gao, Y., Li, G.: Learning to prompt for open-vocabulary object detection with vision-language model. In: Proceedings of the IEEE/CVF conference on computer vision and pattern recognition. pp. 14084– 14093 (2022) 1 10. Feng, Y., You, H., Zhang, Z., Ji, R., Gao, Y.: Hypergraph neural networks. In: Proceedings of the AAAI conference on artificial intelligence. vol. 33, pp. 3558– 3565 (2019) 6 11. Gao, P., Geng, S., Zhang, R., Ma, T., Fang, R., Zhang, Y., Li, H., Qiao, Y.: Clip-adapter: Better vision-language models with feature adapters. International Journal of Computer Vision 132 (2), 581–595 (2024) 2, 4, 10 12. Gu, X., Lin, T.Y., Kuo, W., Cui, Y.: Open-vocabulary object detection via vi-sion and language knowledge distillation. In: International Conference on Learning Representations (2022) 1 16 M.A. Aydın et al. 13. Guo, Y., Gu, X.: Mmrl: Multi-modal representation learning for vision-language models. In: Proceedings of the Computer Vision and Pattern Recognition Confer-ence. pp. 25015–25025 (2025) 4, 10 14. Han, K., Wang, Y., Guo, J., Tang, Y., Wu, E.: Vision gnn: An image is worth graph of nodes. Advances in neural information processing systems 35 , 8291–8303 (2022) 6 15. He, K., Zhang, X., Ren, S., Sun, J.: Delving deep into rectifiers: Surpassing human-level performance on imagenet classification. In: Proceedings of the IEEE/CVF international conference on computer vision. pp. 1026–1034 (2015) 6 16. Hu, E.J., Shen, Y., Wallis, P., Allen-Zhu, Z., Li, Y., Wang, S., Wang, L., Chen, W., et al.: Lora: Low-rank adaptation of large language models. In: International Conference on Learning Representations. vol. 1, p. 3 (2022) 2, 4, 5 17. Huang, J., Yang, J.: Unignn: a unified framework for graph and hypergraph neu-ral networks. In: Proceedings of the Thirtieth International Joint Conference on Artificial Intelligence. pp. 2563–2569. International Joint Conferences on Artificial Intelligence Organization (2021) 6, 8 18. Huang, S.C., Shen, L., Lungren, M.P., Yeung, S.: Gloria: A multimodal global-local representation learning framework for label-efficient medical image recognition. In: Proceedings of the IEEE/CVF international conference on computer vision. pp. 3942–3951 (2021) 2, 3, 9, 11, 12, 13 19. Huang, Z., Bianchi, F., Yuksekgonul, M., Montine, T.J., Zou, J.: A visual–language foundation model for pathology image analysis using medical twitter. Nature medicine 29 (9), 2307–2316 (2023) 3, 12 20. Ikezogwo, W., Seyfioglu, S., Ghezloo, F., Geva, D., Sheikh Mohammed, F., Anand, P.K., Krishna, R., Shapiro, L.: Quilt-1m: One million image-text pairs for histopathology. Advances in neural information processing systems 36 , 37995– 38017 (2023) 3, 10, 12, 22 21. Irvin, J., Rajpurkar, P., Ko, M., Yu, Y., Ciurea-Ilcus, S., Chute, C., Marklund, H., Haghgoo, B., Ball, R., Shpanskaya, K., et al.: Chexpert: A large chest radiograph dataset with uncertainty labels and expert comparison. In: Proceedings of the AAAI conference on artificial intelligence. vol. 33, pp. 590–597 (2019) 8, 9, 21, 22 22. Jia, C., Yang, Y., Xia, Y., Chen, Y.T., Parekh, Z., Pham, H., Le, Q., Sung, Y.H., Li, Z., Duerig, T.: Scaling up visual and vision-language representation learning with noisy text supervision. In: International conference on machine learning. pp. 4904–4916. PMLR (2021) 1 23. Johnson, A.E., Pollard, T.J., Greenbaum, N.R., Lungren, M.P., Deng, C.y., Peng, Y., Lu, Z., Mark, R.G., Berkowitz, S.J., Horng, S.: Mimic-cxr-jpg, a large publicly available database of labeled chest radiographs. arXiv preprint arXiv:1901.07042 (2019) 2, 8, 9 24. Khattak, M.U., Rasheed, H., Maaz, M., Khan, S., Khan, F.S.: Maple: Multi-modal prompt learning. In: Proceedings of the IEEE/CVF conference on computer vision and pattern recognition. pp. 19113–19122 (2023) 2, 4, 10, 11 25. Kipf, T.N., Welling, M.: Semi-supervised classification with graph convolutional networks. In: International Conference on Learning Representations (2017), https: //openreview.net/forum?id=SJU4ayYgl 426. Kojima, Y., Xu, J., Zou, X., Wang, X.: LoRA-TTT: Low-rank test-time train-ing for vision-language models. In: Second Workshop on Test-Time Adaptation: Putting Updates to the Test! at ICML (2025), https://openreview.net/forum? id=P2XhjOJL7Z 5ACE-LoRA 17 27. Koleilat, T., Asgariandehkordi, H., Rivaz, H., Xiao, Y.: Biomedcoop: Learning to prompt for biomedical vision-language models. In: Proceedings of the IEEE/CVF Computer Vision and Pattern Recognition Conference. pp. 14766–14776 (2025) 4 28. Lai, H., Yao, Q., Jiang, Z., Wang, R., He, Z., Tao, X., Zhou, S.K.: Carzero: Cross-attention alignment for radiology zero-shot classification. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition. pp. 11137– 11146 (2024) 3 29. Lan, M., Chen, C., Ke, Y., Wang, X., Feng, L., Zhang, W.: Clearclip: Decomposing clip representations for dense vision-language inference. In: European Conference on Computer Vision. pp. 143–160. Springer (2024) 1 30. Lester, B., Al-Rfou, R., Constant, N.: The power of scale for parameter-efficient prompt tuning. In: Proceedings of the 2021 Conference on Empirical Methods in Natural Language Processing. pp. 3045–3059 (2021) 2 31. Li, J., Zhang, J., Li, J., Li, G., Liu, S., Lin, L., Li, G.: Learning background prompts to discover implicit knowledge for open vocabulary object detection. In: Proceed-ings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition. pp. 16678–16687 (2024) 1 32. Li, Z., Yang, L.T., Ren, B., Nie, X., Gao, Z., Tan, C., Li, S.Z.: Mlip: Enhanc-ing medical visual representation with divergence encoder and knowledge-guided contrastive learning. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition. pp. 11704–11714 (2024) 3, 11 33. Lin, W., Zhao, Z., Zhang, X., Wu, C., Zhang, Y., Wang, Y., Xie, W.: Pmc-clip: Con-trastive language-image pre-training using biomedical documents. In: International Conference on Medical Image Computing and Computer-Assisted Intervention. pp. 525–536. Springer (2023) 3, 9, 11, 12, 21 34. Loshchilov, I., Hutter, F.: Sgdr: Stochastic gradient descent with warm restarts. In: International Conference on Learning Representations (2017) 9 35. Loshchilov, I., Hutter, F.: Decoupled weight decay regularization. In: International Conference on Learning Representations (2019) 9, 20, 21 36. Lozano, A., Sun, M.W., Burgess, J., Chen, L., Nirschl, J.J., Gu, J., Lopez, I., Aklilu, J., Rau, A., Katzer, A.W., et al.: Biomedica: An open biomedical image-caption archive, dataset, and vision-language models derived from scientific literature. In: Proceedings of the IEEE/CVF Computer Vision and Pattern Recognition Confer-ence. pp. 19724–19735 (2025) 2, 3, 11, 12 37. Oord, A.v.d., Li, Y., Vinyals, O.: Representation learning with contrastive predic-tive coding. arXiv preprint arXiv:1807.03748 (2018) 8 38. Ozturk, S., Yilmaz, M.B., Kara, M., Yavuz, M.T., Koç, A., Çukur, T.: Meta-entity driven triplet mining for aligning medical vision-language models. arXiv preprint arXiv:2504.15929 (2025) 3 39. Radford, A., Kim, J.W., Hallacy, C., Ramesh, A., Goh, G., Agarwal, S., Sastry, G., Askell, A., Mishkin, P., Clark, J., et al.: Learning transferable visual models from natural language supervision. In: International conference on machine learning. pp. 8748–8763. PmLR (2021) 1, 3, 22 40. Redmon, J., Farhadi, A.: Yolov3: An incremental improvement. arXiv preprint arXiv:1804.02767 (2018) 11, 21 41. Roberts, R.J.: Pubmed central: The genbank of the published literature (2001) 2 42. Sadman, N., Zulkernine, F., Kwan, B.: Interpreting biomedical vlms on high-imbalance out-of-distributions: An insight into biomedclip on radiology. arXiv preprint arXiv:2506.14136 (2025) 2 18 M.A. Aydın et al. 43. Shih, G., Wu, C.C., Halabi, S.S., Kohli, M.D., Prevedello, L.M., Cook, T.S., Sharma, A., Amorosa, J.K., Arteaga, V., Galperin-Aizenberg, M., et al.: Aug-menting the national institutes of health chest radiograph dataset with expert annotations of possible pneumonia. Radiology: Artificial Intelligence 1(1), e180041 (2019) 9, 11, 21, 22, 25 44. Spadaro, G., Grangetto, M., Fiandrotti, A., Tartaglione, E., Giraldo, J.H.: Wignet: Windowed vision graph neural network. In: 2025 IEEE/CVF Winter Conference on Applications of Computer Vision (WACV). pp. 859–868. IEEE (2025) 6 45. Tao, M., Bao, B.K., Tang, H., Xu, C.: Galip: Generative adversarial clips for text-to-image synthesis. In: Proceedings of the IEEE/CVF conference on computer vision and pattern recognition. pp. 14214–14223 (2023) 1 46. Vaswani, A., Shazeer, N., Parmar, N., Uszkoreit, J., Jones, L., Gomez, A.N., Kaiser, Ł., Polosukhin, I.: Attention is all you need. Advances in neural information pro-cessing systems 30 (2017) 5 47. Veličković, P., Cucurull, G., Casanova, A., Romero, A., Liò, P., Bengio, Y.: Graph attention networks. In: International Conference on Learning Representations (2018) 4, 13, 20 48. Wang, F., Mei, J., Yuille, A.: Sclip: Rethinking self-attention for dense vision-language inference. In: European Conference on Computer Vision. pp. 315–332. Springer (2024) 1 49. Wang, F., Zhou, Y., Wang, S., Vardhanabhuti, V., Yu, L.: Multi-granularity cross-modal alignment for generalized medical visual representation learning. Advances in neural information processing systems 35 , 33536–33549 (2022) 2, 3, 9, 11, 12, 13 50. Wang, X., Peng, Y., Lu, L., Lu, Z., Bagheri, M., Summers, R.M.: Chestx-ray8: Hospital-scale chest x-ray database and benchmarks on weakly-supervised classi-fication and localization of common thorax diseases. In: Proceedings of the IEEE conference on computer vision and pattern recognition. pp. 2097–2106 (2017) 10, 21, 22 51. Wang, Z., Wu, Z., Agarwal, D., Sun, J.: Medclip: Contrastive learning from un-paired medical images and text. In: Proceedings of the Conference on Empirical Methods in Natural Language Processing. Conference on Empirical Methods in Natural Language Processing. vol. 2022, p. 3876 (2022) 3, 8 52. Wei, J., Suriawinata, A., Ren, B., Liu, X., Lisovsky, M., Vaickus, L., Brown, C., Baker, M., Tomita, N., Torresani, L., et al.: A petri dish for histopathology image analysis. In: International Conference on Artificial Intelligence in Medicine. pp. 11–24. Springer (2021) 10, 21, 22 53. Wu, C., Zhang, X., Zhang, Y., Wang, Y., Xie, W.: Medklip: Medical knowledge en-hanced language-image pre-training. Proceedings of the IEEE/CVF International Conference on Computer Vision (2023) 3 54. Wu, X., Zhu, F., Zhao, R., Li, H.: Cora: Adapting clip for open-vocabulary de-tection with region prompting and anchor pre-matching. In: Proceedings of the IEEE/CVF conference on computer vision and pattern recognition. pp. 7031–7040 (2023) 1 55. Xiao, T., Liu, Y., Zhou, B., Jiang, Y., Sun, J.: Unified perceptual parsing for scene understanding. In: Proceedings of the European conference on computer vision (ECCV). pp. 418–434 (2018) 10, 20 56. Yang, L., Zhang, R.Y., Wang, Y., Xie, X.: Mma: Multi-modal adapter for vision-language models. In: Proceedings of the IEEE/CVF Conference on Computer Vi-sion and Pattern Recognition. pp. 23826–23837 (2024) 4, 10, 11 ACE-LoRA 19 57. Yao, H., Zhang, R., Xu, C.: Visual-language prompt tuning with knowledge-guided context optimization. In: Proceedings of the IEEE/CVF conference on computer vision and pattern recognition. pp. 6757–6767 (2023) 4 58. Yu, T., Lu, Z., Jin, X., Chen, Z., Wang, X.: Task residual for tuning vision-language models. In: Proceedings of the IEEE/CVF conference on computer vision and pattern recognition. pp. 10899–10909 (2023) 4, 10 59. Zanella, M., Ben Ayed, I.: Low-rank few-shot adaptation of vision-language models. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition. pp. 1593–1603 (2024) 2, 4, 5, 6, 10 60. Zanella, M., Gérin, B., Ayed, I.: Boosting vision-language models with transduc-tion. Advances in Neural Information Processing Systems 37 , 62223–62256 (2024) 23, 24 61. Zawacki, A., Wu, C., Shih, G., Elliott, J., Fomitchev, M., Hussain, M., Lakhani, P., Culliton, P., Bao, S.: Siim-acr pneumothorax segmentation (2019), https:// www.kaggle.com/competitions/siim-acr-pneumothorax-segmentation/ 10, 11, 21, 22, 25 62. Zhang, S., Xu, Y., Usuyama, N., Xu, H., Bagga, J., Tinn, R., Preston, S., Rao, R., Wei, M., Valluri, N., et al.: Biomedclip: a multimodal biomedical foundation model pretrained from fifteen million scientific image-text pairs. arXiv preprint arXiv:2303.00915 (2023) 2, 3, 5, 6, 9, 10, 11, 12, 24, 25, 26 63. Zhang, X., Wu, C., Zhang, Y., Xie, W., Wang, Y.: Knowledge-enhanced visual-language pre-training on chest radiology images. Nature Communications 14 (1), 4542 (2023) 3, 11, 12 64. Zhang, Y., Jiang, H., Miura, Y., Manning, C.D., Langlotz, C.P.: Contrastive learn-ing of medical visual representations from paired images and text. In: Machine learning for healthcare conference. pp. 2–25. PMLR (2022) 3, 11 65. Zhang, Z., Yu, Y., Chen, Y., Yang, X., Yeo, S.Y.: Medunifier: Unifying vision-and-language pre-training on medical data with vision generation task using discrete visual representations. In: Proceedings of the Computer Vision and Pattern Recog-nition Conference. pp. 29744–29755 (2025) 3 66. Zhou, C., Loy, C.C., Dai, B.: Extract free dense labels from clip. In: European conference on computer vision. pp. 696–712. Springer (2022) 1 67. Zhou, H.Y., Lian, C., Wang, L., Yu, Y.: Advancing radiograph representation learn-ing with masked record modeling. In: International Conference on Learning Rep-resentations (2023), https://openreview.net/forum?id=w-x7U26GM7j 368. Zhou, K., Yang, J., Loy, C.C., Liu, Z.: Conditional prompt learning for vision-language models. In: Proceedings of the IEEE/CVF conference on computer vision and pattern recognition. pp. 16816–16825 (2022) 4, 10, 11 69. Zhou, K., Yang, J., Loy, C.C., Liu, Z.: Learning to prompt for vision-language models. International Journal of Computer Vision 130 (9), 2337–2348 (2022) 2, 4, 10 70. Zhou, Y., Faith, T., Xu, Y., Leng, S., Xu, X., Liu, Y., Goh, R.S.M.: Benchx: A unified benchmark framework for medical vision-language pretraining on chest x-rays. Advances in Neural Information Processing Systems 37 , 6625–6647 (2024) 10 71. Zhou, Z., Lei, Y., Zhang, B., Liu, L., Liu, Y.: Zegclip: Towards adapting clip for zero-shot semantic segmentation. In: Proceedings of the IEEE/CVF conference on computer vision and pattern recognition. pp. 11175–11185 (2023) 1 72. Zhu, B., Niu, Y., Han, Y., Wu, Y., Zhang, H.: Prompt-aligned gradient for prompt tuning. In: Proceedings of the IEEE/CVF international conference on computer vision. pp. 15659–15669 (2023) 4 20 M.A. Aydın et al. 
+
+# Appendix 
+
+Table of Contents – Section A - Additional Method Details 
+
+– Section B - Experimental Setup & Implementation Details 
+
+• Section B.1 - Additional Implementation Details for Downstream Tasks 
+
+• Section B.2 - Dataset Details 
+
+• Section B.3 - Prompt Templates for Zero-Shot Evaluation 
+
+– Section C - Computational Efficiency 
+
+– Section D - Additional Ablation Studies 
+
+– Section E - Qualitative Results 
+
+## A Additional Method Details 
+
+A.1 Formulation of GAT and GATv2 
+
+In Table 6, we investigate the effect of using attention maps as edge weights and compare our approach with alternative designs that learn attention coefficients from scratch, adopting the attention formulations of GAT [47] and GATv2 [4]. In this section, we present the detailed formulations used to compute attention scores in GAT and GATv2. For GAT, the attention scores are computed using the following equation: 
+
+αij = exp  LeakyReLU  aT Wvi ∥ Wvj
+
+ P 
+
+> k
+
+exp  LeakyReLU  aT Wvi ∥ Wvk
+
+  (12) where aT ∈ Rd×d denotes a learnable weight vector, and ∥ denotes the concate-nation operation. The LeakyReLU activation has a negative slope of 0.2. GATv2 demonstrates that GAT has limited expressive power for attention computation and reformulates the attention mechanism by modifying the order of operations to enhance this expressiveness. The corresponding equation is given by: 
+
+αij = exp  aT  LeakyReLU  Wvi ∥ vj
+
+ P 
+
+> k
+
+exp  aT  LeakyReLU  Wvi ∥ vk
+
+  (13) 
+
+## B Experimental Setup & Implementation Details 
+
+B.1 Additional Implementation Details for Downstream Tasks Semantic Segmentation. To enhance model robustness, we augment the train-ing data with horizontal flipping, vertical flipping, and random rotations. We utilize the AdamW optimizer [35] with a learning rate of 1e −3 and weight de-cay of 1e −2. To mitigate class imbalance, as diseases typically occupy only a small portion of each image, we employ a linear combination of cross-entropy and Tversky losses. For the UPerNet [55] decoder, feature maps are extracted ACE-LoRA 21                                          
+
+> Task Dataset Classes Total Size Train/Val/Test (%)
+> Classification CheXpert 5 ×200 [21] 51000 -/-/100 Classification RSNA [43] 229,684 -/–/15 Classification SIIM [61] 212,047 –/–/30 Classification NIH ChestX-ray [50] 14 112,120 –/5/-Classification LC25000 (Lung) [3] 315,000 –/–/100 Classification LC25000 (Colon) [3] 210,000 –/–/100 Classification MHIST [52] 23,152 –/–/100 Detection RSNA [43] 229,684 70/15/15 Segmentation SIIM [61] 212,047 70/15/15
+> Table A.1: Summary of dataset specifications and statistics. “Classes” and “Total Size” refer to the number of categories and total images, respectively.
+
+from the frozen image encoder at layers {2, 4, 7, 9, 11} (zero-indexed). Training is performed on a single NVIDIA RTX 4090 GPU with a batch size of 4. 
+
+Object Detection. We utilize the AdamW optimizer [35] with a learning rate of 1e −4 and weight decay of 1e −2. A linear warmup is applied during the first epoch, followed by a polynomial learning rate decay. For the YOLOv3 [40] de-tection head, feature maps are extracted from the frozen image encoder at layers {3, 7, 11} (zero-indexed). The model is trained on a single NVIDIA RTX 4090 GPU with a batch size of 8. 
+
+B.2 Dataset Details Histopathology Dataset Curation. To construct a robust and domain-specific subset for our experiments, we curated a histopathology-focused dataset from the large-scale PMC-OA [33] corpus. Given the multimodal nature of PMC-OA, which encompasses a broad range of medical imaging modalities, we applied a targeted keyword-based filtering protocol to isolate relevant histopathology sam-ples. Specifically, we scanned the image captions across the entire dataset for a predefined set of diagnostic and technical terms. Samples were retained if their captions contained at least one of the following keywords: h&e, hematoxylin, eosin, histopathology, biopsy, or microscopic . This automated filtering procedure ensures that the resulting subset primarily comprises tissue slides and microscopic structures, effectively excluding unrelated modalities such as radio-logical imaging. 
+
+Dataset Specifications and Statistics. Table A.1 details the specific charac-teristics of each downstream dataset used in evaluation, including the number of classes, image counts, and the respective training, validation, and test partitions. Additionally, Table A.2 lists the class names for each dataset. 22 M.A. Aydın et al.                
+
+> Dataset Classes
+> CheXpert 5 ×200 [21] "Atelectasis", "Cardiomegaly", "Consolidation", "Edema", "Pleural Effusion" RSNA [43] "No Finding", "Pneumonia" SIIM [61] "No Finding", "Pneumothorax" NIH ChestX-ray [50] "Atelectasis", "Cardiomegaly", "Effusion", "Infiltration", "Mass", ’"Nodule", "Pneumonia", "Pneumothorax", "Consolidation", "Edema", "Emphysema", "Fibrosis", "Pleural Thickening", "Hernia" LC25000 (Lung) [3] "Lung adenocarcinoma", "Benign lung", "Lung squamous cell carcinoma" LC25000 (Colon) [3] "Colon adenocarcinoma", "Benign colonic tissue" MHIST [52] "Hyperplastic polyp", "Sessile serrated adenoma"
+> Table A.2: Class names for each dataset in zero-shot image classification.
+
+B.3 Prompt Templates for Zero-Shot Evaluation 
+
+Following CLIP [39], we leverage simple prompt templates to align text and im-age features. For chest X-ray datasets, we utilize two templates: "a chest X-ray image of {disease}" and "Findings suggesting {disease}" . To ensure a fair comparison in the histopathology domain, we adopt the prompt templates from QuiltNet [20]. Specifically, we use the following templates for histopathology datasets: "a histopathology slide showing {disease}" , "histopathology image of {disease}" , "pathology tissue showing {disease}" , and "pres-ence of {disease} tissue on image" .
+
+## C Computational Efficiency 
+
+We benchmark various PEFT methods against our approach, evaluating the trade-off between trainable parameters, forward-pass computational cost, and zero-shot accuracy averaged across the CheXpert 5 ×200, RSNA, and SIIM data-sets (Fig. A.1). While CoCoOp is the most parameter-efficient, its performance remains suboptimal. In contrast, our approach achieves state-of-the-art perfor-mance with competitive parameter counts and computational overhead. Notably, our ACE-HGNN module incurs a marginal overhead over the LoRA baseline while yielding significant gains in accuracy. 
+
+## D Additional Ablation Studies 
+
+Effect of ACE-HGNN module integration on image and text encoders. 
+
+Table A.3 demonstrates the impact of applying the ACE-HGNN module to the ACE-LoRA 23 10 2 10 1 10 0 10 1
+
+> # of Trainable Parameters (M)
+> 60
+> 62
+> 64
+> 66
+> 68
+> Average Accuracy (%)
+> Methods
+> ACE-LoRA
+> CLIP-LoRA
+> MMRL
+> Maple
+> MMA
+> CoCoOp
+
+Fig. A.1: Average zero-shot accuracy across three CXR benchmarks vs. number of trainable parameters (log-scale). The bubble size denotes the com-putational cost in GFLOPs during the forward pass. IE TE CheXpert RSNA SIIM 
+
+✗ ✗ 45.80 72.85 72.50 
+
+✓ ✗ 49.00 75.84 73.60 
+
+✗ ✓ 50.40 76.92 72.80 
+
+✓ ✓ 49.80 79.54 73.35 
+
+Table A.3: Effects of ACE-HGNN module integration on the image encoder (IE) and the text encoder (TE). Classification accuracy is reported in all datasets. 
+
+image and text encoders in the zero-shot classification task. Notably, apply-ing ACE-HGNN to the image encoder alone yields substantial gains across all datasets compared to the LoRA-only baseline. Similarly, applying the module solely to the text encoder also boosts performance, even achieving the best re-sult on the CheXpert 5 ×200 dataset. Overall, incorporating ACE-HGNN into either encoder consistently outperforms the LoRA-only baseline across all three benchmarks, underscoring the module’s effectiveness. However, we observe that multimodal integration (i.e., applying the module to both encoders) delivers the most balanced results across the datasets. 
+
+Analysis of transductive inference. To evaluate alternative approaches, we compare our method with TransCLIP [60], a transductive approach that lever-ages unlabeled target-domain samples during inference, as shown in Table A.4. While TransCLIP improves the performance of the baseline BiomedCLIP on two benchmarks, the gains are marginal and it even results in slightly worse perfor-mance on the RSNA dataset. These results suggest that unsupervised domain adaptation alone may be insufficient, motivating the need for domain adaptation with fine-tuning. 24 M.A. Aydın et al.           
+
+> Method CheXpert RSNA SIIM
+> BiomedCLIP [62] 35.50 74.34 61.40 TransCLIP [60] 37.50 73.54 65.36 Table A.4: Analysis of transductive inference. Classification accuracy is reported in all datasets.
+
+Effect of different k values in the top-k operation. We conduct an abla-tion study to investigate the impact of the number of selected neighbor tokens on performance, as illustrated in Figure A.2. Notably, even with k = 1 , ACE-HGNN achieves substantial zero-shot gains over the baseline fine-tuned solely with LoRA (see Table 5). While k = 5 yields optimal results, performance re-mains consistently high and robust across all tested k values and benchmarks, highlighting the effectiveness of the ACE-LoRA framework. 
+
+Impact of different rank r values. To assess how the rank of the integrated LoRA modules affects performance, we vary the r values as shown in Figure A.3. We find that ranks below 4 yield weaker performance compared to r = 4 ,suggesting that such low-rank adaptations lack sufficient representational com-plexity. In contrast, increasing the rank beyond 4 provides no additional gains and even slightly degrades accuracy. 10 75321      
+
+> k
+> 45
+> 50
+> 55
+> 60
+> 65
+> 70
+> 75
+> 80
+> Zero-shot Accuracy (%)
+> Chexpert
+> RSNA
+> SIIM
+> Fig. A.2: Zero-shot accuracy across three datasets for varying kvalues. We find that selecting k= 5 yields optimal performance.
+
+Impact of pre-training data scale. To characterize the framework’s scal-ing behavior, we evaluate performance across a data regime ranging from 1% 
+
+to 100% of the pre-training set. This analysis investigates how effectively the model leverages increasing data volumes to learn transferable representations. As summarized in Figure A.4, we observe a consistent positive correlation be-tween pre-training data scale and downstream performance. While even a mini-ACE-LoRA 25 16 8421  
+
+> r(log 2scale)
+> 50
+> 55
+> 60
+> 65
+> 70
+> 75
+> 80
+> Zero-shot Accuracy (%)
+> Chexpert
+> RSNA
+> SIIM
+
+Fig. A.3: Zero-shot accuracy across three datasets for different r values. 
+
+Setting the rank r = 4 delivers the best performance. 
+
+mal amount of data ( 1% ) improves over the baseline, performance continues to increase as the data scale approaches 100% . These results demonstrate that our framework scales effectively with larger datasets, consistently improving repre-sentation quality and yielding superior performance on downstream benchmarks. 1 10 50 100 
+
+Pre-training Data Ratio (%) 
+
+40 
+
+50 
+
+60 
+
+70 
+
+80 
+
+> Zero-shot Accuracy (%)
+> CheXpert
+> RSNA
+> SIIM
+> Base Zero-Shot
+
+Fig. A.4: Zero-shot accuracy as a function of pre-training data scale (log-scale). Dashed lines indicate the zero-shot performance of BiomedCLIP without do-main adaptation. 
+
+## E Qualitative Results 
+
+Figure A.5 illustrates segmentation and detection predictions across different im-age encoder backbones on the SIIM [61] and RSNA [43] datasets, respectively. ACE-LoRA outperforms established medical VLMs, PRIOR [5] and Biomed-CLIP [62], on both downstream tasks. 26 M.A. Aydın et al. Image GT PRIOR BiomedCLIP ACE-LoRA 
+
+> SIIM
+> RSNA
+> RSNA
+
+Fig. A.5: Qualitative comparison of different image encoder backbones. We compare our method with PRIOR [5] and BiomedCLIP [62] on the semantic segmen-tation and object detection tasks. GT denotes the ground truth.

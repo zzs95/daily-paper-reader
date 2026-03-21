@@ -1,0 +1,549 @@
+Title: DiffVP: Differential Visual Semantic Prompting for LLM-Based CT Report Generation
+
+URL Source: https://arxiv.org/pdf/2603.17718v1
+
+Published Time: Thu, 19 Mar 2026 01:19:06 GMT
+
+Number of Pages: 26
+
+Markdown Content:
+# DiffVP: Differential Visual Semantic Prompting for LLM-Based CT Report Generation 
+
+Yuhe Tian 1,3,4, Kun Zhang 2,3,4∗, Haoran Ma 2,3,4, Rui Yan 2,3,4, Yingtai Li 2,3,4,Rongsheng Wang 2,3,4, and Shaohua Kevin Zhou 2,3,4,5∗ 
+
+> 1
+
+Department of Electronic Engineering and Information Science, School of Information Science and Technology, University of Science and Technology of China (USTC), Hefei, Anhui 230026, China  
+
+> 2
+
+School of Biomedical Engineering, Division of Life Sciences and Medicine, University of Science and Technology of China (USTC), Hefei, Anhui 230026, China  
+
+> 3
+
+Center for Medical Imaging, Robotics, Analytic Computing & Learning (MIRACLE), Suzhou Institute for Advanced Research, University of Science and Technology of China (USTC), Suzhou, Jiangsu 215123, China  
+
+> 4
+
+Jiangsu Provincial Key Laboratory of Multimodal Digital Twin Technology, University of Science and Technology of China (USTC), Suzhou, Jiangsu 215123, China  
+
+> 5
+
+State Key Laboratory of Precision and Intelligent Chemistry, University of Science and Technology of China (USTC), Hefei, Anhui 230026, China 
+
+Abstract. While large language models (LLMs) have advanced CT re-port generation, existing methods typically encode 3D volumes holisti-cally, failing to distinguish informative cues from redundant anatomical background. Inspired by radiological cognitive subtraction, we propose Differential Visual Prompting (DiffVP), which conditions report gener-ation on explicit, high-level semantic scan-to-reference differences rather than solely on absolute visual features. DiffVP employs a hierarchical difference extractor to capture complementary global and local seman-tic discrepancies into a shared latent space, along with a difference-to-prompt generator that transforms these signals into learnable visual pre-fix tokens for LLM conditioning. These difference prompts serve as struc-tured conditioning signals that implicitly suppress invariant anatomy while amplifying diagnostically relevant visual evidence, thereby facil-itating accurate report generation without explicit lesion localization. On two large-scale benchmarks, DiffVP consistently outperforms prior methods, improving the average BLEU-1-4 by +10.98 and +4.36, re-spectively, and further boosts clinical efficacy on RadGenome-ChestCT (F1 score 0.421). All codes will be released at https://github.com/ ArielTYH/DiffVP/ .
+
+Keywords: CT Report Generation · Vision-Language Models · Seman-tic Discrepancy Modeling 
+
+## 1 Introduction 
+
+Computed tomography (CT) is one of the most widely used imaging modalities in clinical practice, which plays a critical role in disease screening, diagnosis, and 
+
+> arXiv:2603.17718v1 [cs.CV] 18 Mar 2026
+
+2 Y. Tian et al. (a) Previous Methods       
+
+> Input CT Visual Tokens
+> (c) Our Method
+> Normal Features
+> (b) Clinical Intuition
+> Normal
+> Reference
+> Doctor
+> Focus
+> Encoder
+> LLMs
+> Medical Report Input CT
+> Input CT
+> Normal Reference
+> Encoder
+> Encoder
+> Difference -aware Module
+> Visual Semantic Difference Prompt
+> Visual Tokens
+> LLMs
+> Medical
+> Report
+> compare
+
+Fig. 1: Comparison of conventional methods and our proposed framework. (a) Previous methods feed whole-volume visual tokens uniformly into an LLM for report generation. (b) In clinical practice, radiologists often compare the current scan image with a normal reference image to identify differences. (c) Inspired by this, our method leverages a normal reference prior to derive deviation-aware visual prompts, guiding the LLM to generate more accurate and fine-grained reports. treatment planning across a broad range of conditions. Despite its clinical value, interpreting CT scans remains highly demanding for radiologists, requiring care-ful slice-by-slice review to produce reliable reports. This challenge is particularly pronounced due to the inherently sparse nature of 3D CT volumes, where ab-normal areas constitute only a small portion of the entire volume. Consequently, automated report generation, as an effective solution to assist clinicians, has attracted widespread research attention. Early studies on CT report generation predominantly adopt an encoder-decoder paradigm [26,4,25,9], in which a visual encoder extracts representations from CT slices or volumes, followed by a language decoder that generates reports conditioned on these visual features. More recently, driven by the remarkable rea-soning and language generation capabilities of large language models (LLMs), the field has shifted toward LLM-based medical report generation. R2GenGPT first introduced LLMs to this task [24], and Reg2RG further improves it by in-corporating segmented local regions to provide finer-grained visual context [5]. As depicted in fig. 1(a), existing LLM-based CT report generation typically en-codes a CT volume into a sequence of visual tokens and feeds them into an LLM to generate the report. This paradigm typically passes all tokens to the LLM uniformly, implicitly assuming equal informativeness, and relies on the LLM to autonomously infer clinically salient cues from raw visual representations. However, this uniform token-feeding strategy is fundamentally misaligned with the actual cognitive process of radiologists when composing CT reports: in clinical practice, radiologists rely on strong priors of normal anatomy and summarize imaging findings by contrasting the current scan with an expected DiffVP for LLM-Based CT Report Generation 3
+
+internal reference [12]. In fact, this comparison is not performed at the pixel level; due to inherent inter-subject anatomical variations and inevitable spatial registration errors, raw scans lack direct comparability at the pixel scale, as shown in fig. 5(b). Furthermore, this comparative process does not require ex-plicit contour delineation or precise localization of abnormal regions; instead, it serves as an abstract, high-level semantic cue designed to highlight deviations worthy of clinical attention. In contrast, existing LLM-based paradigms provide no such visual reference signal, leading to two key issues. First, 3D CT volumes are dominated by redun-dant background anatomy (e.g., bones and muscles). Without reference-guided cues, the LLM must process these undifferentiated tokens equally, which can dilute clinically important information and hinder effective report generation. Second, abnormalities in 3D CT are often sparse. Radiologists identify them by leveraging normal anatomical priors, whereas LLMs conditioned on a single scan lack this contrastive reference, making it difficult to emphasize diagnosti-cally relevant findings while avoiding redundancy- and sparsity-induced noise. As a result, the generated reports tend to be overly generic and often miss fine-grained descriptive details that are critical for clinical interpretability. Drawing inspiration from this semantic comparative reasoning mechanism, we propose Diff erential Visual Prompting for CT Report Generation ( DiffVP ). Instead of explicitly localizing or segmenting lesions, DiffVP leverages normal CT scans as a reference prior and extracts semantic deviation-aware cues to guide attention toward clinically meaningful differences. By contrasting the input scan with a normal reference, DiffVP constructs a visual difference prompt that reweights the conditioning semantics, implicitly suppressing invariant anatomy while amplifying distinctive variations, promoting more fine-grained and infor-mative report generation. Specifically, DiffVP comprises two modules. First, the Hierarchical Difference Extractor (HDE) projects both target and reference normal inputs into a unified, fixed-budget token space via a shared extractor. Rather than relying on alignment-sensitive pixel-level subtraction, it computes high-level semantic difference representations using hierarchically complemen-tary global and local difference operators. This step effectively disentangles potentially diseased signals from the anatomical surroundings while resisting registration-induced noise. Second, the Difference-to-Prompt Generator (DPG) transforms these difference representations into learnable prefix[13] embeddings. These embeddings are then integrated into the LLM input sequence, serving as continuous cues that guide the model to generate diagnostic-sensitive reports. Our main contributions are summarized as follows: 
+
+– We propose the Differential Visual Prompting (DiffVP) framework, a novel paradigm that introduces normal CT scans as visual reference priors for CT report generation. Unlike conventional methods that rely solely on absolute visual representations or are sensitive to low-level misalignment when form-ing comparisons, DiffVP models differences in a high-level semantic space. This enables LLMs to better focus on clinically important information with-out explicit abnormal region localization. 4 Y. Tian et al. 
+
+– We design a hierarchical difference extractor to capture complementary global and local semantic discrepancies, together with a difference-to-prompt gen-erator that projects these signals into the LLM’s input space. This design effectively alleviates redundancy and sparsity issues inherent in 3D CT vol-umes while preserving diagnostic sensitivity and improving robustness to inter-subject anatomical variation. 
+
+– We conduct extensive experiments on two large-scale 3D CT datasets, Rad Genome-ChestCT and CTRG-Chest-548K. Results demonstrate that Dif-fVP consistently outperforms state-of-the-art methods across major metrics, producing reports with improved clinical accuracy, diagnostic relevance, and fine-grained clinical descriptions. 
+
+## 2 Related Work 
+
+2.1 3D CT Report Generation 
+
+Early studies on 3D CT report generation, such as CT2REP and CT-ViT [9,18], largely follow encoder–decoder architectures that compress volumetric data into global representations. Such compression inevitably discards subtle pathological cues, limiting the clinical fidelity of the generated reports. With the strong generation and reasoning abilities of large language models (LLMs), recent work increasingly adapts LLMs for medical report generation. Generalist foundation models, including RadFM [27], M3D [2], and Argus [15], use lightweight adapters to connect 3D visual encoders with pre-trained LLMs. To improve diagnostic precision, several methods further inject fine-grained guid-ance: Reg2RG [5] leverages anatomical region masks to extract region-aware fea-tures and align structures with text, while Dia-LLaMA [6] introduces diagnostic prompts to steer decoding. Other lines explore more elaborate pipelines, such as the agent-based CT-Agent [17] and the retrieval-augmented MvKeTR [7]. De-spite these advances, most methods still operate in a single-scan setting, extract-ing features only from the target volume. Lacking a normal reference for contrast, they struggle to suppress anatomical redundancy and background noise, which hinders isolating pathological changes from normal anatomy. 
+
+2.2 Difference-Aware Report Generation 
+
+Prior work has explored difference-aware strategies with distinct calculation and utilization paradigms. In longitudinal settings, Yun et al. [30] explicitly extracts isolated and localized disease-wise patch differences between current and prior scans to capture disease progression, while Song et al. [21] computes dynamic temporal residuals, treating them as implicit features to emphasize evolving re-gions. Several methods have also addressed abnormal—normal discrepancies in non-temporal settings. For instance, Park et al. [20] and Lyu et al. [16] perform simple, direct feature-vector subtraction between abnormal and normal 2D im-ages. The subtracted difference vectors are then fused with tag information and DiffVP for LLM-Based CT Report Generation 5
+
+fed into traditional decoders for text generation. Alternatively, rather than em-ploying paired reference images, Zhao et al. [32] constructs a latent decoupling memory matrix to learn and separate normal from pathological patterns across the entire dataset. However, applying these mechanisms to LLM-based 3D report generation re-veals numerous limitations. At the calculation level, extracting isolated patches or performing naive subtraction destroys cross-slice continuity, subsequently leading to the omission of minute lesions and introducing spatial noise. Fur-thermore, these differences are typically relegated to mere implicit auxiliary fea-tures. To effectively handle the inherent lesion sparsity and massive background redundancy in 3D CT volumes, our method hierarchically models discrepancies directly over the full 3D voxel-token sequence. This multi-scale approach pre-serves volumetric continuity and enables the fine-grained detection of structural deviations, effectively disentangling critical anatomy from the background. Af-ter extracting the hierarchical visual semantic differences, we innovatively and explicitly project them into learnable visual prefix tokens to serve as part of the LLM input prefix. This prefix-based injection provides a structured and control-lable autoregressive signal, guiding the LLM to focus more attention on what differs between scans. 
+
+## 3 Methodology 
+
+3.1 Overview 
+
+Existing LLM-based CT report generation typically follows a unified paradigm: the input CT volume X is first transformed into a sequence of visual tokens 
+
+I ∈ { vi}ki=1 (k denotes the number of visual tokens), which are then directly fed into the LLM to generate the diagnostic report ˆT :
+
+T ∼ LLM( ˆT | I), I = Φ(X), (1) where Φ(·) denotes the visual encoder. While effective to some extent, this paradigm fundamentally treats all visual tokens as equally informative and relies on the LLM to implicitly discover clinically relevant cues from the input CT. In contrast, our Differential Visual Prompting CT report generation ( DiffVP )explicitly models the discrepancies between the target input X and a normative reference Xref in a shared latent space. The extracted difference features are then transformed into learnable prefix embeddings and prepended to the LLM input sequence as: 
+
+T ∼ LLM   ˆT | [∆prompt ; I],
+
+s.t. ∆prompt = Diff  Φ(X), Φ (Xref ), (2) where ∆prompt denotes the learnable prompt tokens derived from the feature dis-parity between Φ(X) and Φ(Xref ), functioning as discriminative semantic cues. Diff( ·) is a difference module that captures visual changes between the target 6 Y. Tian et al. 
+
+Fig. 2: Overall architecture. The framework takes a target CT volume and a normal reference CT as inputs. A shared visual encoder and resampler produce aligned latent tokens ( I and Ir ). A difference-aware module then derives (a) a global delta ∆global by applying a Transformer with a learnable query over I and 
+
+Ir , and (b) a local delta ∆local by aggregating token-wise residuals with distance-based importance weights. These two signals are fused by (c) a difference-to-prompt generator to form a visual difference prompt, which is prepended as a soft prefix to an LLM (LoRA-tuned) to guide medical report generation. and reference 3D CT volumes. By injecting explicit differential cues, DiffVP effectively mitigates interference from the redundant anatomical background, steering the LLM to prioritize the description of potentially important areas to improve report generation quality. In the following, we introduce the visual encoder (section 3.2), the hierarchical difference extractor (section 3.3 and sec-tion 3.3), and the difference-to-prompt generator (section 3.4) with LLM input construction. 
+
+3.2 Visual Encoder 
+
+To extract dense anatomical representations from high-dimensional CT volumes, we employ a ResNet-based visual encoder as the backbone network. Given a batch of input volumes X ∈ Rb×s×h×w, the encoder processes the volumet-ric data to capture voxel-level visual patterns. The resulting feature maps are flattened along the spatial dimensions and denoted as F ∈ Rb×v×c, where v
+
+corresponds to the number of voxel tokens and c is the encoder feature dimen-sion. These dense volumetric features serve as the input for subsequent difference modeling. 
+
+3.3 Hierarchical Difference Extractor 
+
+We aim to capture visual differences between the input and reference scans to guide the LLM in report generation. In 3D CT volumes, organ- and structure-DiffVP for LLM-Based CT Report Generation 7
+
+level variations manifest at multiple spatial scales, ranging from global morpho-logical shifts to subtle localized deviations within specific anatomical regions. Therefore, a single-scale comparison is often insufficient to represent such het-erogeneous differences. To address this, we design the Hierarchical Difference Extractor (HDE) to model discrepancies at two complementary levels. Specifi-cally, a Global Delta Operator captures holistic structural and semantic shifts, while a Local Delta Operator aggregates fine-grained deviations, jointly providing multi-scale difference cues for report generation. 
+
+Global Delta Operator Our objective is to capture global differential seman-tics between a target CT volume X and a normative reference Xref , enabling the model to reason about what has changed at a holistic level rather than processing each input independently. Both volumes are first encoded by a 3D visual encoder into dense volumetric feature maps, F, F ref ∈ Rb×v×c. However, due to the prohibitive magnitude of the voxel count v, directly operating on these features is computationally infeasible and introduces substantial redundancy, as most voxels correspond to common anatomical background with limited differential information. Specifically, we adopt a Q-Former–style Visual Resampler to perform se-mantic downsampling. We initialize a shared set of n learnable latent queries 
+
+L ∈ Rn×d, which serve as semantic anchors for both the target and reference volumes. Using cross-attention, these shared queries aggregate informative visual content from the dense features into compact latent representations: 
+
+I = Resampler( F, L ) ∈ Rb×n×d,Ir = Resampler( Fref , L ) ∈ Rb×n×d, (3) By enforcing a shared query set, this resampling process projects both volumes into a common latent space, ensuring structural alignment and enabling direct comparison at the token level. Given the resampled latent tokens I and Ir , we then explicitly model their global difference semantics. We introduce a learnable global difference query 
+
+δ ∈ Rd, which is designed to summarize holistic discrepancies between the target and reference volumes. This query interacts jointly with both token sets through a Transformer layer: 
+
+∆global = Ddif f (I, I r )= Transformer θ
+
+ [δ; I; Ir ] 
+
+> δ
+
+, (4) Here, [ ·; ·] denotes concatenation along the token dimension, and ( ·)δ indicates extracting the output state corresponding to the query token δ. The resulting 
+
+∆global encapsulates the overall structural and semantic shift between X and 
+
+Xref , providing a compact global difference representation to condition down-stream report generation. 8 Y. Tian et al. 
+
+Local Delta Operator While ∆global captures high-level semantic discrep-ancies, it may not explicitly encode the strength of localized deviations. To complement it, we introduce a local-level difference aggregation mechanism that operates directly on the aligned latent visual tokens. Formally, given the input and reference tokens I, I r , we define a local differ-ence operator Adiff as 
+
+∆local = Adiff (I, I r ) , (5) where ∆local ∈ Rb×d summarizes localized deviations via a geometry-aware weighting scheme in the latent space. Specifically, we assign each aligned token pair ( Ii, I ri ) a normalized impor-tance weight wi based on their squared Euclidean distance: 
+
+wi = ∥Ii − Iri ∥22
+
+PNj=1 Ij − Irj 
+
+> 22
+
++ ϵ , i = 1 , . . . , N. (6) This weighting emphasizes token pairs that deviate most from the reference while remaining robust to scale via normalization, where ϵ = 1 × 10 −5 is a small term added to prevent division by zero. The local difference representation is then obtained by aggregating the resid-ual vectors under these weights: 
+
+Adiff (I, I r ) = 
+
+> N
+
+X
+
+> i=1
+
+wi (Ii − Iri ) . (7) This operator is parameter-free and grounded in the metric structure of the latent token space. It ensures that tokens exhibiting pronounced deviations con-tribute dominantly to ∆local , providing a direct and interpretable difference ev-idence signal for the LLM during report generation. 
+
+3.4 Difference-to-Prompt Generator 
+
+The HDE module yields two complementary difference representations: a global descriptor ∆global and a locality-sensitive descriptor ∆local . The Difference-to-Prompt Generator (DPG) transforms these visual differences into a learnable prefix that can directly condition the LLM. Since the extracted differences reside in the vision latent space, they must be projected into the LLM embedding space. To jointly encode holistic shifts and localized deviations, we first fuse ∆global and ∆local via concatenation and an MLP, and then expand the fused representation into a sequence of prefix tokens: 
+
+∆prompt = Projector  [∆global ; ∆local ]. (8) The resulting ∆prompt ∈ Rp×dLLM consists of p learnable prefix tokens ( p=16 in our study), with dimensionality matching the LLM embedding size. By in-jecting explicit scan-to-reference discrepancy cues initially, ∆prompt acts as a dy-namic soft prompt that reweights conditioning signals, suppressing background-dominated representations and enhancing report generation. DiffVP for LLM-Based CT Report Generation 9
+
+Diagnostic Semantic Guidance. To provide high-level semantic guidance, we incorporate predicted diagnostic classes E, a standard anchoring paradigm in medical report generation [11]. Specifically, E is generated by a pre-trained 3D ResNet-18 classifier optimized via Binary Cross-Entropy (BCE) loss over 18 report-independent disease labels (e.g., Cardiomegaly, Emphysema), preventing information leakage. During generation, this classifier remains frozen, and its predictions are converted into short textual prompts. Detailed class definitions, training specifics, and the rationale for this two-stage design are deferred to the Supplementary Material. 
+
+LLM Input Construction. To preserve complete visual context, we retain the original tokens I with the difference prefix ∆prompt . We then integrate diag-nostic guidance E and append structured textual prompts T to aid instruction following. The final input sequence for the LLM is formulated as: 
+
+Xin = [ ∆prompt ; I ; E ; T ]. (9) 
+
+3.5 Training Objective 
+
+We train the model with a multi-task objective that combines report generation with an auxiliary disease classification task. 
+
+Report Generation Loss. We formulate report generation as conditional se-quence modeling. Given the hybrid input embeddings Xin and the ground-truth report Y = {y1, . . . , y L}, we minimize the negative log-likelihood (NLL): 
+
+Lgen = −
+
+> L
+
+X
+
+> t=1
+
+log P (yt | y<t , Xin ; θ) . (10) 
+
+Diagnostic Classification Loss. To encourage diagnostic consistency and reg-ularize the visual representations, we add an auxiliary multi-label classification loss Lcls using binary cross-entropy (BCE) over K=18 disease categories. 
+
+Total Objective. The final training objective is: 
+
+Ltotal = Lgen + Lcls . (11) 
+
+## 4 Experiments 
+
+4.1 Datasets RadGenome-ChestCT. The RadGenome-ChestCT dataset [31], derived from the CT-RATE dataset [8], comprises 25,692 CT-report pairs from 21,304 unique patients. We adhere to the official partition, designating 24,128 pairs for training and 1,564 pairs for evaluation. The data is pre-processed into ten anatomical regions with a standardized voxel spacing of 1 ×1×3 mm. 
+
+CTRG-Chest-548K. As a supplementary benchmark [22], it contains 1,804 CT report pairs, split into train and test sets with an 8:2 ratio. We further extract anatomical region masks and parse reports into region-level descriptions. 10 Y. Tian et al. 
+
+Table 1: Quantitative results on RadGenome-ChestCT and CTRG-Chest-548K. Models marked with † are foundation models. We report BLEU (BL), ROUGE-L (RG-L), and METEOR (MTR) scores. The best, second best, and third best results are highlighted in dark blue, medium blue, and light blue, respectively.                                                                                                               
+
+> Dataset Method Year BL-1 BL-2 BL-3 BL-4 RG-L MTR RadGenome-ChestCT
+> †RadFM 2023 44.20 34.49 28.06 23.65 31.53 39.94
+> †M3D 2023 43.57 34.48 28.54 24.49 32.61 39.95 R2GenGPT 2023 43.28 34.11 28.16 24.16 32.26 39.85 MedVInT 2024 44.28 34.91 28.75 24.60 32.58 40.39 CT2Rep 2024 44.42 34.43 27.94 23.56 30.99 40.16 Reg2RG 2025 47.25 36.49 29.57 24.87 36.65 44.07
+> Ours -58.16 48.74 40.93 34.28 32.32 47.40 CTRG-Chest-548K
+> †RadFM 2023 48.66 40.28 34.73 30.89 49.08 49.18
+> †M3D 2023 46.27 39.02 34.23 30.86 50.24 49.26 R2GenGPT 2023 41.82 36.37 32.70 30.10 50.93 47.05 MedVInT 2024 47.38 39.60 34.28 30.68 49.53 49.32 CT2Rep 2024 42.28 36.16 32.08 29.19 50.17 47.00 Reg2RG 2025 49.63 41.43 35.91 32.04 47.76 49.71
+> Ours -50.37 46.57 41.94 37.57 45.00 50.44
+
+Normal Reference Set Construction. To facilitate explicit difference mod-eling, we construct a dedicated normal reference pool by selecting CT volumes where the associated reports indicate no abnormalities. Based on this criterion, we select 1,787 training and 124 evaluation samples from RadGenome-ChestCT, each used in its training and testing phase. Similarly, for the CTRG-Chest-548K dataset, we select 105 training and 43 testing samples as normal references. References are sampled strictly within the corresponding split, train-only for training, test-only for testing, preventing any train–test leakage. In the supple-mentary material, we further report a five-seed stability analysis with mean ±std and two-sided t-tests under random reference pairing. 
+
+4.2 Implementation Details 
+
+We utilize a pretrained frozen 3D ResNet-18 as the visual encoder to extract voxel-level features ( d = 512). For the language backbone, we adopt LLaMA-2-7B [23] equipped with Low-Rank Adaptation (LoRA) [10] for efficient fine-tuning. All models are optimized with a learning rate of 5 × 10 −5. We train the models for 10 epochs with a batch size of 1 per GPU. Experiments are conducted on a cluster of 4 NVIDIA H20 GPUs trained in parallel. DiffVP for LLM-Based CT Report Generation 11 
+
+Table 2: Clinical Efficacy (CE) performance on RadGenome-ChestCT. The symbol † denotes generalist foundation models, while unmarked methods are specialized Report Generation Models.                       
+
+> Method Clinical Efficacy (CE) F1-Score Recall Precision
+> †RadFM 0.195 0.131 0.382
+> †M3D 0.148 0.090 0.407 R2GenGPT 0.110 0.066 0.340 MedVInT 0.212 0.148 0.377 CT2Rep 0.139 0.089 0.317 Reg2RG 0.253 0.181 0.423 Ours 0.421 0.496 0.366
+
+Table 3: Impact of Visual Pre-fix Length. We vary the visual prefix length p ∈ {4, 8, 16 , 24 , 32 }
+
+on RadGenome-ChestCT. NLG perfor-mance increases with p and peaks at 
+
+p=16 .                          
+
+> Metric Prefix Length ( p)4816 24 32
+> BLEU-1 53.97 57.98 58.16 56.89 56.24 BLEU-2 44.29 48.60 48.74 47.46 46.51 BLEU-3 36.37 40.78 40.93 39.79 38.43 BLEU-4 29.72 34.13 34.28 33.32 31.53 METEOR 43.37 47.96 47.40 47.33 46.19 ROUGE-1 59.63 63.48 63.52 62.33 61.82 ROUGE-2 38.41 42.60 42.63 41.49 40.38 ROUGE-L 31.46 32.43 32.32 32.27 31.23
+
+4.3 Evaluation Metrics 
+
+We evaluate linguistic quality using standard generation metrics, specifically BLEU-n with n ranging from 1 to 4, METEOR, and ROUGE-1, ROUGE-2, and ROUGE-L, and medical correctness using Clinical Efficacy (CE) metrics. CE computes Precision, Recall, and F1 on 18 pathologies extracted by a RadBERT classifier. Due to label misalignment between RadBERT’s training data and the primary abnormalities in CTRG-Chest-548K, CE metrics are reported only for RadGenome-ChestCT. 
+
+4.4 Comparison with SOTA Methods 
+
+Natural Language Generation Performance. Table 1 summarizes the NLG re-sults on RadGenome-ChestCT and CTRG-Chest-548K. We compare DiffVP with large-scale medical foundation models (RadFM, M3D) and dedicated re-port generation methods (R2GenGPT, MedVInT, CT2Rep, Reg2RG). Overall, DiffVP achieves the best or competitive performance across most metrics on both datasets. Compared with the previous SOTA Reg2RG, DiffVP delivers large gains in n-gram precision, improving BLEU-1 by 23.08% and BLEU-4 by 37.83%. DiffVP also attains the highest METEOR, indicating better seman-tic alignment with reference reports. Although Reg2RG is slightly higher on ROUGE-L, DiffVP’s stronger BLEU and METEOR suggest improved precision in describing clinically relevant findings rather than relying on long shared sub-sequences. 
+
+Clinical Efficacy Analysis. Table 2 reports CE results on RadGenome-ChestCT. DiffVP achieves the best F1-score (0.421) and the highest Recall among all meth-ods, indicating improved sensitivity to clinically relevant findings and a reduced 12 Y. Tian et al. 
+
+Table 4: Ablation study on the effectiveness of different modules on RadGenome-ChestCT. Global , Local , and E denote the Global Delta, Local Delta, and Classification Prompt modules, respectively. CE Metrics denote clinical efficacy metrics including Precision, Recall, and F1.                                                                                
+
+> ID Module Settings NLG Metrics CE Metrics
+> ∆global ∆local EB-1 B-2 B-3 B-4 MR-1 R-2 R-L Pre. Rec. F1
+> Baseline 55.29 46.55 39.36 33.17 44.11 62.12 41.95 31.94 0.295 0.109 0.159
+> #1 ✓55.62 46.89 39.65 33.44 44.80 62.31 42.19 32.35 0.311 0.217 0.256
+> #2 ✓✓57.46 47.92 39.97 33.20 46.63 62.97 41.69 32.08 0.373 0.459 0.411
+> #3 ✓✓57.68 48.24 40.47 33.89 47.67 63.19 42.25 32.76 0.360 0.464 0.406
+> Ours ✓✓✓58.16 48.74 40.93 34.28 47.40 63.52 42.63 32.32 0.366 0.496 0.421
+
+risk of missing positives. While Reg2RG is marginally higher in Precision, DiffVP provides a better overall balance between Precision and Recall. 
+
+## 5 Ablation Studies and Analysis 
+
+5.1 Ablation Studies Ablation Study on Model Components. Table 4 reports an ablation anal-ysis of DiffVP. We start from a baseline with a pretrained ResNet18 encoder on RadGenome-ChestCT. Adding the inferred diagnostic anchor (#1) provides consistent improvements, notably in CE Recall, and offers a stable semantic context for subsequent difference prompting. Comparing #2 and #3 shows that modeling discrepancies at complementary levels is beneficial: the Global Delta 
+
+captures holistic structural and semantic shifts and improves global consistency, while the Local Delta contributes fine-grained deviations that boost METEOR. Combining both yields the best BLEU-4, indicating that joint global consistency and local detail improves long-range coherence and overall report quality. 
+
+Impact of Visual Prefix Length. Table 3 studies the visual prefix length 
+
+p. Performance increases as p grows from 4, with BLEU-1–4 peaking at p=16. While p=8 remains competitive for Recall, larger prefixes (24/32) consistently degrade performance, suggesting redundant conditioning. We therefore set p=16 by default. 
+
+5.2 Performance Analysis Visual semantic difference map. Fig. 5(a) explicitly visualizes the critical discrepancy cue extracted by our difference-aware module. Given an input CT scan and its paired normal reference, we compute multi-scale discrepancy in the latent visual token space and project it back to the image plane for inter-pretability. This map is not obtained by simple pixel-wise subtraction; instead, it highlights semantically deviant regions relative to the normal prior, which is consistent with radiologists’ high-level comparative reasoning (e.g., for the first pair in Fig. 5(a), the activation concentrates around the lung fields where the DiffVP for LLM-Based CT Report Generation 13 0 4 8 12 16 20 24 28      
+
+> Visual token index (N=32)
+> 0.00 0.02 0.04 0.06 0.08 0.10
+> Importance
+> BL-1 MTR 0.40 0.45 0.50 0.55 0.60
+> Score
+> with _prompt w/o _prompt
+> (a) (b)
+
+Fig. 3: Visual token importance. 
+
+(a) Normalized importance distribu-tions for N =32 latent tokens with (blue) and without (orange) the pro-posed ∆prompt . (b) Performance gain by ∆prompt .SENSITIVITY  
+
+> UTILITY
+> GRANULARITY LOCALIZATION
+> QUANTIFICATION
+> 20
+> 40
+> 60
+> 80
+> 100
+> Ours
+> Baseline
+> 63.7
+> 36.3
+> 55.0
+> 45.0
+> 74.0
+> 26.0
+> 74.7
+> 25.3
+> 73.3 26.7
+
+Fig. 4: LLM-as-a-Judge Evalua-tion .We employ GPT-5 for pairwise comparisons across five clinical axes: Granularity, Localization, Quantifica-tion, Sensitivity, and Utility report describes subsegmental atelectasis in the right lower lobe and multiple pulmonary nodules, most prominent in the left upper-lobe lingular segment). 
+
+Impact of discrepancy level. Fig. 5(b) compares three variants: w/o Diff ,which removes the discrepancy cue; Pixel-level Diff , which derives the cue from pixel-wise subtraction in the image space; and Ours , which computes discrepancy in the latent token space. Importantly, Pixel-level Diff and Ours share the same discrepancy-prompt injection form with the same prefix structure and length, and thus differ only in where the discrepancy is computed. Semantic discrepancy consistently yields better BLEU-1 and CE-F1, suggesting that clinically useful comparison is better captured at a semantic level than by raw pixel subtraction. 
+
+Analysis of the ∆prompt Distribution. To clarify the visual prefix mecha-nism, fig. 3(a) visualizes the token importance distribution, defined as the latent geometric discrepancy: Si = ∥Ii − Iri ∥22. This metric quantifies local clinical deviations from the reference in semantic space. As shown, the baseline (or-ange) exhibits a near-uniform distribution, failing to distinguish critical findings from massive anatomical redundancy. In sharp contrast, ∆prompt (blue) induces a highly sparse distribution, where the top 8 tokens capture 45% of the total importance mass. This shift proves our prefix forces the model to focus on lo-calized clinically-variant regions rather than treating all tokens equally. Such difference-guided focus aligns with the linguistic gains in fig. 3(b), underscoring the necessity of prioritizing semantically variant regions for high-quality report generation. 
+
+LLM-as-a-Judge: Multi-dimensional Pairwise Evaluation. We use GPT-5 as a reference-guided judge for randomized pairwise comparisons in Figure 4 for multi-dimensional analysis. We evaluate descriptive quality using Granularity, Localization, and Quantification, which assess linguistic richness, anatomical specificity, and the use of measurable descriptors, respectively. We further assess 14 Y. Tian et al. Input CT Normal Reference        
+
+> Visual Semantic
+> Difference Map
+> w/o Diff  Pixel -level  Diff  Ours
+> Input CT Normal Reference
+> Visual Semantic
+> Difference Map Impact of Difference Level
+> (a )(b)
+
+Fig. 5: Visual semantic discrepancy and discrepancy-level comparison. 
+
+(a) Two examples showing the input CT, the Visual Semantic Difference Map 
+
+produced by our method, and the paired normal reference. (b) Performance comparison among w/o Diff , Pixel-level Diff (pixel-wise subtraction), and Ours 
+
+on BLEU-1 and CE-F1. clinical substance via Sensitivity and Utility, measuring coverage of reference findings and potential decision support. As shown in the radar chart, our method demonstrates a dominant advantage in descriptive quality, achieving superior win-rates across Granularity, Localization, and Quantification. This automated assessment provides a more detailed way of analyzing data, rather than replacing report generation metrics. 
+
+Case Study Figure 6 shows qualitative comparisons. The comparison method, using a uniform input strategy, tends to generate template-like reports and miss subtle findings. In contrast, DiffVP uses reference-guided prompting to suppress redundant anatomy and emphasize informative evidence. The variant without 
+
+∆prompt already captures linear subsegmental atelectasis missed by the base-line, while the full model with ∆prompt further focuses on sparse deviations and recovers finer details such as the 4.6 mm measurement and steatosis. 
+
+## 6 Conclusion 
+
+In this paper, we propose DiffVP, a reference-guided framework that brings 3D CT report generation closer to the comparative reasoning used in clinical prac-tice. DiffVP explicitly encodes scan-to-reference discrepancies and converts them into visual delta prompts via a hierarchical difference extractor and a difference-to-prompt generator. Injected as learnable prefixes to an LLM, these prompts provide structured visual guidance that suppresses redundant anatomical back-ground and highlights informative evidence for report generation. Experiments show that DiffVP consistently surpasses state-of-the-art baselines in both lan-guage metrics and clinical efficacy. This work supports reference-guided prompt-ing as an effective direction for medical report generation. DiffVP for LLM-Based CT Report Generation 15 
+
+Visuals Excerpt of the generated report 
+
+> GT
+
+Abdomen: A decrease in liver density, consistent with steatosis , is observed. Bilateral adrenal glands were normal and no space-occupying lesion was detected. Thoracic aorta diameter is normal. 
+
+Lung: Several nonspecific nodules are observed in both lungs, the largest of which is in the left lung lower lobe anteromedial segment ( 4.6 mm ). There was no finding in favor of active infiltration in both lungs. 
+
+> Comparison Method
+
+Abdomen: Bilateral adrenal glands were normal and 
+
+q no space-occupying lesion was detected . Upper abdominal organs included in the sections are q normal . [Missed Steatosis] 
+
+Lung: Trachea and both main bronchi are open. The lungs are 
+
+q clear of active infiltration . [Missed Nodules] 
+
+> Ours (w/o  ∆ prompt)
+
+Abdomen: Bilateral adrenal glands were normal. Upper abdominal organs included in the sections are q normal . [Missed Steatosis] No space-occupying lesion was detected in the liver. 
+
+Lung: q No mass lesion with distinguishable borders was detected. 
+
+[Missed Nodule] However, when examined in the parenchyma window, 
+
+¥ Linear subsegmental atelectasis was observed in the middle lobe of the right lung. [Fine-grained detail] 
+
+> Ours
+
+Abdomen: A ¥ decrease in liver density is noted, consistent with 
+
+¥ steatosis . Bilateral adrenal glands normal and no space-occupying lesion was detected. 
+
+Lung: ¥ Nonspecific nodules are seen in the lung parenchyma. The largest nodule is measured at ¥ 4.6 mm in the left lower lobe. There was no finding in favor of active infiltration. 
+
+Fig. 6: Qualitative case study comparing the Ground Truth, the Comparison Method, the ablation variant without the ∆prompt , and the full model. Correctly identified pathologies are highlighted in blue and missed detections are marked with q crosses .
+
+## Acknowledgements 
+
+This work is supported by the Natural Science Foundation of China under Grants 62271465 and 62502490; the National Key R&D Program of China under Grant 2025YFC3408300; the Natural Science Foundation of Jiangsu Province under Grant BK20250496; the Suzhou Basic Research Program under Grant SYG202338; Jiangsu Funding Program for Excellent Postdoctoral Talent, and the China Postdoctoral Science Foundation under Grant 2024M763178. 
+
+## References 
+
+1. Achiam, J., Adler, S., Agarwal, S., Ahmad, L., Akkaya, I., Aleman, F.L., Almeida, D., Altenschmidt, J., Altman, S., Anadkat, S., et al.: Gpt-4 technical report. arXiv preprint arXiv:2303.08774 (2023) 2. Bai, F., Du, Y., Huang, T., Meng, M.Q.H., Zhao, B.: M3d: Advancing 3d medical image analysis with multi-modal large language models. arXiv preprint arXiv:2404.00578 (2024) 16 Y. Tian et al. 3. Banerjee, S., Lavie, A.: Meteor: An automatic metric for mt evaluation with im-proved correlation with human judgments. In: Proceedings of the acl workshop on intrinsic and extrinsic evaluation measures for machine translation and/or summa-rization. pp. 65–72 (2005) 4. Chen, Z., Song, Y., Chang, T.H., Wan, X.: Generating radiology reports via memory-driven transformer. arXiv preprint arXiv:2010.16056 (2020) 5. Chen, Z., Bie, Y., Jin, H., Chen, H.: Large language model with region-guided referring and grounding for ct report generation. IEEE Transactions on Medical Imaging (2025) 6. Chen, Z., Luo, L., Bie, Y., Chen, H.: Dia-llama: Towards large language model-driven ct report generation. In: International Conference on Medical Image Com-puting and Computer-Assisted Intervention. pp. 141–151. Springer (2025) 7. Deng, X., He, X., Bao, J., Zhou, Y., Cai, S., Cai, C., Chen, Z.: Mvketr: chest ct report generation with multi-view perception and knowledge enhancement. IEEE Journal of Biomedical and Health Informatics (2025) 8. Hamamci, I.E., Er, S., Almas, F., Simsek, A.G., Esirgun, S.N., Dogan, I., Dasdelen, M.F., Wittmann, B., Simsar, E., Simsar, M., et al.: A foundation model utilizing chest ct volumes and radiology reports for supervised-level zero-shot detection of abnormalities. CoRR (2024) 9. Hamamci, I.E., Er, S., Menze, B.: Ct2rep: Automated radiology report generation for 3d medical imaging. In: International Conference on Medical Image Computing and Computer-Assisted Intervention. pp. 476–486. Springer (2024) 10. Hu, E.J., Shen, Y., Wallis, P., Allen-Zhu, Z., Li, Y., Wang, S., Wang, L., Chen, W., et al.: Lora: Low-rank adaptation of large language models. ICLR 1(2), 3 (2022) 11. Kale, K., Bhattacharyya, P., Jadhav, K.: Replace and report: Nlp assisted radiology report generation. In: Findings of the Association for Computational Linguistics: ACL 2023. pp. 10731–10742 (2023) 12. Kundel, H.L., Nodine, C.F.: Interpreting chest radiographs without visual search. Radiology 116 (3), 527–532 (1975) 13. Li, X.L., Liang, P.: Prefix-tuning: Optimizing continuous prompts for generation. In: Proceedings of the 59th Annual Meeting of the Association for Computational Linguistics and the 11th International Joint Conference on Natural Language Pro-cessing (Volume 1: Long Papers). pp. 4582–4597 (2021) 14. Lin, C.Y.: Rouge: A package for automatic evaluation of summaries. In: Text sum-marization branches out. pp. 74–81 (2004) 15. Liu, C., Wan, Z., Wang, Y., Shen, H., Wang, H., Zheng, K., Zhang, M., Arcucci, R.: Argus: benchmarking and enhancing vision-language models for 3d radiology report generation. In: Findings of the Association for Computational Linguistics: ACL 2025. pp. 16448–16460 (2025) 16. Lyu, C., Qiu, C., Han, K., Li, S., Sheng, V.S., Rong, H., Song, Y., Liu, Y., Liu, Z.: Automatic medical report generation combining contrastive learning and feature difference. Knowledge-Based Systems 305 , 112630 (2024) 17. Mao, Y., Xu, W., Qin, Y., Gao, Y.: Ct-agent: A multimodal-llm agent for 3d ct radiology question answering. arXiv preprint arXiv:2505.16229 (2025) 18. Marcos, L., Babyn, P., Alirezaie, J.: Pure vision transformer (ct-vit) with noise2neighbors interpolation for low-dose ct image denoising. Journal of Imag-ing Informatics in Medicine 37 (5), 2669–2687 (2024) 19. Papineni, K., Roukos, S., Ward, T., Zhu, W.J.: Bleu: a method for automatic evaluation of machine translation. In: Proceedings of the 40th annual meeting of the Association for Computational Linguistics. pp. 311–318 (2002) DiffVP for LLM-Based CT Report Generation 17 20. Park, H., Kim, K., Yoon, J., Park, S., Choi, J.: Feature difference makes sense: a medical image captioning model exploiting feature difference and tag information. In: Proceedings of the 58th Annual Meeting of the Association for Computational Linguistics: Student Research Workshop. pp. 95–102 (2020) 21. Song, S., Tang, H., Yang, H., Li, X.: Ddatr: Dynamic difference-aware tempo-ral residual network for longitudinal radiology report generation. arXiv preprint arXiv:2505.03401 (2025) 22. Tang, Y., Yang, H., Zhang, L., Yuan, Y.: Work like a doctor: Unifying scan localizer and dynamic generator for automated computed tomography report generation. Expert Systems with Applications 237 , 121442 (2024) 23. Touvron, H., Martin, L., Stone, K., Albert, P., Almahairi, A., Babaei, Y., Bash-lykov, N., Batra, S., Bhargava, P., Bhosale, S., et al.: Llama 2: Open foundation and fine-tuned chat models. arXiv preprint arXiv:2307.09288 (2023) 24. Wang, Z., Liu, L., Wang, L., Zhou, L.: R2gengpt: Radiology report generation with frozen llms. Meta-Radiology 1(3), 100033 (2023) 25. Wang, Z., Tang, M., Wang, L., Li, X., Zhou, L.: A medical semantic-assisted trans-former for radiographic report generation. In: International Conference on Medi-cal Image Computing and Computer-Assisted Intervention. pp. 655–664. Springer (2022) 26. Wang, Z., Zhou, L., Wang, L., Li, X.: A self-boosting framework for automated radiographic report generation. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition. pp. 2433–2442 (2021) 27. Wu, C., Zhang, X., Zhang, Y., Hui, H., Wang, Y., Xie, W.: Towards generalist foun-dation model for radiology by leveraging web-scale 2d&3d medical data. Nature Communications 16 (1), 7866 (2025) 28. Yan, A., McAuley, J., Lu, X., Du, J., Chang, E.Y., Gentili, A., Hsu, C.N.: Radbert: adapting transformer-based language models to radiology. Radiology: Artificial Intelligence 4(4), e210258 (2022) 29. Yang, A., Yang, B., Hui, B., Zheng, B., Yu, B., Zhou, C., Li, C., Li, C., Liu, D., Huang, F., et al.: Qwen2 technical report. arXiv preprint arXiv:2407.10670 (2024) 30. Yun, H., Maeng, J., Kang, E., Suk, H.I.: Diff-rrg: Longitudinal disease-wise patch difference as guidance for llm-based radiology report generation. In: International Conference on Medical Image Computing and Computer-Assisted Intervention. pp. 152–161. Springer (2025) 31. Zhang, X., Wu, C., Zhao, Z., Lei, J., Zhang, Y., Wang, Y., Xie, W.: Radgenome-chest ct: A grounded vision-language dataset for chest ct analysis. arXiv preprint arXiv:2404.16754 (2024) 32. Zhao, G., Yan, Y., Zhao, Z.: Normal-abnormal decoupling memory for medical report generation. In: Findings of the Association for Computational Linguistics: EMNLP 2023. pp. 1962–1977 (2023) 33. Zhao, Z., Zhang, Y., Wu, C., Zhang, X., Zhang, Y., Wang, Y., Xie, W.: One model to rule them all: Towards universal segmentation for medical images with text prompts. arXiv preprint arXiv:2312.17183 (2023) 18 Y. Tian et al. 
+
+## A Experiments Background 
+
+A.1 Datasets 
+
+RadGenome-ChestCT. Derived from the large-scale CT-RATE [8] dataset, which is specifically constructed for region-guided 3D CT interpretation. RadGenome-ChestCT comprises a total of 25,692 CT-report pairs collected from 21,304 unique patients. We adhere to the official data partition, which designates 24,128 pairs for training and 1,564 pairs for evaluation. This dataset includes overall CT data and uses SAT [33] to segment the CT images into anatomical regions. Simultaneously, GPT-4o [1] was used to localize and separate regions within the medical reports. The final output consists of image information and corre-sponding reports for ten common anatomical regions: abdomen, bones, breasts, esophagus, heart, lungs, trachea and bronchi, mediastinum, pleura, and thyroid. Furthermore,the dataset ensures standardized visual inputs with a consistent voxel spacing of 1 × 1 × 3 mm. 
+
+CTRG-Chest-548K. Serving as a supplementary benchmark, this dataset con-tains 1,804 CT-report pairs. To adapt the data for region-guided generation, we established a standardized preprocessing workflow. We utilized SAT to ex-tract visual masks for 10 anatomical regions, while leveraging Qwen-14B [29] to parse and rewrite the raw reports into corresponding regional descriptions. The dataset is randomly split into training and testing sets with a ratio of 8:2. 
+
+A.2 Evaluation Metrics 
+
+We evaluate generated reports using a combination of natural language genera-tion (NLG) metrics and clinically oriented metrics. For language quality, we report BLEU-n (n=1 , 2, 3, 4) [19], METEOR [3] and ROUGE-L [14]. BLEU-n measures n-gram overlap between generated and refer-ence reports, ROUGE-L focuses on the longest common subsequence, METEOR accounts for synonymy and paraphrasing, emphasizes consensus with multiple references by TF-IDF reweighting. Together, these metrics assess lexical accu-racy, fluency, and semantic similarity. NLG metrics alone are insufficient to evaluate clinical correctness, as reports with opposite diagnostic meanings may still achieve similar scores. To address this limitation, we additionally adopt clinical efficacy (CE) metrics [8]. Specif-ically, we use a RadBERT-based classifier [28] to extract 18 abnormality labels from both generated and ground-truth reports on the RadGenome-ChestCT dataset. Precision, recall, and F1 scores are then computed over the predicted abnormality labels, providing a clinically meaningful assessment of diagnostic consistency. DiffVP for LLM-Based CT Report Generation 19 
+
+## Normal Reference Report    
+
+> Dataset Reference Content
+> RadGenome Thoracic CT examination within normal limits. Findings within normal limits. No obvious pathology was observed in thorax CT examination. Findings within normal limits CTRG-548K Thorax is symmetrical. lung window shows clear lung markings. natural walking. good lung field transparency. no obvious consolidation shadow. and bilateral pulmonary hili are not large. The shape of heart shadow and heart big vessels is normal. and no obvious mass or enlarged lymph node is found in mediastinum. No pleural effusion or pleural thickening. Thorax is symmetrical. lung window shows clear lung markings. natural walking. good lung field transparency. no obvious consolidation shadow. and bilateral pulmonary hili are not large. The shape of heart shadow and heart big vessels is normal. and no obvious mass or enlarged lymph node is found in mediastinum. No pleural effusion or pleural thickening.
+
+Fig. 7: Examples of normal references from the constructed pool. These reports describe standard physiological states without pathological findings. 
+
+## B Normal Reference Dataset 
+
+To compare input images with normal reference CT images, we construct a dedicated normal reference sample dataset by selecting CT images whose reports explicitly indicate no abnormality. This selection process yields 1,787 training samples and 124 evaluation sam-ples from the RadGenome-ChestCT dataset, and 105 training samples and 43 test samples from the CTRG-Chest-548K dataset. During the training and inference phases, we employ a random pairing strat-egy, matching each target input image with a reference sample randomly drawn from the corresponding portion of this normal reference dataset. Note that there is no mixing or leakage of normal reference images used in the training and testing processes; the normal reference samples drawn from each dataset, belonging to both the training and test phases, were used only for the corresponding dataset’s training or testing phase. Since the normal reference samples were collected based on reports, we pro-vide examples of normal reports from the two datasets below to give a more intuitive understanding of normal samples in figure 7. 20 Y. Tian et al. 
+
+Table 5: Quantitative results and stability analysis on the test set. We report results across five random seeds for both Baseline and Ours, together with mean ±std and two-sided t-test p-values (Ours vs. Baseline). Metric scores are reported in percentage (%).                                                                                                   
+
+> Method B1 B4 MTR RG-L F1 Recall Precision
+> Baseline (Seed 21) 47.25 24.87 44.07 36.65 0.253 0.180 0.423 Baseline (Seed 22) 47.43 25.02 44.06 36.67 0.250 0.178 0.417 Baseline (Seed 23) 47.63 25.27 44.38 36.98 0.248 0.178 0.412 Baseline (Seed 24) 47.41 25.09 44.18 37.62 0.260 0.186 0.430 Baseline (Seed 25) 47.30 24.84 43.99 36.53 0.259 0.186 0.427 Ours (Seed 21) 58.01 35.82 50.76 39.48 0.398 0.440 0.362 Ours (Seed 22) 57.75 35.54 50.59 39.27 0.397 0.441 0.361 Ours (Seed 23) 57.73 35.54 50.59 39.28 0.397 0.441 0.361 Ours (Seed 24) 57.75 35.52 50.58 39.25 0.397 0.441 0.361 Ours (Seed 25) 58.16 34.28 47.40 32.32 0.406 0.450 0.370
+> Baseline (mean ±std) 47.40 ±0.15 25.02 ±0.17 44.14 ±0.15 36.89 ±0.39 0.254 ±0.005 0.182 ±0.004 0.422 ±0.007
+> Ours (mean ±std) 57.88 ±0.19 35.34 ±0.61 49.98 ±1.45 37.92 ±3.13 0.399 ±0.003 0.443 ±0.004 0.363 ±0.004
+> p-value 8.77e-13 6.44e-07 7.65e-04 5.05e-01 1.62e-10 1.13e-13 3.36e-06
+
+## C Stability and Significance Analysis 
+
+Stability under Random Test-Time Pairing. Our framework pairs each abnormal input with a randomly sampled normal reference at inference time, reflecting realistic clinical conditions where perfectly aligned priors are unavailable. To evaluate robustness to this stochastic pairing, we run both the Baseline and our method five times (Seeds 21–25), each with an independent random pairing. 
+
+Robustness to Stochastic Pairing. Table 5 summarizes the cross-seed mean ±std. Despite random reference selection, our method remains stable across runs, with small variance on both language and clinical metrics (eg std= 0 .19 for BLEU-1 and std= 0 .003 for CE-F1). This indicates that the difference-aware mechanism extracts consistent semantic discrepancies rather than relying on specific refer-ence samples or “lucky” pairings. 
+
+Statistical Significance. We further test whether the improvements are statisti-cally reliable using two-sided t-tests over the five seeds. As reported in Table 5, the gains are significant for BLEU-1, BLEU-4, METEOR, and clinical efficacy metrics (F1/Recall/Precision), with p < 10 −3. In contrast, ROUGE-L does not show a significant difference ( p = 5 .05e −01), consistent with the observation that longest-common-subsequence structure can be more sensitive to stochastic generation. Overall, these results support that our improvements are robust and reproducible under random test-time pairing. 
+
+Why ROUGE-L can be non-significant. ROUGE-L is computed from the longest common subsequence (LCS) and is therefore sensitive to sentence order and dis-course structure: when the same clinical content is organized in a different or-der, the LCS length can decrease even if the semantics remain consistent. We inspected predictions against ground-truth reports and found that the weaker DiffVP for LLM-Based CT Report Generation 21 
+
+and non-significant ROUGE-L results mainly stem from structural ordering dif-ferences rather than missing clinical content. For example, in case valid 1289 , the ground truth follows the order abdomen 
+
+→ bone → esophagus → heart and mediastinum → lung → lymph nodes →
+
+airway , whereas our report follows abdomen → bone → esophagus → mediastinal vessels → lung → mediastinum and lymph nodes → airway .Although the anatomical coverage and abnormal findings largely overlap, dif-ferences in section placement and topic order shorten the LCS alignment, low-ering ROUGE-L. Hence, the non-significant ROUGE-L difference reflects struc-tural sensitivity rather than semantic deficiency, which is consistent with the stable clinical efficacy metrics. We acknowledge that structure alignment can be further improved and will explore structure-aware strategies in future work. 
+
+## D Diagnostic Anchor E: Definition, Training, and Ablations 
+
+Definition and supervision source. We introduce an auxiliary diagnostic anchor 
+
+E as an 18-class multi-label disease vector aligned with the official structured annotations of RadGenome-ChestCT. Each CT volume corresponds to an 18-class label over the following cate-gories: Medical material, Arterial wall calcification, Cardiomegaly, Pericardial effusion, Coronary artery wall calcification, Hiatal hernia, Lymphadenopathy, Emphysema, Atelectasis, Lung nodule, Lung opacity, Pulmonary fibrotic sequela, Pleural effusion, Mosaic attenuation pattern, Peribronchial thickening, Consol-idation, Bronchiectasis, Interlobular septal thickening . These labels are dataset-provided structured annotations rather than extracted from free-text reports. The E classifier is trained only on the training split, hence it does not introduce information leakage. 
+
+Training of the E predictor. E is predicted by an independently trained 3D multi-label classifier with a 3D ResNet-18 backbone. The classifier produces voxel-level logits, which are aggregated into volume-level probabilities using Noisy-OR pooling. We optimize the classifier using a standard multi-label bi-nary cross-entropy (BCE) loss with the 18-class labels. 
+
+How E is used for report generation. During report generation, the E classi-fier is frozen. Predicted disease probabilities are converted into short diagnostic prompts and prepended to the LLM input as a lightweight semantic anchor. We also tested end-to-end joint training of the classifier and the generator, but observed unstable optimization and reduced report quality; therefore, we adopt a two-stage design. Using predicted disease labels as semantic anchors is a stan-dard paradigm in medical report generation and vision–language modeling, and is not the core novelty of this work. 22 Y. Tian et al. 
+
+Table 6: Ablation study without the diagnostic anchor E on RadGenome-ChestCT.                                                 
+
+> Setting BL-1 BL-4 MTR RG-L F1 Recall Precision Baseline (w/o ∆, w/o E)55.29 33.17 44.11 31.94 0.159 0.109 0.295 +∆global (w/o E)56.83 37.24 50.09 42.50 0.188 0.124 0.383 +∆global +∆local (w/o E)57.23 33.99 46.67 32.83 0.238 0.175 0.374 +∆global +∆local +E(Ours) 58.16 34.28 47.40 32.32 0.421 0.496 0.366
+
+Ablation without E. To evaluate the standalone effect of difference-aware mod-eling, we remove E and report results in Table 6. Even without E, discrepancy modeling still yields consistent improvements over the baseline. In particular, introducing ∆global improves overall language generation quality across NLG metrics, and further adding ∆local enhances abnormality sensitivity, increasing CE-F1 from 0.188 to 0.238 and improving Recall. These results indicate that multi-level discrepancy modeling has an independent effect and contributes di-rectly to clinical effectiveness, rather than relying on the diagnostic anchor. 
+
+## E LLM-as-Judge Evaluation Protocol 
+
+We use GPT-5 (temperature = 0) as a reference-guided judge for randomized pairwise comparisons across five clinically motivated dimensions: finding cover-age, clinical actionability, detail richness, anatomical specificity, and quantifica-tion detail. The evaluation follows a forced-choice design to compute win-rates. We include the complete judge prompt below to ensure full reproducibility and transparency. 
+
+## F Sensitivity to Normal Reference Pool 
+
+This section evaluates the sensitivity of our method to (i) the size of the normal reference pool, (ii) domain shift in the normal references, and (iii) imperfect normal pools with abnormal contamination, following the reviewer request to vary pool size and pool quality and report performance. DiffVP for LLM-Based CT Report Generation 23 
+
+## Judge Prompt (GPT-5) 
+
+You are a Senior Radiologist Consultant. You must compare Report A vs Report B against the Ground Truth (GT) on FIVE dimensions. IMPORTANT: You are NOT allowed to output ”Tie” in any dimension. You must choose either ”Report A” or ”Report B” for every winner field. This forced-choice design is required to compute consistent win-rate statistics. Focus strictly on what is written in the reports. Do not assume extra findings beyond GT. When judging ”detail richness”, richness should NOT reward fabricated or unsupported facts. Prefer clinically plausible elaboration only if it remains consistent with the GT. Penalize clearly invented or contradictory details. 
+
+Dimension 1: finding coverage Question: Which report captured more GT POSITIVE findings (missed fewer true abnormalities)? 
+
+How to judge: 
+
+• Identify GT positive abnormalities and check which report mentions them correctly. 
+
+• Missing a major GT abnormality is heavily penalized. 
+
+Winner: the report that misses fewer true positives. 
+
+Dimension 2: clinical actionability Question: Which report is more clinically actionable while staying faithful to GT? 
+
+How to judge: 
+
+• Clear key impression / prioritization of important findings. 
+
+• Less irrelevant clutter; avoids burying key abnormalities. 
+
+• No major contradictions with GT. 
+
+Winner: the report that is more useful for clinical decision-making. 
+
+Dimension 3: detail richness Question: Which report provides richer clinically-relevant detail while remaining faithful to GT? 
+
+How to judge: 
+
+• More descriptive radiology language, qualifiers, and contextual details. 
+
+• Avoid empty generic statements. 
+
+• Prefer plausible and GT-consistent details. 
+
+• Penalize unsupported measurements, invented facts, or contradictions. 
+
+Winner: the report with richer and informative yet GT-consistent descriptions. 
+
+Dimension 4: anatomical specificity Question: Which report uses more specific anatomical localization? 
+
+How to judge: 
+
+• Laterality (left/right), lobes/segments, sub-regions, organ parts. 
+
+• Concrete localization beats vague phrases. 
+
+Winner: the report with finer anatomical grounding. 
+
+Dimension 5: quantification detail Question: Which report includes more quantification and measurable descriptors? 
+
+How to judge: 
+
+• Measurements (mm/cm), counts (multiple/few), severity (mild/moderate/severe), intervals. 
+
+Winner: the report with more quantification. 
+
+Output format (MUST be a strict JSON object, no markdown, no extra text): 
+
+{ "finding coverage winner": "Report A" or "Report B", "clinical actionability winner": "Report A" or "Report B", "detail richness winner": "Report A" or "Report B", "anatomical specificity winner": "Report A" or "Report B", "quantification detail winner": "Report A" or "Report B", "evidence": { "GT key findings": ["<=5 short phrases summarizing the GT positives, if any; if GT is fully normal, write [’normal’]"], "ReportA supporting spans": ["2-4 short verbatim spans copied from Report A that support your decisions"], "ReportB supporting spans": ["2-4 short verbatim spans copied from Report B that support your decisions"] },"reason": "1-3 sentences summarizing why the winners were chosen across the five dimensions." }
+
+Fig. 8: Complete prompt used for LLM-as-judge evaluation (GPT-5, temperature= 0). 24 Y. Tian et al. 
+
+Table 7: Effect of normal reference pool size on RadGenome-ChestCT.                                           
+
+> Pool Size B1 B4 MRL F1 Recall Prec
+> 158.20 35.82 50.71 39.38 0.403 0.451 0.365 10 58.33 36.07 50.83 39.50 0.406 0.451 0.370 40 58.40 36.31 50.92 39.74 0.414 0.458 0.379 60 58.25 35.89 50.66 39.47 0.403 0.450 0.365 124 58.08 35.73 50.55 39.38 0.398 0.445 0.360
+
+Table 8: In-domain vs. domain-shift comparison on RadGenome-ChestCT.                                
+
+> Setting B1 B4 MRL F1 Recall Prec
+> Baseline (No ∆)55.29 33.17 44.11 31.94 0.159 0.109 0.295 Ours (In-domain ∆)58.16 34.28 47.40 32.32 0.421 0.496 0.366 Ours (100% CTRG ∆)56.53 34.95 48.03 36.50 0.128 0.082 0.289
+
+F.1 Effect of Normal Reference Pool Size 
+
+We conduct additional experiments on RadGenome-ChestCT using different nor-mal reference pool sizes: 1, 10, 40, 60, and 124 images (124 corresponds to the full reference pool in the Rad dataset). As shown in Table 7, both NLG met-rics and clinical efficiency metrics remain stable across different pool sizes. The overall variation is small. This behavior is closely related to our random pairing design. During both training and testing, abnormal scans are randomly paired with normal references rather than matched to fixed samples. Therefore, the model learns a distribu-tional representation of abnormal–normal contrast patterns instead of memoriz-ing specific reference images or relying on a large reference pool. Even with a small pool, the stochastic sampling mechanism enables the model to consistently extract stable difference signals. Overall, the results indicate that the proposed method is robust to the size of the normal reference pool and does not depend on a large curated reference library. 
+
+F.2 Effect of Domain Shift 
+
+To evaluate the impact of domain shift, we construct a cross-domain normal pool. Abnormal samples remain from the RadGenome-ChestCT test set, while normal reference images are replaced with normal cases from the CTRG dataset. CTRG and RadGenome differ systematically in scanning protocols, preprocess-ing pipelines, pixel statistics, reconstruction orientation, contrast usage, device types, hospital sources, and acquisition periods. Therefore, abnormal–normal pairing under this setting constitutes a realistic cross-domain scenario. DiffVP for LLM-Based CT Report Generation 25 
+
+Table 9: Domain shift with different CTRG mixing ratios.                             
+
+> CTRG Mix Ratio B1 B4 MRL F1 Recall Prec
+> 10% 56.73 35.05 48.17 36.66 0.130 0.083 0.299 50% 56.91 35.45 48.47 36.82 0.128 0.082 0.292 100% 56.53 34.95 48.03 36.50 0.128 0.082 0.289
+
+Table 10: Imperfect normal pool with mixed abnormal samples.                             
+
+> Abnormal Ratio B1 B4 MRL F1 Recall Prec
+> 10% 57.03 36.51 48.41 36.34 0.166 0.118 0.282 50% 56.91 35.45 48.47 36.82 0.128 0.082 0.292 0% (ours) 58.16 34.28 47.40 32.32 0.421 0.496 0.366
+
+Under domain shift, B1 decreases from 58.16 (in-domain ∆) to 56.53, but remains clearly higher than the no-∆ baseline (55.29). This indicates that domain shift weakens the contrast signal to some extent, yet the ∆ mechanism still provides consistent gains. We further evaluate 10%, 50%, and 100% CTRG mixing ratios. NLG met-rics remain relatively stable without monotonic degradation as the mixing ratio increases, suggesting reasonable robustness to cross-domain normal references. Clinical efficiency (CE) metrics are more sensitive to domain shift. For exam-ple, F1 drops from 0.421 (in-domain) to approximately 0.128 under full cross-domain setting. This is expected, as CE directly depends on the precision of abnormal–normal contrast, which is affected by distribution mismatch. Importantly, in practical deployment, obtaining a small number of in-domain normal samples is typically low-cost. Combined with our earlier findings that performance is stable even with small normal pools, domain shift is unlikely to be a major obstacle in real-world application. 
+
+F.3 Imperfect Normal Pool 
+
+To evaluate the impact of an imperfect normal pool, we contaminate the normal reference set by mixing abnormal samples at ratios of 10 percent and 50 percent. Evaluation is conducted on the same test set. Results show that NLG metrics such as BLEU, ROUGE, and METEOR remain relatively stable, while CE metrics decline. For example, F1 decreases from 0.421 under a clean normal pool to 0.166 at 10 percent contamination and 0.128 at 50 percent contamination. This indicates that when the normal pool is no longer clean, the abnormal– normal contrast signal weakens, primarily affecting abnormality-related metrics. However, overall text generation quality remains stable. This experiment directly quantifies performance changes under imperfect normal conditions. 26 Y. Tian et al. 
+
+F.4 Summary 
+
+We systematically evaluate three scenarios: small normal pools, cross-domain normal pools, and imperfect normal pools with mixed abnormal samples. Results show that performance remains stable under small pool sizes. Under domain shift, performance decreases moderately but remains above the no-∆ baseline. When the normal pool is contaminated, abnormality-related metrics decline, while generation quality remains largely stable. These findings indicate that the method is robust to variations in normal pool size and distribution, although abnormal contrast capability weakens as reference quality degrades. In practical deployment, obtaining a small number of in-domain and rela-tively clean normal samples is typically low cost. Only a limited reference set is needed to support the contrast-based mechanism. Therefore, reliance on a curated normal pool does not pose a substantial limitation for real-world appli-cation.
