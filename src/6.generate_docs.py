@@ -6,81 +6,148 @@ import json
 import traceback
 from typing import Dict, List, Optional
 from urllib.parse import urljoin, urlparse, parse_qs, unquote
-from datetime import datetime
+from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
 import base64
 import urllib.request
 from generate_docs import *
 
-def gmail_decode(data):
-    # 补全 Base64 填充符号 (Padding)
-    missing_padding = len(data) % 4
-    if missing_padding:
-        data += '=' * (4 - missing_padding)
-    return base64.urlsafe_b64decode(data).decode('utf-8')
+def gmail_decode(data: str) -> str:
+    if not data:
+        return ""
+    data = data.replace("-", "+").replace("_", "/")
+    padding = 4 - (len(data) % 4)
+    if padding and padding != 4:
+        data += "=" * padding
+    return base64.b64decode(data).decode("utf-8", errors="ignore")
 
-def get_latest_research_email():
-    """获取最新一封标题包含 'new related research' 的邮件内容"""
-    
-    # 1. 配置 API 密钥和基础 URL
-    # 建议通过环境变量设置：export MATON_API_KEY='your_key'
+
+def extract_html_from_payload(payload: dict) -> str:
+    if not payload:
+        return ""
+
+    mime_type = payload.get("mimeType", "")
+    body = payload.get("body", {}) or {}
+    data = body.get("data")
+
+    if mime_type == "text/html" and data:
+        return gmail_decode(data)
+
+    parts = payload.get("parts", []) or []
+
+    for part in parts:
+        html = extract_html_from_payload(part)
+        if html and ("<html" in html.lower() or "<div" in html.lower() or "<table" in html.lower()):
+            return html
+
+    if mime_type == "text/plain" and data:
+        return gmail_decode(data)
+
+    for part in parts:
+        plain = extract_html_from_payload(part)
+        if plain:
+            return plain
+
+    return ""
+
+
+def get_related_research_emails_by_day(target_date: str):
+    """
+    target_date: '2026/03/22' 或 '2026-03-22'
+    获取该天全部标题包含 'new related research' 的邮件内容
+    """
     api_key = os.environ.get("MATON_API_KEY")
     if not api_key:
         return "错误：未找到 MATON_API_KEY 环境变量。"
 
     base_url = "https://gateway.maton.ai/google-mail/gmail/v1/users/me/messages"
-    headers = {'Authorization': f'Bearer {api_key}'}
+    headers = {"Authorization": f"Bearer {api_key}"}
 
     try:
-        # 2. 搜索邮件：使用 Gmail 的搜索语法 q='subject:"new related research"'
-        # 限制只取 1 条结果（最新的）
-        search_query = 'subject:"new related research"'
-        list_url = f"{base_url}?maxResults=1&q={urllib.parse.quote(search_query)}"
-        
-        req = urllib.request.Request(list_url, headers=headers)
-        with urllib.request.urlopen(req) as response:
-            list_data = json.loads(response.read().decode('utf-8'))
-        
-        messages = list_data.get('messages', [])
-        if not messages:
-            return "未找到标题包含 'new related research' 的邮件。"
+        # 兼容两种输入格式
+        if "/" in target_date:
+            day_dt = datetime.strptime(target_date, "%Y/%m/%d")
+        else:
+            day_dt = datetime.strptime(target_date, "%Y-%m-%d")
 
-        # 3. 获取该邮件的详细内容
-        msg_id = messages[0]['id']
-        detail_url = f"{base_url}/{msg_id}?format=full"
-        
-        detail_req = urllib.request.Request(detail_url, headers=headers)
-        with urllib.request.urlopen(detail_req) as response:
-            msg_detail = json.loads(response.read().decode('utf-8'))
+        next_day_dt = day_dt + timedelta(days=1)
 
-        # 4. 解析邮件关键信息
-        snippet = msg_detail.get('snippet', '')
-        payload = msg_detail.get('payload', {})
-        headers_list = payload.get('headers', [])
-        
-        subject = next((h['value'] for h in headers_list if h['name'] == 'Subject'), "无主题")
-        sender = next((h['value'] for h in headers_list if h['name'] == 'From'), "未知发件人")
+        today_str = day_dt.strftime("%Y/%m/%d")
+        tomorrow_str = next_day_dt.strftime("%Y/%m/%d")
 
-        email_data = payload['body']['data']
+        search_query = f'subject:"new related research" after:{today_str} before:{tomorrow_str}'
 
-        html_content = gmail_decode(email_data)
-        
-        # 返回格式化后的结果
+        all_message_ids = []
+        page_token = None
+
+        while True:
+            params = {
+                "maxResults": 100,
+                "q": search_query,
+            }
+            if page_token:
+                params["pageToken"] = page_token
+
+            list_url = f"{base_url}?{urllib.parse.urlencode(params)}"
+            req = urllib.request.Request(list_url, headers=headers)
+
+            with urllib.request.urlopen(req) as response:
+                list_data = json.loads(response.read().decode("utf-8"))
+
+            messages = list_data.get("messages", []) or []
+            all_message_ids.extend(messages)
+
+            page_token = list_data.get("nextPageToken")
+            if not page_token:
+                break
+
+        if not all_message_ids:
+            return {
+                "query": search_query,
+                "count": 0,
+                "emails": [],
+            }
+
+        results = []
+
+        for msg in all_message_ids:
+            msg_id = msg["id"]
+            detail_url = f"{base_url}/{msg_id}?format=full"
+
+            detail_req = urllib.request.Request(detail_url, headers=headers)
+            with urllib.request.urlopen(detail_req) as response:
+                msg_detail = json.loads(response.read().decode("utf-8"))
+
+            snippet = msg_detail.get("snippet", "")
+            payload = msg_detail.get("payload", {}) or {}
+            headers_list = payload.get("headers", []) or []
+
+            subject = next((h["value"] for h in headers_list if h["name"].lower() == "subject"), "无主题")
+            sender = next((h["value"] for h in headers_list if h["name"].lower() == "from"), "未知发件人")
+            date_header = next((h["value"] for h in headers_list if h["name"].lower() == "date"), "")
+
+            html_content = extract_html_from_payload(payload)
+
+            results.append({
+                "message_id": msg_id,
+                "subject": subject,
+                "sender": sender,
+                "date": date_header,
+                "snippet": snippet,
+                "full_data": msg_detail,
+                "html_content": html_content,
+            })
+
         return {
-            "subject": subject,
-            "sender": sender,
-            "snippet": snippet,
-            "full_data": msg_detail, 
-            "html_content": html_content
+            "query": search_query,
+            "count": len(results),
+            "emails": results,
         }
 
     except Exception as e:
         return f"程序运行出错: {str(e)}"
 
 os.environ['MATON_API_KEY'] = 'fiAs2yYLwCFTokXLsNQAPlza0HV0td4jg3NVWH0AW1BIaWapZleJuUM52sx2XFLbQoBFBCnTUGuxtJgw6KPZrJKcR8zOX33EgwY'
-
-
-
 
 # --------------------------------------------------
 # 1. 从 Google Scholar 提醒邮件中解析论文条目
@@ -185,13 +252,17 @@ def parse_scholar_html_to_dict(html_content: str) -> Dict:
             snippet_div = h3_tag.find_next_sibling('div', class_='gse_alrt_sni')
 
         author_venue = author_venue_div.get_text(strip=True) if author_venue_div else "未知作者/期刊"
+        author_text = author_venue.replace('\xa0', ' ').strip()
+
+        # 按第一个 " - " 切开
+        author_part = re.split(r'\s-\s', author_text, maxsplit=1)[0].strip()
         snippet = snippet_div.get_text(strip=True) if snippet_div else "无摘要"
 
         pdf_url = extract_pdf_url_from_title_block(a_tag)
 
         paper_dict = {
             "title": title,
-            "authors_and_venue": author_venue,
+            "authors": author_part,
             "snippet": snippet,
             "link": link,
             "pdf_url": pdf_url,
@@ -340,36 +411,46 @@ def process_paper_gmail(paper: Dict,
 # 4. 新 main：
 #    从邮件解析论文，然后作为 deep_list 逐篇处理
 # --------------------------------------------------
-def main(output_dir: str = "./generated_docs_from_email"):
-    result = get_latest_research_email()
+def main():
+    date_str = datetime.now().strftime("%Y/%m/%d")
+    # 不传参数时默认今天
+    result = get_related_research_emails_by_day(date_str)
+    # result = get_related_research_emails_by_day("2026/03/21") # debug
 
     if not isinstance(result, dict):
         print(result)
-        return
-    date_str = datetime.now().strftime("%Y-%m-%d")
-    print(f"找到邮件！")
-    print(f"主题: {result.get('subject', '')}")
-    print(f"发件人: {result.get('sender', '')}")
-    print(f"摘要: {result.get('snippet', '')}")
 
-    html_content = result.get("html_content", "")
-    if not html_content:
-        print("[ERROR] 邮件中没有 html_content")
-        return
+    print(f"找到 {date_str} {result.get('count', 0)} 封邮件")
 
-    parsed_data = parse_scholar_html_to_dict(html_content)
-    email_papers = parsed_data.get("papers", [])
+    all_email_papers = []
 
-    if not email_papers:
-        print("[INFO] 邮件中没有解析到论文条目")
-        return
+    for i, mail in enumerate(result.get("emails", []), 1):
+        subject = mail.get("subject", "")
+        sender = mail.get("sender", "")
+        snippet = mail.get("snippet", "")
+        html_content = mail.get("html_content", "")
 
-    email_list = build_deep_list_from_email_papers(email_papers)
+        print(f"\n--- 邮件 {i} ---")
+        print(f"主题: {subject}")
+        print(f"发件人: {sender}")
+        print(f"摘要: {snippet}")
 
-    print(f"[INFO] 从邮件中解析到 {len(email_papers)} 篇论文")
-    print(f"[INFO] 可用于 docs 生成的 email_list 数量: {len(email_list)}")
+        if not html_content:
+            print("[WARN] 该邮件没有 html_content，跳过")
+            continue
 
-    os.makedirs(output_dir, exist_ok=True)
+        parsed_data = parse_scholar_html_to_dict(html_content)
+        email_papers = parsed_data.get("papers", [])
+
+        print(f"[INFO] 该邮件解析出 {len(email_papers)} 篇论文")
+        all_email_papers.extend(email_papers)
+
+    print(f"\n[INFO] 总共拼接得到 {date_str} 有 {len(all_email_papers)} 篇论文")
+
+    email_list = build_deep_list_from_email_papers(all_email_papers)
+
+
+    # os.makedirs(output_dir, exist_ok=True)
 
     # all_results = []
     # for idx, paper in enumerate(deep_list, 1):
