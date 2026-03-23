@@ -1,0 +1,696 @@
+Title: Object-Scene-Camera Decomposition and Recomposition for Data-Efficient Monocular 3D Object Detection
+
+URL Source: https://scholar.google.com/scholar_url?url=https://arxiv.org/pdf/2602.20627&hl=en&sa=X&d=3750040201927371139&ei=4qnAaYP0K5TP6rQPnpK_yAY&scisig=ADi0EEWP3zjruugwQycxNwo3iTup&oi=scholaralrt&hist=Sp41LysAAAAJ:7428935191213286109:ADi0EEU2ouqVTCBrwHaLJOMmEG4p&html=&pos=1&folt=rel
+
+Published Time: Wed, 25 Feb 2026 01:38:36 GMT
+
+Number of Pages: 20
+
+Markdown Content:
+International Journal of Computer Vision manuscript No. 
+
+(will be inserted by the editor) 
+
+# Object-Scene-Camera Decomposition and Recomposition for Data Efficient Monocular 3D Object Detection 
+
+Zhaonian Kuang · Rui Ding · Meng Yang · Xinhu Zheng · Gang Hua ·
+
+> Received: 22 July 2025
+
+Abstract Monocular 3D object detection (M3OD) is intrin-sically ill-posed, hence training a high-performance deep learning based M3OD model requires a humongous amount of labeled data with complicated visual variation from diverse scenes, variety of objects and camera poses. However, we observe that, due to strong human bias, the three independent entities, i.e., object, scene, and camera pose, are always tightly entangled when an image is captured to construct training data. More specifically, specific 3D objects are always cap-tured in particular scenes with fixed camera poses, and hence lacks necessary diversity. Such tight entanglement induces the challenging issues of insufficient utilization and overfitting to uniform training data. To mitigate this, we propose an online object-scene-camera decomposition and recomposition data manipulation scheme to more efficiently exploit the training data. We first fully decompose training images into textured 3D object point models and background scenes in an efficient computation and storage manner. We then continuously re-compose new training images in each epoch by inserting the 3D objects into the freespace of the background scenes, and rendering them with perturbed camera poses from textured 3D point representation. In this way, the refreshed training     
+
+> Zhaonian Kuang ·Rui Ding ·Meng Yang Institute of Artificial Intelligence and Robotics, Xi’an Jiaotong Univer-sity, Xi’an, P.R.China E-mail: znkwong@stu.xjtu.edu.cn, dingrui@stu.xjtu.edu.cn, mengyang@mail.xjtu.edu.cn Xinhu Zheng Intelligent Transportation Thrust of the Systems Hub, Hong Kong Uni-versity of Science and Technology (GZ), Guangzhou, P.R.China E-mail: xinhuzheng@hkust-gz.edu.cn Gang Hua Amazon Alexa AI, Bellevue, Washington, United States E-mail: ganghua@gmail.com Codes and models are available at this website.
+
+data in all epochs can cover the full spectrum of independent object, scene, and camera pose combinations. This scheme can serve as a plug-and-play component to boost M3OD models, working flexibly with both fully and sparsely super-vised settings. In the fully-supervised setting, all objects are annotated. In the sparsely-supervised setting, objects closest to the ego-camera for all instances are sparsely annotated. We then can flexibly increase the annotated objects to control annotation cost. For validation, our method is widely applied to five representative M3OD models and evaluated on both the KITTI and the more complicated Waymo datasets. In the fully-supervised setting, our method significantly im-proves the performance of the base models by 26% ∼48% relatively, and achieves new state-of-the-art on KITTI as of submission. In the sparsely-supervised setting, our method with only 10% annotations achieves on-par performance with fully-supervised paradigm in most scenarios. 
+
+Keywords Monocular vision · 3D object detection · Data Efficient · Full supervision · Sparse supervision 
+
+1 Introduction 
+
+Monocular 3D object detection (M3OD) (Huang et al., 2023; Lu et al., 2021; Ma et al., 2021; Peng et al., 2022b; Reading et al., 2021; Zhang et al., 2023) aims to restore the 3D attributes of objects in a scene, such as 3D position, orientation, and size, using a single RGB image. Compared with high-cost LiDAR-based schemes (Lang et al., 2019; Sheng et al., 2025; Shi et al., 2023; Yang et al., 2025; Zhang et al., 2025, 2024b) and multi-view schemes (Huang et al., 2021, 2025; Li et al., 2023b, 2022a; Wang et al., 2025; Wu et al., 2024; Zhang et al., 2022), M3OD provides a low-cost alternative for autonomous driving and robot navigation. However, M3OD is more challenging due to the intrinsic ill-posedness of monocular 3D vision.              
+
+> arXiv:2602.20627v1 [cs.CV] 24 Feb 2026 2Zhaonian Kuang et al. 10% 20% 50% 100%
+> 5
+> 8
+> 11
+> 14
+> 17
+> 20
+> 23
+> MonoDLE
+> 10% 20% 50% 100%
+> 5
+> 8
+> 11
+> 14
+> 17
+> 20
+> 23
+> GUPNet
+> 10% 20% 50% 100%
+> 5
+> 8
+> 11
+> 14
+> 17
+> 20
+> 23
+> DID-M3D
+> 10% 20% 50% 100%
+> 5
+> 8
+> 11
+> 14
+> 17
+> 20
+> 23
+> MonoDETR
+> Annotation Ratio
+> AP 3D
+> baseline
+> ours
+
+Fig. 1: Implementation of our data manipulation scheme on four released models under both fully and sparsely supervised settings. The 𝑥 -axis represents the percentage of annotated objects used in our scheme out of all objects in the KITTI train split. The 𝑦 -axis represents the moderate level of 𝐴𝑃 3𝐷 in the KITTI validation split. Our method significantly boosts the performance of the base models in both the fully (i.e., 100% annotation ratio) and the sparsely (i.e., 10%, 20%, and 50%) supervised settings. Our method with only 10% annotations even achieves on-par performance with the fully-supervised setting of the first three base models. Training a high-performance deep learning based M3OD model requires a humongous amount of labeled data with complicated visual variation from diverse scenes, a variety of objects, and camera poses in real world. This could help the network learn a robust feature representation to alleviate the ill-posed problem. However, the annotations of 3D object detection are more challenging and costly compared with conventional 2D object detection. Limited training data may result in low accuracy of M3OD models and difficult appli-cation in real world. Therefore, developing a data efficient scheme is a meaningful yet challenging task for M3OD. Existing work has made several efforts to alleviate the training data problem. Conventional image-level augmenta-tions (Liu et al., 2022a) are basic schemes. Semi-supervised schemes (Yang et al., 2023; Zhang et al., 2024a) directly alleviate the problem by scaling up training data but is limited by the quality of pseudo labels. Copy-Paste (Lian et al., 2022; Qiao et al., 2024) can generate more objects with labels for M3OD. It achieves this by cutting and pasting the image patches of objects. However, these schemes are limited by inserting positions in the scene due to the fixed occupation of existing objects. Moreover, the 2D-3D geometric consistency after paste cannot be maintained. Recent Nerf-based method (Tong et al., 2023), GAN-based (Li et al., 2023a), graphical-engine-based method (Ge et al., 2023) and diffusion-based method (Parihar et al., 2025; Wen et al., 2024) can generate precise 3D data but suffer from high reconstruction or ren-dering cost, making them difficult to embed into the training pipeline of M3OD models. In addition, camera pose is an important factor of training data for M3OD, but is often overlooked. In traffic scenes, camera pose is entangled with the ground plane prior (Dijk and Croon, 2019; Zhou et al., 2021), the latter of which is often utilized by M3OD models to estimate the object’s depth. Such tight entanglement makes the model sensitive to camera pose perturbation. MonoEF (Zhou et al., 2021) improves the robustness to pose changes by learning and rectifying camera pose online, however, it does not directly reduce pose sensitivity. Moreover, training data collected with a fixed camera pose are typically annotated at a low temporal resolution. This setup fails to capture the full data stream, limiting the model capacity to learn from the training data. In this paper, we observe that one crucial problem of training data for M3OD lies in the tight entanglement of the three entities, i.e. object, scene, and camera pose. That is, to construct training samples, specific 3D objects are always captured in particular scenes with fixed camera poses. Due to this strong human bias, the training data lacks necessary diversity. However, these three entities are essentially inde-pendent in the real world. For example, the traffic scene and the camera pose are diverse in real scenarios, and different objects can appear anywhere in the freespace of a scene. This tight entanglement problem appears everywhere in real-world datasets for M3OD such as the KITTI and the more complicated Waymo. It results in the network being trained for multiple epochs on uniform training data, where objects, scenes, and camera poses are tightly entangled. This will results in three challenging issues: 
+
+(i) Overfitting to uniform training data. To estimate 3D properties, especially depth, the detector relies on: (1) the appearance and 2D size of the object; (2) the relationship between the object and the scene; (3) the relationship between adjacent objects. Due to the tight entanglement of objects and scenes, the appearance, 2D size of the object, object-scene relationship and object-object relationship are remain the same in each training epoch. Therefore, the network is prone to overfitting to these uniform training data. 
+
+(ii) Underutilization of object-scene and object-object relationship. Objects and scenes are supposed to be two inde-pendent entities in real world. Due to their tight entanglement, objects can only appear on the specific locations of specific scenes. Firstly, the fixed object appearance and 2D size hinder the network from learning robust semantic-to-3D properties mapping. Secondly, the fixed location of the object hinders the network to exploit more structural information from the scene, which helps estimate the object’s depth. Thirdly, the spatial relationships between adjacent objects can also assist Object-Scene-Camera Decomposition and Recomposition for Data Efficient Monocular 3D Object Detection 3
+
+in depth estimation, but a fixed object-object relationship hinders the model from learning a robust depth reasoning pattern based on this relationship. 
+
+(iii) Limited camera pose variation . The ground plane prior in the traffic scene (Dijk and Croon, 2019; Zhou et al., 2021) is tightly entangled to camera pose. As a result, when the network learns these priors, it becomes sensitive to specific pose perturbations due to the tight entanglement between 3D scenes and camera poses. In addition, collected training data with a fixed camera pose is typically annotated at a low temporal resolution, which limits the model’s ability to learn from the training data effectively. Existing methods address these issues to some extent. For example, Copy-Paste (Lian et al., 2022; Qiao et al., 2024) can extend the object-scene and object-object relationship, but cannot alleviate the two issues of overfitting to uniform training data and limited camera pose variation. Recent recon-struction and generation methods (Ge et al., 2023; Li et al., 2023a; Tong et al., 2023; Wen et al., 2024) have the potential to solve these three issues, but face prohibitive computational costs for M3OD tasks. Specifically, the augmented data con-struction process of these methods have to be deployed offline. It requires substantial GPU hours for computation and a large amount of disk space for data storage. To mitigate the three issues, we propose an online object-scene-camera decomposition and recomposition data manip-ulation scheme for data efficient M3OD. Our scheme fully decomposes and randomly recomposes the three indepen-dent entities in 3D space, i.e., objects, scenes, and camera poses, to exploit training data more efficiently. In our scheme, object-scene decomposition helps the network alleviate the overfitting to uniform training data, object-scene recompo-sition helps explore more object-scene and object-object relationships, and scene-camera decomposition and recom-position can extend the camera pose of a frame from fixed value to diverse variations. More specifically, in the decomposition process, we con-struct objects as textured 3D point models, and remove all objects from the scene to construct empty scenes. In this process, we utilize texture point cloud representation for effi-cient computation and storage. In the recomposition process, we continuously recompose new training images online in each epoch by traversing the combination of objects, scenes, and camera poses. 3D objects are inserted into the freespace of scenes to explore variation of object appearance and 2D size, and the relationships of objects and scenes. Moreover, the 3D texture scene point cloud is rendered into 2D images with perturbed camera poses. This way, the refreshed training data in all epochs can cover the full spectrum of independent object, scene, and camera combinations. Thus, the network can learn robust representations related to all objects, scenes, and camera poses in 3D scenes. Our scheme can serve as a plug-and-play component to boost deep learning based M3OD models, and it works flexibly with both fully and sparsely supervised settings. In the fully-supervised setting, all objects are annotated to apply our scheme. In the sparsely-supervised setting, only the objects closest to the ego-camera for all instances are sparsely annotated to avoid redundant semantics across successive frames. Then we can flexibly increase the number of annotated objects to control annotation costs for easier applications in real world. To validate our scheme, we widely apply it to five represen-tative M3OD models with publicly released codes, including MonoDLE (Ma et al., 2021), GUPNet (Lu et al., 2021), DID-M3D (Peng et al., 2022b), MonoDETR (Zhang et al., 2023), MonoDGP (Pu et al., 2025), and evaluate them on both the widely used KITTI and the more complicated Waymo benchmarks. We also apply our scheme to PETR (Liu et al., 2022b) under multi-camera setting on Waymo. In the fully-supervised setting, our scheme significantly improves 𝐴𝑃 3𝐷 of the four base models by 26% ∼48% relative to their original performance, and achieves new state-of-the-art (SOTA) on KITTI. In the sparsely-supervised setting, our method with fewer annotations (especially only 10% for MonoDLE, GUPNet and DID-M3D) can achieve on-par performance, when compared to fully-supervised paradigm of these base models. The results in these two settings are shown in Figure 1. Notably, our method holds great potential to achieve higher accuracy with stronger base models upon their codes released. We highlight the main contributions as follows: 
+
+– We observe the crucial tight entanglement problem of the three independent entities,i.e., scene, object, and camera pose, seriously hinders the efficient utilization of training data in M3OD. 
+
+– We propose an online data manipulation scheme to miti-gate the issues of insufficient utilization and overfitting on uniform training data. It serves as a plug-and-play component to boost M3OD models, working flexibly with both fully and sparsely supervised settings. 
+
+– Our scheme significantly improves the performance of recent M3OD models and achieves SOTA on KITTI. In addition, our scheme with fewer annotations can achieve on-par performance with fully-supervised paradigm. 
+
+2 Related Work 
+
+2.1 Monocular 3D Object Detection Monocular 3D object detection (M3OD) focuses on detecting and localizing objects in 3D space based on a single RGB image. Most M3OD methods are developed based on tradi-tional 2D object detection methods (Ren et al., 2015; Tian 4 Zhaonian Kuang et al. 
+
+et al., 2019; Zhou et al., 2019). However, compared to 2D Detection, (Ma et al., 2021) and (Wang et al., 2022) reveal that depth estimation is the key challenge in M3OD. To tackle the challenging problem of accurately estimating depth from ill-posed monocular 3D vision, various methods have been proposed, each employing a distinct approaches. MonoDLE and MonoCon (Liu et al., 2022a; Ma et al., 2021) estimate object depth through direct regression. Additionally, MonoCon (Liu et al., 2022a) advocates learning auxiliary monocular contexts via keypoint estimation. MonoPair (Chen et al., 2020) utilizes the spatial relationship of objects to help estimating depth of per objects. CaDDN (Reading et al., 2021) uses categorical depth distribution estimation to elevate 2D features into 3D features. GUPNet (Lu et al., 2021) combines 2D height and 3D height of objects with perspective projection to determine object depth. DID-M3D (Peng et al., 2022b) decouples object depth into surface depth and attribute depth. MonoLSS (Li et al., 2024) uses learnable ROI feature selection to help estimate depth. MonoFlex (Zhang et al., 2021), MonoDDE (Li et al., 2022b), and MonoCD (Yan et al., 2024) use the 2D-3D geometric constraint of object keypoints for depth inference. MonoDETR (Zhang et al., 2023) and MonoDTR (Huang et al., 2022) introduce the transformer architecture for global relationship modeling to strengthen depth prediction. MonoEF (Zhou et al., 2021) uses online feature rectification to make model robust to camera pose perturbations. To effectively alleviate the ill-posed depth estimation prob-lem, a huge amount of labeled data is required for training. However, the annotations of M3OD are much more chal-lenging and costly compared to 2D object detection. Limited training data may lead to low accuracy of M3OD models and hinder their application in real-world scenarios. Our work aims to develop a data manipulation scheme for M3OD to exploit training data more efficiently. 2.2 Boosting M3OD from a Data Pespective To mitigate the limitation of training data, many works seeks to enhance monocular 3D detectors from a data perspective. We categorize them into four categories: image-level aug-mentation, utilizing additional data, copy-paste strategy, and data reconstruction and generation. 
+
+2.2.1 Image-level Augmentation 
+
+Color augmentation, random flipping, and random cropping (Liu et al., 2022a) are representative image-level augmentation operations. DID-M3D (Peng et al., 2022b) and EGC (Lian et al., 2022) use scaling factors to adjust the depth labels of objects to alleviate the 2D-3D geometric inconsistency caused by image scaling. However, image-level augmentation still suffers from the tight entanglement issue. 
+
+2.2.2 Utilizing Unlabeled Data 
+
+LPCG (Peng et al., 2022a), Mix-Teaching (Yang et al., 2023), and DPL (Zhang et al., 2024a) utilize large-scale unlabeled data, employing pseudo-label mining strategies to expand training samples. However, these methods still suffer from the tight entanglement problem and low-quality pseudo labels. 
+
+2.2.3 Copy-Paste Strategy 
+
+Copy-paste is an effective technique to increase the number of training samples by extracting image patches of certain objects and pasting them into different areas. This technique was first applied to 2D vision tasks (Dvornik et al., 2018; Fang et al., 2019; Wang et al., 2019). EGC (Lian et al., 2022) and MonoSample (Qiao et al., 2024) extend this strategy to M3OD by adjusting the 2D size of objects and enforcing object-ground attachment constraints. However, this approach suffers from the 2D-3D inconsistency problem. Morever, the presence of existing objects in the scene restricts the available insertion positions for new objects. Therefore, while this strategy expands object-scene relationships, it fails to mitigate the issues of overfitting to invariant training data and limited camera pose variation. 
+
+2.2.4 Data Reconstruction and Generation 
+
+3DA (Tong et al., 2023) and Lift3D (Li et al., 2023a) employ NeRF and GAN, respectively, to generate precise 3D data. (Ge et al., 2023) employs a graphical engine, while (Parihar et al., 2025; Wen et al., 2024) utilize a diffusion model to generate more realistic training samples. However, these approaches incur high computational costs for reconstruction and rendering. Therefore, they have to be deployed offline. Consequently, generating a large-scale dataset with diverse object-scene-camera combinations for training remains computationally expensive and impractical. In summary, existing methods fail to effectively address the tight entanglement issue of object, scene, and camera poses, or come with prohibitive computational costs. In con-trast, we conduct a comprehensive investigation and propose an effective solution to this problem. Compared to previous methods, our approach simultaneously achieves 2D-3D con-sistent data manipulation, covers the full spectrum of object-scene-camera combinations during training while maintains a low computational cost. Object-Scene-Camera Decomposition and Recomposition for Data Efficient Monocular 3D Object Detection 5extracted 
+
+> objects
+> scene
+> database
+> object
+> database
+> 2D→3 D
+> object
+> removal
+
+decomposition process     
+
+> raw scene
+> raw scene
+> empty scene
+> scene
+> database
+> object
+> database
+> freespace
+> sampling
+> pose perturbation
+> [𝐀 +𝐀 |𝐀 +𝐀 ]
+> render
+> recomposed scene
+> network
+> training
+> travers e object-scene-camera combinations
+
+recomposition process 
+
+> random
+> sample
+> 2D→3 D
+> object
+> insert
+> 𝐀
+> 𝐀
+> 𝐀
+> collision &
+> occlusion filter
+> object-scene recomposition
+
+Fig. 2: Illustration of our online object-scene-camera decomposition and recomposition data manipulation scheme. We first fully decompose training images into textured 3D object point models and background scenes in an efficient computation and storage manner. We then continuously recompose new training images in each epoch by inserting the 3D objects into the freespace of the background scenes, and rendering them with perturbed camera poses from textured 3D point representation. In this way, the refreshed training data in all epochs can cover the full spectrum of independent object, scene, and camera combinations. 
+
+3 Methodology 
+
+3.1 Scheme Overview Figure 2 illustrates our online object-scene-camera decompo-sition and recomposition data manipulation scheme. It has two main processes, i.e., decomposition and recomposition. In the decomposition process, we first reconstruct objects from training images to textured 3D object point models. We then remove all objects from the scenes to construct empty scenes. All object models are collected to construct an object database. All raw and empty scenes are collected to build a scene database. Notably, this process is offline deployed and the computation and storage is efficient due to the simple operation. In the recomposition process, we first randomly sample locations in the scene freespace. We then randomly sample objects from the object database and replace them at the sampled locations after collision and occlusion filters. In this way, we can fully exploit the object information, the object-scene relationship and object-object relationship. We then perturb the camera pose and render recomposed scenes to new training images to alleviate the limited camera pose variation issue. The recomposition process is computationally efficient and can be embedded into the training pipeline. Therefore, it continuously feeds refreshed data to the model without pre-generation before training. In this way, the refreshed training data in all epochs can cover the full spectrum of independent object, scene, and camera combinations. First of all, we give a brief introduction to the data we used. For a raw scene, the data contains an RGB image 𝐼 𝑠 , the synchronous LiDAR point clouds 𝑃 𝑙 (Geiger et al., 2012) and the ground plane equation 𝐺 : 𝑎𝑥 +𝑏𝑦 +𝑐𝑧 +𝑑 = 0 . The ground plane equation can be estimated by RANSAC (Fang et al., 2021), which is applied to the extracted ground LiDAR points. To generate the RGB-Depth scene representation, we use an off-the-shelf depth completion model (Wang et al., 2023) to obtain a dense depth map 𝐷 𝑠 for the scene. Each scene has corresponding camera intrinsic 𝐾 . 𝑇 2𝑑 −→3𝑑 (𝐷, 𝐾, 𝑀 ) denotes transforming the 2D depth to 3D points cloud, where 𝑀 is the foreground mask. We only transform the foreground pixel if 
+
+𝑀 is given. Otherwise, the whole image will be transformed. 
+
+𝑇 3𝑑 −→2𝑑 (𝑃, 𝐾 ) denotes transforming the points cloud under camera coordinate system to image space. The 3D coordinate system we use is the camera coordinate system specified by KITTI (Geiger et al., 2012). In this system, the 𝑥 -axis points right, the 𝑦 -axis points up and the 𝑧 -axis points forward. We use the u-v coordinate system in the image space. 6 Zhaonian Kuang et al. 2D&3D Outlier Points 2D&3D Lidar Points     
+
+> Anchor Points Allocation Neighbour Lidar Points
+> A. Get outside points B. Enlarge outlier area C. Outlier rectification
+> 2D Object Points
+
+Fig. 3: Object point model rectification. The CAD model is intended to aid visualization. 3.2 Decomposition Process 
+
+3.2.1 Object database construction 
+
+We aim to construct textured 3D object models using points representation. Compared to copy-paste methods that use 2D image patches (Lian et al., 2022; Qiao et al., 2024), this representation can perform more flexible 3D manipulation. It also maintaining 2D-3D geometric consistency. Compared to recent reconstruction and generation-based methods (Ge et al., 2023; Li et al., 2023a; Tong et al., 2023; Wen et al., 2024), this representation has a low reconstruction and rendering cost, which is beneficial to our online recomposition process. To construct the object database, we first use a 2D segmen-tation method (Kirillov et al., 2023) to obtain the foreground masks 𝑀 of objects. We then reconstruct the 3D points model 
+
+P𝑜𝑔 = 𝑇 2𝑑 −→3𝑑 (𝐷 𝑠 , 𝐾, 𝑀 ), where P𝑜𝑔 ∈ R𝑘 ×3 and 𝑘 denotes the number of foreground points, together with the texture 
+
+P𝑜𝑐 ∈ R𝑘 ×3 extracted from 𝐼 𝑠 using 𝑀 . Finally, we construct the textured 3D points model {P𝑜𝑔 , P𝑜𝑐 } and add it to the object database. Due to the common edge distortion issue caused by the depth completion model, if we directly use the raw completed depth map 𝐷 𝑠 to construct the objects model, the object model will be harmful to the recomposition process. Hence, we have to rectify the edge depth around the foreground pixels to obtain rectified dense depth 𝐷 𝑟 𝑒𝑐𝑡 and use 𝐷 𝑟 𝑒𝑐𝑡 for object model construction, with P𝑟 𝑒𝑐𝑡 𝑜𝑔 = 𝑇 2𝑑 −→3𝑑 (𝐷 𝑟 𝑒𝑐𝑡 , 𝐾, 𝑀 ).To solve this issue, we first use an annotated 3D box to identify which points of P𝑜𝑔 are outside the box. Then these points will be identified as outlier points. We can then obtain the outlier mask 𝑀 𝑜𝑢𝑡𝑙𝑖𝑒𝑟 in image space according to the 2D-3D correspondence. Because the surface of the object is continuous, the distorted area is supposed to be larger than the area determined by the outside points. Therefore, we need to enlarge the outlier area by applying a morphological dilation operation to obtain new 𝑀 𝑜𝑢𝑡𝑙𝑖𝑒𝑟 . Once the outlier area is refined, we conduct rectification on each outlier point. object 
+
+models object position resample 
+
+Fig. 4: Object position resampling. Using a 3D textured point representation, objects can be flexibly resampled to new positions. Specifically, for each outlier point, we find the nearest LiDAR points in image space as anchor points. Then, we use the rectified scale of the anchor points to rectify the depth of the outlier point. To determine the rectified scale, for each LiDAR point, we find a few neighbor LiDAR points nearest to it in 3D space and compute the rectified scale 𝑠 𝑎𝑛𝑐ℎ𝑜𝑟 :
+
+𝑠 𝑎𝑛𝑐ℎ𝑜𝑟 = 1
+
+𝑛 𝑛𝑏 𝑛 𝑛𝑏 ∑︁ 
+
+> 𝑖 =1
+
+|𝑧 𝑎𝑛𝑐ℎ𝑜𝑟 − 𝑧 𝑖 𝑛𝑒𝑖𝑔ℎ𝑏𝑜𝑢𝑟 |, (1) where 𝑧 𝑎𝑛𝑐ℎ𝑜𝑟 and 𝑧 𝑛𝑒𝑖𝑔ℎ𝑏𝑜𝑢𝑟 are the depth of the anchor LiDAR point and the neighbor LiDAR points, and 𝑛 𝑛𝑏 is the number of neighbor points to be selected. We then use Equation (2) to rectify the depth of each outlier point: 
+
+𝑧 𝑟 𝑒𝑐𝑡 = ( 21 + 𝑒 −𝑧 𝑜𝑢𝑡𝑙𝑖𝑒𝑟 − 1) ∗ 𝑠 𝑎𝑛𝑐ℎ𝑜𝑟 + 𝑧 𝑎𝑛𝑐ℎ𝑜𝑟 . (2) This process is shown in Figure 3. Based on the textured 3D object point model, we can flexibly resample objects to new positions, as shown in Figure 4. 
+
+3.2.2 Scene database construction 
+
+A raw scene is often occupied by fixed objects, which can cause the network to overfit on duplicated data and hinder the exploitation of the object-scene relationship. To solve this, we remove all objects from the raw scene and create an empty scene in RGB-Depth representation. The images and depth maps of the scene will be processed separately. For the image, we use an object removal method, LaMa (Suvorov et al., 2022), to eliminate the semantics of objects, obtaining an empty scene image 𝐼 𝑒𝑠 . For the depth map, we use ground depth and background depth to replace the foreground depth. Specifically, to generate the background depth map 𝐷 𝑏𝑔 ,we first copy it as 𝐷 𝑏𝑔 = 𝐷 𝑠 . Then, for each column of pixels in the foreground area, we allocate their depth value as the depth value of the upper neighbor of the top pixel among these column pixels. This can be formulated as: 
+
+𝐷 (𝑖, 𝑗 ) 
+
+> 𝑏𝑔
+
+= 𝐷 (𝑖,𝑘 ) 
+
+> 𝑏𝑔
+
+, 𝑘 = 𝑚𝑖𝑛 ({ 𝑣 |( 𝑖, 𝑣 ) ∈ 𝑀 𝑓 𝑔 }) − 1, (3) Object-Scene-Camera Decomposition and Recomposition for Data Efficient Monocular 3D Object Detection 7𝐀 𝐀𱰀    
+
+> 𱰀 𝐀 𝐀𱰀
+> 𝐀 𝐀𱰀 𝐀 𝐀𱰀
+> invalid area valid area
+> empty area camera position
+> Completion
+> Row Completion Steps
+
+Fig. 5: Freespace generation process. For each row of the freespace map in the polar coordinates system, we scan each column to complete the empty area. where 𝑀 𝑓 𝑔 is the foreground area. To generate the ground depth map 𝐷 𝑔𝑟 𝑜𝑢𝑛𝑑 , we use the ground plane equation 𝐺 
+
+of the scene to render the depth, setting non-ground areas to infinite depth value. Finally, we copy the empty scene depth as 𝐷 𝑒𝑠 = 𝐷 𝑠 , and apply pixel-wise minimum in the foreground area between 𝐷 𝑏𝑔 and 𝐷 𝑔𝑟 𝑜𝑢𝑛𝑑 to replace the corresponding pixels of 𝐷 𝑒𝑠 :
+
+𝐷 𝑒𝑠 [𝑀 𝑓 𝑔 ] = 𝑚𝑖𝑛 (𝐷 𝑏𝑔 [𝑀 𝑓 𝑔 ], 𝐷 𝑔𝑟 𝑜𝑢𝑛𝑑 [𝑀 𝑓 𝑔 ]) . (4) After that, we save the empty scene (𝐼 𝑒𝑠 , 𝐷 𝑒𝑠 ) and the raw scene (𝐼 𝑠 , 𝐷 𝑠 ) to the scene database. 
+
+3.2.3 Scene freespace generation 
+
+The scene space is vast. Apart from areas occupied by static obstacles such as houses and trees, objects can appear in any other areas of the scene, which belong to the freespace of the scene. We identify freespace using LiDAR data 𝑃 𝑙 .Initially, LiDAR points of existing objects are projected onto the ground using the ground-plane equation 𝐺 . We then use the method in LiDAR-aug (Fang et al., 2021) to generate sparse freespace map 𝑀 𝑠 𝑓 𝑠 ∈ Rℎ×𝑤 in BEV space, where each grid represents a 𝑟 𝑓 𝑠 × 𝑟 𝑓 𝑠 area, as shown in Figure 5. In the sparse freespace map 𝑀 𝑠 𝑓 𝑠 , ground plane belongs to valid areas, and invalid areas are static obstacles. However, due to the sparsity of LiDAR data, there are many empty areas where there are no LiDAR points. These empty areas remain unclassified, which limits object-scene recomposition. To address this, we complete the empty areas with assistance from adjacent valid or invalid regions. Considering the characteristics of LiDAR scans, com-pleting the freespace map is more effective in the Polar coordinates system. Hence, we transform the freespace map 
+
+𝑀 𝑠 𝑓 𝑠 from the Cartesian to the Polar coordinates system cen-tered at the camera position (𝑤 /2, ℎ ) to get 𝑉 𝑓 𝑠 ∈ R𝛼 ×𝑟 ,where the LiDAR data range is set as 𝑟 =√︁ (𝑤 /2)2 + ℎ2 and angle bins 𝛼 are set to 180. To complete this, for row 𝑗 , we traverse each column 𝑖 
+
+from 0 to 𝑟 . We first set 𝑉 𝑓 𝑠 (0, 𝑗 ) as an invalid area. Then, if 𝑉 𝑓 𝑠 (𝑖, 𝑗 ) is an empty area, we complete it as 𝑉 𝑓 𝑠 (𝑖, 𝑗 ) =
+
+𝑉 𝑓 𝑠 (𝑖 − 1, 𝑗 ). In other words, if the current pixel in the freespace map is empty and the former column pixel is valid, we replace current pixel with valid, the same as when the former pixel is invalid. After completing each row, we convert the completed freespace map 𝑉 𝑓 𝑠 back to the Cartesian coordinates system to obtain the dense freespace map 𝑀 𝑓 𝑠 .
+
+𝑀 𝑓 𝑠 is attached to each scene as an additional resource. Figure 5 illustrates the freespace generation process. 3.3 Recomposition process 
+
+3.3.1 Object-Scene Recomposition 
+
+In this process, we randomly insert objects into freespace of the scene to generate a recomposed scene image. We first sample a scene from the scene database. Then, we randomly sample 𝑁 𝑟 𝑒 valid areas according to the scene freespace map. For each valid area, we first get its center bird’s-eye-view position (𝑥 𝑐 , 𝑧 𝑐 ), and then add a random offset on it to get a sampled position: 
+
+(𝑥 𝑠 , 𝑧 𝑠 ) = (𝑥 𝑐 , 𝑧 𝑐 ) + ( 𝑥 ′, 𝑦 ′),𝑥 ′, 𝑦 ′ ∼ U (− 𝑟 𝑓 𝑠 
+
+2 , 𝑟 𝑓 𝑠 
+
+2 ). (5) For each sampled position (𝑥 𝑠 , 𝑧 𝑠 ), we randomly sample an object with a raw bird’s-eye-view position (𝑥 𝑟 , 𝑧 𝑟 ) from the object database. (𝑥 𝑟 , 𝑧 𝑟 ) satisfies the following conditions: 
+
+𝑥 𝑠 ∗ 𝑥 𝑟 > 0,𝑧 𝑠 > 𝑧 𝑟 ∗ ( 1 − 𝑑 𝑟 ). (6) The first 𝑥 -axis condition aims to restrict 𝑥 𝑟 to share the same sign as 𝑥 𝑠 because the 3D object model is partly visible. The second 𝑧 -axis condition aims to constrain distant objects from being sampled too close consider to the sparsity of the 3D object points model. For each sampled position (𝑥 𝑠 , 𝑧 𝑠 ), we refresh the position label of the sampled object from the raw label (𝑥 𝑟 , 𝑦 𝑟 , 𝑧 𝑟 )
+
+to (𝑥 𝑠 , 𝐺 (𝑥 𝑠 , 𝑧 𝑠 ), 𝑧 𝑠 ) to keep objects attached to the ground, where 𝐺 is the ground plane equation of the scene. We keep the 3D size label and the object 3D box yaw angle label invariant. We update the position of each point in the model with the offset: 
+
+P𝑜 𝑓 𝑓 𝑠𝑒𝑡 = [𝑥 𝑠 , 𝑓 𝑔𝑟 𝑜𝑢𝑛𝑑 (𝑥 𝑠 , 𝑧 𝑠 ), 𝑧 𝑠 ]𝑇 − [ 𝑥 𝑟 , 𝑦 𝑟 , 𝑧 𝑟 ]𝑇 
+
+P𝑜𝑔 = P𝑜𝑔 + P𝑜 𝑓 𝑓 𝑠𝑒𝑡 . (7) After collecting all sampled objects, we filter out the collided and occluded objects. We attempt to insert each 8 Zhaonian Kuang et al. t=0 t=k t=N 
+
+fully 
+
+supervised 
+
+sparsely 
+
+supervised  
+
+> annotated
+> ignored
+> annotated annotated
+> annotated ignored
+
+Fig. 6: Illustration of the sparsely-supervised setting. Based on our scheme, only the objects closest to the camera will be labeled to reduce annotation costs. object from near to far. If the inserted object collides with existing objects, we discard it. We then project P𝑜𝑔 and P𝑜𝑐 back to the 2D image to obtain the foreground depth map and image patch for each object. We will fill the hole with the nearest projected pixels. After inpainting the object, we apply an object occlusion check. If one attempt causes any other objects occluded by a large area, the object will be discarded. Specifically, 𝐹 𝑜 
+
+denotes the foreground pixel set of an object, and 𝐹 𝑠 denotes the set of pixels occluded by the background of the scene and other objects. We have 𝐹 𝑠 ⊆ 𝐹 𝑜 . Given an occlusion threshold 
+
+𝜏 𝑜 , the object will be considered to be largely occluded if 
+
+𝑎𝑟𝑒𝑎 (𝐹 𝑠 )/ 𝑎𝑟𝑒𝑎 (𝐹 𝑜 )>𝜏 𝑜 . If the inserted object is valid, we merge the foreground depth and image patch with the scene depth and image to get recomposed depth 𝐷 𝑟 𝑠 and image 𝐼 𝑟 𝑠 
+
+according to the pixel-wise depth buffer. 
+
+3.3.2 Camera pose perturbation 
+
+The data of the raw scene is entangled with a specific camera pose. We aim to further perturb the camera pose and render the scene from novel views. To achieve this, we first decompose the dense depth map 𝐷 𝑟 𝑠 and the image 𝐼 𝑟 𝑠 from the camera using intrinsic parameters to get scene points P𝑟 𝑠𝑔 = 𝑇 2𝑑 −→3𝑑 (𝐷 𝑟 𝑠 , 𝐾 ) and corresponding texture P𝑟 𝑠𝑐 where P𝑟 𝑠𝑔 ∈ R𝐻𝑊 ×3, P𝑟 𝑠𝑐 ∈
+
+R𝐻𝑊 ×3 and 𝐻, 𝑊 denote the image size. Next, we need to resample a camera pose. We equivalently convert the camera pose perturbation into a coordinate perturbation of the scene point cloud. The camera pose has six degrees of freedom, including pitch angle 𝜃 , yaw angle 𝛾 , roll angle 𝛼 for rotation related to 𝑥, 𝑦 and 𝑧 axis, and translation 𝜖 𝑥 , 𝜖 𝑦 , 𝜖 𝑧 related to 𝑥, 𝑦, 
+
+and 𝑧 axis. Since the mounting position of the camera during training and inference is unchanged, we do not apply the translation perturbation 𝜖 𝑦 along the 𝑦 axis. Since the yaw angle 𝛾 and the translation 𝜖 𝑥 , 𝜖 𝑧 along the 𝑥 and 𝑧 axes are all along the horizontal direction, we only perturb the 𝑧 direction. Specifically, we sample the pitch and roll angles 𝜃 and 𝛼 for rotation related to the 𝑥 and 𝑧 axes as well as the translation perturbation 𝜖 𝑧 along the 𝑧 -axis, obtaining a perturbation matrix R and t as described in equation (8) and (9). The point cloud of the scene, P𝑟 𝑠𝑔 and the 3D position labels of the 
+
+Algorithm 1 Texture Points Rendering and Filling                                                                                                                                                                         
+
+> Input: points positions: P𝑔 ; points color: P𝑐 ; intrinsic matrix: 𝐾 ,
+> Input: image: 𝐼 ∈R𝐻 ×𝑊 ×3, depth: 𝐷 ∈R𝐻 ×𝑊
+> Output: recomposed image 𝐼 𝑟 , recomposed depth 𝐷 𝑟
+> 1: calculate points image coordinate u,v,z←𝑇 3𝑑 −→2𝑑 (P𝑔 , 𝐾 )
+> 2: initialize : 𝐼 ′=0∈R𝐻 ×𝑊 ×3, , 𝑀 ′=0∈R𝐻 ×𝑊 ;3: initialize : 𝐼 ′[v,u]=P𝑐 ,𝑀 ′[v,u]=1; 4: procedure object scene recomposition filling
+> 5: initialize : 𝐷 ′=inf ∈R𝐻 ×𝑊 , 𝐷 ′[v,u]=z;6: fill: 𝑀 𝑓 𝑔 ←MorphologicalHoleFilling (𝑀 ′);7: extract hole pixels: uℎ,uℎ←Where (𝑀 𝑓 𝑔 ⊕𝑀 ′=1);8: u𝑓 ,u𝑓 ←FindNearsetPoint ( ( uℎ,uℎ),(u,v) ) ;9: fill: 𝐼 ′[uℎ,uℎ]=𝐼 ′[u𝑓 ,u𝑓 ], 𝐷 ′[uℎ,uℎ]=𝐷 ′[u𝑓 ,u𝑓 ];10: 𝐼 𝑟 , 𝐷 𝑟 ←ZBufferMerging (𝐷 ′, 𝐷, 𝐼 ′, 𝐼 )
+> 11: procedure camera pose perturbation filling
+> 12: initialize : 𝐷 ′=0∈R𝐻 ×𝑊 , 𝐷 ′[v,u]=z;13: 𝐼 𝑟 , 𝐷 𝑟 ←GPUMaxPooling (𝐼 ′, 𝐷 ′);14: 𝐼 𝑟 , 𝐷 𝑟 ←GPUGaussianSmoothing (𝐼 𝑟 , 𝐷 𝑟 );15: 𝐼 𝑟 [𝑀 ′]=𝐼 ′[𝑀 ′], 𝐷 𝑟 [𝑀 ′]=𝐷 ′[𝑀 ′]
+> 16: return 𝐼 𝑟 , 𝐷 𝑟
+
+𝑘 objects O ∈ R𝑘 ×3 in the scene are updated using the new pose as equations (10) and (11). 
+
+R =
+
+
+
+1 0 00 𝑐𝑜𝑠𝜃 −𝑠𝑖𝑛𝜃 
+
+0 𝑠𝑖𝑛𝜃 𝑐𝑜𝑠𝜃 
+
+
+
+𝑐𝑜𝑠𝛼 −𝑠𝑖𝑛𝛼 0
+
+𝑠𝑖𝑛𝛼 𝑐𝑜𝑠𝛼 00 0 1
+
+
+
+, (8) 
+
+t = 0 0 𝜖 𝑧 
+
+𝑇 , (9) 
+
+P′ 
+
+> 𝑟 𝑠𝑔
+
+= RP 𝑟 𝑠𝑔 + t, (10) 
+
+O′
+
+= RO + t. (11) Finally, we render the textured scene point cloud to generate a new image and depth map {𝐼 𝑡 , 𝐷 𝑡 } =
+
+𝑇 3𝑑 −→2𝑑 ({ P′
+
+> 𝑟 𝑠𝑔
+
+, P𝑟 𝑠𝑐 }, 𝐾 ) for training. This process will re-sult in hole pixels in the image after camera zoom-in and hole areas in the ground after camera zoom-out. To handle these, we use max-pooling to fill the hole pixels and use the nearest non-zero ground pixels to fill the hole areas. We explain the detailed texture points rendering and filling method in algorithm 1. We consider the difference in the number of hole pixels for objects during object scene recomposition and for the scene after camera perturbation. The former has fewer hole pixels, while the latter has more. We customize their hole filling processes accordingly. 
+
+3.3.3 Mix sampling of Raw/Empty Scenes 
+
+On one hand, using only raw scenes for recomposition is inflexible due to the occupancy of existing objects. On the other hand, using only empty scenes will induce a domain gap between real and synthetic data. To make a trade-off, we employ a mixed sampling strategy of raw scenes and empty scenes during training. Specifically, for a batch size 
+
+𝑏𝑠 , we randomly sample (1 − 𝑟 𝑒𝑚 𝑝𝑡 𝑦 ) × 𝑏𝑠 raw scenes and Object-Scene-Camera Decomposition and Recomposition for Data Efficient Monocular 3D Object Detection 9
+
+𝑟 𝑒𝑚 𝑝𝑡 𝑦 × 𝑏𝑠 empty scenes to perform our recomposition process and obtain training data. 3.4 Applications Our object-scene-camera decomposition and recomposition data manipulation scheme can serve as a plug-and-play com-ponent to boost the performance of M3OD models in flexible annotation settings. 
+
+3.4.1 Fully-Supervised Setting 
+
+In the fully-supervised setting, all frames in all collected clips will be fully annotated. These frames are treated as raw scenes. All scenes will be used to generate empty scenes. Raw scenes and empty scenes are both add to the scene database. Objects in all these frames are collected into the object database. Notably, we only select high-quality objects with depths less than 50 meters, slight occlusion, and no truncation to construct the object database. 
+
+3.4.2 Sparsely-Supervised Setting 
+
+Fully annotating all frames is costly and limits real-world ap-plications. We propose a sparsely-supervised scheme, where only the closest object with the richest semantic information is labeled for each instance in each clip as shown in Figure 6. Using a 2D tracking method (Maggiolino et al., 2023), we extract instances and select only the closest object to label, identified by LiDAR points in the foreground. These sparse objects, which make up about 5% of all annotations, are used to build the object database denoted 𝐷𝐵 𝑠 𝑝𝑎𝑟 𝑠𝑒 𝑜𝑏 𝑗 . All frames are used to construct the empty scene database, denoted 
+
+𝐷𝐵 𝑒𝑚 𝑝𝑡 𝑦 𝑠𝑐𝑒𝑛𝑒 .To handle the domain gap of real and synthetic data, we can randomly select a few clips to fully annotate. The amount of full annotations can also be flexibly controlled for different applications in the real world. More specifically, all labeled objects in our scheme account for 𝑘 % of all labeled objects in the KITTI train split, with 𝑘 being flexible to control annotation costs. The scenes in the selected clips serve as raw scenes to construct the raw scene database 𝐷𝐵 𝑟 𝑎𝑤 𝑠𝑐𝑒𝑛𝑒 . High-quality objects in these selected scenes are used to construct the object database 𝐷𝐵 𝑟 𝑎𝑤 𝑜𝑏 𝑗 .Because the amount of empty scenes and raw scenes is unbalanced in the sparsely-supervised setting, we train the model for two stages. In the first stage, we use 𝐷𝐵 𝑠 𝑝𝑎𝑟 𝑠𝑒 𝑜𝑏 𝑗 
+
+and 𝐷𝐵 𝑒𝑚 𝑝𝑡 𝑦 𝑠𝑐𝑒𝑛𝑒 . During each epoch, all scenes in 𝐷𝐵 𝑒𝑚 𝑝𝑡 𝑦 𝑠𝑐𝑒𝑛𝑒 
+
+are traversed to recompose with 𝐷𝐵 𝑠 𝑝𝑎𝑟 𝑠𝑒 𝑜𝑏 𝑗 and camera poses, generating new training images for model pretraining. In the second stage, we merge 𝐷𝐵 𝑠 𝑝𝑎𝑟 𝑠𝑒 𝑜𝑏 𝑗 and 𝐷𝐵 𝑟 𝑎𝑤 𝑜𝑏 𝑗 to ob-tain 𝐷𝐵 𝑜𝑏 𝑗 . During each epoch, we randomly select half the scenes from 𝐷𝐵 𝑟 𝑎𝑤 𝑠𝑐𝑒𝑛𝑒 and the same number of scenes in 𝐷𝐵 𝑒𝑚 𝑝𝑡 𝑦 𝑠𝑐𝑒𝑛𝑒 to recompose with 𝐷𝐵 𝑜𝑏 𝑗 and camera poses, generating new training images for model finetuning. 
+
+4 Experiments 
+
+4.1 Datasets and Metrics To demonstrate the effectiveness of our data manipulation scheme, we evaluate it on both the widely-used KITTI dataset (Geiger et al., 2012) and the more complicated Waymo dataset (Sun et al., 2020). The KITTI 3D object detection dataset (Geiger et al., 2012) provides 141 clips and 7481 images for training and 7518 images for testing. Following common practice (Ma et al., 2021), we split the training set into a train split and a validation split. The train split contains 96 clips and 3712 images, while the validation split contains 45 clips and 3769 images. The image resolution is set to 384 ×1280. Following previous methods, we use Average Precision 𝐴𝑃 𝑅 40 3𝐷 and 
+
+𝐴𝑃 𝑅 40  
+
+> 𝐵𝐸𝑉
+
+to evaluate the validation split and the test set. The Waymo Dataset (Sun et al., 2020) is a more recent large-scale dataset that consists of 798 training clips and 202 validation clips. The dataset provides objects labels in the full 360 ° field of view with a multi-camera rig. Waymo has 5 ring cameras covering a 230 ° field of view to perceive the environment. To evaluate our method under both monoc-ular and multi-camera settings, we separately discuss two configurations of Waymo: Waymo-Mono and Waymo-Ring. For Waymo-Mono, following (Reading et al., 2021), we use only the front camera and consider only object labels in the front camera’s field of view for the task of M3OD. We provide results on the validation clips. Considering the large dataset size and high frame rate (10Hz), we sample every 3 rd frame from the training clips to form our training set (52,386 images) following (Reading et al., 2021). The image resolution is downsampled to 640 ×960 to meet GPU memory. We adopt the official evaluation to calculate the Average Precision 𝐴𝑃 and Average Precision weighted by Heading 𝐴𝑃𝐻 . The evaluation is divided by difficulty settings (LEVEL 1, LEVEL 2), which are determined by the number of LiDAR points inside the 3D box. We evaluate using IoU criteria of 0.7 and 0.5. For Waymo-Ring, we use all 5 ring cameras and extract object labels within the filed of view. We sample every 4 th 
+
+frame for the training clips to form the training set (39872 × 5images). The image resolution is downsampled to 352 ×800. we follow the popular multi-camera evaluation protocol used by Nuscenes (Caesar et al., 2020). We use the metric NDS ∗,which aggregates mean Average Precision (mAP), mean Average Translation Error (mATE), mean Average Scale Error (mASE), and mean Average Orientation Error (mAOE): 10 Zhaonian Kuang et al. 
+
+Table 1: Comparison with four base models on the car category in the KITTI official test set and validation split. 
+
+Method 𝐴𝑃 𝑡𝑒𝑠𝑡  
+
+> 3𝐷
+
+𝐴𝑃 𝑡𝑒𝑠𝑡 𝐵𝐸𝑉 𝐴𝑃 𝑣𝑎𝑙  
+
+> 3𝐷
+
+𝐴𝑃 𝑣𝑎𝑙 𝐵𝐸𝑉 
+
+easy mod hard easy mod hard easy mod hard easy mod hard MonoDLE 17.23 12.23 10.29 24.79 18.89 16.00 19.48 15.21 13.57 26.03 21.10 18.59 +ours 25.55 18.04 15.45 34.51 24.82 20.86 26.57 20.42 17.34 36.37 26.74 23.07 
+
+improvement +8.32 +5.81 +5.16 +9.72 +5.93 +4.86 +7.09 +5.21 +3.77 +10.34 +5.64 +4.48 
+
+GUPNet 22.26 15.02 13.12 30.29 21.19 18.20 21.95 16.94 14.43 29.57 23.49 20.40 +ours 28.60 19.35 16.35 38.18 26.51 23.01 26.91 20.45 17.45 35.17 26.22 22.84 
+
+improvement +6.34 +4.33 +3.23 +7.89 +5.32 +4.81 +4.96 +3.51 +3.02 +5.60 +2.73 +2.44 
+
+DID-M3D 24.40 16.29 13.75 32.95 22.76 19.83 24.60 17.30 14.57 31.26 22.90 20.46 +ours 30.69 20.45 17.25 39.68 26.50 22.69 30.32 21.65 18.28 39.03 27.79 23.93 
+
+improvement +6.29 +4.16 +3.50 +6.73 +3.74 +2.86 +5.72 +4.35 +3.71 +7.77 +4.89 +3.47 
+
+MonoDETR 25.00 16.47 13.58 33.60 22.11 18.60 28.84 20.61 16.38 37.86 26.95 22.80 +ours 30.25 20.86 17.68 38.94 26.75 23.13 31.58 23.43 20.01 42.35 30.94 26.05 
+
+improvement +5.25 +4.39 +4.10 +5.34 +4.64 +4.53 +2.74 +2.82 +3.63 +4.49 +3.99 +3.25 
+
+MonoDGP 26.35 18.72 15.97 35.24 25.23 22.02 30.76 22.34 19.02 39.40 28.20 24.42 +ours 30.25 21.10 17.85 37.95 26.82 23.11 32.02 23.90 20.49 40.90 30.80 26.95 
+
+improvement +3.90 +2.38 +1.88 +2.71 +1.59 +1.09 +1.26 +1.56 +1.47 +1.50 +2.60 +2.53 
+
+Table 2: Comparison with state-of-the-art methods on the car category in the KITTI official test set. Following the KITTI protocol, methods are ranked based on their performance under the moderate difficulty setting. The best results are in bold ,and the best results of the baselines are underlined. 
+
+𝐴𝑃 3𝐷 𝐴𝑃 𝐵𝐸𝑉 
+
+Method Venues easy mod hard easy mod hard MonoDLE (Ma et al., 2021) CVPR2021 17.23 12.23 10.29 24.79 18.89 16.00 CaDDN (Reading et al., 2021) CVPR2021 19.17 13.41 11.46 27.94 18.91 17.19 MonoFlex (Zhang et al., 2021) CVPR2021 19.94 13.89 12.07 28.23 19.75 16.89 GUPNet (Lu et al., 2021) ICCV2021 22.26 15.02 13.12 30.29 21.19 18.20 MonoDistill (Chong et al., 2022) ICLR2022 22.97 16.03 13.60 31.87 22.59 19.72 DID-M3D (Peng et al., 2022b) ECCV2022 24.40 16.29 13.75 32.95 22.76 19.83 Monocon (Liu et al., 2022a) AAAI2022 22.50 16.46 13.95 31.12 22.10 19.00 CMKD (Hong et al., 2022) ECCV2022 25.09 16.99 15.30 33.69 23.10 20.67 MonoDDE (Li et al., 2022b) CVPR2022 24.93 17.14 15.10 33.58 23.46 20.37 MonoDETR (Zhang et al., 2023) ICCV2023 24.52 16.26 13.93 32.20 21.45 18.68 MonoNeRD (Zhang et al., 2023) ICCV2023 22.75 17.13 15.63 31.13 23.46 20.97 NeurOCS (Min et al., 2023) CVPR2023 29.89 18.94 15.90 37.27 24.49 20.89 MonoCD (Yan et al., 2024) CVPR2024 25.53 16.59 14.53 33.41 22.81 19.57 OccupancyM3D (Peng et al., 2024) CVPR2024 25.55 17.02 14.79 35.38 24.18 21.37 MonoSTL (Ding et al., 2024) TCSVT2024 24.54 17.14 14.59 32.19 22.42 19.48 MonoLSS (Li et al., 2024) 3DV2024 26.11 19.15 16.94 34.89 25.95 22.59 MonoDGP (Pu et al., 2025) CVPR2025 26.35 18.72 15.97 35.24 25.23 22.02 MonoDLE+ours 25.55 18.04 15.45 34.51 24.82 20.86 GUPNet+ours 28.60 19.35 16.35 38.18 26.51 23.01 DID-M3D+ours 30.69 20.45 17.25 39.68 26.50 22.69 MonoDETR+ours 30.25 20.86 17.68 38.94 26.75 23.13 MonoDGP+ours 30.25 21.10 17.85 37.95 26.82 23.11 vs. SOTAs -+0.80 +1.95 +0.91 +2.41 +0.87 +0.54 
+
+NDS ∗ = 16 [3mAP +∑︁ 
+
+> mTP ∈TP
+
+(1 − min (1, mTP ))] . (12) 4.2 Implementation Details In the experiments, we empirically set the parameters. During object edge rectification, 𝑛 𝑛𝑏 in Equation (1) is set to 5. For scene freespace map construction in Section 3.2.3, 𝑟 𝑓 𝑠 is set to 0.5m and the size (ℎ, 𝑤 ) of the freespace map is set to (140, 160). During object-scene recomposition in Section 3.3.1, Object-Scene-Camera Decomposition and Recomposition for Data Efficient Monocular 3D Object Detection 11 
+
+Table 3: Comparison of fully-supervised and sparsely-supervised results on the KITTI validation set. Our scheme with fewer annotations (especially 10% for the first three base models) achieves comparable performance to the fully-supervised training of the base models. When both use the same sparse annotations, our scheme significantly outperforms the base models.                                                                                 
+
+> Method Annotation 𝐴𝑃 3𝐷 𝐴𝑃 𝐵𝐸𝑉
+> easy mod hard easy mod hard MonoDLE Full 19.48 15.21 13.57 26.03 21.10 18.59 10% 6.67(-12.81) 4.67(-10.54) 3.61(-9.96) 10.10(-15.93) 6.91(-14.19) 5.54(-13.05)
+> 10% w / ours 20.73(+1.25) 15.73(+0.52) 12.82(-0.75) 28.00(+1.97) 20.69(-0.41) 16.37(-2.22)
+> GUPNet Full 21.95 16.94 14.43 29.57 23.49 20.40 10% 10.25(-11.70) 6.06(-10.88) 4.70(-9.73) 15.17(-14.40) 8.88(-14.61) 7.13(-13.27)
+> 10% w / ours 22.27(+0.32) 16.18(-0.76) 13.18(-1.25) 29.94(+0.37) 21.48(-2.01) 17.03(-3.37)
+> DID-M3D Full 24.60 17.30 14.57 31.26 22.90 20.46 10% 13.05(-11.55) 8.50(-8.80) 6.13(-8.44) 18.32(-12.94) 11.64(-11.26) 8.70(-11.76)
+> 10% w / ours 24.74(+0.14) 17.22(-0.08) 13.99(-0.58) 32.62(+1.36) 22.60(-0.30) 18.74(-1.72)
+> MonoDETR Full 28.84 20.61 16.38 37.86 26.95 22.80 50% 18.09(-10.75) 13.39(-7.22) 11.53(-4.85) 28.01(-9.85) 20.70(-6.25) 17.41(-5.39)
+> 50% w / ours 28.23(-0.61) 20.59(-0.02) 17.23(+0.85) 37.42(-0.44) 27.59(+0.64) 23.56(+0.76)
+
+𝑁 𝑟 𝑒 is randomly sampled from 0 to 10 for a raw scene and 5 to 15 for an empty scene, and 𝜏 𝑜 is randomly sampled from 
+
+{0.1, 0.3, 0.5, 0.7}. During the perturbation of camera poses in Section 3.3.2, we randomly set 𝜃 and 𝛼 within [− 2◦, 2◦],and 𝜖 𝑧 within [-2m, 2m]. During training in Section 3.3.3, we set 𝑟 𝑒𝑚 𝑝𝑡 𝑦 to 0.5. Moreover, for Waymo-Ring, 𝑟 𝑓 𝑠 is set to 0.4m and the size (ℎ, 𝑤 ) of the freespace map is set to (256, 256). 𝑁 𝑟 𝑒 will be randomly sampled to control the range of training objects from 10 to 50 for a scene. To filter out the high-quality objects as mentioned in 3.4.1, we use the occlusion and truncation labels in KITTI and de-termine the labels in Waymo using simple rules. Specifically, for KITTI, we filter out objects with truncation greater than 0.5 and occlusion greater than 2. For Waymo, to determine the truncation, we first project the 3D box corners into image space and calculate the 2D box area 𝐴 𝑏𝑜𝑥 . We then calculate the area 𝐴 ′ 
+
+> 𝑏𝑜𝑥
+
+inside the image. Next, we filter out objects with large truncation that satisfy 𝐴 ′ 
+
+> 𝑏𝑜𝑥
+> 𝐴 𝑏𝑜𝑥
+
+< 0.9 . Moreover, let the segmentation area of an object be denoted as 𝐴 𝑠𝑒𝑔 , we filter out objects with large occlusion that satisfy 𝐴 𝑠𝑒𝑔 
+
+> 𝐴 ′
+> 𝑏𝑜𝑥
+
+< 0.5for Vehicles and 𝐴 𝑠𝑒𝑔 
+
+> 𝐴 ′
+> 𝑏𝑜𝑥
+
+< 0.3 for Pedestrians and Cyclists. For Waymo-Mono and Waymo-Ring, we use the sparsely annotated objects database for all settings, considering the large amount of data. Our model is trained using a one-cycle learning rate scheduler and the AdamW optimizer with a single RTX 4090 GPU. We train the model for 200 epochs on the KITTI dataset and 30 epochs on the Waymo dataset. The batch size is set to 16. Notably, all parameters can be further optimized for different base models to boost the performance. For Waymo-Ring, we train the model for 24 epochs on four RTX 4090 GPUs. The total batch size is set to 32. 4.3 Main Results on KITTI Our data manipulation scheme can serve as a plug-and-play component to boost M3OD models. We widely use four recent representative models with released codes, including MonoDLE (Ma et al., 2021), GUPNet (Lu et al., 2021), DID-M3D (Peng et al., 2022b), and MonoDETR (Zhang et al., 2023). 
+
+4.3.1 Fully-Supervised Setting 
+
+We evaluate on both the test set and the validation split on KITTI dataset. Table 1 shows that our method significantly improves the accuracy of five base models MonoDLE (Ma et al., 2021), GUPNet (Lu et al., 2021), DID-M3D (Peng et al., 2022b), MonoDETR (Zhang et al., 2023), and MonoDGP (Pu et al., 2025). Specifically, the results of moderate-level of 
+
+𝐴𝑃 3𝐷 of the five base models are improved by 5.81, 4.33, 4.16, 4.39, and 2.38 (48%, 29%, 26%, 27%, and 13% relative improvement) on the test set, and 4.62, 3.51, 4.35, 2.82, 1.56 on the validation split. We attribute the significant improvements in these base models to the ability of our scheme to more efficiently leverage the knowledge in limited training data. Table 2 shows the comparison to SOTA models in re-cent years on the KITTI test set. Especially for NeurOCS (Min et al., 2023) and MonoLSS (Li et al., 2024), which lead easy-level and moderate/hard-level performance, our scheme improves all three levels of 𝐴𝑃 3𝐷 and 𝐴𝑃 𝐵𝐸𝑉 by 0.8, 1.95, 0.91 and 2.41, 0.87, 0.54, respectively. Our method thereby establishes a new SOTA for M3OD. Notably, our scheme holds great potential to further boost performance with stronger base models upon codes released in the future. 12 Zhaonian Kuang et al. 
+
+Table 4: Comparison of base models and our scheme on three categories in the Waymo-Mono Dataset.                                                                                                          
+
+> 𝐴𝑃 3𝐷 𝐴𝑃𝐻 3𝐷
+> 𝐼𝑂𝑈 3𝐷 Difficulty Method Vehicle Pedestrian Cyclist Vehicle Pedestrian Cyclist DID-M3D 2.64 1.49 1.05 2.63 1.36 1.02
+> +ours 3.73(+41%) 1.91(+28%) 2.78(+165%) 3.71(+41%) 1.72(+26%) 2.70(+165%)
+> MonoDETR 1.63 0.98 1.87 1.61 0.86 1.49 Level 1
+> +ours 2.52(+55%) 1.34(+37%) 2.14(+14%) 2.49(+55%) 1.2(+40%) 2.1(+41%)
+> DID-M3D 2.48 1.36 1.01 2.46 1.24 0.98
+> +ours 3.50(+41%) 1.74(+27%) 2.68(+165%) 3.47(+41%) 1.57(+27%) 2.60(+165%)
+> MonoDETR 1.53 0.89 1.80 1.51 0.78 1.43 0.7 Level 2
+> +ours 2.37(+55%) 1.22(+37%) 2.06(+14%) 2.34(+55%) 1.09(+40%) 2.02(+41%)
+> DID-M3D 11.83 7.17 5.42 11.74 6.41 5.26
+> +ours 14.42(+22%) 8.13(+13%) 8.30(+53%) 14.30(+22%) 7.20(+12%) 7.99(+52%)
+> MonoDETR 8.03 4.77 6.39 7.94 4.12 5.58 Level 1
+> +ours 11.08(+38%) 6.18(+30%) 6.47(+1%) 10.95(+38%) 5.45(+32%) 6.30(+13%)
+> DID-M3D 11.09 6.53 5.22 11.01 5.83 5.06
+> +ours 13.52(+22%) 7.40(+13%) 8.00(+53%) 13.41(+22%) 6.55(+12%) 7.70(+52%)
+> MonoDETR 7.54 4.34 6.16 7.45 3.75 5.37 0.5 Level 2
+> +ours 10.39(+38%) 5.62(+29%) 6.23(+1%) 10.27(+38%) 4.96(+32%) 6.07(+13%)
+
+Table 5: Comparison of fully supervised and sparsely supervised (10% annotation ratio) settings on Waymo-Mono dataset (vehicle class). Our scheme with 10% annotation achieves comparable performance to the fully-supervised setting of the base models.                                                                 
+
+> Method DID-M3D MonoDETR
+> Annotation Full 10% 10% w/ours Full 10% 10% w /ours
+> 𝐴𝑃 3𝐷
+> 𝐼𝑂𝑈 3𝐷 @0 .7Level 1 2.64 0.71(-1.93) 2.69(+0.05) 1.63 0.77(-0.86) 1.53(-0.10)
+> Level 2 2.48 0.67(-1.81) 2.52(+0.04) 1.53 0.72(-0.81) 1.44(-0.09)
+> 𝐼𝑂𝑈 3𝐷 @0 .5Level 1 11.83 4.37(-7.46) 11.24(-0.59) 8.03 4.51(-3.52) 7.47(-0.56)
+> Level 2 11.09 4.09(-7.00) 10.54(-0.55) 7.54 4.23(-3.31) 7.01(-0.53)
+> 𝐴𝑃𝐻 3𝐷
+> 𝐼𝑂𝑈 3𝐷 @0 .7Level 1 2.63 0.70(-1.93) 2.66(+0.03) 1.61 0.76(-0.85) 1.51(-0.10)
+> Level 2 2.46 0.66(-1.80) 2.50(+0.04) 1.51 0.71(-0.80) 1.42(-0.09)
+> 𝐼𝑂𝑈 3𝐷 @0 .5Level 1 11.74 4.29(-7.45) 11.13(-0.61) 7.94 4.42(-3.52) 7.35(-0.59)
+> Level 2 11.01 4.02(-6.99) 10.44(-0.57) 7.45 4.14(-3.31) 6.90(-0.55)
+
+4.3.2 Sparsely-Supervised Setting 
+
+We sparsely annotate all 96 clips in the KITTI train split and randomly select a few clips to fully annotate. We choose three different annotation ratios, i.e., 10%, 20% and 50%, for experiment. Figure 1 shows the results of these three annotation ratios on MonoDLE, GUPNet, DID-M3D, and MonoDETR. Our scheme with fewer sparse annotations, espe-cially 10% for MonoDLE, GUPNet and DID-M3D, achieves on-par performance with the fully-supervised setting of these base models. The performance increases with the annotation ratio. Notably, the performance for 100% annotation in this setting is higher than in the fully-supervised setting because the model is pretrained first. Table 3 further shows the re-sults of our scheme on the three base models under the sparsely-supervised setting with a lower annotation ratio. Our scheme, with fewer annotations (10% for the first three base models), can achieve on-par performance with the fully-supervised training of these three models in the KITTI train split. When both our scheme and the base models use the same sparse annotations, the performance of the base models drops significantly, while our scheme achieves significant gains compared to the base models. This demonstrates the strong data exploitation ability of our method. 4.4 Main Results on Waymo-Mono We further evaluate on the more complicated Waymo Dataset. We deploy our scheme on two representative types of base models, i.e., the convolution-based DID-M3D (Peng et al., 2022b) and the transformer-based MonoDETR (Zhang et al., 2023). Table 2 showed that our scheme implemented on these two models achieves SOTA on KITTI. Table 4 shows the experimental results. We can see that, although the dataset scale of Waymo is 10 × larger than KITTI, we also achieve a significant improvement to the base models over three classes. Object-Scene-Camera Decomposition and Recomposition for Data Efficient Monocular 3D Object Detection 13 
+
+Table 6: Comparison of both fully-supervised and sparsely supervised performance at different distances. The result is reported on DID-M3D with an IoU threshold of 0.5. 
+
+Setting Difficulty Method 𝐴𝑃 3𝐷 𝐴𝑃𝐻 3𝐷 
+
+0-30m 30-50m 50-∞ m 0-30m 30-50m 50-∞ mfully-supervised Level 1 DID-M3D 27.55 5.47 0.89 27.35 5.42 0.88 
+
+ours 33.68 6.53 0.75 33.41 6.47 0.74 
+
+Level 2 DID-M3D 27.45 5.27 0.78 27.25 5.22 0.76 
+
+ours 33.55 6.28 0.65 33.29 6.23 0.64 
+
+sparsely-supervised (10%) Level 1 DID-M3D 11.84 1.41 0.18 11.64 1.38 0.17 
+
+ours 27.20 4.81 0.42 26.95 4.78 0.42 
+
+Level 2 DID-M3D 11.80 1.36 0.16 11.60 1.33 0.15 
+
+ours 27.10 4.64 0.37 26.85 4.61 0.36 
+
+Table 7: Comparison of PETR (Liu et al., 2022b) and our scheme on Waymo-Ring Dataset. 
+
+Supervision Full Sparse(10%) 
+
+Category Method mAP ↑ mATE ↓ mASE ↓ mAOE ↓ NDS* ↑ mAP ↑ mATE ↓ mASE ↓ mAOE ↓ NDS* ↑
+
+Vehicle PETR 0.497 0.704 0.156 0.126 0.584 0.074 1.250 0.228 0.764 0.205 
+
++ours 0.508 0.684 0.153 0.114 0.596(+0.012) 0.435 0.769 0.162 0.205 0.528(+0.323) 
+
+Pedestrian PETR 0.457 0.776 0.266 0.859 0.411 0.069 1.173 0.287 1.454 0.153 
+
++ours 0.492 0.715 0.262 0.606 0.482(+0.071) 0.401 0.812 0.270 1.087 0.353(+0.200) 
+
+Cyclist PETR 0.318 0.713 0.229 0.569 0.407 0.000 1.288 0.542 1.401 0.077 
+
++ours 0.328 0.668 0.209 0.465 0.440(+0.033) 0.154 0.799 0.258 0.854 0.259(+0.182) 
+
+all PETR 0.424 0.731 0.217 0.518 0.467 0.048 1.237 0.352 1.206 0.132 
+
++ours 0.443 0.689 0.208 0.395 0.506(+0.039) 0.330 0.793 0.230 0.715 0.375(+0.243) 
+
+Table 8: Ablation study of object-scene-camera decomposition and recomposition operations. 
+
+Object-Scene Recomposition Object-Scene Decomposition Camera Pose Pertubation 𝐴𝑃 3𝐷 𝐴𝑃 𝐵𝐸𝑉 
+
+easy mod hard easy mod hard - - - 15.89 12.76 10.57 23.14 18.17 15.31 
+
+✓ - - 20.69 16.92 14.34 27.95 21.96 19.22 
+
+✓ ✓ - 23.30 19.02 16.35 32.00 25.12 21.99 
+
+✓ ✓ ✓ 26.57 20.42 17.34 36.37 26.74 23.07 
+
+Table 9: Ablation study of different decomposition ratios. 
+
+Decomposition Ratio(%) 
+
+𝐴𝑃 3𝐷 𝐴𝑃 𝐵𝐸𝑉 
+
+easy mod hard easy mod hard 0 15.89 12.76 10.57 23.14 18.17 15.31 25 18.24 14.96 12.64 24.31 19.88 17.35 50 19.92 15.71 14.01 27.31 21.80 18.94 
+
+100 22.44 17.97 15.28 31.94 24.59 21.70 
+
+This indicates that, not only the small-scale dataset but also the large-scale dataset suffers from the tight entanglement issue. Although a larger dataset can alleviate this issue, due to the efficient data mining capabilities of our scheme, we can more efficiently utilize the training data to improve the performance for all object classes. Further, as shown in Table 5, with the sparsely-supervised setting, only 10% annotation is needed to achieve comparable performance with the fully-supervised setting. It also demonstrates the strong data exploitation ability of our scheme. Moreover, Table 6 shows the performance of our scheme based on DID-M3D across different distances under both fully-supervised and sparsely-supervised settings. The experiment shows that our scheme effectively improves the detection performance within 0-30m and 30-50m ranges. For objects in the 50-∞m range, considering the ill-posed nature of M3OD, objects at such a far distance are hard to detect, so our scheme shows limited improvement. 4.5 Main Results on Waymo-Ring To evaluate the applicability of our scheme on the multi-camera Waymo-Ring dataset, we deploy it on the representa-14 Zhaonian Kuang et al. 
+
+Table 10: Ablation study of different counts of recomposition per scene.                               
+
+> Counts of Recomposition
+> 𝐴𝑃 3𝐷 𝐴𝑃 𝐵𝐸𝑉
+> easy mod hard easy mod hard 015.89 12.76 10.57 23.14 18.17 15.31 218.89 14.86 12.51 26.67 20.44 17.40 50 21.11 17.00 14.47 29.17 22.86 19.78
+> 200 23.30 19.02 16.35 32.00 25.12 21.99
+
+Table 11: Ablation study of scene utilization before and after applying our scheme.    
+
+> Method Object-scene composition per scene plain ≈4
+> +ours ≈700
+
+tive multi-camera 3D object detector PETR (Liu et al., 2022b). Table 7 shows the experiment results. We can see that, al-though under the more challenge multi-camera setting, our scheme still effectively improves the detection performance across all categories of PETR, under both fully-supervised and sparsely-supervised settings. This indicates that the tight entanglement issue still occur in multi-camera setting and our scheme can alleviate it. 4.6 Ablation Study We investigate the effect of each component in our data manipulation scheme on the KITTI validation split using MonoDLE. 
+
+4.6.1 Effectiveness of Object-Scene-Camera Decomposition and Recomposition 
+
+In our scheme, we propose three strategies to alleviate the tight entanglement of the three intenties, i.e., object, scene, and camera pose, in training data. More specifically, object-scene decomposition helps the network alleviate the overfitting to uniform training data, object-scene recomposition helps explore more object-scene and object-object relationships, and camera pose pertubation can extend the camera pose of a frame from fixed value to diverse variations. Table 8 validates the effectiveness of the combination of the three proposed strategies. We can see that each of these three components contributes significantly to the performance. By combining all components, we achieve a significant gain in model performance. 
+
+4.6.2 Effectiveness of Decomposition Operation 
+
+We validate the effectiveness of our decomposition operation to alleviate the overfitting issue to the uniform training data. Table 12: Ablation study of different degrees of camera pose (pitch and roll) perturbation.                                   
+
+> 𝜃 &𝛼 (°)𝐴𝑃 3𝐷 𝐴𝑃 𝐵𝐸𝑉
+> easy mod hard easy mod hard 015.89 12.76 10.57 23.14 18.17 15.31 120.84 16.86 13.50 28.07 21.99 18.11
+> 221.76 16.13 13.60 28.71 21.30 18.41
+> 319.98 15.48 12.90 27.98 21.03 17.79
+
+Table 13: Ablation study of different degrees of camera pose (translation) perturbation.                                 
+
+> 𝜖 𝑧 (m) 𝐴𝑃 3𝐷 𝐴𝑃 𝐵𝐸𝑉
+> easy mod hard easy mod hard 015.89 12.76 10.57 23.14 18.17 15.31 119.90 15.40 12.93 27.98 21.13 18.09
+> 221.21 16.20 14.10 28.85 22.04 18.97
+> 319.22 15.16 12.76 27.38 21.62 18.75
+
+We randomly selected 25% clips, 50% clips and all data from train split to apply decomposition and obtain different scales of empty scenes and an object database. For the empty scenes, we randomly select objects from the database and insert them into the position of the original objects in the scene. Table 9 shows the results. We can see that, as the proportion of decomposed scenes increases, the performance of the model continues to improve. This indicates that the model tends to overfit on uniform data and our decomposition operation can alleviate it. 
+
+4.6.3 Effectiveness of Recomposition Operation 
+
+We validate the effectiveness of our recomposition operation to alleviate the underutilization issue of the object-scene relationship. We apply different numbers of recompositions for each scene while keeping the total training epochs the same. Table 10 shows the results. We can see that, as the number of recompositiosn increases, more variance of appearance and 2D size of objects and more diverse combinations of objects and scenes are introduced. This allows the model to exploit more information and achieve higher performance. Table 11 also reflects how our method greatly utilizes the object-scene relationship. For the original data in the KITTI train split, each scene contains, on average, only 4 object-scene compositions. With our scheme, after 200 iterations, we generate up to approximately 700 object-scene compositions per scene. 
+
+4.6.4 Effectiveness of Camera Pose Perturbation 
+
+We validate the effectiveness of our camera pose perturbation operation to alleviate the limited camera pose variation issue. Tables 12 and 13 show the effect of applying our camera pose Object-Scene-Camera Decomposition and Recomposition for Data Efficient Monocular 3D Object Detection 15 scene A 
+
+## scene B 
+
+## scene C 
+
+## scene D 
+
+## scene E 
+
+## scene F 
+
+> Vehicle
+> Pedestrian
+> Cyclist
+
+Fig. 7: Visualization of recomposed data based on decomposed data on Waymo-Ring. Our scheme can generate diverse data with randomly sampled object-scene-camera combinations online. For each scene, the top row shows the raw scene, and the bottom row shows the recomposed scene. We circle some of the recomposed samples of each category in the figure with different color. 16 Zhaonian Kuang et al. 
+
+Fig. 8: Qualitative comparison of detection results on the KITTI validation set for DID-M3D training with and without our scheme. For each scene, the left and right images show the results without and with our scheme, respectively. Ground truth boxes are shown in red, and predicted boxes are shown in green. Object-Scene-Camera Decomposition and Recomposition for Data Efficient Monocular 3D Object Detection 17 
+
+Table 14: Ablation study of different ratios of empty scenes per batch.                         
+
+> 𝑟 𝑒𝑚 𝑝𝑡 𝑦
+> 𝐴𝑃 3𝐷 𝐴𝑃 𝐵𝐸𝑉
+> easy mod hard easy mod hard 1.0 19.83 13.65 10.14 27.55 19.13 14.76
+> 0.5 26.57 20.42 17.34 36.37 26.74 23.07
+> 023.07 17.92 15.33 31.58 23.68 20.78
+
+Table 15: Comparison with copy-paste strategies.                    
+
+> Model 𝐴𝑃 3𝐷 /𝐴𝑃 𝐵𝐸𝑉
+> easy mod hard MonoDLE (Ma et al., 2021) 17.45 / 24.97 13.66 / 19.33 11.68 / 17.01 +EGC (Lian et al., 2022) 22.79 / 30.44 16.74 / 22.71 14.60 / 19.60 +MonoSample (Qiao et al., 2024) 19.71 / 26.66 15.82 / 21.14 13.58 / 18.36 +MonoPlace3D (Parihar et al., 2025) 22.49 / -15.44 / -12.89 / -
+> +ours 26.87 / 35.52 19.48 / 25.07 16.02 / 21.15
+
+perturbation operation on the performance of the base model. After applying pitch and roll perturbation, the network learns an extrinsic-invariant representation against pose variation. By applying translation perturbation, we can dynamically increase the temporal resolution, enabling the network to learn from the data effectively. 
+
+4.6.5 Mix sampling of raw/empty scenes in training 
+
+Table 14 shows a comparison of different mixing ratios between raw scenes and empty scenes. When only raw scenes are sampled, recomposition flexibility is poor due to fixed object semantics. As a result, it is difficult to fully utilize object-scene relationship, and leading to network overfitting. However, if only empty scenes are sampled, recomposition flexibility is maximized. Nevertheless, performance remains poor due to the domain gap between synthetic and real data. To make a trade-off, we mix raw scenes and empty scenes with the ratio 0.5. With this mixed sampling strategy, the network can train stably while benefiting from data recomposition. 
+
+4.6.6 Comparison with Copy-Paste strategies 
+
+We also compare our scheme with three representative copy-paste strategies in EGC (Lian et al., 2022), MonoSample (Qiao et al., 2024), and MonoPlace3D (Parihar et al., 2025). Table 15 shows the results. We can see that our scheme holds huge performance gains compared to these three methods. The reason is that, although copy-paste methods partly alleviate the tight entanglement issue to some degree, e.g., the object-scene Table 16: Quantitative results of recomposed images.         
+
+> Method FID ↓LPIPS ↓
+> 2D copy paste 9.977 0.098
+> ours 8.757 0.068
+
+Table 17: Computational costs of our scheme.             
+
+> Type Action Speed
+> Offline Data Manipulation Scene Database Construction 3.5h Object Database Construction 1h Online Data Manipulation Object-Scene Recomposition 5fps Camera Pose Perturbation 2500fps Training DID-M3D 24h DID-M3D+ours 40h PETR 12.5h PETR+ours 12.5h
+
+relationship, but cannot alleviate the two issues of overfitting to uniform training data and limited camera pose variation. For comparison, we delve into the tight entanglement issue and propose three strategies to fully mitigate it. Further, we can achieve 2D-3D geometric consistency after data manipulation. 
+
+4.6.7 Quantitative results of recomposed images 
+
+We use FID and LPIPS to evaluate the quantitative quality of recomposed images in our scheme. The experiment is conducted on the KITTI train split. Table 16 shows the FID and LPIPS scores of our results. We achieve better results than the simple 2D copy-paste because we consider the geometric consistency. 
+
+4.6.8 Computational and storage costs 
+
+To evaluate the efficiency of our scheme, we show the com-putational and storage costs. Table 17 shows the computation cost. Specifically, we evaluate the offline data manipulation, including scene database construction and object database construction on Waymo-Mono. The results show that the database construction cost is low thanks to our design. For the online data manipulation, we implement object-scene recomposition within dataloader sub-process on CPU, and we implement camera pose perturbation in the main-process on GPU. The results show that the camera pose perturbation is very efficient because all operations are im-plemented via matrix calculations, which are well-suited for GPU. The object-scene recomposition is relatively slow because the calculation need to processed by the CPU step by step, but 5 fps is still a fast speed compared to the high-cost GAN or Diffusion schemes. Moreover, we show the training time of DID-M3D on Waymo-Mono and PETR on Waymo-Ring. The results show 18 Zhaonian Kuang et al. 
+
+that our scheme has a certain degree of influence on DID-M3D and no influence on PETR. This is because, although the main online computation of our scheme is object-scene re-composition, it is implemented in the dataloader sub-process, which can run in parallel with network training. The training time of DID-M3D slows down because it is a lightweight network and the training speed bottleneck lies in the data pre-process running on CPU. Finally, regarding the storage costs, for the Waymo-Ring dataset, additional storage required for the object database and scene database is 1.5GB and 97GB, compared to the raw images, which occupy 31GB. 4.7 Qualitative Results 
+
+4.7.1 Visualization of Recomposed Data 
+
+Figure 7 shows some recomposed data based on the combi-nation of different categories of objects, scenes, and camera poses. Our scheme can explore their combination to generate diverse data online for efficient network training. We did not introduce complicated shadow rendering, and it does not hinder the performance enhancement. 
+
+4.7.2 Visualization of Detection Results 
+
+Figure 8 shows some qualitative comparison of detection results for DID-M3D training with and without our scheme. We can see that, the model trained without our scheme results in bad detection results. The reason lies that it suffers from the tight entanglement issue on uniform training data. After applying our scheme, it can alleviate the tight entanglement issue and well boost the performance of the model. 
+
+5 Conclusion 
+
+In this paper, we observe that the crucial tight entanglement problem of the three independent entities, i.e., object, scene and camera pose, induces the challenging issues of insufficient utilization and overfitting to uniform training data for deep learning based monocular 3D object detection. To mitigate, we propose an online object-scene-camera decomposition and recomposition data manipulation scheme to more efficiently exploit training data. This scheme serves as a plug-and-play component to significantly boost existing M3OD models, which can work flexibly with both fully and sparsely super-vised settings. Notably, our scheme holds great potential to achieve higher accuracy with stronger base models upon their codes released. In the future, we plan to extend our scheme to unsupervised setting. 
+
+Data Availability The KITTI (Geiger et al., 2012) and Waymo (Sun et al., 2020) datasets used in this manuscript are deposited in publicly available reposito-ries respectively: https://www.cvlibs.net/datasets/kitti/ and https://waymo.com/open/data/perception 
+
+References 
+
+Holger Caesar, Varun Bankiti, Alex H Lang, Sourabh Vora, Venice Erin Liong, Qiang Xu, Anush Krishnan, Yu Pan, Giancarlo Baldan, and Oscar Beijbom. nuscenes: A multimodal dataset for autonomous driving. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pages 11621–11631, 2020. Yongjian Chen, Lei Tai, Kai Sun, and Mingyang Li. Monopair: Monoc-ular 3d object detection using pairwise spatial relationships. In 
+
+Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pages 12093–12102, 2020. Zhiyu Chong, Xinzhu Ma, Hong Zhang, Yuxin Yue, Haojie Li, Zhihui Wang, and Wanli Ouyang. Monodistill: Learning spatial features for monocular 3d object detection. arXiv preprint arXiv:2201.10830 ,2022. Tom van Dijk and Guido de Croon. How do neural networks see depth in single images? In Proceedings of the IEEE/CVF International Conference on Computer Vision , pages 2183–2191, 2019. Rui Ding, Meng Yang, and Nanning Zheng. Selective transfer learning of cross-modality distillation for monocular 3d object detection. IEEE Transactions on Circuits and Systems for Video Technology , 2024. Nikita Dvornik, Julien Mairal, and Cordelia Schmid. Modeling visual context is key to augmenting object detection datasets. In Proceedings of the European Conference on Computer Vision (ECCV) , pages 364–380, 2018. Hao-Shu Fang, Jianhua Sun, Runzhong Wang, Minghao Gou, Yong-Lu Li, and Cewu Lu. Instaboost: Boosting instance segmentation via probability map guided copy-pasting. In Proceedings of the IEEE/CVF international conference on computer vision , pages 682– 691, 2019. Jin Fang, Xinxin Zuo, Dingfu Zhou, Shengze Jin, Sen Wang, and Liangjun Zhang. Lidar-aug: A general rendering-based augmentation framework for 3d object detection. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 4710–4720, 2021. Yunhao Ge, Hong-Xing Yu, Cheng Zhao, Yuliang Guo, Xinyu Huang, Liu Ren, Laurent Itti, and Jiajun Wu. 3d copy-paste: Physically plausible object insertion for monocular 3d detection. Advances in Neural Information Processing Systems , 36:17057–17071, 2023. Andreas Geiger, Philip Lenz, and Raquel Urtasun. Are we ready for autonomous driving? the kitti vision benchmark suite. In 2012 IEEE conference on computer vision and pattern recognition , pages 3354–3361. IEEE, 2012. Yu Hong, Hang Dai, and Yong Ding. Cross-modality knowledge distillation network for monocular 3d object detection. In European Conference on Computer Vision , pages 87–104. Springer, 2022. Chenxi Huang, Tong He, Haidong Ren, Wenxiao Wang, Binbin Lin, and Deng Cai. Obmo: One bounding box multiple objects for monocular 3d object detection. IEEE Transactions on Image Processing , 32: 6570–6581, 2023. Junjie Huang, Guan Huang, Zheng Zhu, Yun Ye, and Dalong Du. Bevdet: High-performance multi-camera 3d object detection in bird-eye-view. 
+
+arXiv preprint arXiv:2112.11790 , 2021. Kuan-Chih Huang, Tsung-Han Wu, Hung-Ting Su, and Winston H Hsu. Monodtr: Monocular 3d object detection with depth-aware transformer. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pages 4012–4021, 2022. Linyan Huang, Huijie Wang, Jia Zeng, Shengchuan Zhang, Liujuan Cao, Junchi Yan, and Hongyang Li. Lidar-guided geometric pretraining for Object-Scene-Camera Decomposition and Recomposition for Data Efficient Monocular 3D Object Detection 19 vision-centric 3d object detection. International Journal of Computer Vision , 133(7):3877–3890, 2025. Alexander Kirillov, Eric Mintun, Nikhila Ravi, Hanzi Mao, Chloe Rol-land, Laura Gustafson, Tete Xiao, Spencer Whitehead, Alexander C Berg, Wan-Yen Lo, et al. Segment anything. In Proceedings of the IEEE/CVF International Conference on Computer Vision , pages 4015–4026, 2023. Alex H Lang, Sourabh Vora, Holger Caesar, Lubing Zhou, Jiong Yang, and Oscar Beijbom. Pointpillars: Fast encoders for object detection from point clouds. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pages 12697–12705, 2019. Leheng Li, Qing Lian, Luozhou Wang, Ningning Ma, and Ying-Cong Chen. Lift3d: Synthesize 3d training data by lifting 2d gan to 3d generative radiance field. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 332–341, 2023a. Yinhao Li, Zheng Ge, Guanyi Yu, Jinrong Yang, Zengran Wang, Yukang Shi, Jianjian Sun, and Zeming Li. Bevdepth: Acquisition of reliable depth for multi-view 3d object detection. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 37, pages 1477–1485, 2023b. Zhenjia Li, Jinrang Jia, and Yifeng Shi. Monolss: Learnable sample se-lection for monocular 3d detection. In 2024 International Conference on 3D Vision (3DV) , pages 1125–1135. IEEE, 2024. Zhiqi Li, Wenhai Wang, Hongyang Li, Enze Xie, Chonghao Sima, Tong Lu, Yu Qiao, and Jifeng Dai. Bevformer: Learning bird’s-eye-view representation from multi-camera images via spatiotemporal transformers. In European conference on computer vision , pages 1–18. Springer, 2022a. Zhuoling Li, Zhan Qu, Yang Zhou, Jianzhuang Liu, Haoqian Wang, and Lihui Jiang. Diversity matters: Fully exploiting depth clues for reliable monocular 3d object detection. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,pages 2791–2800, 2022b. Qing Lian, Botao Ye, Ruijia Xu, Weilong Yao, and Tong Zhang. Ex-ploring geometric consistency for monocular 3d object detection. In 
+
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 1685–1694, 2022. Xianpeng Liu, Nan Xue, and Tianfu Wu. Learning auxiliary monocular contexts helps monocular 3d object detection. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 36, pages 1810–1818, 2022a. Yingfei Liu, Tiancai Wang, Xiangyu Zhang, and Jian Sun. Petr: Position embedding transformation for multi-view 3d object detection. In 
+
+European conference on computer vision , pages 531–548. Springer, 2022b. Yan Lu, Xinzhu Ma, Lei Yang, Tianzhu Zhang, Yating Liu, Qi Chu, Junjie Yan, and Wanli Ouyang. Geometry uncertainty projection network for monocular 3d object detection. In Proceedings of the IEEE/CVF International Conference on Computer Vision , pages 3111–3121, 2021. Xinzhu Ma, Yinmin Zhang, Dan Xu, Dongzhan Zhou, Shuai Yi, Haojie Li, and Wanli Ouyang. Delving into localization errors for monocular 3d object detection. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 4721–4730, 2021. Gerard Maggiolino, Adnan Ahmad, Jinkun Cao, and Kris Kitani. Deep oc-sort: Multi-pedestrian tracking by adaptive re-identification. In 
+
+2023 IEEE International Conference on Image Processing (ICIP) ,pages 3025–3029. IEEE, 2023. Zhixiang Min, Bingbing Zhuang, Samuel Schulter, Buyu Liu, Enrique Dunn, and Manmohan Chandraker. Neurocs: Neural nocs supervision for monocular 3d object localization. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 21404–21414, 2023. Rishubh Parihar, Srinjay Sarkar, Sarthak Vora, Jogendra Nath Kundu, and R Venkatesh Babu. Monoplace3d: Learning 3d-aware object placement for 3d monocular detection. In Proceedings of the Com-puter Vision and Pattern Recognition Conference , pages 6531–6541, 2025. Liang Peng, Fei Liu, Zhengxu Yu, Senbo Yan, Dan Deng, Zheng Yang, Haifeng Liu, and Deng Cai. Lidar point cloud guided monocular 3d object detection. In European conference on computer vision , pages 123–139. Springer, 2022a. Liang Peng, Xiaopei Wu, Zheng Yang, Haifeng Liu, and Deng Cai. Did-m3d: Decoupling instance depth for monocular 3d object detection. In European Conference on Computer Vision , pages 71–88. Springer, 2022b. Liang Peng, Junkai Xu, Haoran Cheng, Zheng Yang, Xiaopei Wu, Wei Qian, Wenxiao Wang, Boxi Wu, and Deng Cai. Learning occupancy for monocular 3d object detection. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 10281–10292, 2024. Fanqi Pu, Yifan Wang, Jiru Deng, and Wenming Yang. Monodgp: Monocular 3d object detection with decoupled-query and geometry-error priors. In Proceedings of the Computer Vision and Pattern Recognition Conference , pages 6520–6530, 2025. Junchao Qiao, Biao Liu, Jiaqi Yang, Baohua Wang, Sanmu Xiu, Xin Du, and XiaoBo Nie. Monosample: Synthetic 3d data augmentation method in monocular 3d object detection. IEEE Robotics and Automation Letters , 2024. Cody Reading, Ali Harakeh, Julia Chae, and Steven L Waslander. Categorical depth distribution network for monocular 3d object detection. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 8555–8564, 2021. Shaoqing Ren, Kaiming He, Ross Girshick, and Jian Sun. Faster r-cnn: Towards real-time object detection with region proposal networks. 
+
+Advances in neural information processing systems , 28, 2015. Hualian Sheng, Sijia Cai, Na Zhao, Bing Deng, Qiao Liang, Min-Jian Zhao, and Jieping Ye. Ct3d++: Improving 3d object detection with keypoint-induced channel-wise transformer. International Journal of Computer Vision , 133(7):4817–4836, 2025. Shaoshuai Shi, Li Jiang, Jiajun Deng, Zhe Wang, Chaoxu Guo, Jianping Shi, Xiaogang Wang, and Hongsheng Li. Pv-rcnn++: Point-voxel feature set abstraction with local vector representation for 3d object detection. International Journal of Computer Vision , 131(2):531–551, 2023. Pei Sun, Henrik Kretzschmar, Xerxes Dotiwalla, Aurelien Chouard, Vijaysai Patnaik, Paul Tsui, James Guo, Yin Zhou, Yuning Chai, Benjamin Caine, et al. Scalability in perception for autonomous driving: Waymo open dataset. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pages 2446– 2454, 2020. Roman Suvorov, Elizaveta Logacheva, Anton Mashikhin, Anastasia Rem-izova, Arsenii Ashukha, Aleksei Silvestrov, Naejin Kong, Harshith Goka, Kiwoong Park, and Victor Lempitsky. Resolution-robust large mask inpainting with fourier convolutions. In Proceedings of the IEEE/CVF winter conference on applications of computer vision ,pages 2149–2159, 2022. Zhi Tian, Chunhua Shen, Hao Chen, and Tong He. Fcos: Fully convolu-tional one-stage object detection. In Proceedings of the IEEE/CVF international conference on computer vision , pages 9627–9636, 2019. Wenwen Tong, Jiangwei Xie, Tianyu Li, Hanming Deng, Xiangwei Geng, Ruoyi Zhou, Dingchen Yang, Bo Dai, Lewei Lu, and Hongyang Li. 3d data augmentation for driving scenes on camera. arXiv preprint arXiv:2303.10340 , 2023. Hao Wang, Qilong Wang, Fan Yang, Weiqi Zhang, and Wangmeng Zuo. Data augmentation for object detection via progressive and selective instance-switching. arXiv preprint arXiv:1906.00358 , 2019. Haotian Wang, Meng Yang, and Nanning Zheng. G2-monodepth: A general framework of generalized depth inference from monocular rgb+ x data. IEEE Transactions on Pattern Analysis and Machine Intelligence , 2023. 20 Zhaonian Kuang et al. Jian Wang, Fan Li, Song Lv, Lijun He, and Chao Shen. Physically realizable adversarial creating attack against vision-based bev space 3d object detection. IEEE Transactions on Image Processing , 2025. Tai Wang, ZHU Xinge, Jiangmiao Pang, and Dahua Lin. Probabilistic and geometric depth: Detecting objects in perspective. In Conference on Robot Learning , pages 1475–1485. PMLR, 2022. Yuqing Wen, Yucheng Zhao, Yingfei Liu, Fan Jia, Yanhui Wang, Chong Luo, Chi Zhang, Tiancai Wang, Xiaoyan Sun, and Xiangyu Zhang. Panacea: Panoramic and controllable video generation for autonomous driving. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 6902–6912, 2024. Yiming Wu, Ruixiang Li, Zequn Qin, Xinhai Zhao, and Xi Li. Height-former: Explicit height modeling without extra data for camera-only 3d object detection in bird’s eye view. IEEE Transactions on Image Processing , 2024. Longfei Yan, Pei Yan, Shengzhou Xiong, Xuanyu Xiang, and Yihua Tan. Monocd: Monocular 3d object detection with complementary depths. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 10248–10257, 2024. Lei Yang, Xinyu Zhang, Jun Li, Li Wang, Minghan Zhu, Chuang Zhang, and Huaping Liu. Mix-teaching: A simple, unified and effective semi-supervised learning framework for monocular 3d object detection. 
+
+IEEE Transactions on Circuits and Systems for Video Technology , 33 (11):6832–6844, 2023. Zhiyuan Yang, Xuekuan Wang, Wei Zhang, Xiao Tan, Jincheng Lu, Jingdong Wang, Errui Ding, and Cairong Zhao. Fusion4dal: Offline multi-modal 3d object detection for 4d auto-labeling. International Journal of Computer Vision , pages 1–19, 2025. Jiacheng Zhang, Jiaming Li, Xiangru Lin, Wei Zhang, Xiao Tan, Junyu Han, Errui Ding, Jingdong Wang, and Guanbin Li. Decoupled pseudo-labeling for semi-supervised monocular 3d object detection. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 16923–16932, 2024a. Renrui Zhang, Han Qiu, Tai Wang, Ziyu Guo, Ziteng Cui, Yu Qiao, Hongsheng Li, and Peng Gao. Monodetr: Depth-guided transformer for monocular 3d object detection. In Proceedings of the IEEE/CVF International Conference on Computer Vision , pages 9155–9166, 2023. Yanan Zhang, Jiaxin Chen, and Di Huang. Cmae-3d: Contrastive masked autoencoders for self-supervised 3d object detection. International Journal of Computer Vision , 133(5):2783–2804, 2025. Yifan Zhang, Junhui Hou, and Yixuan Yuan. A comprehensive study of the robustness for lidar-based 3d object detectors against adversarial attacks. International Journal of Computer Vision , 132(5):1592– 1624, 2024b. Yunpeng Zhang, Jiwen Lu, and Jie Zhou. Objects are different: Flexible monocular 3d object detection. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 3289–3298, 2021. Yunpeng Zhang, Zheng Zhu, Wenzhao Zheng, Junjie Huang, Guan Huang, Jie Zhou, and Jiwen Lu. Beverse: Unified perception and prediction in birds-eye-view for vision-centric autonomous driving. 
+
+arXiv preprint arXiv:2205.09743 , 2022. Xingyi Zhou, Dequan Wang, and Philipp Kr ¨ahenb¨ uhl. Objects as points. 
+
+arXiv preprint arXiv:1904.07850 , 2019. Yunsong Zhou, Yuan He, Hongzi Zhu, Cheng Wang, Hongyang Li, and Qinhong Jiang. Monoef: Extrinsic parameter free monocular 3d object detection. IEEE Transactions on Pattern Analysis and Machine Intelligence , 44(12):10114–10128, 2021.
