@@ -413,7 +413,7 @@ def process_paper_gmail(paper: Dict,
 # --------------------------------------------------
 def main():
     date_str = datetime.now().strftime("%Y/%m/%d")
-    date_str = "2026/03/25"
+    # date_str = "2026/03/25"
     # 不传参数时默认今天
     result = get_related_research_emails_by_day(date_str)
     # result = get_related_research_emails_by_day("2026/03/25") # debug
