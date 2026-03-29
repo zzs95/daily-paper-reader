@@ -666,18 +666,31 @@ def main() -> None:
 
     fetch_source = resolve_fetch_source(args.fetch_source)
     email_date_token = normalize_email_date_token(args.email_date)
-    email_keyword = str(args.email_keyword or "").strip()
-    if fetch_source == "email" and email_date_token:
-        run_date_token = email_date_token
-        if re.match(r"^\d{8}-\d{8}$", run_date_token):
-            sidebar_date_label = (
-                f"{run_date_token[:4]}-{run_date_token[4:6]}-{run_date_token[6:8]} ~ "
-                f"{run_date_token[9:13]}-{run_date_token[13:15]}-{run_date_token[15:17]}"
-            )
-        else:
-            sidebar_date_label = (
-                f"{run_date_token[:4]}-{run_date_token[4:6]}-{run_date_token[6:8]}"
-            )
+    email_keyword = str(args.email_keyword or "new related research").strip()
+    if fetch_source == "email":
+        if email_date_token:
+            run_date_token = email_date_token
+            if re.match(r"^\d{8}-\d{8}$", run_date_token):
+                sidebar_date_label = (
+                    f"{run_date_token[:4]}-{run_date_token[4:6]}-{run_date_token[6:8]} ~ "
+                    f"{run_date_token[9:13]}-{run_date_token[13:15]}-{run_date_token[15:17]}"
+                )
+            else:
+                sidebar_date_label = (
+                    f"{run_date_token[:4]}-{run_date_token[4:6]}-{run_date_token[6:8]}"
+                )
+        if not sidebar_date_label:
+            if re.match(r"^\d{8}-\d{8}$", run_date_token):
+                sidebar_date_label = (
+                    f"{run_date_token[:4]}-{run_date_token[4:6]}-{run_date_token[6:8]} ~ "
+                    f"{run_date_token[9:13]}-{run_date_token[13:15]}-{run_date_token[15:17]}"
+                )
+            elif re.match(r"^\d{8}$", run_date_token):
+                sidebar_date_label = (
+                    f"{run_date_token[:4]}-{run_date_token[4:6]}-{run_date_token[6:8]}"
+                )
+        if sidebar_date_label and not sidebar_date_label.startswith("📧"):
+            sidebar_date_label = f"📧 {sidebar_date_label}"
     os.environ["DPR_RUN_DATE"] = run_date_token
     print(f"[INFO] DPR_RUN_DATE={run_date_token}", flush=True)
     print(f"[INFO] fetch_source={fetch_source}", flush=True)
@@ -721,7 +734,7 @@ def main() -> None:
             flush=True,
         )
         print(
-            f"[INFO] email fetch params: date={run_date_token}, keyword={email_keyword or '(default)'}, mode={recommend_mode}",
+            f"[INFO] email fetch params: date={run_date_token}, keyword={email_keyword or '(default: new related research)'}, mode={recommend_mode}",
             flush=True,
         )
         run_step(
