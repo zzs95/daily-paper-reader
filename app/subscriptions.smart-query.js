@@ -23,8 +23,8 @@ window.SubscriptionsSmartQuery = (function () {
 
   const defaultPromptTemplate = [
     'You are a retrieval planning assistant.',
-    '鏍囩 (Tag): {{TAG}}',
-    '涓枃鎻忚堪 (Description): {{USER_DESCRIPTION}}',
+    '标签 (Tag): {{TAG}}',
+    '中文描述 (Description): {{USER_DESCRIPTION}}',
     'Retrieval context: {{RETRIEVAL_CONTEXT}}',
     '',
     'Return JSON only:',
@@ -35,17 +35,17 @@ window.SubscriptionsSmartQuery = (function () {
     '    {',
     '      "keyword": "short keyword phrase for BM25 recall",',
     '      "query": "semantic rewrite for this keyword",',
-    '      "keyword_cn": "涓枃鐩磋瘧锛堝彲閫夛級",',
+    '      "keyword_cn": "中文直译（可选）",',
     '    }',
     '  ],',
     '  "intent_queries": [',
     '    {',
     '      "query": "intent-oriented semantic query 1",',
-    '      "query_cn": "涓枃鐩磋瘧锛堝彲閫夛級",',
+    '      "query_cn": "中文直译（可选）",',
     '    },',
     '    {',
       '      "query": "intent-oriented semantic query 2",',
-      '      "query_cn": "涓枃鐩磋瘧锛堝彲閫夛級",',
+      '      "query_cn": "中文直译（可选）",',
     '    }',
     '  ],',
     '}',
@@ -97,7 +97,7 @@ window.SubscriptionsSmartQuery = (function () {
   );
 
   const getKindLabel = (kind) => (
-    normalizeCandidateKind(kind) === 'intent' ? '鎰忓浘Query' : '鍏抽敭璇?
+    normalizeCandidateKind(kind) === 'intent' ? '意图Query' : '关键词'
   );
 
   const countSelectedCandidates = (items) =>
@@ -127,16 +127,16 @@ window.SubscriptionsSmartQuery = (function () {
       (item) => item && !item._isDraftSlot && item._selected,
     );
     if (!selectedKeywords.length) {
-      return '璇疯嚦灏戜繚鐣?1 鏉″叧閿瘝銆?;
+      return '请至少保留 1 条关键词。';
     }
     if (selectedKeywords.length > MAX_KEYWORDS_PER_PROFILE) {
-      return `鍏抽敭璇嶆渶澶氬彧鑳戒繚鐣?${MAX_KEYWORDS_PER_PROFILE} 鏉°€俙;
+      return `关键词最多只能保留 ${MAX_KEYWORDS_PER_PROFILE} 条。`;
     }
     if (!selectedIntentQueries.length) {
-      return '璇疯嚦灏戜繚鐣?1 鏉℃剰鍥綫uery銆?;
+      return '请至少保留 1 条意图Query。';
     }
     if (selectedIntentQueries.length > MAX_INTENT_QUERIES_PER_PROFILE) {
-      return `鎰忓浘Query 鏈€澶氬彧鑳戒繚鐣?${MAX_INTENT_QUERIES_PER_PROFILE} 鏉°€俙;
+      return `意图Query 最多只能保留 ${MAX_INTENT_QUERIES_PER_PROFILE} 条。`;
     }
     return '';
   };
@@ -158,16 +158,16 @@ window.SubscriptionsSmartQuery = (function () {
         ? (realKind === 'intent' ? modalState.intent_queries : modalState.keywords)
         : [];
     const selectedCount = countSelectedCandidates(currentItems);
-    return `${getKindLabel(realKind)}锛?{selectedCount}/${getSelectionLimit(realKind)}锛?{suffix}锛塦;
+    return `${getKindLabel(realKind)}（${selectedCount}/${getSelectionLimit(realKind)}，${suffix}）`;
   };
 
   const sanitizeNoYear = (value) => {
     const base = normalizeText(value);
     if (!base) return '';
     let text = base
-      .replace(/\((?:19|20)\d{2}(?:骞??\)/g, '')
-      .replace(/锛??:19|20)\d{2}(?:骞??锛?g, '')
-      .replace(/(?:19|20)\d{2}(?:骞??/g, '')
+      .replace(/\((?:19|20)\d{2}(?:年)?\)/g, '')
+      .replace(/（(?:19|20)\d{2}(?:年)?）/g, '')
+      .replace(/(?:19|20)\d{2}(?:年)?/g, '')
       .replace(/[\s_-]{2,}/g, ' ')
       .trim();
     if (text) {
@@ -183,11 +183,11 @@ window.SubscriptionsSmartQuery = (function () {
     const base = normalizeText(value);
     if (!base) return '';
     let tag = base
-      .replace(/\((?:19|20)\d{2}(?:骞??\)/g, '')
-      .replace(/锛??:19|20)\d{2}(?:骞??锛?g, '')
+      .replace(/\((?:19|20)\d{2}(?:年)?\)/g, '')
+      .replace(/（(?:19|20)\d{2}(?:年)?）/g, '')
       .replace(/([\u4e00-\u9fffA-Za-z]+)\s*(?:19|20)\d{2}(?!\d)/g, '$1')
       .replace(/(?:19|20)\d{2}(?!\d)([\u4e00-\u9fffA-Za-z]+)/g, '$1')
-      .replace(/[\s_-]*(?:19|20)\d{2}(?:骞?[\s_-]*/g, '')
+      .replace(/[\s_-]*(?:19|20)\d{2}(?:年)[\s_-]*/g, '')
       .replace(/[\s_-]*(?:19|20)\d{2}[\s_-]*/g, '');
     tag = tag
       .replace(/\+/g, ' ')
@@ -274,7 +274,7 @@ window.SubscriptionsSmartQuery = (function () {
   const getPaperSourceLabel = (source) => {
     const key = normalizeText(source).toLowerCase();
     if (key === 'all') return 'all';
-    return PAPER_SOURCE_LABELS[key] || key || '鏈煡婧?;
+    return PAPER_SOURCE_LABELS[key] || key || '未知源';
   };
 
   const renderPaperSourceChoices = (selectedSources) => {
@@ -589,7 +589,7 @@ window.SubscriptionsSmartQuery = (function () {
           if (parsed && typeof parsed === 'object') return parsed;
         } catch {}
       }
-      throw new Error('妯″瀷杩斿洖涓嶆槸鍚堟硶 JSON');
+      throw new Error('模型返回不是合法 JSON');
     }
   };
 
@@ -631,7 +631,7 @@ window.SubscriptionsSmartQuery = (function () {
     const data = resolvePayload(payload);
     const tag = normalizeText(
       data.tag ||
-        data.鏍囩 ||
+        data.标签 ||
         data.intent_tag ||
         data.profile_tag ||
         '',
@@ -639,7 +639,7 @@ window.SubscriptionsSmartQuery = (function () {
     const cleanedTag = sanitizeAutoTag(tag);
     const description = normalizeText(
       data.description ||
-        data.涓枃鎻忚堪 ||
+        data.中文描述 ||
         data.profile_desc ||
         data.user_description ||
         '',
@@ -699,7 +699,10 @@ window.SubscriptionsSmartQuery = (function () {
       })
       .filter(Boolean);
 
-    // 鍏抽敭璇嶅彫鍥炲幓鍐椾綑锛?    // 鑻ュ凡鏈夋牳蹇冩湳璇紙濡?symbolic regression锛夛紝鍒欏皢 "X symbolic regression" 褰掍竴涓?"X"锛?    // 鑻?X 鍙槸娉涘舰瀹硅瘝锛屽垯鐩存帴涓㈠純璇ュ啑浣欒瘝鏉°€?    const plainList = keywords.map((k) => normalizePhrase(k.keyword || ''));
+    // 关键词召回去冗余：
+    // 若已有核心术语（如 symbolic regression），则将 "X symbolic regression" 归一为 "X"；
+    // 若 X 只是泛形容词，则直接丢弃该冗余词条。
+    const plainList = keywords.map((k) => normalizePhrase(k.keyword || ''));
     const plainSet = new Set(plainList);
     const anchorCandidates = new Set();
     plainList.forEach((p) => {
@@ -741,7 +744,7 @@ window.SubscriptionsSmartQuery = (function () {
       })
       .filter(Boolean);
 
-    // 褰掍竴鍚庡啀鍘婚噸
+    // 归一后再去重
     const kwSeen = new Set();
     keywords = keywords.filter((k) => {
       const key = normalizePhrase(k.keyword || '');
@@ -774,10 +777,10 @@ window.SubscriptionsSmartQuery = (function () {
   const requestCandidatesByDesc = async (tag, desc) => {
     const llm = loadLlmConfig();
     if (!llm) {
-      throw new Error('鏈娴嬪埌鍙敤澶фā鍨嬮厤缃紝璇峰厛瀹屾垚瀵嗛挜閰嶇疆銆?);
+      throw new Error('未检测到可用大模型配置，请先完成密钥配置。');
     }
     if (!llm.apiKey) {
-      throw new Error('鏈娴嬪埌鍙敤 API Key锛岃鍏堝湪瀵嗛挜閰嶇疆閲屽～鍐欐憳瑕?Chat Token銆?);
+      throw new Error('未检测到可用 API Key，请先在密钥配置里填写摘要/Chat Token。');
     }
 
     const cfg = window.SubscriptionsManager.getDraftConfig ? window.SubscriptionsManager.getDraftConfig() : {};
@@ -818,7 +821,7 @@ window.SubscriptionsSmartQuery = (function () {
     };
     const endpoints = buildEndpoints();
     if (!endpoints.length) {
-      throw new Error('LLM 閰嶇疆缂哄皯 baseUrl銆?);
+      throw new Error('LLM 配置缺少 baseUrl。');
     }
 
     const controller = new AbortController();
@@ -939,10 +942,11 @@ window.SubscriptionsSmartQuery = (function () {
         } catch (e) {
           fetchError = textSafeFromError(e);
           if (e && e.name === 'AbortError') {
-            throw new Error('鐢熸垚瓒呮椂锛岃绋嶅悗閲嶈瘯銆?);
+            throw new Error('生成超时，请稍后重试。');
           }
           if (i < endpoints.length - 1) {
-            // 缃戠粶绫婚敊璇皾璇曚笅涓€涓鐐?            continue;
+            // 网络类错误尝试下一个端点
+            continue;
           }
         }
       }
@@ -953,16 +957,16 @@ window.SubscriptionsSmartQuery = (function () {
     clearTimeout(timeout);
     if (!res) {
       if (fetchError) {
-        throw new Error(`妯″瀷鏈嶅姟璇锋眰澶辫触锛?{fetchError}`);
+        throw new Error(`模型服务请求失败：${fetchError}`);
       }
-      throw new Error(errorText || '妯″瀷鏈嶅姟璇锋眰澶辫触锛岃妫€鏌ョ綉缁滀笌瀵嗛挜閰嶇疆銆?);
+      throw new Error(errorText || '模型服务请求失败，请检查网络与密钥配置。');
     }
     const data = await res.json();
     const content = extractLlmJsonText(data);
     const parsed = loadJsonLenient(content);
     const candidates = normalizeGenerated(parsed);
     if (!candidates.keywords.length) {
-      throw new Error('妯″瀷鏈繑鍥炲彲鐢ㄥ€欓€夛紝璇疯皟鏁存弿杩板悗閲嶈瘯銆?);
+      throw new Error('模型未返回可用候选，请调整描述后重试。');
     }
     return candidates;
   };
@@ -1116,15 +1120,15 @@ window.SubscriptionsSmartQuery = (function () {
       return {
         primary: 'query',
         secondary: 'query_cn',
-        primaryPlaceholder: '锛堣嫳鏂?Intent锛?,
-        secondaryPlaceholder: '锛堝彲閫変腑鏂囨剰鍥撅級',
+        primaryPlaceholder: '（英文 Intent）',
+        secondaryPlaceholder: '（可选中文意图）',
       };
     }
     return {
       primary: 'keyword',
       secondary: 'keyword_cn',
-      primaryPlaceholder: '锛堣嫳鏂囧叧閿瘝锛?,
-      secondaryPlaceholder: '锛堝彲閫変腑鏂囩洿璇戯級',
+      primaryPlaceholder: '（英文关键词）',
+      secondaryPlaceholder: '（可选中文直译）',
     };
   };
 
@@ -1199,7 +1203,7 @@ window.SubscriptionsSmartQuery = (function () {
 
     const primaryValue = normalizeText(slot[meta.primary]);
     if (!primaryValue) {
-      setMessage(`璇峰厛濉啓${meta.primaryPlaceholder || '鑻辨枃'}銆俙, '#c00');
+      setMessage(`请先填写${meta.primaryPlaceholder || '英文'}。`, '#c00');
       return false;
     }
 
@@ -1221,7 +1225,7 @@ window.SubscriptionsSmartQuery = (function () {
     const created = buildDraftItemFromSlot(realKind, slot);
     if (!created) return false;
     if (!canSelectMoreCandidates(list, true, realKind)) {
-      setMessage(`${getKindLabel(realKind)} 鏈€澶氬彧鑳介€夋嫨 ${getSelectionLimit(realKind)} 鏉°€俙, '#c00');
+      setMessage(`${getKindLabel(realKind)} 最多只能选择 ${getSelectionLimit(realKind)} 条。`, '#c00');
       return false;
     }
     const next = list.slice();
@@ -1328,7 +1332,7 @@ window.SubscriptionsSmartQuery = (function () {
         data-field="${escapeHtml(field)}"
       >
         <span class="dpr-inline-text">${escapeHtml(escapeValueForRender(value, placeholder))}</span>
-        <span class="dpr-inline-pencil" aria-hidden="true">鉁?/span>
+        <span class="dpr-inline-pencil" aria-hidden="true">✎</span>
       </div>
     `;
   };
@@ -1369,7 +1373,7 @@ window.SubscriptionsSmartQuery = (function () {
           data-action="append-draft-slot"
           data-kind="${kind}"
           data-index="${idx}"
-          title="鏂板"
+          title="新增"
         >
           +
         </button>
@@ -1396,7 +1400,7 @@ window.SubscriptionsSmartQuery = (function () {
           data-action="append-draft-slot"
           data-kind="${kind}"
           data-index="${idx}"
-          title="鏂板"
+          title="新增"
         >
           +
         </button>
@@ -1538,7 +1542,7 @@ window.SubscriptionsSmartQuery = (function () {
               idx,
               textField,
               text,
-              options.defaultPrimaryPlaceholder || '锛堣嫳鏂囷級',
+              options.defaultPrimaryPlaceholder || '（英文）',
               true,
             )}
             ${renderEditableField(
@@ -1546,7 +1550,7 @@ window.SubscriptionsSmartQuery = (function () {
               idx,
               descField,
               desc || item[descFallbackField] || item.source || '',
-              defaultDesc || '锛堟棤璇存槑锛?,
+              defaultDesc || '（无说明）',
               false,
             )}
           </span>
@@ -1570,13 +1574,13 @@ window.SubscriptionsSmartQuery = (function () {
       btn.disabled = true;
       btn.classList.add('dpr-btn-loading');
       const label = btn.querySelector('.dpr-chat-send-label');
-      if (label) label.textContent = '鐢熸垚涓?..';
+      if (label) label.textContent = '生成中...';
       return;
     }
     btn.disabled = false;
     btn.classList.remove('dpr-btn-loading');
     const label = btn.querySelector('.dpr-chat-send-label');
-    if (label) label.textContent = '鐢熸垚鍊欓€?;
+    if (label) label.textContent = '生成候选';
   };
 
   const ensureModal = () => {
@@ -1619,7 +1623,7 @@ window.SubscriptionsSmartQuery = (function () {
   const renderMain = () => {
     if (!displayListEl) return;
     if (!currentProfiles.length) {
-      displayListEl.innerHTML = '<div style="color:#999;">鏆傛棤璇嶆潯锛屽厛鐐广€屾柊澧炪€嶆墦寮€瀵硅瘽鐢熸垚銆?/div>';
+      displayListEl.innerHTML = '<div style="color:#999;">暂无词条，先点「新增」打开对话生成。</div>';
       return;
     }
 
@@ -1627,10 +1631,10 @@ window.SubscriptionsSmartQuery = (function () {
       .map((p) => {
         const isPaused = !!p.paused;
         const isQuickRunOpen = !!p._quickRunOpen;
-        const pauseLabel = isPaused ? '鎭㈠' : '鏆傚仠';
+        const pauseLabel = isPaused ? '恢复' : '暂停';
         const pauseBtnClass = isPaused ? 'dpr-entry-resume-btn' : 'dpr-entry-pause-btn';
         const cardClass = 'dpr-entry-card' + (isPaused ? ' dpr-entry-card--paused' : '');
-        const pausedBadge = isPaused ? '<span class="dpr-entry-paused-badge">宸叉殏鍋?/span>' : '';
+        const pausedBadge = isPaused ? '<span class="dpr-entry-paused-badge">已暂停</span>' : '';
         const profileId = escapeHtml(getProfileKey(p) || '');
         const runPanelClass = `dpr-entry-run-panel${isQuickRunOpen ? ' is-open' : ''}`;
         return `
@@ -1639,20 +1643,20 @@ window.SubscriptionsSmartQuery = (function () {
               <div class="dpr-entry-headline">
                 <span class="dpr-entry-title">${escapeHtml(p.tag || '')}</span>
                 ${pausedBadge}
-                <span class="dpr-entry-desc-inline">${escapeHtml(p.description || '锛堟棤鎻忚堪锛?)}</span>
+                <span class="dpr-entry-desc-inline">${escapeHtml(p.description || '（无描述）')}</span>
                 <span class="dpr-entry-source-inline">${renderProfileSourceChips(p.paper_sources)}</span>
               </div>
               <div class="dpr-entry-actions">
-                <button class="arxiv-tool-btn dpr-entry-run-toggle-btn" data-action="toggle-profile-runs" data-profile-id="${profileId}">${isQuickRunOpen ? '鏀惰捣杩愯' : '杩愯'}</button>
+                <button class="arxiv-tool-btn dpr-entry-run-toggle-btn" data-action="toggle-profile-runs" data-profile-id="${profileId}">${isQuickRunOpen ? '收起运行' : '运行'}</button>
                 <button class="arxiv-tool-btn ${pauseBtnClass}" data-action="pause-profile" data-profile-id="${profileId}">${pauseLabel}</button>
-                <button class="arxiv-tool-btn dpr-entry-edit-btn" data-action="edit-profile" data-profile-id="${profileId}">淇敼</button>
-                <button class="arxiv-tool-btn dpr-entry-delete-btn" data-action="delete-profile" data-profile-id="${profileId}">鍒犻櫎</button>
+                <button class="arxiv-tool-btn dpr-entry-edit-btn" data-action="edit-profile" data-profile-id="${profileId}">修改</button>
+                <button class="arxiv-tool-btn dpr-entry-delete-btn" data-action="delete-profile" data-profile-id="${profileId}">删除</button>
               </div>
             </div>
             <div class="${runPanelClass}">
-              <button class="arxiv-tool-btn dpr-entry-run-btn" data-action="run-profile-10d" data-profile-id="${profileId}">10 澶?/button>
-              <button class="arxiv-tool-btn dpr-entry-run-btn" data-action="run-profile-30d-skims" data-profile-id="${profileId}">30 澶╅€熻</button>
-              <button class="arxiv-tool-btn dpr-entry-run-btn" data-action="run-profile-30d-standard" data-profile-id="${profileId}">30 澶╂爣鍑?/button>
+              <button class="arxiv-tool-btn dpr-entry-run-btn" data-action="run-profile-10d" data-profile-id="${profileId}">10 天</button>
+              <button class="arxiv-tool-btn dpr-entry-run-btn" data-action="run-profile-30d-skims" data-profile-id="${profileId}">30 天速览</button>
+              <button class="arxiv-tool-btn dpr-entry-run-btn" data-action="run-profile-30d-standard" data-profile-id="${profileId}">30 天标准</button>
             </div>
           </div>
         `;
@@ -1721,13 +1725,13 @@ window.SubscriptionsSmartQuery = (function () {
     const hasIntentQueries = (modalState.intent_queries || []).length > 0;
     const keywordBlock =
       `<div class="dpr-combo-block">
-        <div class="dpr-modal-group-title">${buildSelectionTitle('keyword', '鐢ㄤ簬鍙洖')}</div>
-        <div class="dpr-pick-grid">${kwHtml || '<div style="color:#999;">鏃犲叧閿瘝鍊欓€?/div>'}</div>
+        <div class="dpr-modal-group-title">${buildSelectionTitle('keyword', '用于召回')}</div>
+        <div class="dpr-pick-grid">${kwHtml || '<div style="color:#999;">无关键词候选</div>'}</div>
       </div>`;
     const intentBlock =
       `<div class="dpr-combo-block">
-        <div class="dpr-modal-group-title">${buildSelectionTitle('intent', '鐢ㄤ簬鎰忓浘鍙洖涓庢渶缁堟墦鍒?)}</div>
-        <div class="dpr-pick-grid">${intentHtml || '<div style="color:#999;">鏃犳剰鍥炬煡璇㈠€欓€?/div>'}</div>
+        <div class="dpr-modal-group-title">${buildSelectionTitle('intent', '用于意图召回与最终打分')}</div>
+        <div class="dpr-pick-grid">${intentHtml || '<div style="color:#999;">无意图查询候选</div>'}</div>
       </div>`;
     const divider = `<div class="dpr-modal-divider"></div>`;
     const candidateBlocks = `${hasKeywords ? keywordBlock : ''}${hasKeywords && hasIntentQueries ? divider : ''}${
@@ -1737,37 +1741,38 @@ window.SubscriptionsSmartQuery = (function () {
 
     modalPanel.innerHTML = `
       <div class="dpr-modal-head">
-        <div class="dpr-modal-title">${modalState && modalState.editProfileId ? '淇敼璇嶆潯' : '鏂板璇嶆潯鍊欓€?}</div>
-        <button class="arxiv-tool-btn" data-action="close">鍏抽棴</button>
+        <div class="dpr-modal-title">${modalState && modalState.editProfileId ? '修改词条' : '新增词条候选'}</div>
+        <button class="arxiv-tool-btn" data-action="close">关闭</button>
       </div>
       <div class="dpr-modal-group-title">
-        璇峰厛鍦ㄤ笅鏂硅緭鍏ヤ綘鐨勬绱㈡兂娉?      </div>
+        请先在下方输入你的检索想法
+      </div>
       <div class="dpr-help-examples">
-        <div class="dpr-help-example">ex: 寮哄寲瀛︿範 绗﹀彿鍥炲綊</div>
-        <div class="dpr-help-example">ex: 璇峰府鎴戝幓鏌ユ壘寮哄寲瀛︿範鍜岀鍙峰洖褰掔浉鍏崇殑璁烘枃</div>
-        <div class="dpr-help-example">ex: 璇峰府鎴戞煡鎵惧彲瑙ｉ噴鐨勫己鍖栧涔犻┍鍔ㄧ鍙峰洖褰掓柟绋嬪彂鐜拌鏂?/div>
+        <div class="dpr-help-example">ex: 强化学习 符号回归</div>
+        <div class="dpr-help-example">ex: 请帮我去查找强化学习和符号回归相关的论文</div>
+        <div class="dpr-help-example">ex: 请帮我查找可解释的强化学习驱动符号回归方程发现论文</div>
       </div>
       <div class="dpr-modal-list dpr-combo-list">${candidateBlocks || '<div class="dpr-cloud-empty"></div>'}</div>
       <div class="dpr-modal-actions-inline dpr-modal-add-inline">
-        <input id="dpr-add-kw-text" type="text" placeholder="鎵嬪姩鏂板鍏抽敭璇嶏紙鍙洖璇嶏級" value="${escapeHtml(modalState.customKeyword || '')}" />
-        <input id="dpr-add-kw-query" type="text" placeholder="瀵瑰簲璇箟 Query 鏀瑰啓" value="${escapeHtml(modalState.customQuery || '')}" />
-        <input id="dpr-add-kw-logic" type="text" placeholder="涓枃鐩磋瘧锛堝彲閫夛級" value="${escapeHtml(modalState.customKeywordLogic || '')}" />
-        <button class="arxiv-tool-btn" data-action="add-custom-kw">鍔犲叆鍊欓€?/button>
+        <input id="dpr-add-kw-text" type="text" placeholder="手动新增关键词（召回词）" value="${escapeHtml(modalState.customKeyword || '')}" />
+        <input id="dpr-add-kw-query" type="text" placeholder="对应语义 Query 改写" value="${escapeHtml(modalState.customQuery || '')}" />
+        <input id="dpr-add-kw-logic" type="text" placeholder="中文直译（可选）" value="${escapeHtml(modalState.customKeywordLogic || '')}" />
+        <button class="arxiv-tool-btn" data-action="add-custom-kw">加入候选</button>
       </div>
       <div class="dpr-modal-actions dpr-modal-add-footer">
         <label class="dpr-modal-field">
-          <span class="dpr-modal-field-label">鏍囩</span>
-          <input id="dpr-add-profile-tag" type="text" value="${escapeHtml(modalState.tag || '')}" placeholder="璇峰～鍐欐爣绛? />
+          <span class="dpr-modal-field-label">标签</span>
+          <input id="dpr-add-profile-tag" type="text" value="${escapeHtml(modalState.tag || '')}" placeholder="请填写标签" />
         </label>
         <label class="dpr-modal-field">
-          <span class="dpr-modal-field-label">涓枃鎻忚堪</span>
-          <input id="dpr-add-profile-desc" type="text" value="${escapeHtml(modalState.description || '')}" placeholder="璇峰～鍐欎腑鏂囨弿杩? />
+          <span class="dpr-modal-field-label">中文描述</span>
+          <input id="dpr-add-profile-desc" type="text" value="${escapeHtml(modalState.description || '')}" placeholder="请填写中文描述" />
         </label>
         <div class="dpr-modal-field dpr-modal-field-sources">
-          <span class="dpr-modal-field-label">璁烘枃婧?/span>
+          <span class="dpr-modal-field-label">论文源</span>
           <div class="dpr-paper-source-row">${sourceChoices}</div>
         </div>
-        <button class="arxiv-tool-btn" data-action="apply-add" style="background:#2e7d32;color:#fff;">淇濆瓨鏌ヨ</button>
+        <button class="arxiv-tool-btn" data-action="apply-add" style="background:#2e7d32;color:#fff;">保存查询</button>
       </div>
     `;
   };
@@ -1778,7 +1783,7 @@ window.SubscriptionsSmartQuery = (function () {
     const nextDesc = normalizeText(document.getElementById('dpr-add-profile-desc')?.value || '');
 
     if (!nextTag || !nextDesc) {
-      setMessage('鏍囩鍜屾弿杩颁笉鑳戒负绌恒€?, '#c00');
+      setMessage('标签和描述不能为空。', '#c00');
       return;
     }
 
@@ -1786,7 +1791,7 @@ window.SubscriptionsSmartQuery = (function () {
     modalState.description = nextDesc;
     const nextPaperSources = normalizePaperSources(modalState.paper_sources, { fallbackToArxiv: false });
     if (!nextPaperSources.length) {
-      setMessage('璇疯嚦灏戝嬀閫?1 涓鏂囨簮銆?, '#c00');
+      setMessage('请至少勾选 1 个论文源。', '#c00');
       return;
     }
 
@@ -1817,12 +1822,12 @@ window.SubscriptionsSmartQuery = (function () {
         });
 
     if (!ok) {
-      setMessage('璇疯嚦灏戦€夋嫨 1 鏉″叧閿瘝鍜?1 鏉℃剰鍥綫uery銆?, '#c00');
+      setMessage('请至少选择 1 条关键词和 1 条意图Query。', '#c00');
       return;
     }
 
     if (typeof reloadAll === 'function') reloadAll();
-    setMessage(isEditMode ? '璇嶆潯淇敼宸插簲鐢紝璇风偣鍑汇€屼繚瀛樸€嶃€? : '鏂板璇嶆潯宸插簲鐢紝璇风偣鍑汇€屼繚瀛樸€嶃€?, '#666');
+    setMessage(isEditMode ? '词条修改已应用，请点击「保存」。' : '新增词条已应用，请点击「保存」。', '#666');
     closeModal();
   };
 
@@ -1832,13 +1837,13 @@ window.SubscriptionsSmartQuery = (function () {
     const kwHtml = renderCloudCards(modalState.keywords || [], 'kw', {
       textField: 'keyword',
       descField: 'keyword_cn',
-      defaultDesc: '锛堝緟琛ュ厖涓枃鐩磋瘧锛?,
+      defaultDesc: '（待补充中文直译）',
     });
     const intentHtml = renderCloudCards(modalState.intent_queries || [], 'intent', {
       textField: 'query',
       descField: 'query_cn',
       descFallbackField: 'note',
-      defaultDesc: '锛堝緟琛ュ厖涓枃鐩磋瘧锛?,
+      defaultDesc: '（待补充中文直译）',
     });
     const hasKeywordSection = Array.isArray(modalState.keywords) && modalState.keywords.length > 0;
     const hasIntentSection = Array.isArray(modalState.intent_queries) && modalState.intent_queries.length > 0;
@@ -1848,19 +1853,20 @@ window.SubscriptionsSmartQuery = (function () {
     const hasCandidates = hasKeywords || hasIntentQueries;
     const sourceChoices = renderPaperSourceChoices(modalState.paper_sources || []);
     const isFirstRound = !(Array.isArray(modalState.requestHistory) && modalState.requestHistory.length);
-    const actionLabel = isFirstRound ? '鐢熸垚鍊欓€? : '鏂板鍊欓€?;
+    const actionLabel = isFirstRound ? '生成候选' : '新增候选';
     const tipSection = isFirstRound
       ? `<div class="dpr-modal-group-title">
-           璇峰厛鍦ㄤ笅鏂硅緭鍏ヤ綘鐨勬绱㈡兂娉?         </div>
+           请先在下方输入你的检索想法
+         </div>
          <div class="dpr-help-examples">
-           <div class="dpr-help-example">ex: 寮哄寲瀛︿範 绗﹀彿鍥炲綊</div>
-           <div class="dpr-help-example">ex: 璇峰府鎴戝幓鏌ユ壘寮哄寲瀛︿範鍜岀鍙峰洖褰掔浉鍏崇殑璁烘枃</div>
-           <div class="dpr-help-example">ex: 璇峰府鎴戞煡鎵惧彲瑙ｉ噴鐨勫己鍖栧涔犻┍鍔ㄧ鍙峰洖褰掓柟绋嬪彂鐜拌鏂?/div>
+           <div class="dpr-help-example">ex: 强化学习 符号回归</div>
+           <div class="dpr-help-example">ex: 请帮我去查找强化学习和符号回归相关的论文</div>
+           <div class="dpr-help-example">ex: 请帮我查找可解释的强化学习驱动符号回归方程发现论文</div>
          </div>`
       : '';
     const kwSection = hasKeywordSection
       ? `<div class="dpr-chat-result-block">
-           <div class="dpr-modal-group-title">${buildSelectionTitle('keyword', '鐢ㄤ簬鍙洖')}</div>
+           <div class="dpr-modal-group-title">${buildSelectionTitle('keyword', '用于召回')}</div>
            <div class="dpr-chat-slot-area ${hasKeywords ? 'has-candidates' : 'draft-only'}">
              <div class="dpr-chat-slot-scroll">
                <div class="dpr-cloud-grid dpr-cloud-grid-keywords">${kwHtml}</div>
@@ -1870,7 +1876,7 @@ window.SubscriptionsSmartQuery = (function () {
       : '';
     const intentSection = hasIntentSection
       ? `<div class="dpr-chat-result-block">
-           <div class="dpr-modal-group-title">${buildSelectionTitle('intent', '鐢ㄤ簬鎰忓浘鍙洖涓庢渶缁堟墦鍒?)}</div>
+           <div class="dpr-modal-group-title">${buildSelectionTitle('intent', '用于意图召回与最终打分')}</div>
            <div class="dpr-chat-slot-area ${hasIntentQueries ? 'has-candidates' : 'draft-only'}">
              <div class="dpr-chat-slot-scroll">
                <div class="dpr-cloud-grid dpr-cloud-grid-intent">${intentHtml}</div>
@@ -1883,8 +1889,8 @@ window.SubscriptionsSmartQuery = (function () {
 
     modalPanel.innerHTML = `
       <div class="dpr-modal-head">
-        <div class="dpr-modal-title">${modalState && modalState.editProfileId ? '淇敼鏌ヨ' : '鏂板鏌ヨ'}</div>
-        <button class="arxiv-tool-btn" data-action="close">鍏抽棴</button>
+        <div class="dpr-modal-title">${modalState && modalState.editProfileId ? '修改查询' : '新增查询'}</div>
+        <button class="arxiv-tool-btn" data-action="close">关闭</button>
       </div>
       <div class="dpr-chat-result-module">
         ${tipSection}
@@ -1893,8 +1899,8 @@ window.SubscriptionsSmartQuery = (function () {
       <div class="dpr-modal-actions dpr-chat-action-area">
         <div class="dpr-chat-row">
           <label class="dpr-chat-label dpr-chat-inline-desc">
-            <span class="dpr-chat-label-text">妫€绱㈤渶姹?/span>
-            <textarea id="dpr-chat-desc-input" rows="2" placeholder="璇峰府鎴戝幓鏌ユ壘寮哄寲瀛︿範鍜岀鍙峰洖褰掔浉鍏崇殑璁烘枃">${escapeHtml(
+            <span class="dpr-chat-label-text">检索需求</span>
+            <textarea id="dpr-chat-desc-input" rows="2" placeholder="请帮我去查找强化学习和符号回归相关的论文">${escapeHtml(
               modalState.inputDesc || '',
             )}</textarea>
           </label>
@@ -1911,19 +1917,19 @@ window.SubscriptionsSmartQuery = (function () {
       </div>
       <div class="dpr-modal-actions dpr-modal-add-footer">
         <label class="dpr-chat-label dpr-chat-inline-tag">
-          <span class="dpr-chat-label-text">鏍囩</span>
-          <input id="dpr-chat-tag-input" type="text" placeholder="渚嬪锛歋R" value="${escapeHtml(modalState.inputTag || '')}" />
+          <span class="dpr-chat-label-text">标签</span>
+          <input id="dpr-chat-tag-input" type="text" placeholder="例如：SR" value="${escapeHtml(modalState.inputTag || '')}" />
         </label>
         <label class="dpr-chat-label dpr-chat-inline-desc">
-          <span class="dpr-chat-label-text">涓枃鎻忚堪</span>
-          <input id="dpr-chat-required-desc" type="text" placeholder="璇峰～鍐欐弿杩? value="${escapeHtml(modalState.inputDesc || '')}" />
+          <span class="dpr-chat-label-text">中文描述</span>
+          <input id="dpr-chat-required-desc" type="text" placeholder="请填写描述" value="${escapeHtml(modalState.inputDesc || '')}" />
         </label>
         <div class="dpr-chat-label dpr-chat-inline-sources">
-          <span class="dpr-chat-label-text">璁烘枃婧?/span>
+          <span class="dpr-chat-label-text">论文源</span>
           <div class="dpr-paper-source-row">${sourceChoices}</div>
         </div>
         <button class="arxiv-tool-btn" data-action="apply-chat" style="background:#2e7d32;color:#fff;" ${hasCandidates ? '' : 'disabled'}>
-          淇濆瓨鏌ヨ
+          保存查询
         </button>
       </div>
     `;
@@ -1958,15 +1964,15 @@ window.SubscriptionsSmartQuery = (function () {
     const paperSources = normalizePaperSources(modalState.paper_sources, { fallbackToArxiv: false });
 
     if (!tag) {
-      setMessage('璇峰厛濉啓鏍囩銆?, '#c00');
+      setMessage('请先填写标签。', '#c00');
       return;
     }
     if (!desc) {
-      setMessage('璇峰厛濉啓涓枃鎻忚堪銆?, '#c00');
+      setMessage('请先填写中文描述。', '#c00');
       return;
     }
     if (!paperSources.length) {
-      setMessage('璇疯嚦灏戝嬀閫?1 涓鏂囨簮銆?, '#c00');
+      setMessage('请至少勾选 1 个论文源。', '#c00');
       return;
     }
     if (validationError) {
@@ -1992,11 +1998,11 @@ window.SubscriptionsSmartQuery = (function () {
     }
 
     if (!hasSelection) {
-      setMessage(hasItems ? '搴旂敤澶辫触锛岃閲嶈瘯銆? : '璇疯嚦灏戝嬀閫?1 鏉″叧閿瘝鍜?1 鏉℃剰鍥綫uery 鍚庡啀搴旂敤銆?, '#c00');
+      setMessage(hasItems ? '应用失败，请重试。' : '请至少勾选 1 条关键词和 1 条意图Query 后再应用。', '#c00');
       return;
     }
     if (typeof reloadAll === 'function') reloadAll();
-    setMessage(modalState.editProfileId ? '璇嶆潯淇敼宸插簲鐢紝璇风偣鍑汇€屼繚瀛樸€嶃€? : '鏌ヨ宸蹭繚瀛橈紝璇风偣鍑汇€屼繚瀛樸€嶃€?, '#666');
+    setMessage(modalState.editProfileId ? '词条修改已应用，请点击「保存」。' : '查询已保存，请点击「保存」。', '#666');
     closeModal();
   };
 
@@ -2009,14 +2015,14 @@ window.SubscriptionsSmartQuery = (function () {
     let finalTag = tag || `SR-${new Date().toISOString().slice(0, 10)}`;
 
     if (!finalDesc) {
-      setChatStatus('璇峰厛濉啓妫€绱㈤渶姹傘€?, '#c00');
+      setChatStatus('请先填写检索需求。', '#c00');
       return;
     }
 
     modalState.pending = true;
     setSendBtnLoading(true);
-    setChatStatus('姝ｅ湪鐢熸垚鍊欓€夛紝璇风◢鍊?..', '#666');
-    setMessage('姝ｅ湪鐢熸垚鍊欓€夛紝璇风◢鍊?..', '#666');
+    setChatStatus('正在生成候选，请稍候...', '#666');
+    setMessage('正在生成候选，请稍候...', '#666');
 
     try {
       const candidates = await requestCandidatesByDesc(finalTag, finalDesc);
@@ -2065,7 +2071,7 @@ window.SubscriptionsSmartQuery = (function () {
       modalState.lastTag = finalTag;
       modalState.lastDesc = finalDesc;
       modalState.requestHistory = history;
-      modalState.chatStatus = `宸茬敓鎴愬€欓€夛紙鍏抽敭璇?${nextCandidates.keywords.length} 鏉★紝鎰忓浘 ${nextCandidates.intent_queries.length} 鏉★級銆俙;
+      modalState.chatStatus = `已生成候选（关键词 ${nextCandidates.keywords.length} 条，意图 ${nextCandidates.intent_queries.length} 条）。`;
       if (document.getElementById('dpr-chat-desc-input')) {
         document.getElementById('dpr-chat-desc-input').value = '';
       }
@@ -2077,13 +2083,13 @@ window.SubscriptionsSmartQuery = (function () {
       setChatStatus(modalState.chatStatus, '#666');
     } catch (e) {
       console.error(e);
-      const rawMsg = e && e.message ? String(e.message) : '鏈煡閿欒';
+      const rawMsg = e && e.message ? String(e.message) : '未知错误';
       const hint =
         /Failed to fetch|NETWORK|network|ERR_TIMED_OUT|timed out/i.test(rawMsg) ||
-        /妯″瀷鏈嶅姟璇锋眰澶辫触/.test(rawMsg)
-          ? '璇锋鏌ュ綋鍓嶇綉缁滄槸鍚﹁兘璁块棶妯″瀷缃戝叧锛屾垨绋嶅悗閲嶈瘯锛堝彲鍏堝垏鎹?閲嶉€夋ā鍨嬶級銆?
+        /模型服务请求失败/.test(rawMsg)
+          ? '请检查当前网络是否能访问模型网关，或稍后重试（可先切换/重选模型）。'
           : '';
-      const msg = `鐢熸垚澶辫触锛?{rawMsg}${hint ? `锛?{hint}锛塦 : ''}`;
+      const msg = `生成失败：${rawMsg}${hint ? `（${hint}）` : ''}`;
       setMessage(msg, '#c00');
       setChatStatus(msg, '#c00');
     } finally {
@@ -2156,7 +2162,7 @@ window.SubscriptionsSmartQuery = (function () {
         ) {
           const nextSelected = !modalState.keywords[idx]._selected;
           if (!canSelectMoreCandidates(modalState.keywords, nextSelected, 'keyword')) {
-            setMessage(`鍏抽敭璇嶆渶澶氬彧鑳介€夋嫨 ${MAX_KEYWORDS_PER_PROFILE} 鏉°€俙, '#c00');
+            setMessage(`关键词最多只能选择 ${MAX_KEYWORDS_PER_PROFILE} 条。`, '#c00');
             return;
           }
           modalState.keywords[idx]._selected = nextSelected;
@@ -2173,7 +2179,7 @@ window.SubscriptionsSmartQuery = (function () {
         ) {
           const nextSelected = !modalState.intent_queries[idx]._selected;
           if (!canSelectMoreCandidates(modalState.intent_queries, nextSelected, 'intent')) {
-            setMessage(`鎰忓浘Query 鏈€澶氬彧鑳介€夋嫨 ${MAX_INTENT_QUERIES_PER_PROFILE} 鏉°€俙, '#c00');
+            setMessage(`意图Query 最多只能选择 ${MAX_INTENT_QUERIES_PER_PROFILE} 条。`, '#c00');
             return;
           }
           modalState.intent_queries[idx]._selected = nextSelected;
@@ -2186,18 +2192,18 @@ window.SubscriptionsSmartQuery = (function () {
         const query = normalizeText(document.getElementById('dpr-add-kw-query')?.value || '');
         const logic = normalizeText(document.getElementById('dpr-add-kw-logic')?.value || '');
         if (!kwText) {
-          setMessage('璇疯緭鍏ヨ鏂板鐨勫叧閿瘝銆?, '#c00');
+          setMessage('请输入要新增的关键词。', '#c00');
           return;
         }
         const existed = (modalState.keywords || []).some(
           (x) => normalizeText(x.keyword || x.text || '').toLowerCase() === kwText.toLowerCase(),
         );
         if (existed) {
-          setMessage('璇ュ叧閿瘝宸插湪鍊欓€変腑銆?, '#c00');
+          setMessage('该关键词已在候选中。', '#c00');
           return;
         }
         if (!canSelectMoreCandidates(modalState.keywords, true, 'keyword')) {
-          setMessage(`鍏抽敭璇嶆渶澶氬彧鑳介€夋嫨 ${MAX_KEYWORDS_PER_PROFILE} 鏉°€俙, '#c00');
+          setMessage(`关键词最多只能选择 ${MAX_KEYWORDS_PER_PROFILE} 条。`, '#c00');
           return;
         }
         modalState.keywords.push({
@@ -2210,7 +2216,7 @@ window.SubscriptionsSmartQuery = (function () {
         modalState.customKeywordLogic = '';
         modalState.customQuery = '';
         renderAddModal();
-        setMessage('宸插姞鍏ヨ嚜瀹氫箟鍏抽敭璇嶅€欓€夈€?, '#666');
+        setMessage('已加入自定义关键词候选。', '#666');
         return;
       }
       if (action === 'apply-add') {
@@ -2291,7 +2297,7 @@ window.SubscriptionsSmartQuery = (function () {
       if (card) {
         card.classList.remove('selected');
       }
-      setMessage(`${getKindLabel(kind)} 鏈€澶氬彧鑳介€夋嫨 ${getSelectionLimit(kind)} 鏉°€俙, '#c00');
+      setMessage(`${getKindLabel(kind)} 最多只能选择 ${getSelectionLimit(kind)} 条。`, '#c00');
       return;
     }
     if (card) {
@@ -2325,9 +2331,9 @@ window.SubscriptionsSmartQuery = (function () {
   const requestHistoryLength = (state) => {
     const history = Array.isArray(state && state.requestHistory) ? state.requestHistory : [];
     if (!history.length) {
-      return '棣栨鐢熸垚';
+      return '首次生成';
     }
-    return `鏂板绗?${history.length + 1} 杞甡;
+    return `新增第 ${history.length + 1} 轮`;
   };
 
   const generateAndOpenAddModal = async () => {
@@ -2335,20 +2341,20 @@ window.SubscriptionsSmartQuery = (function () {
     const desc = normalizeText(descInputEl?.value || '');
     const finalTag = tag || `SR-${new Date().toISOString().slice(0, 10)}`;
     if (!desc) {
-      setMessage('璇峰厛濉啓鏅鸿兘 Query 鎻忚堪銆?, '#c00');
+      setMessage('请先填写智能 Query 描述。', '#c00');
       return;
     }
 
     try {
-      setMessage('姝ｅ湪鐢熸垚鍊欓€夛紝璇风◢鍊?..', '#666');
+      setMessage('正在生成候选，请稍候...', '#666');
       if (createBtn) createBtn.disabled = true;
       const candidates = await requestCandidatesByDesc(finalTag, desc);
 
       openAddModal(finalTag, desc, candidates);
-      setMessage(`鍊欓€夊凡鐢熸垚锛堝叡 ${candidates.keywords.length} 鏉★級銆俙, '#666');
+      setMessage(`候选已生成（共 ${candidates.keywords.length} 条）。`, '#666');
     } catch (e) {
       console.error(e);
-      setMessage(`鐢熸垚澶辫触锛?{e && e.message ? e.message : '鏈煡閿欒'}`, '#c00');
+      setMessage(`生成失败：${e && e.message ? e.message : '未知错误'}`, '#c00');
     } finally {
       if (createBtn) createBtn.disabled = false;
     }
@@ -2376,7 +2382,7 @@ window.SubscriptionsSmartQuery = (function () {
       const profile = findCurrentProfile(profileId);
       if (!profile) return;
       if (!window.SubscriptionsManager || typeof window.SubscriptionsManager.runProfileQuickFetch !== 'function') {
-        setMessage('鍚庡彴绠＄悊杩愯鍣ㄦ湭鍔犺浇锛屾棤娉曞彂璧峰崟璇嶆潯鎶撳彇銆?, '#c00');
+        setMessage('后台管理运行器未加载，无法发起单词条抓取。', '#c00');
         return;
       }
       if (action === 'run-profile-10d') {
@@ -2415,19 +2421,19 @@ window.SubscriptionsSmartQuery = (function () {
         next.subscriptions = subs;
         return next;
       });
-      const tag = normalizeText(profile.tag) || '璇ヨ瘝鏉?;
-      const statusText = nextPaused ? '宸叉殏鍋? : '宸叉仮澶?;
-      setMessage(`璇嶆潯銆?{tag}銆?{statusText}锛岃鐐瑰嚮銆屼繚瀛樸€嶃€俙, '#666');
+      const tag = normalizeText(profile.tag) || '该词条';
+      const statusText = nextPaused ? '已暂停' : '已恢复';
+      setMessage(`词条「${tag}」${statusText}，请点击「保存」。`, '#666');
       return;
     }
     if (action === 'delete-profile') {
       const profile = findCurrentProfile(profileId);
-      const tag = normalizeText(profile && profile.tag) || '璇ヨ瘝鏉?;
+      const tag = normalizeText(profile && profile.tag) || '该词条';
       const desc = normalizeText(profile && profile.description);
       const keywordCount = Array.isArray(profile && profile.keywords) ? profile.keywords.length : 0;
-      const summary = desc || `鍏抽敭璇?${keywordCount} 鏉;
+      const summary = desc || `关键词 ${keywordCount} 条`;
       const ok = window.confirm(
-        `纭鍒犻櫎璇嶆潯銆?{tag}銆嶅悧锛焅n绠€浠嬶細${summary}\n姝ゆ搷浣滃彲鍦ㄦ湭淇濆瓨鍓嶉€氳繃鍒锋柊鏀惧純銆俙,
+        `确认删除词条「${tag}」吗？\n简介：${summary}\n此操作可在未保存前通过刷新放弃。`,
       );
       if (!ok) return;
       const normalizedProfileId = getProfileId(profileId);
@@ -2447,7 +2453,7 @@ window.SubscriptionsSmartQuery = (function () {
         return next;
       });
       if (typeof reloadAll === 'function') reloadAll();
-      setMessage(`宸插垹闄よ瘝鏉°€?{tag}銆嶏紝璇风偣鍑汇€屼繚瀛樸€嶃€俙, '#666');
+      setMessage(`已删除词条「${tag}」，请点击「保存」。`, '#666');
     }
   };
 
