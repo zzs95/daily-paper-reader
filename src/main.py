@@ -103,6 +103,23 @@ def resolve_run_date_token(fetch_days: int | None) -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%d")
 
 
+def normalize_email_date_token(value: str) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    if re.match(r"^\d{8}$", text):
+        return text
+    if re.match(r"^\d{8}-\d{8}$", text):
+        start = text[:8]
+        end = text[9:]
+        if start > end:
+            raise ValueError(f"Invalid --email-date range: {text} (start > end)")
+        return text
+    raise ValueError(
+        f"Invalid --email-date '{text}', expected YYYYMMDD or YYYYMMDD-YYYYMMDD"
+    )
+
+
 def resolve_sidebar_date_label(fetch_days: int | None) -> str | None:
     # 1) 显式传 --fetch-days 时，仅在大窗口模式下显示日期范围。
     if fetch_days is not None:
@@ -583,6 +600,11 @@ def main() -> None:
         help="Step 1 source: arxiv (legacy) or email (Gmail fetch).",
     )
     parser.add_argument(
+        "--email-date",
+        default="",
+        help="Email fetch date token: YYYYMMDD or YYYYMMDD-YYYYMMDD (used when --fetch-source=email).",
+    )
+    parser.add_argument(
         "--profile-tag",
         default="",
         help="仅运行指定 tag 对应的词条；大小写不敏感，支持空格。",
@@ -612,8 +634,6 @@ def main() -> None:
 
     sidebar_date_label = resolve_sidebar_date_label(args.fetch_days)
     run_date_token = resolve_run_date_token(args.fetch_days)
-    os.environ["DPR_RUN_DATE"] = run_date_token
-    print(f"[INFO] DPR_RUN_DATE={run_date_token}", flush=True)
     profile_tag = str(args.profile_tag or os.getenv("DPR_FILTER_PROFILE_TAG") or "").strip()
     if profile_tag:
         os.environ["DPR_FILTER_PROFILE_TAG"] = profile_tag
@@ -638,6 +658,20 @@ def main() -> None:
         print(f"[TRACE] 启用论文追踪: {', '.join(trace_ids)}", flush=True)
 
     fetch_source = resolve_fetch_source(args.fetch_source)
+    email_date_token = normalize_email_date_token(args.email_date)
+    if fetch_source == "email" and email_date_token:
+        run_date_token = email_date_token
+        if re.match(r"^\d{8}-\d{8}$", run_date_token):
+            sidebar_date_label = (
+                f"{run_date_token[:4]}-{run_date_token[4:6]}-{run_date_token[6:8]} ~ "
+                f"{run_date_token[9:13]}-{run_date_token[13:15]}-{run_date_token[15:17]}"
+            )
+        else:
+            sidebar_date_label = (
+                f"{run_date_token[:4]}-{run_date_token[4:6]}-{run_date_token[6:8]}"
+            )
+    os.environ["DPR_RUN_DATE"] = run_date_token
+    print(f"[INFO] DPR_RUN_DATE={run_date_token}", flush=True)
     print(f"[INFO] fetch_source={fetch_source}", flush=True)
 
     archive_dir = os.path.join(ROOT_DIR, "archive", run_date_token)
