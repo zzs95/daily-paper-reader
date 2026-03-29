@@ -15,6 +15,15 @@ conclusion: SHAPE通过整合结构信息与层次化对齐，显著增强了医
 ## 摘要
 无监督领域自适应（UDA）对于在多样化的临床环境中部署医学图像分割模型至关重要。现有方法存在根本性的局限性，受困于语义不明的特征对齐，导致……
 
+## 速览
+**TLDR**：本研究针对医疗图像分割中无监督领域自适应（UDA）存在的语义特征对齐不准确问题，提出了SHAPE框架。该框架通过结构感知的层次化对齐和合理性评估机制，增强了模型在跨临床环境下的泛化能力，有效解决了传统方法在处理复杂解剖结构时特征对齐失效的局限性。 \
+**Motivation**：现有的无监督领域自适应方法在医疗图像分割中往往缺乏语义感知，导致源域与目标域之间的特征对齐效果不佳。 \
+**Method**：提出了SHAPE框架，该框架集成了结构感知的层次化特征对齐技术以及针对分割结果的合理性评估机制。 \
+**Result**：实验表明，该方法在多个医疗影像分割任务中显著提升了跨领域性能，实现了更具解剖合理性的分割结果。 \
+**Conclusion**：SHAPE通过引入结构信息和合理性评价，为医疗影像在多样化临床环境下的鲁棒性跨域迁移提供了有效的解决方案。
+
+---
+
 ## Abstract
 Unsupervised Domain Adaptation (UDA) is essential for deploying medicalsegmentation models across diverse clinical environments. Existing methods arefundamentally limited, suffering from semantically unaware feature alignment that …
 

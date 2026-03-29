@@ -1,14 +1,14 @@
 # 日报 · 2026-03-27
 
-- 生成时间：2026-03-29 05:59:07 UTC
+- 生成时间：2026-03-29 06:25:48 UTC
 - 当次推荐总数：7
 - 精读区：7
 - 速读区：0
 
 ## 今日简报（AI）
-今日深度解析 7 篇前沿论文，聚焦影像组学在癌症早筛与放疗并发症预测中的突破性进展。
-重点关注多结构影像组学对胰腺肿瘤风险的重新定义，以及联邦学习在免疫治疗肺炎预测中的精准应用。
-建议关注 AI 影像技术如何通过跨机构协作与多维度建模，为复杂病症提供更早、更准的临床预判。
+今日深度解析 7 篇前沿论文，聚焦影像组学在肿瘤精准诊疗与风险预测中的突破性应用。
+重点推荐：联邦学习助力放射性肺炎的跨机构预测，以及多结构影像组学重新定义胰腺早癌的风险分层。
+建议关注影像组学如何通过跨中心协作与多维度建模，显著提升复杂病灶的早期预警与临床决策精度。
 
 ## 精读区
 1. [Adapting Federated Radiomics Models for Radiation Pneumonitis Prediction in Patients Receiving Thoracic Radiotherapy with Immunotherapy](/202603/27/adapting-federated-radiomics-models-for-radiation-pneumonitis-prediction-in-pati-adapting-federated-radiomics-models-for-radiation-pneumonitis-prediction-in-patients-receiving-thoracic-radiotherapy-with-immunotherapy) 

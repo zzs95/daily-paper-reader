@@ -15,6 +15,15 @@ conclusion: 挤压注意力U-Net能有效提高肺栓塞的诊断精度，为临
 ## 摘要
 目的：肺栓塞 (PE) 是一种危及生命的疾病，需要快速且准确的诊断。本研究提出了一种基于深度学习的自动化 PE 分割方法，重点关注像素级准确性和临床……
 
+## 速览
+**TLDR**：肺栓塞（PE）是一种危及生命的疾病，需要快速准确的诊断。本研究提出了一种基于深度学习的挤压与注意力U-Net（Squeeze-and-Attention U-Net）模型，旨在提高CT血管造影（CTA）中PE的自动分割精度。该方法通过结合注意力机制增强特征提取，在像素级准确性和临床实用性方面均有显著提升，为临床医生提供了高效的辅助诊断工具。 \
+**Motivation**：肺栓塞诊断具有高度紧迫性，传统人工阅片耗时且易漏诊，亟需高精度的自动化分割工具以辅助临床决策。 \
+**Method**：提出一种融合了挤压与注意力机制（Squeeze-and-Attention）的改进型U-Net架构，专门用于CT血管造影图像中的PE检测与分割。 \
+**Result**：该模型在像素级分割精度和临床检测性能上均表现优异，能够有效识别并分割复杂的肺栓塞病灶。 \
+**Conclusion**：挤压与注意力U-Net显著提升了肺栓塞的自动诊断能力，为提高临床诊断效率和准确性提供了有效的技术支撑。
+
+---
+
 ## Abstract
 Objective Pulmonary embolism (PE) is a life-threatening condition requiring rapidand accurate diagnosis. This study proposes a deep learning-based approach forautomated PE segmentation, focusing on both pixel-level accuracy and clinical …
 
