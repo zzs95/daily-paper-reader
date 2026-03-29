@@ -103,19 +103,28 @@ def extract_html_from_payload(payload: dict) -> str:
 
 
 def get_related_research_emails_by_day(target_date: str, subject_text: str = "new related research") -> Dict:
-    api_key = os.environ.get("MATON_API_KEY")
-    if not api_key:
-        raise RuntimeError("Missing MATON_API_KEY environment variable")
-
-    base_url = "https://gateway.maton.ai/google-mail/gmail/v1/users/me/messages"
-    headers = {"Authorization": f"Bearer {api_key}"}
-
     day_dt = datetime.strptime(target_date, "%Y%m%d")
     next_day_dt = day_dt + timedelta(days=1)
 
     today_str = day_dt.strftime("%Y/%m/%d")
     tomorrow_str = next_day_dt.strftime("%Y/%m/%d")
     search_query = f'subject:"{subject_text}" after:{today_str} before:{tomorrow_str}'
+
+    api_key = os.environ.get("MATON_API_KEY")
+    if not api_key:
+        print(
+            f"[WARN] MATON_API_KEY is not set; skip Gmail fetch for day={target_date}, "
+            f"subject={subject_text!r}."
+        )
+        return {
+            "query": search_query,
+            "count": 0,
+            "emails": [],
+            "skipped_reason": "missing_maton_api_key",
+        }
+
+    base_url = "https://gateway.maton.ai/google-mail/gmail/v1/users/me/messages"
+    headers = {"Authorization": f"Bearer {api_key}"}
 
     all_message_ids = []
     page_token = None
