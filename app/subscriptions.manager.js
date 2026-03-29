@@ -21,7 +21,7 @@ window.SubscriptionsManager = (function () {
   let runDateRangeStartEl = null;
   let runDateRangeEndEl = null;
   let runModeSelectEl = null;
-  let runSourceSelectEl = null;
+  let emailKeywordEl = null;
   let quickRunConferenceBtn = null;
   let quickRunYearSelect = null;
   let quickRunConferenceSelect = null;
@@ -462,12 +462,14 @@ window.SubscriptionsManager = (function () {
     }
 
     const mode = normalizeText(runModeSelectEl && runModeSelectEl.value) || 'auto';
-    const fetchSource = normalizeText(runSourceSelectEl && runSourceSelectEl.value) || 'email';
+    const profileTag = normalizeText(emailKeywordEl && emailKeywordEl.value);
     window.DPRWorkflowRunner.runMainByDateToken(dateResult.token, {
       mode,
-      fetchSource,
+      fetchSource: 'email',
+      profileTag,
     });
-    setQuickRunMessage(`已触发：date=${dateResult.token}, mode=${mode}, source=${fetchSource}`, '#080');
+    const tagTip = profileTag ? `, keyword=${profileTag}` : '';
+    setQuickRunMessage(`已触发邮件检索：date=${dateResult.token}, mode=${mode}${tagTip}`, '#080');
   };
 
   const runQuickFetch = (days, msgEl, tipText, runOptions) => {
@@ -705,6 +707,16 @@ window.SubscriptionsManager = (function () {
     }
     const fetchSource = normalizeText(next.arxiv_paper_setting.fetch_source).toLowerCase();
     next.arxiv_paper_setting.fetch_source = fetchSource === 'arxiv' ? 'arxiv' : 'email';
+    const emailQuickRun = isPlainObject(next.arxiv_paper_setting.email_quick_run)
+      ? next.arxiv_paper_setting.email_quick_run
+      : {};
+    next.arxiv_paper_setting.email_quick_run = {
+      date_single: normalizeText(emailQuickRun.date_single || ''),
+      date_start: normalizeText(emailQuickRun.date_start || ''),
+      date_end: normalizeText(emailQuickRun.date_end || ''),
+      keyword: normalizeText(emailQuickRun.keyword || ''),
+      mode: normalizeText(emailQuickRun.mode || 'auto') || 'auto',
+    };
 
     if (!next.subscriptions) next.subscriptions = {};
     const subs = next.subscriptions;
@@ -779,37 +791,61 @@ window.SubscriptionsManager = (function () {
 
           <div id="arxiv-search-quick-run-side">
             <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px;">
-              <div class="chat-quick-run-title" style="margin:0;">按日期运行</div>
+              <div class="chat-quick-run-title" style="margin:0;">快速抓取</div>
               <button id="arxiv-admin-open-workflow-panel-btn" class="arxiv-tool-btn" type="button" style="padding:2px 8px;">打开工作流面板</button>
             </div>
+            <button id="arxiv-admin-quick-run-10d-btn" class="chat-quick-run-item" type="button">立即搜寻十天内论文</button>
+            <button id="arxiv-admin-quick-run-30d-btn" class="chat-quick-run-item" type="button">立即搜寻三十天内论文（全速览，约 0.76）</button>
+            <button id="arxiv-admin-quick-run-30d-standard-btn" class="chat-quick-run-item" type="button">立即搜寻三十天内论文（全标准 / 精读，约 1.22）</button>
+            <div class="chat-quick-run-divider" aria-hidden="true"></div>
+            <div class="chat-quick-run-title">会议论文（暂未接入）</div>
             <div class="chat-quick-run-row">
-              <label for="arxiv-admin-run-date-single">单日</label>
-              <input id="arxiv-admin-run-date-single" type="date" style="width:100%;" />
-            </div>
-            <div class="chat-quick-run-row">
-              <label for="arxiv-admin-run-date-start">范围开始</label>
-              <input id="arxiv-admin-run-date-start" type="date" style="width:100%;" />
-            </div>
-            <div class="chat-quick-run-row">
-              <label for="arxiv-admin-run-date-end">范围结束</label>
-              <input id="arxiv-admin-run-date-end" type="date" style="width:100%;" />
-            </div>
-            <div class="chat-quick-run-row">
-              <label for="arxiv-admin-run-source-select">来源</label>
-              <select id="arxiv-admin-run-source-select">
-                <option value="email">email</option>
-                <option value="arxiv">arxiv</option>
+              <label for="arxiv-admin-quick-run-year-select">年份</label>
+              <select id="arxiv-admin-quick-run-year-select" disabled>
+                <option value="">选择年份</option>
               </select>
             </div>
             <div class="chat-quick-run-row">
-              <label for="arxiv-admin-run-mode-select">模式</label>
-              <select id="arxiv-admin-run-mode-select">
+              <label for="arxiv-admin-quick-run-conference-select">会议名</label>
+              <select id="arxiv-admin-quick-run-conference-select" disabled>
+                <option value="">选择会议名</option>
+              </select>
+            </div>
+            <button
+              id="arxiv-admin-quick-run-conference-run-btn"
+              class="chat-quick-run-run-btn chat-quick-run-item--disabled"
+              type="button"
+              disabled
+            >
+              运行
+            </button>
+            <div class="chat-quick-run-divider" aria-hidden="true"></div>
+            <div class="chat-quick-run-title">邮件检索</div>
+            <div class="chat-quick-run-row">
+              <label for="email-admin-run-date-single">单日</label>
+              <input id="email-admin-run-date-single" type="date" style="width:100%;" />
+            </div>
+            <div class="chat-quick-run-row">
+              <label for="email-admin-run-date-start">范围开始</label>
+              <input id="email-admin-run-date-start" type="date" style="width:100%;" />
+            </div>
+            <div class="chat-quick-run-row">
+              <label for="email-admin-run-date-end">范围结束</label>
+              <input id="email-admin-run-date-end" type="date" style="width:100%;" />
+            </div>
+            <div class="chat-quick-run-row">
+              <label for="email-admin-run-keyword">检索关键字</label>
+              <input id="email-admin-run-keyword" type="text" placeholder="可选：词条标签或关键字" style="width:100%;" />
+            </div>
+            <div class="chat-quick-run-row">
+              <label for="email-admin-run-mode-select">模式</label>
+              <select id="email-admin-run-mode-select">
                 <option value="auto">auto</option>
                 <option value="standard">standard</option>
                 <option value="skims">skims</option>
               </select>
             </div>
-            <button id="arxiv-admin-run-by-date-btn" class="chat-quick-run-run-btn" type="button">运行 main.py</button>
+            <button id="email-admin-quick-run-btn" class="chat-quick-run-run-btn" type="button">运行邮件检索</button>
             <div id="arxiv-admin-quick-run-msg" class="chat-quick-run-msg"></div>
 
             <div class="chat-quick-run-divider" aria-hidden="true"></div>
@@ -871,14 +907,16 @@ window.SubscriptionsManager = (function () {
       const { config } = await window.SubscriptionsGithubToken.loadConfig();
       draftConfig = normalizeSubscriptions(config || {});
       hasUnsavedChanges = false;
-      if (runSourceSelectEl) {
-        const sourceValue = normalizeText(
-          draftConfig
-          && draftConfig.arxiv_paper_setting
-          && draftConfig.arxiv_paper_setting.fetch_source,
-        ).toLowerCase();
-        runSourceSelectEl.value = sourceValue === 'arxiv' ? 'arxiv' : 'email';
-      }
+      const emailQuickRun = (
+        draftConfig
+        && draftConfig.arxiv_paper_setting
+        && draftConfig.arxiv_paper_setting.email_quick_run
+      ) || {};
+      if (runDateSingleEl) runDateSingleEl.value = normalizeText(emailQuickRun.date_single || '');
+      if (runDateRangeStartEl) runDateRangeStartEl.value = normalizeText(emailQuickRun.date_start || '');
+      if (runDateRangeEndEl) runDateRangeEndEl.value = normalizeText(emailQuickRun.date_end || '');
+      if (emailKeywordEl) emailKeywordEl.value = normalizeText(emailQuickRun.keyword || '');
+      if (runModeSelectEl) runModeSelectEl.value = normalizeText(emailQuickRun.mode || 'auto') || 'auto';
       refreshQuickRunButtons();
       if (window.SubscriptionsSmartQuery && window.SubscriptionsSmartQuery.clearPendingDeletedProfileIds) {
         window.SubscriptionsSmartQuery.clearPendingDeletedProfileIds();
@@ -913,8 +951,14 @@ window.SubscriptionsManager = (function () {
       if (!draftToSave.arxiv_paper_setting || typeof draftToSave.arxiv_paper_setting !== 'object') {
         draftToSave.arxiv_paper_setting = {};
       }
-      const selectedFetchSource = normalizeText(runSourceSelectEl && runSourceSelectEl.value).toLowerCase();
-      draftToSave.arxiv_paper_setting.fetch_source = selectedFetchSource === 'arxiv' ? 'arxiv' : 'email';
+      draftToSave.arxiv_paper_setting.fetch_source = 'email';
+      draftToSave.arxiv_paper_setting.email_quick_run = {
+        date_single: normalizeText(runDateSingleEl && runDateSingleEl.value),
+        date_start: normalizeText(runDateRangeStartEl && runDateRangeStartEl.value),
+        date_end: normalizeText(runDateRangeEndEl && runDateRangeEndEl.value),
+        keyword: normalizeText(emailKeywordEl && emailKeywordEl.value),
+        mode: normalizeText(runModeSelectEl && runModeSelectEl.value) || 'auto',
+      };
 
       const toSave = normalizeSubscriptions(draftToSave);
       const validationError = validateIntentProfiles(toSave);
@@ -1019,25 +1063,39 @@ window.SubscriptionsManager = (function () {
       });
     }
 
+    quickRun10dBtn = document.getElementById('arxiv-admin-quick-run-10d-btn');
+    quickRun30dBtn = document.getElementById('arxiv-admin-quick-run-30d-btn');
+    quickRun30dStandardBtn = document.getElementById('arxiv-admin-quick-run-30d-standard-btn');
     quickRunOpenWorkflowPanelBtn = document.getElementById('arxiv-admin-open-workflow-panel-btn');
-    runByDateBtn = document.getElementById('arxiv-admin-run-by-date-btn');
-    runDateSingleEl = document.getElementById('arxiv-admin-run-date-single');
-    runDateRangeStartEl = document.getElementById('arxiv-admin-run-date-start');
-    runDateRangeEndEl = document.getElementById('arxiv-admin-run-date-end');
-    runModeSelectEl = document.getElementById('arxiv-admin-run-mode-select');
-    runSourceSelectEl = document.getElementById('arxiv-admin-run-source-select');
+    quickRunConferenceBtn = document.getElementById(
+      'arxiv-admin-quick-run-conference-run-btn',
+    );
+    quickRunYearSelect = document.getElementById('arxiv-admin-quick-run-year-select');
+    quickRunConferenceSelect = document.getElementById(
+      'arxiv-admin-quick-run-conference-select',
+    );
+    runByDateBtn = document.getElementById('email-admin-quick-run-btn');
+    runDateSingleEl = document.getElementById('email-admin-run-date-single');
+    runDateRangeStartEl = document.getElementById('email-admin-run-date-start');
+    runDateRangeEndEl = document.getElementById('email-admin-run-date-end');
+    runModeSelectEl = document.getElementById('email-admin-run-mode-select');
+    emailKeywordEl = document.getElementById('email-admin-run-keyword');
     quickRunMsgEl = document.getElementById('arxiv-admin-quick-run-msg');
     resetContentBtn = document.getElementById('arxiv-admin-reset-content-btn');
     resetContentMsgEl = document.getElementById('arxiv-admin-reset-content-msg');
-    const fetchSource = normalizeText(
-      draftConfig
-      && draftConfig.arxiv_paper_setting
-      && draftConfig.arxiv_paper_setting.fetch_source,
-    ).toLowerCase();
-    if (runSourceSelectEl) {
-      runSourceSelectEl.value = fetchSource === 'arxiv' ? 'arxiv' : 'email';
+    if (quickRunYearSelect) {
+      quickRunYearSelect.disabled = true;
     }
-    [runByDateBtn].forEach((btn) => {
+    if (quickRunConferenceSelect) {
+      quickRunConferenceSelect.disabled = true;
+    }
+    if (quickRunConferenceBtn) {
+      quickRunConferenceBtn.disabled = true;
+      quickRunConferenceBtn.classList.add('chat-quick-run-item--disabled');
+      quickRunConferenceBtn.title = '会议论文抓取功能暂未接入';
+    }
+    fillQuickRunOptions(quickRunYearSelect, quickRunConferenceSelect);
+    [quickRun10dBtn, quickRun30dBtn, quickRun30dStandardBtn, runByDateBtn].forEach((btn) => {
       if (!btn) return;
       if (!btn.dataset.defaultTitle) {
         btn.setAttribute('data-default-title', btn.textContent || '');
@@ -1045,23 +1103,50 @@ window.SubscriptionsManager = (function () {
     });
     refreshQuickRunButtons();
 
+    if (quickRun10dBtn && !quickRun10dBtn._bound) {
+      quickRun10dBtn._bound = true;
+      quickRun10dBtn.addEventListener('click', () => {
+        runQuickFetch(10, quickRunMsgEl);
+      });
+    }
+
+    if (quickRun30dBtn && !quickRun30dBtn._bound) {
+      quickRun30dBtn._bound = true;
+      quickRun30dBtn.addEventListener('click', () => {
+        runQuickFetch(
+          30,
+          quickRunMsgEl,
+          '已发起 30 天全速览抓取任务（skims，成本约 0.76）。',
+          { fetchMode: 'skims' },
+        );
+      });
+    }
+
+    if (quickRun30dStandardBtn && !quickRun30dStandardBtn._bound) {
+      quickRun30dStandardBtn._bound = true;
+      quickRun30dStandardBtn.addEventListener('click', () => {
+        runQuickFetch(
+          30,
+          quickRunMsgEl,
+          '已发起 30 天全标准抓取任务（精读，成本约 1.22）。',
+          { fetchMode: 'standard' },
+        );
+      });
+    }
+
     if (runByDateBtn && !runByDateBtn._bound) {
       runByDateBtn._bound = true;
       runByDateBtn.addEventListener('click', runMainByDate);
     }
-    if (runSourceSelectEl && !runSourceSelectEl._bound) {
-      runSourceSelectEl._bound = true;
-      runSourceSelectEl.addEventListener('change', () => {
-        const selected = normalizeText(runSourceSelectEl.value).toLowerCase();
-        if (!draftConfig || typeof draftConfig !== 'object') draftConfig = {};
-        if (!draftConfig.arxiv_paper_setting || typeof draftConfig.arxiv_paper_setting !== 'object') {
-          draftConfig.arxiv_paper_setting = {};
-        }
-        draftConfig.arxiv_paper_setting.fetch_source = selected === 'arxiv' ? 'arxiv' : 'email';
+    [runDateSingleEl, runDateRangeStartEl, runDateRangeEndEl, runModeSelectEl, emailKeywordEl].forEach((el) => {
+      if (!el || el._boundConfigChange) return;
+      el._boundConfigChange = true;
+      const evt = el.tagName === 'SELECT' ? 'change' : 'input';
+      el.addEventListener(evt, () => {
         hasUnsavedChanges = true;
         refreshQuickRunButtons();
       });
-    }
+    });
 
     if (quickRunOpenWorkflowPanelBtn && !quickRunOpenWorkflowPanelBtn._bound) {
       quickRunOpenWorkflowPanelBtn._bound = true;
@@ -1078,6 +1163,17 @@ window.SubscriptionsManager = (function () {
           quickRunMsgEl.textContent = '工作流触发面板未加载，请刷新页面后重试。';
           quickRunMsgEl.style.color = '#c00';
         }
+      });
+    }
+
+    if (quickRunConferenceBtn && !quickRunConferenceBtn._bound) {
+      quickRunConferenceBtn._bound = true;
+      quickRunConferenceBtn.addEventListener('click', () => {
+        runQuickConferencePlaceholder(
+          quickRunYearSelect,
+          quickRunConferenceSelect,
+          quickRunMsgEl,
+        );
       });
     }
 
@@ -1140,3 +1236,13 @@ window.SubscriptionsManager = (function () {
     },
   };
 })();
+    if (quickRunConferenceBtn && !quickRunConferenceBtn._bound) {
+      quickRunConferenceBtn._bound = true;
+      quickRunConferenceBtn.addEventListener('click', () => {
+        runQuickConferencePlaceholder(
+          quickRunYearSelect,
+          quickRunConferenceSelect,
+          quickRunMsgEl,
+        );
+      });
+    }
