@@ -422,6 +422,47 @@ def strip_auto_sections(md_text: str) -> str:
     return md_text[:cut].rstrip()
 
 
+def sanitize_text_for_llm_input(text: str) -> str:
+    """
+    清洗会发送给 LLM 的原始文本，避免把图片资源（尤其 SVG/data/blob）当成多模态输入触发网关报错。
+    """
+    if not text:
+        return ""
+
+    cleaned = str(text).replace("\r\n", "\n").replace("\r", "\n")
+    # 去掉 HTML 图片标签
+    cleaned = re.sub(r"<img\b[^>]*>", "", cleaned, flags=re.IGNORECASE)
+    # 去掉 Markdown 图片
+    cleaned = re.sub(r"!\[[^\]]*]\([^)]+\)", "", cleaned)
+    # 去掉指向 svg/data/blob 的普通链接（保留链接文本）
+    cleaned = re.sub(
+        r"\[([^\]]*)]\((?:[^)]*\.svg(?:\?[^)]*)?|[^)]*image/svg\+xml[^)]*|data:image[^)]*|blob:[^)]*)\)",
+        r"\1",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+
+    out_lines: List[str] = []
+    for line in cleaned.split("\n"):
+        s = line.strip()
+        if not s:
+            out_lines.append(line)
+            continue
+        low = s.lower()
+        # 直接丢弃明显的图像/data/blob 资源行
+        if (
+            "data:image" in low
+            or "image/svg+xml" in low
+            or "blob:http://" in low
+            or "blob:https://" in low
+            or low.endswith(".svg")
+        ):
+            continue
+        out_lines.append(line)
+
+    return "\n".join(out_lines).strip()
+
+
 def normalize_meta_tldr_line(md_text: str) -> Tuple[str, bool]:
     """
     兼容历史版本：元信息区 TLDR 行曾被写成 '**TLDR**: xxx \\'。
@@ -578,12 +619,12 @@ def generate_deep_summary(md_file_path: str, txt_file_path: str, max_retries: in
         return None
 
     with open(md_file_path, "r", encoding="utf-8") as f:
-        paper_md_content = strip_auto_sections(f.read())
+        paper_md_content = sanitize_text_for_llm_input(strip_auto_sections(f.read()))
 
     paper_txt_content = ""
     if os.path.exists(txt_file_path):
         with open(txt_file_path, "r", encoding="utf-8") as f:
-            paper_txt_content = f.read()
+            paper_txt_content = sanitize_text_for_llm_input(f.read())
 
     system_prompt = (
         "你是一名资深学术论文分析助手，请使用中文、以 Markdown 形式，"
