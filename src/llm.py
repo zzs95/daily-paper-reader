@@ -171,6 +171,11 @@ class LLMClient:
         if isinstance(self.kwargs, dict):
             for k, v in self.kwargs.items():
                 if k in allowed_keys:
+                    # 某些 OpenAI 兼容网关（如部分 BLT 路由）不接受 stream 字段，
+                    # 即使 stream=false 也会报 “Unknown name stream”。
+                    # 本项目当前均使用非流式调用，故默认不透传该字段。
+                    if k == 'stream':
+                        continue
                     payload[k] = v
         if response_format is not None:
             payload['response_format'] = response_format
