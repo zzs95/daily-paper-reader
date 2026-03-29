@@ -251,7 +251,7 @@ window.SubscriptionsSmartQuery = (function () {
     if (window.DPR_RUNTIME_SOURCE_BACKENDS && typeof window.DPR_RUNTIME_SOURCE_BACKENDS === 'object') {
       runtimeCandidates.push(...Object.keys(window.DPR_RUNTIME_SOURCE_BACKENDS || {}));
     }
-    ['arxiv', 'email', ...Object.keys(rawBackends || {}), ...runtimeCandidates].forEach((value) => {
+    ['arxiv', ...Object.keys(rawBackends || {}), ...runtimeCandidates].forEach((value) => {
       const key = normalizeText(value).toLowerCase();
       if (!key || seen.has(key)) return;
       seen.add(key);
