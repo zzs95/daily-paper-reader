@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 import argparse
@@ -8,6 +8,7 @@ import os
 import re
 import urllib.parse
 import urllib.request
+import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List
 from urllib.parse import parse_qs, urlparse
@@ -17,6 +18,15 @@ from bs4 import BeautifulSoup
 
 SRC_DIR = os.path.dirname(__file__)
 ROOT_DIR = os.path.abspath(os.path.join(SRC_DIR, ".."))
+OPEN_ACCESS_DOMAINS = (
+    "arxiv.org",
+    "openreview.net",
+    "biorxiv.org",
+    "medrxiv.org",
+    "chemrxiv.org",
+    "aclanthology.org",
+    "aaai.org",
+)
 
 
 def normalize_date_token(value: str) -> str:
@@ -180,6 +190,116 @@ def normalize_possible_pdf_url(url: str) -> str:
             return f"https://openreview.net/pdf?id={paper_id}"
 
     return url
+
+
+def is_open_access_pdf_url(url: str) -> bool:
+    text = str(url or "").strip()
+    if not text:
+        return False
+    lowered = text.lower()
+    if lowered.endswith(".pdf"):
+        return True
+    return any(domain in lowered for domain in OPEN_ACCESS_DOMAINS) and (
+        "/pdf" in lowered or "openaccesspdf" in lowered
+    )
+
+
+def title_norm(text: str) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9]+", " ", str(text or "").lower())).strip()
+
+
+def search_arxiv_pdf_by_title(title: str) -> str:
+    q = str(title or "").strip()
+    if not q:
+        return ""
+    query = urllib.parse.quote(f'ti:"{q}"')
+    url = f"https://export.arxiv.org/api/query?search_query={query}&start=0&max_results=3"
+    req = urllib.request.Request(url, headers={"User-Agent": "daily-paper-reader/1.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            xml_text = resp.read().decode("utf-8", errors="ignore")
+    except Exception:
+        return ""
+
+    try:
+        root = ET.fromstring(xml_text)
+    except Exception:
+        return ""
+
+    ns = {"atom": "http://www.w3.org/2005/Atom"}
+    target = title_norm(q)
+    for entry in root.findall("atom:entry", ns):
+        e_title = " ".join(((entry.findtext("atom:title", "", ns)) or "").split())
+        e_norm = title_norm(e_title)
+        if not e_norm:
+            continue
+        if e_norm == target or target in e_norm or e_norm in target:
+            for link in entry.findall("atom:link", ns):
+                href = (link.attrib.get("href") or "").strip()
+                if not href:
+                    continue
+                if href.lower().endswith(".pdf"):
+                    return href
+                if link.attrib.get("title") == "pdf":
+                    return href
+    return ""
+
+
+def search_semantic_scholar_open_pdf(title: str) -> str:
+    q = str(title or "").strip()
+    if not q:
+        return ""
+    params = urllib.parse.urlencode(
+        {
+            "query": q,
+            "limit": 5,
+            "fields": "title,openAccessPdf,url",
+        }
+    )
+    url = f"https://api.semanticscholar.org/graph/v1/paper/search?{params}"
+    req = urllib.request.Request(url, headers={"User-Agent": "daily-paper-reader/1.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+    except Exception:
+        return ""
+
+    rows = payload.get("data", []) or []
+    target = title_norm(q)
+    for row in rows:
+        row_title = title_norm(row.get("title") or "")
+        if not row_title:
+            continue
+        if not (row_title == target or target in row_title or row_title in target):
+            continue
+        oa = row.get("openAccessPdf") or {}
+        oa_url = str(oa.get("url") or "").strip()
+        if oa_url:
+            return oa_url
+    return ""
+
+
+def resolve_non_open_pdf_urls(papers: List[Dict]) -> int:
+    updated = 0
+    for p in papers:
+        current = normalize_possible_pdf_url(str(p.get("pdf_url") or p.get("link") or "").strip())
+        if is_open_access_pdf_url(current):
+            p["pdf_url"] = current
+            continue
+
+        title = str(p.get("title") or "").strip()
+        replacement = search_arxiv_pdf_by_title(title)
+        source = "arxiv_title_search"
+        if not replacement:
+            replacement = search_semantic_scholar_open_pdf(title)
+            source = "semantic_scholar_open_access"
+
+        replacement = normalize_possible_pdf_url(replacement)
+        if replacement and is_open_access_pdf_url(replacement):
+            p["pdf_url"] = replacement
+            p["pdf_resolved_from"] = source
+            updated += 1
+    return updated
 
 
 def extract_pdf_url_from_title_block(a_tag) -> str:
@@ -383,6 +503,7 @@ def main() -> None:
             all_email_papers.extend(email_papers)
 
     deduped_email_papers = deduplicate_email_papers(all_email_papers)
+    replaced = resolve_non_open_pdf_urls(deduped_email_papers)
     deep_list = build_deep_list_from_email_papers(deduped_email_papers)
     out_path = save_recommend_file(
         date_token=date_token,
@@ -394,7 +515,8 @@ def main() -> None:
 
     print(
         f"[INFO] date={date_token} days={len(day_list)} emails={total_email_count} "
-        f"papers_raw={len(all_email_papers)} papers_dedup={len(deduped_email_papers)}"
+        f"papers_raw={len(all_email_papers)} papers_dedup={len(deduped_email_papers)} "
+        f"pdf_replaced={replaced}"
     )
     print(f"[INFO] saved: {out_path}")
 
