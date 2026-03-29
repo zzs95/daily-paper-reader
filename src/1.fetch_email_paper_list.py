@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+﻿#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 import argparse
@@ -208,6 +208,20 @@ def title_norm(text: str) -> str:
     return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9]+", " ", str(text or "").lower())).strip()
 
 
+def slugify_text(text: str, max_len: int = 80) -> str:
+    s = str(text or "").strip().lower()
+    s = re.sub(r"\s+", "-", s)
+    s = re.sub(r"[^a-z0-9\-]+", "", s)
+    s = re.sub(r"-{2,}", "-", s).strip("-")
+    if not s:
+        s = "paper"
+    return s[:max_len].strip("-") or "paper"
+
+
+def build_stable_email_paper_id(title: str, link: str, pdf_url: str) -> str:
+    return slugify_text(title)
+
+
 def search_arxiv_pdf_by_title(title: str) -> str:
     q = str(title or "").strip()
     if not q:
@@ -375,7 +389,7 @@ def convert_email_paper_to_deep_item(paper: Dict) -> Dict:
 
     if not pdf_url:
         pdf_url = normalize_possible_pdf_url(link)
-    paper_id = link or pdf_url or title
+    paper_id = build_stable_email_paper_id(title, link, pdf_url)
 
     return {
         "id": paper_id,
