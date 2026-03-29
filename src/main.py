@@ -634,6 +634,8 @@ def main() -> None:
 
     sidebar_date_label = resolve_sidebar_date_label(args.fetch_days)
     run_date_token = resolve_run_date_token(args.fetch_days)
+    os.environ["DPR_RUN_DATE"] = run_date_token
+    print(f"[INFO] DPR_RUN_DATE={run_date_token}", flush=True)
     profile_tag = str(args.profile_tag or os.getenv("DPR_FILTER_PROFILE_TAG") or "").strip()
     if profile_tag:
         os.environ["DPR_FILTER_PROFILE_TAG"] = profile_tag
