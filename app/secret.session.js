@@ -439,12 +439,13 @@
       const summarizedModel = normalizeText(safeOptions.summarizedModel || '');
       const filterModel = normalizeText(safeOptions.filterModel || summarizedModel);
       const rewriteModel = normalizeText(safeOptions.rewriteModel || summarizedModel);
+      const matonApiKey = normalizeText(safeOptions.matonApiKey || '');
       const skipRerank = !!safeOptions.skipRerank;
       const rerankerApiKey = normalizeText(safeOptions.rerankerApiKey || '');
       const rerankerBaseUrl = normalizeBaseUrlForStorage(safeOptions.rerankerBaseUrl || '');
       const rerankerModel = normalizeText(safeOptions.rerankerModel || '');
 
-      if (!summarizedApiKey || !summarizedBaseUrl || !summarizedModel) {
+      if (!summarizedApiKey || !summarizedBaseUrl || !summarizedModel || !matonApiKey) {
         throw new Error('总结模型配置不完整，无法写入 GitHub Secrets。');
       }
 
@@ -460,6 +461,7 @@
       const secretNameBltSummaryModel = 'BLT_SUMMARY_MODEL';
       const secretNameBltFilterModel = 'BLT_FILTER_MODEL';
       const secretNameBltRewriteModel = 'BLT_REWRITE_MODEL';
+      const secretNameMatonKey = 'MATON_API_KEY';
       const secretNameSkipRerank = 'DPR_SKIP_RERANK';
       const secretNameRerankKey = 'Reranker_LLM_API_KEY';
       const secretNameRerankUrl = 'Reranker_LLM_BASE_URL';
@@ -505,6 +507,7 @@
         { name: secretNameBltSummaryModel, value: summarizedModel },
         { name: secretNameBltFilterModel, value: filterModel || summarizedModel },
         { name: secretNameBltRewriteModel, value: rewriteModel || summarizedModel },
+        { name: secretNameMatonKey, value: matonApiKey },
         { name: secretNameSkipRerank, value: skipRerank ? 'true' : 'false' },
       ];
 
@@ -887,6 +890,9 @@
       const initialGithubToken = normalizeText(
         currentSecret.github && currentSecret.github.token,
       );
+      const initialMatonApiKey = normalizeText(
+        currentSecret.gmail && currentSecret.gmail.matonApiKey,
+      );
       const initialApiKey = normalizeText(currentSummaryLLM.apiKey || '');
       const initialBaseUrl = normalizeBaseUrlForStorage(
         currentSummaryLLM.baseUrl || currentChatEntry.baseUrl || '',
@@ -918,6 +924,21 @@
           </button>
           <div id="secret-setup-github-status" style="min-height:18px; font-size:12px; color:#999; margin-bottom:10px;">
             需要具备 <code>repo</code> 和 <code>workflow</code> 权限。
+          </div>
+
+          <div style="font-weight:500; margin-bottom:4px;">Gmail MATON_API_KEY（必填）</div>
+          <input
+            id="secret-setup-maton"
+            type="password"
+            autocomplete="off"
+            placeholder="用于 Gmail 检索的 MATON_API_KEY"
+            style="width:100%; box-sizing:border-box; padding:6px 8px; margin-bottom:4px; font-size:13px;"
+          />
+          <button id="secret-setup-maton-verify" type="button" class="secret-gate-btn secondary" style="margin-bottom:4px;">
+            验证 MATON_API_KEY
+          </button>
+          <div id="secret-setup-maton-status" style="min-height:18px; font-size:12px; color:#999; margin-bottom:10px;">
+            将加密写入 GitHub Secret：<code>MATON_API_KEY</code>。
           </div>
 
           <div style="font-weight:500; margin-bottom:6px;">聊天 / 论文概述模型来源</div>
@@ -1040,6 +1061,9 @@
       const githubInput = document.getElementById('secret-setup-github-token');
       const githubVerifyBtn = document.getElementById('secret-setup-github-verify');
       const githubStatusEl = document.getElementById('secret-setup-github-status');
+      const matonInput = document.getElementById('secret-setup-maton');
+      const matonVerifyBtn = document.getElementById('secret-setup-maton-verify');
+      const matonStatusEl = document.getElementById('secret-setup-maton-status');
       const providerInputs = Array.from(
         document.querySelectorAll('input[name="secret-setup-provider"]'),
       );
@@ -1066,6 +1090,9 @@
         !githubInput ||
         !githubVerifyBtn ||
         !githubStatusEl ||
+        !matonInput ||
+        !matonVerifyBtn ||
+        !matonStatusEl ||
         !providerInputs.length ||
         !platoSection ||
         !customSection ||
@@ -1105,6 +1132,7 @@
       );
 
       githubInput.value = initialGithubToken;
+      matonInput.value = initialMatonApiKey;
       platoInput.value = currentProviderType === 'plato' ? initialApiKey : '';
       customApiKeyInput.value = currentProviderType === 'openai-compatible' ? initialApiKey : '';
       customBaseUrlInput.value =
@@ -1124,6 +1152,7 @@
       }
 
       let githubOk = !!initialGithubToken;
+      let matonOk = !!initialMatonApiKey;
       let platoOk = currentProviderType === 'plato' && !!initialApiKey;
       let customOk =
         currentProviderType === 'openai-compatible'
@@ -1158,6 +1187,12 @@
         githubOk = false;
         githubStatusEl.innerHTML = '需要具备 <code>repo</code> 和 <code>workflow</code> 权限。';
         githubStatusEl.style.color = '#999';
+      };
+
+      const resetMatonStatus = () => {
+        matonOk = false;
+        matonStatusEl.innerHTML = '将加密写入 GitHub Secret：<code>MATON_API_KEY</code>。';
+        matonStatusEl.style.color = '#999';
       };
 
       const resetPlatoStatus = () => {
@@ -1284,6 +1319,10 @@
         githubStatusEl.textContent = '已载入当前加密配置；如更换 GitHub Token，保存前请重新验证。';
         githubStatusEl.style.color = '#666';
       }
+      if (initialMatonApiKey) {
+        matonStatusEl.textContent = '已载入当前加密配置；如更换 MATON_API_KEY，保存前请重新验证。';
+        matonStatusEl.style.color = '#666';
+      }
       if (currentProviderType === 'plato' && initialApiKey) {
         platoStatusEl.textContent = '已载入当前加密配置；如更换 API Key 或模型，建议重新验证或点击测试按钮。';
         platoStatusEl.style.color = '#666';
@@ -1296,6 +1335,7 @@
       syncProviderSections();
 
       bindResetOnInput([githubInput], resetGithubStatus);
+      bindResetOnInput([matonInput], resetMatonStatus);
       bindResetOnInput([platoInput, ...summaryModelInputs], resetPlatoStatus);
       bindResetOnInput(
         [customApiKeyInput, customBaseUrlInput, customModel1Input, customModel2Input, customModel3Input],
@@ -1362,6 +1402,33 @@
           githubOk = false;
         } finally {
           githubVerifyBtn.disabled = false;
+        }
+      });
+
+      matonVerifyBtn.addEventListener('click', async () => {
+        const key = normalizeText(matonInput.value);
+        if (!key) {
+          matonStatusEl.textContent = '请先输入 MATON_API_KEY。';
+          matonStatusEl.style.color = '#c00';
+          matonOk = false;
+          return;
+        }
+        matonVerifyBtn.disabled = true;
+        matonStatusEl.textContent = '正在校验格式...';
+        matonStatusEl.style.color = '#666';
+        try {
+          if (key.length < 16) {
+            throw new Error('长度过短，请检查是否完整复制。');
+          }
+          matonStatusEl.textContent = '✅ 格式校验通过，将加密写入 GitHub Secret: MATON_API_KEY';
+          matonStatusEl.style.color = '#28a745';
+          matonOk = true;
+        } catch (e) {
+          matonStatusEl.textContent = `❌ 验证失败：${e.message || e}`;
+          matonStatusEl.style.color = '#c00';
+          matonOk = false;
+        } finally {
+          matonVerifyBtn.disabled = false;
         }
       });
 
@@ -1437,8 +1504,13 @@
 
       genBtn.addEventListener('click', async () => {
         const githubToken = normalizeText(githubInput.value);
+        const matonKey = normalizeText(matonInput.value);
         if (!githubToken || !githubOk) {
           setErrorText('请先填写并通过验证 GitHub Token。', '#c00');
+          return;
+        }
+        if (!matonKey || !matonOk) {
+          setErrorText('请先填写并通过验证 MATON_API_KEY。', '#c00');
           return;
         }
 
@@ -1465,6 +1537,9 @@
           updatedAt: nowIso,
           github: {
             token: githubToken,
+          },
+          gmail: {
+            matonApiKey: matonKey,
           },
           llmProvider: {
             type: providerDraft.providerType,
@@ -1506,6 +1581,7 @@
               summarizedModel: providerDraft.summaryModel,
               filterModel: providerDraft.filterModel,
               rewriteModel: providerDraft.rewriteModel,
+              matonApiKey: matonKey,
               skipRerank: providerDraft.skipRerank,
               rerankerApiKey: providerDraft.reranker && providerDraft.reranker.apiKey,
               rerankerBaseUrl: providerDraft.reranker && providerDraft.reranker.baseUrl,
@@ -1527,7 +1603,7 @@
           const payload = await createEncryptedSecret(password, plainConfig);
           window.decoded_secret_private = plainConfig;
           setMode('full');
-
+          
           const blob = new Blob([JSON.stringify(payload, null, 2)], {
             type: 'application/json',
           });

@@ -6,8 +6,8 @@ window.DPRWorkflowRunner = (function () {
     {
       key: 'daily-now',
       id: 'daily-paper-reader.yml',
-      name: '立即爬取并处理论文',
-      desc: '触发 daily-paper-reader 工作流（抓取→召回→重排→生成 docs）。',
+      name: '绔嬪嵆鐖彇骞跺鐞嗚鏂?,
+      desc: '瑙﹀彂 daily-paper-reader 宸ヤ綔娴侊紙鎶撳彇鈫掑彫鍥炩啋閲嶆帓鈫掔敓鎴?docs锛夈€?,
       dispatchInputs: {
         run_enrich: 'false',
       },
@@ -15,14 +15,14 @@ window.DPRWorkflowRunner = (function () {
     {
       key: 'sync',
       id: 'sync.yml',
-      name: '同步上游代码',
-      desc: '触发 Upstream Sync 工作流（合并上游 main 到当前仓库）。',
+      name: '鍚屾涓婃父浠ｇ爜',
+      desc: '瑙﹀彂 Upstream Sync 宸ヤ綔娴侊紙鍚堝苟涓婃父 main 鍒板綋鍓嶄粨搴擄級銆?,
     },
     {
       key: 'reset-content',
       id: 'reset-content.yml',
-      name: '重置 content（docs + archive）',
-      desc: '将 docs 恢复为 docs_init 基线，并清空 archive。该操作为危险操作。',
+      name: '閲嶇疆 content锛坉ocs + archive锛?,
+      desc: '灏?docs 鎭㈠涓?docs_init 鍩虹嚎锛屽苟娓呯┖ archive銆傝鎿嶄綔涓哄嵄闄╂搷浣溿€?,
     },
   ];
 
@@ -111,8 +111,7 @@ window.DPRWorkflowRunner = (function () {
       return { owner: githubPagesMatch[1], repo: githubPagesMatch[2] };
     }
 
-    // 非 GitHub Pages URL：回退到「Token 对应的用户 + daily-paper-reader」作为默认目标仓库
-    try {
+    // 闈?GitHub Pages URL锛氬洖閫€鍒般€孴oken 瀵瑰簲鐨勭敤鎴?+ daily-paper-reader銆嶄綔涓洪粯璁ょ洰鏍囦粨搴?    try {
       const userRes = await ghFetch(token, 'https://api.github.com/user');
       if (userRes.ok) {
         const user = await userRes.json();
@@ -199,7 +198,7 @@ window.DPRWorkflowRunner = (function () {
 
   const resolveRecentRunTag = async (owner, repo, token, run) => {
     if (!run) return 'daily-now';
-    // 统一归类到 daily-now，触发面板不再单独展示一个月/一个月标准入口
+    // 缁熶竴褰掔被鍒?daily-now锛岃Е鍙戦潰鏉夸笉鍐嶅崟鐙睍绀轰竴涓湀/涓€涓湀鏍囧噯鍏ュ彛
     if (run.inputs && typeof run.inputs === 'object') return 'daily-now';
     await resolveWorkflowRunInputs(owner, repo, token, run.id);
     return 'daily-now';
@@ -228,21 +227,21 @@ window.DPRWorkflowRunner = (function () {
     overlay.innerHTML = `
       <div id="dpr-workflow-panel">
         <div id="dpr-workflow-header">
-          <div style="font-weight:600;">工作流触发</div>
+          <div style="font-weight:600;">宸ヤ綔娴佽Е鍙?/div>
           <div style="display:flex; gap:8px; align-items:center;">
-            <button id="dpr-workflow-refresh-btn" class="arxiv-tool-btn" style="padding:2px 10px;">刷新</button>
-            <button id="dpr-workflow-close-btn" class="arxiv-tool-btn" style="padding:2px 6px;">关闭</button>
+            <button id="dpr-workflow-refresh-btn" class="arxiv-tool-btn" style="padding:2px 10px;">鍒锋柊</button>
+            <button id="dpr-workflow-close-btn" class="arxiv-tool-btn" style="padding:2px 6px;">鍏抽棴</button>
           </div>
         </div>
         <div id="dpr-workflow-body">
-          <div id="dpr-workflow-status" style="font-size:12px; color:#666; margin-bottom:10px;">准备就绪。</div>
-          <div style="font-weight:600; font-size:13px; margin-bottom:6px;">最近运行（各取 3 条）</div>
+          <div id="dpr-workflow-status" style="font-size:12px; color:#666; margin-bottom:10px;">鍑嗗灏辩华銆?/div>
+          <div style="font-weight:600; font-size:13px; margin-bottom:6px;">鏈€杩戣繍琛岋紙鍚勫彇 3 鏉★級</div>
           <div id="dpr-workflow-recent" style="font-size:12px; color:#333; border:1px solid #eee; border-radius:8px; background:#fff; padding:10px; margin-bottom:12px;">
-            <div style="color:#999;">加载中...</div>
+            <div style="color:#999;">鍔犺浇涓?..</div>
           </div>
-          <div style="font-weight:600; font-size:13px; margin-bottom:6px;">执行过程</div>
+          <div style="font-weight:600; font-size:13px; margin-bottom:6px;">鎵ц杩囩▼</div>
           <div id="dpr-workflow-runs" style="font-size:12px; color:#333; border:1px solid #eee; border-radius:8px; background:#fff; padding:10px; min-height:120px;">
-            <div style="color:#999;">尚未触发工作流。</div>
+            <div style="color:#999;">灏氭湭瑙﹀彂宸ヤ綔娴併€?/div>
           </div>
         </div>
       </div>
@@ -269,7 +268,7 @@ window.DPRWorkflowRunner = (function () {
         if (r && r.owner && r.repo && r.runId) {
           refreshRun(r.owner, r.repo, r.runId);
         } else {
-          setStatus('暂无可刷新的运行记录。', '#666');
+          setStatus('鏆傛棤鍙埛鏂扮殑杩愯璁板綍銆?, '#666');
         }
       });
     }
@@ -281,7 +280,7 @@ window.DPRWorkflowRunner = (function () {
     if (!overlay) return;
     overlay.style.display = 'flex';
     requestAnimationFrame(() => overlay.classList.add('show'));
-    // 打开面板时尝试加载最近运行（不依赖触发）
+    // 鎵撳紑闈㈡澘鏃跺皾璇曞姞杞芥渶杩戣繍琛岋紙涓嶄緷璧栬Е鍙戯級
     loadRecentRuns();
     return true;
   };
@@ -313,7 +312,7 @@ window.DPRWorkflowRunner = (function () {
   const formatRunBadgeText = (status, conclusion) => {
     const s = String(status || '');
     const c = String(conclusion || '');
-    // 用户希望 completed / success 这种冗余展示去掉：优先展示 conclusion，其次 status
+    // 鐢ㄦ埛甯屾湜 completed / success 杩欑鍐椾綑灞曠ず鍘绘帀锛氫紭鍏堝睍绀?conclusion锛屽叾娆?status
     return c || s || '';
   };
 
@@ -351,7 +350,7 @@ window.DPRWorkflowRunner = (function () {
         return `
           <div class="dpr-wf-recent-block">
             <div class="dpr-wf-recent-block-title">${escapeHtml(wf.name)}</div>
-            <div style="color:#c90;">当前仓库不是 GitHub Fork，已禁用上游同步。</div>
+            <div style="color:#c90;">褰撳墠浠撳簱涓嶆槸 GitHub Fork锛屽凡绂佺敤涓婃父鍚屾銆?/div>
           </div>
         `;
       }
@@ -386,7 +385,7 @@ window.DPRWorkflowRunner = (function () {
       return `
         <div class="dpr-wf-recent-block">
           <div class="dpr-wf-recent-block-title">${escapeHtml(wf.name)}</div>
-          ${lines || '<div style="color:#999;">暂无运行记录</div>'}
+          ${lines || '<div style="color:#999;">鏆傛棤杩愯璁板綍</div>'}
         </div>
       `;
     }).join('');
@@ -405,7 +404,7 @@ window.DPRWorkflowRunner = (function () {
           .forEach((n) => n.classList.remove('is-active'));
         btn.classList.add('is-active');
         selectedRun = { owner, repo, runId, token: loadGithubToken() };
-        setStatus(`正在加载运行详情：run_id=${runId}`, '#666', { waiting: true });
+        setStatus(`姝ｅ湪鍔犺浇杩愯璇︽儏锛歳un_id=${runId}`, '#666', { waiting: true });
         await refreshRun(owner, repo, runId);
         refreshTimer = setInterval(() => {
           if (!selectedRun) return;
@@ -422,7 +421,7 @@ window.DPRWorkflowRunner = (function () {
     if (!token) {
       recentEl.classList.remove('is-loading');
       recentEl.innerHTML =
-        '<div style="color:#c00;">未检测到 GitHub Token，无法加载最近运行记录。</div>';
+        '<div style="color:#c00;">鏈娴嬪埌 GitHub Token锛屾棤娉曞姞杞芥渶杩戣繍琛岃褰曘€?/div>';
       return;
     }
 
@@ -430,15 +429,15 @@ window.DPRWorkflowRunner = (function () {
       const repoContext = await resolveRepoContext(token);
       const { owner, repo } = repoContext;
       if (!owner || !repo) {
-        renderRecentRuns(owner, repo, null, '无法推断目标仓库，无法加载最近运行记录。');
+        renderRecentRuns(owner, repo, null, '鏃犳硶鎺ㄦ柇鐩爣浠撳簱锛屾棤娉曞姞杞芥渶杩戣繍琛岃褰曘€?);
         return;
       }
 
       const hasRendered = !!recentEl.querySelector('.dpr-wf-recent-block');
       if (!hasRendered) {
-        recentEl.innerHTML = '<div style="color:#999;">正在加载最近运行记录...</div>';
+        recentEl.innerHTML = '<div style="color:#999;">姝ｅ湪鍔犺浇鏈€杩戣繍琛岃褰?..</div>';
       } else {
-        // 刷新时不要清空现有内容，避免“闪一下再出现”的观感
+        // 鍒锋柊鏃朵笉瑕佹竻绌虹幇鏈夊唴瀹癸紝閬垮厤鈥滈棯涓€涓嬪啀鍑虹幇鈥濈殑瑙傛劅
         recentEl.classList.add('is-loading');
       }
       const byWorkflow = {};
@@ -455,7 +454,7 @@ window.DPRWorkflowRunner = (function () {
         if (!res.ok) {
           const txt = await res.text().catch(() => '');
           throw new Error(
-            `读取最近运行失败(${wfId})：HTTP ${res.status} ${res.statusText} - ${txt}`,
+            `璇诲彇鏈€杩戣繍琛屽け璐?${wfId})锛欻TTP ${res.status} ${res.statusText} - ${txt}`,
           );
         }
         const data = await res.json();
@@ -518,37 +517,36 @@ window.DPRWorkflowRunner = (function () {
     const wf = workflow || {};
     const workflowFile = String(wf.id || '');
     if (!workflowFile) {
-      setStatus('工作流配置缺失，无法触发。', '#c00');
+      setStatus('宸ヤ綔娴侀厤缃己澶憋紝鏃犳硶瑙﹀彂銆?, '#c00');
       return;
     }
     const token = loadGithubToken();
     if (!token) {
-      setStatus('未检测到 GitHub Token：请在“密钥配置”或“GitHub Token”处完成配置。', '#c00');
+      setStatus('鏈娴嬪埌 GitHub Token锛氳鍦ㄢ€滃瘑閽ラ厤缃€濇垨鈥淕itHub Token鈥濆瀹屾垚閰嶇疆銆?, '#c00');
       return;
     }
     const repoContext = await resolveRepoContext(token);
     const { owner, repo } = repoContext;
     if (!owner || !repo) {
-      setStatus('无法推断目标仓库：请确认 GitHub Token 有效，或使用 xxx.github.io/仓库名/ 访问。', '#c00');
+      setStatus('鏃犳硶鎺ㄦ柇鐩爣浠撳簱锛氳纭 GitHub Token 鏈夋晥锛屾垨浣跨敤 xxx.github.io/浠撳簱鍚? 璁块棶銆?, '#c00');
       return;
     }
     if (wf.key === 'sync' && repoContext.isFork === false) {
-      setStatus('当前仓库不是 GitHub Fork，无法使用上游同步。', '#c00');
+      setStatus('褰撳墠浠撳簱涓嶆槸 GitHub Fork锛屾棤娉曚娇鐢ㄤ笂娓稿悓姝ャ€?, '#c00');
       runsEl.innerHTML =
-        '<div style="color:#c00;">当前仓库不是 Fork 仓库，Upstream Sync 不会运行。</div>' +
-        `<div style="margin-top:8px;"><a class="arxiv-tool-btn" style="padding:6px 10px; text-decoration:none;" target="_blank" href="https://github.com/${owner}/${repo}/fork">前往 Fork 当前仓库</a></div>`;
+        '<div style="color:#c00;">褰撳墠浠撳簱涓嶆槸 Fork 浠撳簱锛孶pstream Sync 涓嶄細杩愯銆?/div>' +
+        `<div style="margin-top:8px;"><a class="arxiv-tool-btn" style="padding:6px 10px; text-decoration:none;" target="_blank" href="https://github.com/${owner}/${repo}/fork">鍓嶅線 Fork 褰撳墠浠撳簱</a></div>`;
       return;
     }
 
-    setStatus(`正在检查工作流状态：${wf.name || workflowFile} ...`, '#666', { waiting: true });
-    runsEl.innerHTML = '<div style="color:#999;">正在检查是否有运行中的工作流...</div>';
+    setStatus(`姝ｅ湪妫€鏌ュ伐浣滄祦鐘舵€侊細${wf.name || workflowFile} ...`, '#666', { waiting: true });
+    runsEl.innerHTML = '<div style="color:#999;">姝ｅ湪妫€鏌ユ槸鍚︽湁杩愯涓殑宸ヤ綔娴?..</div>';
     stopPolling();
     activeRun = null;
 
     try {
-      // 检查是否有正在运行中的同名工作流（防止误触重复触发）
-      const activeStatuses = new Set(['queued', 'in_progress', 'waiting']);
-      const statusZhMap = { queued: '排队中', in_progress: '运行中', waiting: '等待中' };
+      // 妫€鏌ユ槸鍚︽湁姝ｅ湪杩愯涓殑鍚屽悕宸ヤ綔娴侊紙闃叉璇Е閲嶅瑙﹀彂锛?      const activeStatuses = new Set(['queued', 'in_progress', 'waiting']);
+      const statusZhMap = { queued: '鎺掗槦涓?, in_progress: '杩愯涓?, waiting: '绛夊緟涓? };
       const checkUrl = `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${encodeURIComponent(
         workflowFile,
       )}/runs?per_page=5`;
@@ -562,22 +560,22 @@ window.DPRWorkflowRunner = (function () {
           const runUrl = `https://github.com/${owner}/${repo}/actions/runs/${r.id}`;
           const statusText = statusZhMap[r.status] || r.status;
           setStatus(
-            `已有正在运行的工作流（#${r.run_number || r.id}，状态：${statusText}），请等待完成后再触发。`,
+            `宸叉湁姝ｅ湪杩愯鐨勫伐浣滄祦锛?${r.run_number || r.id}锛岀姸鎬侊細${statusText}锛夛紝璇风瓑寰呭畬鎴愬悗鍐嶈Е鍙戙€俙,
             '#c00',
           );
           runsEl.innerHTML =
-            `<div style="color:#c00;">同一时间只允许运行一个该工作流实例，请等待当前运行结束。</div>` +
-            `<div style="margin-top:8px;"><a class="arxiv-tool-btn" style="padding:6px 10px; text-decoration:none;" target="_blank" href="${runUrl}">查看当前运行</a></div>`;
+            `<div style="color:#c00;">鍚屼竴鏃堕棿鍙厑璁歌繍琛屼竴涓宸ヤ綔娴佸疄渚嬶紝璇风瓑寰呭綋鍓嶈繍琛岀粨鏉熴€?/div>` +
+            `<div style="margin-top:8px;"><a class="arxiv-tool-btn" style="padding:6px 10px; text-decoration:none;" target="_blank" href="${runUrl}">鏌ョ湅褰撳墠杩愯</a></div>`;
           return;
         }
       }
 
-      setStatus(`正在触发工作流：${wf.name || workflowFile} ...`, '#666', { waiting: true });
-      runsEl.innerHTML = '<div style="color:#999;">正在触发，请稍候...</div>';
+      setStatus(`姝ｅ湪瑙﹀彂宸ヤ綔娴侊細${wf.name || workflowFile} ...`, '#666', { waiting: true });
+      runsEl.innerHTML = '<div style="color:#999;">姝ｅ湪瑙﹀彂锛岃绋嶅€?..</div>';
 
       const createdAt = new Date();
 
-      // 触发 dispatch
+      // 瑙﹀彂 dispatch
       const dispatchUrl = `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${encodeURIComponent(
         workflowFile,
       )}/dispatches`;
@@ -597,16 +595,16 @@ window.DPRWorkflowRunner = (function () {
       if (!res.ok) {
         const txt = await res.text().catch(() => '');
         if (res.status === 422 && txt.includes('disabled workflow')) {
-          const err = new Error('触发失败：该 Workflow 当前处于禁用状态，请先前往 Actions 页面启用该工作流。');
+          const err = new Error('瑙﹀彂澶辫触锛氳 Workflow 褰撳墠澶勪簬绂佺敤鐘舵€侊紝璇峰厛鍓嶅線 Actions 椤甸潰鍚敤璇ュ伐浣滄祦銆?);
           err.workflowEnableUrl = `https://github.com/${owner}/${repo}/actions/workflows/${encodeURIComponent(workflowFile)}`;
           throw err;
         }
-        throw new Error(`触发失败：HTTP ${res.status} ${res.statusText} - ${txt}`);
+        throw new Error(`瑙﹀彂澶辫触锛欻TTP ${res.status} ${res.statusText} - ${txt}`);
       }
 
-      setStatus('已触发，正在等待运行记录创建...', '#666', { waiting: true });
+      setStatus('宸茶Е鍙戯紝姝ｅ湪绛夊緟杩愯璁板綍鍒涘缓...', '#666', { waiting: true });
 
-      // 轮询找到本次 dispatch 对应的 run
+      // 杞鎵惧埌鏈 dispatch 瀵瑰簲鐨?run
       const lookup = async () => {
         const runsUrl = `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${encodeURIComponent(
           workflowFile,
@@ -614,7 +612,7 @@ window.DPRWorkflowRunner = (function () {
         const runsRes = await ghFetch(token, runsUrl);
         if (!runsRes.ok) {
           const txt = await runsRes.text().catch(() => '');
-          throw new Error(`读取 workflow runs 失败：HTTP ${runsRes.status} ${runsRes.statusText} - ${txt}`);
+          throw new Error(`璇诲彇 workflow runs 澶辫触锛欻TTP ${runsRes.status} ${runsRes.statusText} - ${txt}`);
         }
         const data = await runsRes.json();
         const list = Array.isArray(data.workflow_runs) ? data.workflow_runs : [];
@@ -631,8 +629,7 @@ window.DPRWorkflowRunner = (function () {
 
       let run = null;
       for (let i = 0; i < 18; i += 1) {
-        // 最多等 ~90 秒
-        // eslint-disable-next-line no-await-in-loop
+        // 鏈€澶氱瓑 ~90 绉?        // eslint-disable-next-line no-await-in-loop
         run = await lookup();
         if (run) break;
         // eslint-disable-next-line no-await-in-loop
@@ -640,14 +637,14 @@ window.DPRWorkflowRunner = (function () {
       }
 
       if (!run || !run.id) {
-        setStatus('已触发，但未能在短时间内找到对应的运行记录。建议打开 Actions 页面查看。', '#c00');
-        runsEl.innerHTML = `<div style="color:#666;">请在 GitHub Actions 查看：<a target="_blank" href="https://github.com/${owner}/${repo}/actions">打开 Actions</a></div>`;
+        setStatus('宸茶Е鍙戯紝浣嗘湭鑳藉湪鐭椂闂村唴鎵惧埌瀵瑰簲鐨勮繍琛岃褰曘€傚缓璁墦寮€ Actions 椤甸潰鏌ョ湅銆?, '#c00');
+        runsEl.innerHTML = `<div style="color:#666;">璇峰湪 GitHub Actions 鏌ョ湅锛?a target="_blank" href="https://github.com/${owner}/${repo}/actions">鎵撳紑 Actions</a></div>`;
         return;
       }
 
       activeRun = { owner, repo, runId: run.id, token };
       selectedRun = activeRun;
-      setStatus(`运行已创建：run_id=${run.id}，开始拉取进度...`, '#080', { waiting: true });
+      setStatus(`杩愯宸插垱寤猴細run_id=${run.id}锛屽紑濮嬫媺鍙栬繘搴?..`, '#080', { waiting: true });
       await refreshRun(owner, repo, run.id);
 
       refreshTimer = setInterval(() => {
@@ -656,16 +653,15 @@ window.DPRWorkflowRunner = (function () {
         refreshRun(r.owner, r.repo, r.runId);
       }, 5000);
 
-      // 触发后刷新最近运行列表
-      loadRecentRuns();
+      // 瑙﹀彂鍚庡埛鏂版渶杩戣繍琛屽垪琛?      loadRecentRuns();
     } catch (e) {
       console.error(e);
       const msg = e.message || String(e);
-      setStatus(`触发失败：${msg}`, '#c00');
+      setStatus(`瑙﹀彂澶辫触锛?{msg}`, '#c00');
       if (e.workflowEnableUrl) {
         runsEl.innerHTML =
           `<div style="color:#c00;">${escapeHtml(msg)}<br/>` +
-          `👉 <a href="${e.workflowEnableUrl}" target="_blank" style="color:#1a73e8;">前往 Actions 页面启用工作流</a></div>`;
+          `馃憠 <a href="${e.workflowEnableUrl}" target="_blank" style="color:#1a73e8;">鍓嶅線 Actions 椤甸潰鍚敤宸ヤ綔娴?/a></div>`;
       } else {
         runsEl.innerHTML = `<div style="color:#c00;">${escapeHtml(msg)}</div>`;
       }
@@ -696,14 +692,14 @@ window.DPRWorkflowRunner = (function () {
             const c = s.conclusion || s.status || '';
             const icon =
               c === 'success'
-                ? '✅'
+                ? '鉁?
                 : c === 'failure'
-                  ? '❌'
+                  ? '鉂?
                   : c === 'skipped'
-                    ? '⏭'
+                    ? '鈴?
                     : c === 'in_progress'
-                      ? '⏳'
-                      : '•';
+                      ? '鈴?
+                      : '鈥?;
             return `<div class="dpr-wf-step">${icon} ${escapeHtml(
               s.name || '',
             )}</div>`;
@@ -716,7 +712,7 @@ window.DPRWorkflowRunner = (function () {
             <div class="dpr-wf-job-meta">
               <span class="dpr-wf-job-meta-text">${escapeHtml(j.status || '')}${j.conclusion ? ` / ${escapeHtml(j.conclusion)}` : ''}</span>
             </div>
-            <div class="dpr-wf-steps">${stepLines || '<div style="color:#999;">暂无步骤信息</div>'}</div>
+            <div class="dpr-wf-steps">${stepLines || '<div style="color:#999;">鏆傛棤姝ラ淇℃伅</div>'}</div>
           </div>
         `;
       })
@@ -736,10 +732,10 @@ window.DPRWorkflowRunner = (function () {
           </div>
         </div>
         <div style="flex-shrink:0; display:flex; gap:8px;">
-          <a class="arxiv-tool-btn" style="padding:6px 10px; text-decoration:none;" target="_blank" href="${runUrl}">打开 Actions</a>
+          <a class="arxiv-tool-btn" style="padding:6px 10px; text-decoration:none;" target="_blank" href="${runUrl}">鎵撳紑 Actions</a>
         </div>
       </div>
-      ${jobHtml || '<div style="color:#999;">暂无 Job 信息</div>'}
+      ${jobHtml || '<div style="color:#999;">鏆傛棤 Job 淇℃伅</div>'}
     `;
   };
 
@@ -752,7 +748,7 @@ window.DPRWorkflowRunner = (function () {
       const res = await ghFetch(token, runUrl);
       if (!res.ok) {
         const txt = await res.text().catch(() => '');
-        throw new Error(`读取 run 失败：HTTP ${res.status} ${res.statusText} - ${txt}`);
+        throw new Error(`璇诲彇 run 澶辫触锛欻TTP ${res.status} ${res.statusText} - ${txt}`);
       }
       const run = await res.json();
       const stateKey = `${run.status || ''}/${run.conclusion || ''}`;
@@ -772,26 +768,26 @@ window.DPRWorkflowRunner = (function () {
       if (run.status === 'completed') {
         stopPolling();
         setStatus(
-          `运行已结束：${run.conclusion || 'completed'}`,
+          `杩愯宸茬粨鏉燂細${run.conclusion || 'completed'}`,
           run.conclusion === 'success' ? '#080' : '#c00',
         );
-        // run 状态结束后，刷新“最近运行”列表，确保 completed/success 等状态能及时反映
+        // run 鐘舵€佺粨鏉熷悗锛屽埛鏂扳€滄渶杩戣繍琛屸€濆垪琛紝纭繚 completed/success 绛夌姸鎬佽兘鍙婃椂鍙嶆槧
         if (prevStateKey !== stateKey) {
           loadRecentRuns();
         }
       } else {
-        setStatus('运行中：每 5 秒自动刷新...', '#1565c0', { waiting: true });
+        setStatus('杩愯涓細姣?5 绉掕嚜鍔ㄥ埛鏂?..', '#1565c0', { waiting: true });
       }
     } catch (e) {
       console.error(e);
-      setStatus(`刷新失败：${e.message || e}`, '#c00');
+      setStatus(`鍒锋柊澶辫触锛?{e.message || e}`, '#c00');
     }
   };
 
   const runWorkflowByKey = async (workflowKey, extraInputs) => {
     const wf = getWorkflowByKey(workflowKey);
     if (!wf) {
-      setStatus('未找到对应的工作流配置。', '#c00');
+      setStatus('鏈壘鍒板搴旂殑宸ヤ綔娴侀厤缃€?, '#c00');
       return;
     }
     open();
@@ -815,9 +811,27 @@ window.DPRWorkflowRunner = (function () {
     return runWorkflowByKey(preset.key, mergedInputs);
   };
 
+  const runMainByDateToken = async (dateToken, options) => {
+    const token = String(dateToken || '').trim();
+    const opts = options && typeof options === 'object' ? options : {};
+    const mode = String(opts.mode || 'auto').trim();
+    const fetchSource = String(opts.fetchSource || opts.fetch_source || 'email').trim();
+    const dispatchInputs = combineInputs(
+      {
+        run_enrich: 'false',
+        email_date: token,
+        mode,
+        fetch_source: fetchSource || 'email',
+      },
+      opts.dispatchInputs,
+    );
+    return runWorkflowByKey('daily-now', dispatchInputs);
+  };
+
   return {
     open,
     runWorkflowByKey,
     runQuickFetchByDays,
+    runMainByDateToken,
   };
 })();

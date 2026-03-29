@@ -24,15 +24,14 @@ window.$docsify = {
             gfm: true,
             breaks: false,
             tables: true,
-            // 允许 <sup> 等内联 HTML 直接渲染，而不是被转义
-            sanitize: false,
+            // 閸忎浇顔?<sup> 缁涘鍞撮懕?HTML 閻╁瓨甯村〒鍙夌厠閿涘矁鈧奔绗夐弰顖濐潶鏉烆兛绠?            sanitize: false,
             mangle: false,
             headerIds: false,
           }),
         );
       }
 
-      // 1. 解析当前文章 ID (简单用文件名作为 ID)
+      // 1. 鐟欙絾鐎借ぐ鎾冲閺傚洨鐝?ID (缁犫偓閸楁洜鏁ら弬鍥︽閸氬秳缍旀稉?ID)
       const getPaperId = () => {
         return vm.route.file.replace('.md', '');
       };
@@ -47,15 +46,14 @@ window.$docsify = {
 
       const defaultAuthors = ['Daily Paper Reader Team', 'Docsify Renderer'];
 
-      // Zotero 摘要结构标记：方便后续在 Zotero 插件中重新解析
-      const START_MARKER = '【🤖 AI Summary】';
-      const CHAT_MARKER = '【💬 Chat History】';
-      const ORIG_MARKER = '【📄 Original Abstract】';
-      const TLDR_MARKER = '【📝 TLDR】';
-      const GLANCE_MARKER = '【🧭 速览区】';
-      const GLANCE_MARKER_LEGACY = '【🧭 Glance】';
-      const DETAIL_MARKER = '【🧩 论文详细总结区】';
-      const DETAIL_MARKER_LEGACY = '【🧩 论文详细总结】';
+      // Zotero 閹芥顩︾紒鎾寸€弽鍥唶閿涙碍鏌熸笟鍨倵缂侇厼婀?Zotero 閹绘帊娆㈡稉顓㈠櫢閺傛媽袙閺?      const START_MARKER = '閵嗘劮鐓?AI Summary閵?;
+      const CHAT_MARKER = '閵嗘劮鐓?Chat History閵?;
+      const ORIG_MARKER = '閵嗘劮鐓?Original Abstract閵?;
+      const TLDR_MARKER = '閵嗘劮鐓?TLDR閵?;
+      const GLANCE_MARKER = '閵嗘劮鐓?闁喕顫嶉崠鎭掆偓?;
+      const GLANCE_MARKER_LEGACY = '閵嗘劮鐓?Glance閵?;
+      const DETAIL_MARKER = '閵嗘劮鐓?鐠佺儤鏋冪拠锔剧矎閹崵绮ㄩ崠鎭掆偓?;
+      const DETAIL_MARKER_LEGACY = '閵嗘劮鐓?鐠佺儤鏋冪拠锔剧矎閹崵绮ㄩ妴?;
       let latestPaperRawMarkdown = '';
 
       const extractSectionByTitle = (rawContent, matchFn) => {
@@ -137,7 +135,7 @@ window.$docsify = {
           '',
         );
         text = text.replace(/^Tags:\s*.*$/gim, '');
-        text = text.replace(/^>?\s*由\s*daily-paper-reader\s*自动生成\s*$/gim, '');
+        text = text.replace(/^>?\s*閻㈢浂s*daily-paper-reader\s*閼奉亜濮╅悽鐔稿灇\s*$/gim, '');
         return text.trim();
       };
 
@@ -249,10 +247,10 @@ window.$docsify = {
             (title) => {
               const t = normalizeTextForMeta(title).replace(/^\s*#{1,6}\s*/, '').trim().toLowerCase();
               return (
-                t.includes('论文详细总结') ||
-                t.includes('论文详细总结（自动生成）') ||
+                t.includes('鐠佺儤鏋冪拠锔剧矎閹崵绮?) ||
+                t.includes('鐠佺儤鏋冪拠锔剧矎閹崵绮ㄩ敍鍫ｅ殰閸斻劎鏁撻幋鎰剁礆') ||
                 t.includes('ai summary') ||
-                t.includes('🤖 ai summary')
+                t.includes('棣冾樆 ai summary')
               );
             },
           ),
@@ -265,7 +263,7 @@ window.$docsify = {
                 .toLowerCase();
               return (
                 t === 'abstract' ||
-                t.includes('原文摘要') ||
+                t.includes('閸樼喐鏋冮幗妯款洣') ||
                 t.includes('original abstract')
               );
             },
@@ -277,7 +275,7 @@ window.$docsify = {
                 .replace(/^\s*#{1,6}\s*/, '')
                 .trim()
                 .toLowerCase();
-              return t.includes('tldr') || t.includes('tl;dr') || t.includes('摘要要点');
+              return t.includes('tldr') || t.includes('tl;dr') || t.includes('閹芥顩︾憰浣哄仯');
             },
           ),
         };
@@ -294,11 +292,11 @@ window.$docsify = {
             'paper-title-row',
             'paper-meta-row',
             'paper-glance-section',
-            '互动区',
-            '页面导航与交互层',
-            '原文摘要',
+            '娴滄帒濮╅崠?,
+            '妞ょ敻娼扮€佃壈鍩呮稉搴濇唉娴滄帒鐪?,
+            '閸樼喐鏋冮幗妯款洣',
             'original abstract',
-            '论文详细总结',
+            '鐠佺儤鏋冪拠锔剧矎閹崵绮?,
             'ai summary',
             'chat history',
           ];
@@ -316,7 +314,7 @@ window.$docsify = {
               node.classList.contains('paper-title-en'))
           );
         const sections = [];
-        let currentTitle = '📝 论文正文';
+        let currentTitle = '棣冩憫 鐠佺儤鏋冨锝嗘瀮';
         let currentContent = [];
         let seenHeading = false;
         let skipCurrentSection = false;
@@ -388,15 +386,13 @@ window.$docsify = {
         return sections;
       };
 
-      // Zotero 元数据更新函数：可被 Docsify 生命周期和聊天模块重复调用
-      const updateZoteroMetaFromPage = async (
+      // Zotero 閸忓啯鏆熼幑顔芥纯閺傛澘鍤遍弫甯窗閸欘垵顫?Docsify 閻㈢喎鎳￠崨銊︽埂閸滃矁浜版径鈺偰侀崸妤呭櫢婢跺秷鐨熼悽?      const updateZoteroMetaFromPage = async (
         paperId,
         vmRouteFile,
         rawPaperContent = '',
       ) => {
         try {
-          // 优先使用自定义标题条（避免 h1 被隐藏/改造后 innerText 不稳定）
-          const dprEn = document.querySelector('.dpr-title-en');
+          // 娴兼ê鍘涙担璺ㄦ暏閼奉亜鐣炬稊澶嬬垼妫版ɑ娼敍鍫ヤ缉閸?h1 鐞氼偊娈ｉ挊?閺€褰掆偓鐘叉倵 innerText 娑撳秶菙鐎规熬绱?          const dprEn = document.querySelector('.dpr-title-en');
           const dprCn = document.querySelector('.dpr-title-cn');
           let title = '';
           if (dprEn && (dprEn.textContent || '').trim()) {
@@ -408,8 +404,7 @@ window.$docsify = {
             title = titleEl ? (titleEl.textContent || '').trim() : document.title;
           }
           if (title) {
-            // 清理标题中的多余空白与插件注入内容
-            title = title.replace(/\s+/g, ' ').trim();
+            // 濞撳懐鎮婇弽鍥暯娑擃厾娈戞径姘稇缁岃櫣娅ф稉搴㈠絻娴犺埖鏁為崗銉ュ敶鐎?            title = title.replace(/\s+/g, ' ').trim();
           }
 
           let pdfLinkEl = document.querySelector('a[href*="arxiv.org/pdf"]');
@@ -470,13 +465,13 @@ window.$docsify = {
           document.querySelectorAll('.markdown-section p').forEach((p) => {
             if (p.innerText.includes('Authors:')) {
               let text = p.innerText.replace('Authors:', '').trim();
-              // 清理可能被其它扩展注入的换行和尾部信息，以及尾部日期
+              // 濞撳懐鎮婇崣顖濆厴鐞氼偄鍙剧€瑰啯澧跨仦鏇熸暈閸忋儳娈戦幑銏ｎ攽閸滃苯鐔柈銊や繆閹垽绱濇禒銉ュ挤鐏忛箖鍎撮弮銉︽埂
               text = text.replace(/\s+/g, ' ').trim();
               text = text
                 .replace(/Date\s*:\s*\d{4}-\d{2}-\d{2}.*/i, '')
                 .trim();
               authors = text
-                .split(/,|，/)
+                .split(/,|閿?)
                 .map((a) => a.trim())
                 .filter(Boolean);
             }
@@ -497,11 +492,9 @@ window.$docsify = {
           } =
             getRawPaperSections(rawPaperContent || '');
 
-          // 每次路由刷新先清理上一个页面注入的摘要 meta，避免重复残留
-          clearSummaryMetaFields();
+          // 濮ｅ繑顐肩捄顖滄暠閸掗攱鏌婇崗鍫熺閻炲棔绗傛稉鈧稉顏堛€夐棃銏℃暈閸忋儳娈戦幗妯款洣 meta閿涘矂浼╅崗宥夊櫢婢跺秵鐣悾?          clearSummaryMetaFields();
 
-          // 构造给 Zotero 用的“摘要”元信息：按「AI 总结 / 对话历史 / 原始摘要」分段组织
-          let abstractText = '';
+          // 閺嬪嫰鈧姷绮?Zotero 閻劎娈戦垾婊勬喅鐟曚讲鈧繂鍘撴穱鈩冧紖閿涙碍瀵滈妴瀛塈 閹崵绮?/ 鐎电鐦介崢鍡楀蕉 / 閸樼喎顫愰幗妯款洣閵嗗秴鍨庡▓鐢电矋缂?          let abstractText = '';
           let abstractTextForMetaRaw = '';
           const sectionEl = document.querySelector('.markdown-section');
           if (sectionEl) {
@@ -510,8 +503,7 @@ window.$docsify = {
             aiSummaryText = cleanSectionText(aiSummaryText);
             origAbstractText = cleanSectionText(origAbstractText);
 
-            // 3) 解析聊天历史，优先读取本地原始聊天记录，避免从 DOM innerText 读公式时被拆碎
-            let chatSection = '';
+            // 3) 鐟欙絾鐎介懕濠傘亯閸樺棗褰堕敍灞肩喘閸忓牐顕伴崣鏍ㄦ拱閸︽澘甯慨瀣喊婢垛晞顔囪ぐ鏇礉闁灝鍘ゆ禒?DOM innerText 鐠囪鍙曞蹇旀鐞氼偅濯剁喊?            let chatSection = '';
             const buildChatLinesFromMessages =
               window.DPRZoteroChatUtils &&
               typeof window.DPRZoteroChatUtils.buildChatLinesFromMessages === 'function'
@@ -535,9 +527,9 @@ window.$docsify = {
                     : ({ roleText = '', className = '' } = {}) => {
                         const role = String(roleText || '').trim();
                         const cls = String(className || '').trim();
-                        if (role.includes('思考过程')) return '';
-                        if (role.includes('你')) return 'User';
-                        if (role.includes('助手')) return 'AI';
+                        if (role.includes('閹繆鈧啳绻冪粙?)) return '';
+                        if (role.includes('娴?)) return 'User';
+                        if (role.includes('閸斺晜澧?)) return 'AI';
                         if (/\bmsg-content-user\b/.test(cls)) return 'User';
                         if (/\bmsg-content-ai\b/.test(cls)) return 'AI';
                         return '';
@@ -554,7 +546,7 @@ window.$docsify = {
                   if (!speaker) return;
                   const contentText = (contentEl.innerText || '').trim();
                   if (!contentText) return;
-                  const icon = speaker === 'User' ? '👤' : '🤖';
+                  const icon = speaker === 'User' ? '棣冩噥' : '棣冾樆';
                   lines.push(`${icon} ${speaker}: ${contentText}`);
                 });
                 if (lines.length) {
@@ -593,12 +585,12 @@ window.$docsify = {
             const normalizeMarkerTitle = (label) => {
               const raw = normalizeTextForMeta(label).trim();
               if (!raw) return "";
-              if (raw === START_MARKER) return "🤖 AI Summary";
-              if (raw === CHAT_MARKER) return "💬 Chat History";
-              if (raw === ORIG_MARKER) return "📄 Original Abstract";
-              if (raw === TLDR_MARKER) return "📝 TLDR";
-              if (raw === GLANCE_MARKER || raw === GLANCE_MARKER_LEGACY) return "🧭 速览区";
-              if (raw === DETAIL_MARKER || raw === DETAIL_MARKER_LEGACY) return "🧩 论文详细总结区";
+              if (raw === START_MARKER) return "棣冾樆 AI Summary";
+              if (raw === CHAT_MARKER) return "棣冩尠 Chat History";
+              if (raw === ORIG_MARKER) return "棣冩惈 Original Abstract";
+              if (raw === TLDR_MARKER) return "棣冩憫 TLDR";
+              if (raw === GLANCE_MARKER || raw === GLANCE_MARKER_LEGACY) return "棣冃?闁喕顫嶉崠?;
+              if (raw === DETAIL_MARKER || raw === DETAIL_MARKER_LEGACY) return "棣冃?鐠佺儤鏋冪拠锔剧矎閹崵绮ㄩ崠?;
               return raw.replace(/^#{1,6}\s*/, '');
             };
             const addRawMetaBlock = (label, content) => {
@@ -625,7 +617,7 @@ window.$docsify = {
               const lineText = raw
                 .replace(/^[\-\*]\s*/, '')
                 .replace(/^\*\*(.*?)\*\*\s*:?\s*/, '$1:');
-              const m = lineText.match(/^(.+?)\s*[:：]\s*(.*)$/);
+              const m = lineText.match(/^(.+?)\s*[:閿涙瓥\s*(.*)$/);
               if (!m) return null;
               return [normalizeTextForMeta(m[1]).trim(), normalizeTextForMeta(m[2]).trim()];
             };
@@ -702,13 +694,13 @@ window.$docsify = {
                 col.querySelector('.paper-glance-content'),
               );
               if (!label && !content) return '';
-              return `- **${label || '项'}**: ${content || '-'}`;
+              return `- **${label || '妞?}**: ${content || '-'}`;
             });
             const fallbackArray = (value, label = '') =>
               value ? [`- **${label}**: ${Array.isArray(value) ? value.join(' / ') : String(value)}`] : [];
 
             const titleRowText = [
-              `- **中英文标题**: ${titleZhText || frontmatterPaperMeta.title_zh || '-'} / ${titleEnText || frontmatterPaperMeta.title || '-'}`,
+              `- **娑擃叀瀚抽弬鍥ㄧ垼妫?*: ${titleZhText || frontmatterPaperMeta.title_zh || '-'} / ${titleEnText || frontmatterPaperMeta.title || '-'}`,
             ].filter(Boolean);
 
             const metaPairs = collectLabeledPairs([...metaLeftRows, ...metaRightRows]);
@@ -754,21 +746,21 @@ window.$docsify = {
             const chatContainerEl = document.getElementById('paper-chat-container');
             const chatHistoryEl = document.getElementById('chat-history');
             const uiRows = [
-              `- **dpr-title-bar**: ${titleBarEl ? '已挂载' : '未检测到'}`,
-              `- **dpr-page-content**: ${pageContentEl ? '已挂载' : '未检测到'}`,
-              `- **paper-title-row**: ${document.querySelector('.paper-title-row') ? '已挂载' : '未检测到'}`,
-              `- **paper-meta-row**: ${document.querySelector('.paper-meta-row') ? '已挂载' : '未检测到'}`,
-              `- **paper-glance-section**: ${document.querySelector('.paper-glance-section') ? '已挂载' : '未检测到'}`,
-              `- **#paper-chat-container**: ${chatContainerEl ? '已挂载' : '未检测到'}`,
-              `- **#chat-history**: ${chatHistoryEl ? '已挂载' : '未检测到'}`,
+              `- **dpr-title-bar**: ${titleBarEl ? '瀹稿弶瀵曟潪? : '閺堫亝顥呭ù瀣煂'}`,
+              `- **dpr-page-content**: ${pageContentEl ? '瀹稿弶瀵曟潪? : '閺堫亝顥呭ù瀣煂'}`,
+              `- **paper-title-row**: ${document.querySelector('.paper-title-row') ? '瀹稿弶瀵曟潪? : '閺堫亝顥呭ù瀣煂'}`,
+              `- **paper-meta-row**: ${document.querySelector('.paper-meta-row') ? '瀹稿弶瀵曟潪? : '閺堫亝顥呭ù瀣煂'}`,
+              `- **paper-glance-section**: ${document.querySelector('.paper-glance-section') ? '瀹稿弶瀵曟潪? : '閺堫亝顥呭ù瀣煂'}`,
+              `- **#paper-chat-container**: ${chatContainerEl ? '瀹稿弶瀵曟潪? : '閺堫亝顥呭ù瀣煂'}`,
+              `- **#chat-history**: ${chatHistoryEl ? '瀹稿弶瀵曟潪? : '閺堫亝顥呭ù瀣煂'}`,
             ];
 
             addMetaSectionBlock(
-              'paper-title-row（双语标题区域）',
+              'paper-title-row閿涘牆寮荤拠顓熺垼妫版ê灏崺鐕傜礆',
               titleRowText.join('\n'),
             );
             addMetaSectionBlock(
-              'paper-meta-row（中间信息区）',
+              'paper-meta-row閿涘牅鑵戦梻缈犱繆閹垰灏敍?,
               cleanText(
                 buildLabeledText(
                   metaPairs,
@@ -801,12 +793,11 @@ window.$docsify = {
               addRawMetaBlock(GLANCE_MARKER, glanceText);
             }
             addMetaSectionBlock(
-              '页面导航与交互层',
+              '妞ょ敻娼扮€佃壈鍩呮稉搴濇唉娴滄帒鐪?,
               cleanText(uiRows.join('\n')),
             );
 
-            // 1) 全文段落：按页面 heading 自动切块，保持顺序写入
-            const paperBodySections = collectPaperBodySections(sectionEl);
+            // 1) 閸忋劍鏋冨▓浣冩儰閿涙碍瀵滄い鐢告桨 heading 閼奉亜濮╅崚鍥ф健閿涘奔绻氶幐渚€銆庢惔蹇撳晸閸?            const paperBodySections = collectPaperBodySections(sectionEl);
             paperBodySections.forEach((section) => {
               if (section && section.text) {
                 addMetaSectionBlock(section.title, section.text);
@@ -814,7 +805,7 @@ window.$docsify = {
             });
 
             if (aiSummaryText) {
-              // AI Summary 区块：仅保留 AI 摘要正文，不再自动拼入 Tags
+              // AI Summary 閸栧搫娼￠敍姘矌娣囨繄鏆€ AI 閹芥顩﹀锝嗘瀮閿涘奔绗夐崘宥堝殰閸斻劍瀚鹃崗?Tags
               let aiBlock = `${START_MARKER}\n`;
               if (aiSummaryText) {
                 aiBlock += aiSummaryText;
@@ -836,9 +827,8 @@ window.$docsify = {
               addRawMetaBlock(ORIG_MARKER, rawOriginal);
             }
 
-            // 兜底 raw 聚合：确保保留 AI Summary / Original Abstract 原始 Markdown
-            // （避免经过 DOM 文本化路径后公式被改写）
-            abstractText = parts.join('\n\n\n').trim();
+            // 閸忔粌绨?raw 閼辨艾鎮庨敍姘扁€樻穱婵呯箽閻?AI Summary / Original Abstract 閸樼喎顫?Markdown
+            // 閿涘牓浼╅崗宥囩病鏉?DOM 閺傚洦婀伴崠鏍熅瀵板嫬鎮楅崗顒€绱＄悮顐ｆ暭閸愭瑱绱?            abstractText = parts.join('\n\n\n').trim();
             abstractTextForMetaRaw = rawParts.join('\n\n\n').trim();
           }
 
@@ -846,9 +836,8 @@ window.$docsify = {
             const abstractTextForMeta =
               abstractTextForMetaRaw || abstractText;
             if (abstractTextForMeta) {
-              // 用 Zotero Connector 常识别的字段名：citation_abstract
-              // 用占位符编码换行，避免 Connector 导入时丢失段落边界
-              const metaText = encodeCitationAbstractForMeta(abstractTextForMeta);
+              // 閻?Zotero Connector 鐢瓕鐦戦崚顐ゆ畱鐎涙顔岄崥宥忕窗citation_abstract
+              // 閻劌宕版担宥囶儊缂傛牜鐖滈幑銏ｎ攽閿涘矂浼╅崗?Connector 鐎电厧鍙嗛弮鏈垫丢婢惰鲸顔岄拃鍊熺珶閻?              const metaText = encodeCitationAbstractForMeta(abstractTextForMeta);
               updateMetaTag('citation_abstract', metaText, {
                 useFallback: false,
               });
@@ -877,8 +866,7 @@ window.$docsify = {
         }
       };
 
-      // 导出给其它前端模块（例如聊天模块）主动刷新 Zotero 元数据
-      window.DPRZoteroMeta = window.DPRZoteroMeta || {};
+      // 鐎电厧鍤紒娆忓従鐎瑰啫澧犵粩顖浤侀崸妤嬬礄娓氬顩ч懕濠傘亯濡€虫健閿涘瀵岄崝銊ュ煕閺?Zotero 閸忓啯鏆熼幑?      window.DPRZoteroMeta = window.DPRZoteroMeta || {};
       window.DPRZoteroMeta.updateFromPage = (paperId, vmRouteFile) =>
         Promise.resolve(
           updateZoteroMetaFromPage(paperId, vmRouteFile, latestPaperRawMarkdown),
@@ -886,8 +874,7 @@ window.$docsify = {
           console.error('Zotero meta update failed:', e);
         });
 
-      // 公共工具：在指定元素上渲染公式
-      const renderMathInEl = (el) => {
+      // 閸忣剙鍙″銉ュ徔閿涙艾婀幐鍥х暰閸忓啰绀屾稉濠冭閺屾挸鍙曞?      const renderMathInEl = (el) => {
         if (!window.renderMathInElement || !el) return;
         window.renderMathInElement(el, {
           delimiters: [
@@ -898,13 +885,10 @@ window.$docsify = {
         });
       };
 
-      // 公共工具：简单表格 + 标记修正：
-      // 1）移除协议标记 [ANS]/[THINK]
-      // 2）移除表格行之间多余空行，避免把同一张表拆成两块
-      const normalizeTables = (markdown) => {
+      // 閸忣剙鍙″銉ュ徔閿涙氨鐣濋崡鏇°€冮弽?+ 閺嶅洩顔囨穱顔筋劀閿?      // 1閿涘些闂勩倕宕楃拋顔界垼鐠?[ANS]/[THINK]
+      // 2閿涘些闂勩倛銆冮弽鑹邦攽娑斿妫挎径姘稇缁岄缚顢戦敍宀勪缉閸忓秵濡搁崥灞肩瀵姾銆冮幏鍡樺灇娑撱倕娼?      const normalizeTables = (markdown) => {
         if (!markdown) return '';
-        // 清理历史遗留的协议标记
-        let text = markdown
+        // 濞撳懐鎮婇崢鍡楀蕉闁鏆€閻ㄥ嫬宕楃拋顔界垼鐠?        let text = markdown
           .replace(/\[ANS\]/g, '')
           .replace(/\[THINK\]/g, '');
 
@@ -920,8 +904,7 @@ window.$docsify = {
             isTableLine(prev || '') &&
             isTableLine(next || '')
           ) {
-            // 跳过表格行之间的空行
-            continue;
+            // 鐠哄疇绻冪悰銊︾壐鐞涘奔绠ｉ梻瀵告畱缁岄缚顢?            continue;
           }
           result.push(line);
         }
@@ -937,36 +920,27 @@ window.$docsify = {
           .replace(/'/g, '&#39;');
       };
 
-      // 自定义表格渲染：检测 Markdown 表格块并手写生成 <table>，
-      // 其他内容仍交给 marked 渲染。
-      // 同时保护 LaTeX 公式块，避免被 marked 误解析。
-      const renderMarkdownWithTables = (markdown) => {
+      // 閼奉亜鐣炬稊澶庛€冮弽鍏艰閺屾搫绱板Λ鈧ù?Markdown 鐞涖劍鐗搁崸妤€鑻熼幍瀣晸閻㈢喐鍨?<table>閿?      // 閸忔湹绮崘鍛啇娴犲秳姘︾紒?marked 濞撳弶鐓嬮妴?      // 閸氬本妞傛穱婵囧Б LaTeX 閸忣剙绱￠崸妤嬬礉闁灝鍘ょ悮?marked 鐠囶垵袙閺嬫劑鈧?      const renderMarkdownWithTables = (markdown) => {
         const text = normalizeTables(markdown || '');
 
-        // 保护 LaTeX 公式：先用占位符替换，渲染后再恢复
-        const latexBlocks = [];
+        // 娣囨繃濮?LaTeX 閸忣剙绱￠敍姘帥閻劌宕版担宥囶儊閺囨寧宕查敍灞捐閺屾挸鎮楅崘宥嗕划婢?        const latexBlocks = [];
         let protectedText = text;
 
-        // 保护块级公式 $$...$$
+        // 娣囨繃濮㈤崸妤冮獓閸忣剙绱?$$...$$
         protectedText = protectedText.replace(/\$\$([\s\S]*?)\$\$/g, (match) => {
           const idx = latexBlocks.length;
           latexBlocks.push(match);
           return `%%LATEX_BLOCK_${idx}%%`;
         });
 
-        // 保护行内公式 $...$（不跨行）
-        protectedText = protectedText.replace(/\$([^\$\n]+?)\$/g, (match) => {
+        // 娣囨繃濮㈢悰灞藉敶閸忣剙绱?$...$閿涘牅绗夌捄銊攽閿?        protectedText = protectedText.replace(/\$([^\$\n]+?)\$/g, (match) => {
           const idx = latexBlocks.length;
           latexBlocks.push(match);
           return `%%LATEX_INLINE_${idx}%%`;
         });
 
-        // 预处理：手动将 **...** 和 *...* 转换为 HTML 标签
-        // 解决 marked 对中文字符旁的粗体/斜体识别问题
-        // 注意：只匹配同一行内、且内容不超过 100 字符的情况，避免误匹配
-        protectedText = protectedText.replace(/\*\*([^*\n]{1,100}?)\*\*/g, '<strong>$1</strong>');
-        // 斜体：要求前后有空格或中文字符边界，避免误匹配乘号等
-        protectedText = protectedText.replace(/(?<=[^\*]|^)\*([^*\n]{1,50}?)\*(?=[^\*]|$)/g, '<em>$1</em>');
+        // 妫板嫬顦╅悶鍡窗閹靛濮╃亸?**...** 閸?*...* 鏉烆剚宕叉稉?HTML 閺嶅洨顒?        // 鐟欙絽鍠?marked 鐎甸€涜厬閺傚洤鐡х粭锔芥⒑閻ㄥ嫮鐭栨担?閺傛粈缍嬬拠鍡楀焼闂傤噣顣?        // 濞夈劍鍓伴敍姘涧閸栧綊鍘ら崥灞肩鐞涘苯鍞撮妴浣风瑬閸愬懎顔愭稉宥堢Т鏉?100 鐎涙顑侀惃鍕剰閸愮绱濋柆鍨帳鐠囶垰灏柊?        protectedText = protectedText.replace(/\*\*([^*\n]{1,100}?)\*\*/g, '<strong>$1</strong>');
+        // 閺傛粈缍嬮敍姘愁洣濮瑰倸澧犻崥搴㈡箒缁岀儤鐗搁幋鏍﹁厬閺傚洤鐡х粭锕佺珶閻ｅ矉绱濋柆鍨帳鐠囶垰灏柊宥勭閸欓鐡?        protectedText = protectedText.replace(/(?<=[^\*]|^)\*([^*\n]{1,50}?)\*(?=[^\*]|$)/g, '<em>$1</em>');
 
         const lines = protectedText.split('\n');
         const isTableLine = (line) => /^\s*\|.*\|\s*$/.test(line);
@@ -1002,15 +976,13 @@ window.$docsify = {
         while (i < lines.length) {
           const line = lines[i];
 
-          // 检测表格块：当前行是表格行，下一行是对齐行
-          if (
+          // 濡偓濞村銆冮弽鐓庢健閿涙艾缍嬮崜宥堫攽閺勵垵銆冮弽鑹邦攽閿涘奔绗呮稉鈧悰灞炬Ц鐎靛綊缍堢悰?          if (
             isTableLine(line) &&
             i + 1 < lines.length &&
             isAlignLine(lines[i + 1])
           ) {
             const headerLine = lines[i];
-            i += 2; // 跳过对齐行
-
+            i += 2; // 鐠哄疇绻冪€靛綊缍堢悰?
             const bodyLines = [];
             while (i < lines.length && isTableLine(lines[i])) {
               bodyLines.push(lines[i]);
@@ -1036,8 +1008,7 @@ window.$docsify = {
 
             blocks.push(html);
           } else {
-            // 非表格块：收集到下一个表格或结尾
-            const paraLines = [];
+            // 闂堢偠銆冮弽鐓庢健閿涙碍鏁归梿鍡楀煂娑撳绔存稉顏囥€冮弽鍏煎灗缂佹挸鐔?            const paraLines = [];
             while (
               i < lines.length &&
               !(
@@ -1055,8 +1026,7 @@ window.$docsify = {
 
         let result = blocks.join('');
 
-        // 恢复 LaTeX 公式
-        result = result.replace(/%%LATEX_BLOCK_(\d+)%%/g, (_, idx) => latexBlocks[parseInt(idx, 10)]);
+        // 閹垹顦?LaTeX 閸忣剙绱?        result = result.replace(/%%LATEX_BLOCK_(\d+)%%/g, (_, idx) => latexBlocks[parseInt(idx, 10)]);
         result = result.replace(/%%LATEX_INLINE_(\d+)%%/g, (_, idx) => latexBlocks[parseInt(idx, 10)]);
 
         return result;
@@ -1085,15 +1055,13 @@ window.$docsify = {
         });
       };
 
-      // 导出给外部模块（例如聊天模块）复用
-      window.DPRMarkdown = {
+      // 鐎电厧鍤紒娆忣樆闁劍膩閸ф绱欐笟瀣洤閼卞﹤銇夊Ο鈥虫健閿涘顦查悽?      window.DPRMarkdown = {
         normalizeTables,
         renderMarkdownWithTables,
         renderMathInEl,
       };
 
-      // 3. 小屏下：点击侧边栏条目后自动收起侧边栏（全屏列表 → 正文）
-      const setupMobileSidebarAutoCloseOnItemClick = () => {
+      // 3. 鐏忓繐鐫嗘稉瀣剁窗閻愮懓鍤笟褑绔熼弽蹇旀蒋閻╊喖鎮楅懛顏勫З閺€鎯版崳娓氀嗙珶閺嶅骏绱欓崗銊ョ潌閸掓銆?閳?濮濓絾鏋冮敍?      const setupMobileSidebarAutoCloseOnItemClick = () => {
         const nav = document.querySelector('.sidebar-nav');
         if (!nav) return;
         if (nav.dataset.mobileAutoCloseBound === '1') return;
@@ -1104,25 +1072,21 @@ window.$docsify = {
           if (!link) return;
 
           const href = link.getAttribute('href') || '';
-          // 只处理 Docsify 内部路由（#/ 开头），避免影响外链
-          if (!href.includes('#/')) return;
+          // 閸欘亜顦╅悶?Docsify 閸愬懘鍎寸捄顖滄暠閿?/ 瀵偓婢惰揪绱氶敍宀勪缉閸忓秴濂栭崫宥咁樆闁?          if (!href.includes('#/')) return;
 
           const width =
             window.innerWidth || document.documentElement.clientWidth || 0;
-          // 统一“微宽屏 + 窄屏”为同一套逻辑：<1024 时点击条目后自动收起 sidebar（全屏列表 → 正文）
-          if (width >= 1024) return;
+          // 缂佺喍绔撮垾婊冧簳鐎硅棄鐫?+ 缁愬嫬鐫嗛垾婵呰礋閸氬奔绔存總妤呪偓鏄忕帆閿?1024 閺冨墎鍋ｉ崙缁樻蒋閻╊喖鎮楅懛顏勫З閺€鎯版崳 sidebar閿涘牆鍙忕仦蹇撳灙鐞?閳?濮濓絾鏋冮敍?          if (width >= 1024) return;
 
-          // 让 Docsify 先完成路由跳转，再收起侧边栏
-          setTimeout(() => {
+          // 鐠?Docsify 閸忓牆鐣幋鎰熅閻㈣精鐑︽潪顒婄礉閸愬秵鏁圭挧铚傛櫠鏉堣鐖?          setTimeout(() => {
             const body = document.body;
             if (!body) return;
-            // 适配 Docsify 移动端原生语义：小屏收起侧边栏时不保留 close 类
-            body.classList.remove('close');
+            // 闁倿鍘?Docsify 缁夎濮╃粩顖氬斧閻㈢喕顕㈡稊澶涚窗鐏忓繐鐫嗛弨鎯版崳娓氀嗙珶閺嶅繑妞傛稉宥勭箽閻?close 缁?            body.classList.remove('close');
           }, 0);
         });
       };
 
-      // 4. 侧边栏按“日期”折叠的辅助函数
+      // 4. 娓氀嗙珶閺嶅繑瀵滈垾婊勬）閺堢啿鈧繃濮岄崣鐘垫畱鏉堝懎濮崙鑺ユ殶
       const setupCollapsibleSidebarByDay = () => {
         const nav = document.querySelector('.sidebar-nav');
         if (!nav) return;
@@ -1225,11 +1189,78 @@ window.$docsify = {
           return out;
         };
 
+        const EMAIL_PREFIX = '\u{1F4E7} ';
+        const EMAIL_SOURCE_PATTERN = /(gmail|email|google[_\s-]*scholar)/i;
+        const DAY_SOURCE_CACHE_KEY = 'dpr_sidebar_day_source_v1';
+        let daySourceCache = {};
+        try {
+          const raw = window.localStorage
+            ? window.localStorage.getItem(DAY_SOURCE_CACHE_KEY)
+            : null;
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') {
+              daySourceCache = parsed;
+            }
+          }
+        } catch {
+          daySourceCache = {};
+        }
+
+        const stripEmailPrefix = (text) => String(text || '').replace(/^\u{1F4E7}\s*/u, '').trim();
+        const applyDayLabelText = (labelEl, rawText, isEmailDay) => {
+          if (!labelEl) return;
+          const plain = stripEmailPrefix(rawText);
+          labelEl.textContent = isEmailDay ? `${EMAIL_PREFIX}${plain}` : plain;
+        };
+        const isEmailSource = (sourceValue) => EMAIL_SOURCE_PATTERN.test(String(sourceValue || ''));
+
+        const saveDaySourceCache = () => {
+          try {
+            if (window.localStorage) {
+              window.localStorage.setItem(DAY_SOURCE_CACHE_KEY, JSON.stringify(daySourceCache || {}));
+            }
+          } catch {
+            // ignore
+          }
+        };
+
+        const fetchPaperSourceFromMarkdown = async (paperId) => {
+          const id = String(paperId || '').trim();
+          if (!id) return '';
+          const baseHref = window.location.href.split('#')[0];
+          const rel = joinUrlPath(getDocsifyBasePath(), `${id}.md`);
+          const mdUrl = new URL(rel, baseHref).toString();
+          const resp = await fetch(mdUrl, { cache: 'no-store' });
+          if (!resp.ok) return '';
+          const rawMarkdown = await resp.text();
+          const parsed = parseFrontMatter(rawMarkdown || '');
+          const meta = parsed && parsed.meta ? parsed.meta : {};
+          return String(meta.source || meta.Source || '').trim();
+        };
+
+        const detectEmailDayByPaperItems = async (paperItems) => {
+          const items = Array.isArray(paperItems) ? paperItems : [];
+          if (!items.length) return false;
+          const probeItems = items.slice(0, 3);
+          for (const item of probeItems) {
+            try {
+              const source = await fetchPaperSourceFromMarkdown(item.paperId);
+              if (isEmailSource(source)) {
+                return true;
+              }
+            } catch {
+              // ignore
+            }
+          }
+          return false;
+        };
+
         const normalizeSection = (section) => {
           const v = String(section || '').trim();
           if (!v) return '';
-          if (/深度|精读|deep/i.test(v)) return 'deep';
-          if (/速读|速览|quick/i.test(v)) return 'quick';
+          if (/濞ｅ崬瀹硘缁崘顕皘deep/i.test(v)) return 'deep';
+          if (/闁喕顕皘闁喕顫峾quick/i.test(v)) return 'quick';
           return v.toLowerCase();
         };
 
@@ -1285,7 +1316,7 @@ window.$docsify = {
           const abstractFromBody = trimBeforeMarkers(
             extractSectionByTitle(body, (title) => {
               const normalized = String(title || '').trim().toLowerCase();
-              return normalized === 'abstract' || normalized === '摘要';
+              return normalized === 'abstract' || normalized === '閹芥顩?;
             }),
             [],
           ).trim();
@@ -1391,8 +1422,7 @@ window.$docsify = {
           state = {};
           hiddenDays = new Set();
         }
-        // 先扫描一遍，找出所有日期和最新一天
-        const items = nav.querySelectorAll('li');
+        // 閸忓牊澹傞幓蹇庣闁稄绱濋幍鎯у毉閹碘偓閺堝妫╅張鐔锋嫲閺堚偓閺傞绔存径?        const items = nav.querySelectorAll('li');
         const dayItems = [];
         let latestDay = '';
 
@@ -1401,9 +1431,7 @@ window.$docsify = {
           const directLink = li.querySelector(':scope > a');
           if (!childUl || directLink) return;
 
-          // 取日期文本：
-          // - 初次：li 的第一个文本节点
-          // - 已初始化过：wrapper 内的 label
+          // 閸欐牗妫╅張鐔告瀮閺堫剨绱?          // - 閸掓繃顐奸敍姝璱 閻ㄥ嫮顑囨稉鈧稉顏呮瀮閺堫剝濡悙?          // - 瀹告彃鍨垫慨瀣鏉╁浄绱皐rapper 閸愬懐娈?label
           let rawText = '';
           let firstTextNode = null;
           const first = li.firstChild;
@@ -1416,6 +1444,7 @@ window.$docsify = {
             );
             rawText = (label && (label.textContent || '').trim()) || '';
           }
+          rawText = rawText.replace(/^\u{1F4E7}\s*/u, '').trim();
 
           const rangeMatch = rawText.match(
             /^(\d{4}-\d{2}-\d{2})\s*~\s*(\d{4}-\d{2}-\d{2})$/,
@@ -1423,8 +1452,7 @@ window.$docsify = {
           const isSingleDay = /^\d{4}-\d{2}-\d{2}$/.test(rawText);
           if (!isSingleDay && !rangeMatch) return;
 
-          const dayKey = rangeMatch ? rangeMatch[2] : rawText; // 用区间“结束日”参与最新日判断
-          if (hiddenDays.has(dayKey)) return;
+          const dayKey = rangeMatch ? rangeMatch[2] : rawText; // 閻劌灏梻绮光偓婊呯波閺夌喐妫╅垾婵嗗棘娑撳孩娓堕弬鐗堟）閸掋倖鏌?          if (hiddenDays.has(dayKey)) return;
 
           dayItems.push({ li, text: rawText, firstTextNode, dayKey });
           if (!latestDay || dayKey > latestDay) {
@@ -1434,23 +1462,20 @@ window.$docsify = {
 
         if (!dayItems.length) return;
 
-        // 判断是否出现了“更新后的新一天”
-        const prevLatest =
+        // 閸掋倖鏌囬弰顖氭儊閸戣櫣骞囨禍鍡忊偓婊勬纯閺傛澘鎮楅惃鍕煀娑撯偓婢垛斁鈧?        const prevLatest =
           typeof state.__latestDay === 'string' ? state.__latestDay : null;
         const isNewDay =
           latestDay &&
           (!prevLatest || (typeof prevLatest === 'string' && latestDay > prevLatest));
 
-        // 如果出现了新的一天：清空历史状态，只保留最新一天的信息
-        if (isNewDay) {
+        // 婵″倹鐏夐崙铏瑰箛娴滃棙鏌婇惃鍕婢垛晪绱板〒鍛敄閸樺棗褰堕悩鑸碘偓渚婄礉閸欘亙绻氶悾娆愭付閺傞绔存径鈺冩畱娣団剝浼?        if (isNewDay) {
           const prevHidden = hiddenDays;
           state = { __latestDay: latestDay };
           if (prevHidden.size) {
             state[HIDDEN_DAYS_KEY] = Array.from(prevHidden);
           }
         } else if (!prevLatest && latestDay) {
-          // 第一次使用，没有历史记录但也不算“新一天触发重置”的场景：记录当前最新日期
-          state.__latestDay = latestDay;
+          // 缁楊兛绔村▎鈥插▏閻㈩煉绱濆▽鈩冩箒閸樺棗褰剁拋鏉跨秿娴ｅ棔绡冩稉宥囩暬閳ユ粍鏌婃稉鈧径鈺勑曢崣鎴﹀櫢缂冾喒鈧繄娈戦崷鐑樻珯閿涙俺顔囪ぐ鏇炵秼閸撳秵娓堕弬鐗堟）閺?          state.__latestDay = latestDay;
         }
 
         const hasAnyState =
@@ -1486,13 +1511,13 @@ window.$docsify = {
           const oldText = menuDownload ? menuDownload.textContent : null;
           if (menuDownload) {
             menuDownload.disabled = true;
-            menuDownload.textContent = '下载中...';
+            menuDownload.textContent = '娑撳娴囨稉?..';
           }
           try {
             if (!dayPaperItems.length) {
               payload.errors.push({
                 paper_id: '',
-                error: '本日分组下未找到可导出的论文',
+                error: '閺堫剚妫╅崚鍡欑矋娑撳婀幍鎯у煂閸欘垰顕遍崙铏规畱鐠佺儤鏋?,
               });
             } else {
               const baseHref = window.location.href.split('#')[0];
@@ -1546,24 +1571,24 @@ window.$docsify = {
             if (rowLi) {
               const trigger = rowLi.querySelector('.sidebar-day-menu-trigger');
               if (trigger) {
-                trigger.title = `已下载：${payload.count || 0} 篇`;
+                trigger.title = `瀹歌弓绗呮潪鏂ょ窗${payload.count || 0} 缁″樃;
               }
             }
           } catch (err) {
             if (rowLi) {
               const trigger = rowLi.querySelector('.sidebar-day-menu-trigger');
               if (trigger) {
-                trigger.title = `下载失败（见控制台）：${String(
+                trigger.title = `娑撳娴囨径杈Е閿涘牐顫嗛幒褍鍩楅崣甯礆閿?{String(
                   err && err.message ? err.message : err,
                 )}`;
               }
             }
-            console.warn('[DPR Export] 下载失败：', err);
+            console.warn('[DPR Export] 娑撳娴囨径杈Е閿?, err);
             throw err;
           } finally {
             if (menuDownload) {
               menuDownload.disabled = false;
-              menuDownload.textContent = oldText || '下载 JSON';
+              menuDownload.textContent = oldText || '娑撳娴?JSON';
             }
           }
         };
@@ -1624,28 +1649,30 @@ window.$docsify = {
           }, DAY_ANIM_MS + 30);
         };
 
-        // 第二遍：真正安装折叠行为
-        dayItems.forEach(({ li, text: rawText, firstTextNode, dayKey }) => {
+        // 缁楊兛绨╅柆宥忕窗閻喐顒滅€瑰顥婇幎妯哄綌鐞涘奔璐?        dayItems.forEach(({ li, text: rawText, firstTextNode, dayKey }) => {
           const childUl = li.querySelector(':scope > ul');
           if (childUl) childUl.classList.add('sidebar-day-content');
           const key = dayKey || rawText;
 
-          // 复用或创建 wrapper（包含日期文字和小箭头）
-          let wrapper = li.querySelector(':scope > .sidebar-day-toggle');
+          // 婢跺秶鏁ら幋鏍у灡瀵?wrapper閿涘牆瀵橀崥顐ｆ）閺堢喐鏋冪€涙鎷扮亸蹇曨唲婢惰揪绱?          let wrapper = li.querySelector(':scope > .sidebar-day-toggle');
           if (!wrapper) {
             wrapper = document.createElement('div');
             wrapper.className = 'sidebar-day-toggle';
 
             const labelSpan = document.createElement('span');
             labelSpan.className = 'sidebar-day-toggle-label';
-            labelSpan.textContent = rawText;
+            applyDayLabelText(
+              labelSpan,
+              rawText,
+              String(daySourceCache[String(dayKey || rawText)] || '') === 'email',
+            );
 
             const menuTrigger = document.createElement('button');
             menuTrigger.type = 'button';
             menuTrigger.className = 'sidebar-day-menu-trigger';
-            menuTrigger.title = '更多操作';
-            menuTrigger.setAttribute('aria-label', '更多操作');
-            menuTrigger.textContent = '⋮';
+            menuTrigger.title = '閺囨潙顦块幙宥勭稊';
+            menuTrigger.setAttribute('aria-label', '閺囨潙顦块幙宥勭稊');
+            menuTrigger.textContent = '閳?;
 
             const menu = document.createElement('span');
             menu.className = 'sidebar-day-menu';
@@ -1653,12 +1680,12 @@ window.$docsify = {
             const downloadBtn = document.createElement('button');
             downloadBtn.type = 'button';
             downloadBtn.className = 'sidebar-day-menu-item sidebar-day-menu-item-download';
-            downloadBtn.textContent = '下载 JSON';
-            downloadBtn.setAttribute('aria-label', '下载论文元数据 JSON');
+            downloadBtn.textContent = '娑撳娴?JSON';
+            downloadBtn.setAttribute('aria-label', '娑撳娴囩拋鐑樻瀮閸忓啯鏆熼幑?JSON');
 
             const arrowSpan = document.createElement('span');
             arrowSpan.className = 'sidebar-day-toggle-arrow';
-            arrowSpan.textContent = '▾';
+            arrowSpan.textContent = '閳?;
 
             const actions = document.createElement('span');
             actions.className = 'sidebar-day-toggle-actions';
@@ -1670,14 +1697,20 @@ window.$docsify = {
             wrapper.appendChild(labelSpan);
             wrapper.appendChild(actions);
 
-            // 用 wrapper 替换原始文本节点
+            // 閻?wrapper 閺囨寧宕查崢鐔奉潗閺傚洦婀伴懞鍌滃仯
             if (firstTextNode && firstTextNode.parentNode === li) {
               li.replaceChild(wrapper, firstTextNode);
             }
           }
 
           const labelSpan = wrapper.querySelector('.sidebar-day-toggle-label');
-          if (labelSpan) labelSpan.textContent = rawText;
+          if (labelSpan) {
+            applyDayLabelText(
+              labelSpan,
+              rawText,
+              String(daySourceCache[String(dayKey || rawText)] || '') === 'email',
+            );
+          }
           const arrowSpan = wrapper.querySelector('.sidebar-day-toggle-arrow');
           const menuTrigger = wrapper.querySelector('.sidebar-day-menu-trigger');
           const menu = wrapper.querySelector('.sidebar-day-menu');
@@ -1722,11 +1755,8 @@ window.$docsify = {
             });
           }
 
-          // 决定默认展开 / 收起：
-          // - 如果本次是“出现了新的一天”：清空历史，只展开最新一天；
-          // - 否则若已有用户偏好（state），按偏好来；
-          // - 否则（首次使用且没有历史）：仅“最新一天”展开，其余收起。
-          let collapsed;
+          // 閸愬啿鐣炬妯款吇鐏炴洖绱?/ 閺€鎯版崳閿?          // - 婵″倹鐏夐張顒侇偧閺勵垪鈧粌鍤悳棰佺啊閺傛壆娈戞稉鈧径鈹锯偓婵撶窗濞撳懐鈹栭崢鍡楀蕉閿涘苯褰х仦鏇炵磻閺堚偓閺傞绔存径鈺嬬幢
+          // - 閸氾箑鍨懟銉ュ嚒閺堝鏁ら幋宄颁焊婵傛枻绱檚tate閿涘绱濋幐澶婁焊婵傝姤娼甸敍?          // - 閸氾箑鍨敍鍫ヮ浕濞嗏€插▏閻劋绗栧▽鈩冩箒閸樺棗褰堕敍澶涚窗娴犲應鈧粍娓堕弬棰佺婢垛斁鈧繂鐫嶅鈧敍灞藉従娴ｆ瑦鏁圭挧鏋偓?          let collapsed;
           if (isNewDay) {
             collapsed = key === latestDay ? false : true;
           } else if (hasAnyState) {
@@ -1736,7 +1766,7 @@ window.$docsify = {
             } else if (saved === 'closed') {
               collapsed = true;
             } else {
-              // 新出现的日期：默认跟最新一天策略走
+              // 閺傛澘鍤悳鎵畱閺冦儲婀￠敍姘剁帛鐠併倛绐￠張鈧弬棰佺婢垛晝鐡ラ悾銉ㄨ泲
               collapsed = key === latestDay ? false : true;
             }
           } else {
@@ -1745,23 +1775,21 @@ window.$docsify = {
 
           if (collapsed) {
             li.classList.add('sidebar-day-collapsed');
-            if (arrowSpan) arrowSpan.textContent = '▸';
+            if (arrowSpan) arrowSpan.textContent = '閳?;
           } else {
             li.classList.remove('sidebar-day-collapsed');
-            if (arrowSpan) arrowSpan.textContent = '▾';
+            if (arrowSpan) arrowSpan.textContent = '閳?;
           }
 
-          // 初始化一次高度（不做动画，避免首次渲染闪动）
-          setDayCollapsed(li, collapsed, { animate: false });
+          // 閸掓繂顫愰崠鏍︾濞嗭繝鐝惔锔肩礄娑撳秴浠涢崝銊ф暰閿涘矂浼╅崗宥夘浕濞嗏剝瑕嗛弻鎾绘／閸旑煉绱?          setDayCollapsed(li, collapsed, { animate: false });
 
-          // 绑定点击：使用 capture 阶段，确保即使旧版本已有 handler 也能覆盖
+          // 缂佹垵鐣鹃悙鐟板毊閿涙矮濞囬悽?capture 闂冭埖顔岄敍宀€鈥樻穱婵嗗祮娴ｆ寧妫悧鍫熸拱瀹稿弶婀?handler 娑旂喕鍏樼憰鍡欐磰
           if (!wrapper.dataset.dprDayToggleBound) {
             wrapper.dataset.dprDayToggleBound = '1';
             wrapper.addEventListener(
               'click',
               (e) => {
-                // 点击菜单控件时，不触发日期折叠（否则 capture 阶段会先被 wrapper 拦截，导致菜单无响应）
-                try {
+                // 閻愮懓鍤懣婊冨礋閹貉傛閺冭绱濇稉宥埿曢崣鎴炴）閺堢喐濮岄崣鐙呯礄閸氾箑鍨?capture 闂冭埖顔屾导姘帥鐞?wrapper 閹凤附鍩呴敍灞筋嚤閼风褰嶉崡鏇熸￥閸濆秴绨查敍?                try {
                   const target = e && e.target && e.target.closest
                     ? e.target.closest(
                         '.sidebar-day-menu-trigger,.sidebar-day-menu,.sidebar-day-menu-item',
@@ -1776,14 +1804,12 @@ window.$docsify = {
                 e.stopPropagation();
                 if (e.stopImmediatePropagation) e.stopImmediatePropagation();
                 const collapsed = li.classList.toggle('sidebar-day-collapsed');
-                if (arrowSpan) arrowSpan.textContent = collapsed ? '▸' : '▾';
+                if (arrowSpan) arrowSpan.textContent = collapsed ? '閳? : '閳?;
                 setDayCollapsed(li, collapsed, { animate: true });
                 state[rawText] = collapsed ? 'closed' : 'open';
                 state.__latestDay = latestDay;
                 ensureStateSaved();
-                // 先做一次即时同步（保证交互反馈），再在动画结束后做一次终态校准，
-                // 否则列表在 max-height 过渡中继续位移，会让高亮条“越开越往上偏”。
-                requestAnimationFrame(() => {
+                // 閸忓牆浠涙稉鈧▎鈥冲祮閺冭泛鎮撳銉礄娣囨繆鐦夋禍銈勭鞍閸欏秹顩敍澶涚礉閸愬秴婀崝銊ф暰缂佹挻娼崥搴′粵娑撯偓濞嗭紕绮撻幀浣圭墡閸戝棴绱?                // 閸氾箑鍨崚妤勩€冮崷?max-height 鏉╁洦娴稉顓犳埛缂侇厺缍呯粔浼欑礉娴兼俺顔€妤傛ü瀵掗弶鈾€鈧粏绉哄鈧搾濠傜窔娑撳﹤浜搁垾婵勨偓?                requestAnimationFrame(() => {
                   syncSidebarActiveIndicator({ animate: false });
                 });
                 setTimeout(() => {
@@ -1796,16 +1822,38 @@ window.$docsify = {
 
           li.dataset.dayToggleApplied = '2';
         });
+        const annotateEmailDayBadges = async () => {
+          for (const item of dayItems) {
+            const rowLi = item && item.li ? item.li : null;
+            const rawText = item && item.text ? item.text : '';
+            const key = String((item && (item.dayKey || item.text)) || '').trim();
+            if (!rowLi || !key) continue;
+            const wrapper = rowLi.querySelector(':scope > .sidebar-day-toggle');
+            const labelSpan = wrapper ? wrapper.querySelector('.sidebar-day-toggle-label') : null;
 
-        // 每次 doneEach 触发时都刷新一次“已展开分组”的 max-height：
-        // 避免 active 项显示评价按钮等导致内容高度变化后被截断，从而出现“只有灰色高亮但看不到文字”的错觉。
-        requestAnimationFrame(() => {
+            const cached = String(daySourceCache[key] || '').trim();
+            if (cached === 'email' || cached === 'other') {
+              applyDayLabelText(labelSpan, rawText, cached === 'email');
+              continue;
+            }
+
+            const paperItems = collectDayPaperItems(rowLi);
+            const isEmailDay = await detectEmailDayByPaperItems(paperItems);
+            daySourceCache[key] = isEmailDay ? 'email' : 'other';
+            saveDaySourceCache();
+            applyDayLabelText(labelSpan, rawText, isEmailDay);
+          }
+        };
+        setTimeout(() => {
+          annotateEmailDayBadges().catch(() => {});
+        }, 0);
+
+        // 濮ｅ繑顐?doneEach 鐟欙箑褰傞弮鍫曞厴閸掗攱鏌婃稉鈧▎鈾€鈧粌鍑＄仦鏇炵磻閸掑棛绮嶉垾婵堟畱 max-height閿?        // 闁灝鍘?active 妞よ妯夌粈楦跨槑娴犻攱瀵滈柦顔剧搼鐎佃壈鍤ч崘鍛啇妤傛ê瀹抽崣妯哄閸氬氦顫﹂幋顏呮焽閿涘奔绮犻懓灞藉毉閻滄壋鈧粌褰ч張澶屼紗閼规煡鐝禍顔荤稻閻绗夐崚鐗堟瀮鐎涙せ鈧繄娈戦柨娆掝潕閵?        requestAnimationFrame(() => {
           try {
             nav
               .querySelectorAll('li:not(.sidebar-day-collapsed) > ul.sidebar-day-content')
               .forEach((ul) => {
-                // 仅做“静默修正”，避免因为 max-height 变化触发过渡，导致侧边栏看起来“滚动/刷新”一下
-                const prevTransition = ul.style.transition;
+                // 娴犲懎浠涢垾婊堟饯姒涙ü鎱ㄥ锝傗偓婵撶礉闁灝鍘ら崶鐘辫礋 max-height 閸欐ê瀵茬憴锕€褰傛潻鍥ㄦ诞閿涘苯顕遍懛缈犳櫠鏉堣鐖惇瀣崳閺夈儮鈧粍绮撮崝?閸掗攱鏌婇垾婵呯娑?                const prevTransition = ul.style.transition;
                 ul.style.transition = 'none';
                 ul.style.maxHeight = `${ul.scrollHeight}px`;
                 ul.style.opacity = '1';
@@ -1819,8 +1867,7 @@ window.$docsify = {
         });
       };
 
-      // 4. 论文“已阅读”状态管理（存储在 localStorage）
-      const READ_STORAGE_KEY = 'dpr_read_papers_v1';
+      // 4. 鐠佺儤鏋冮垾婊冨嚒闂冨懓顕伴垾婵堝Ц閹胶顓搁悶鍡礄鐎涙ê鍋嶉崷?localStorage閿?      const READ_STORAGE_KEY = 'dpr_read_papers_v1';
 
       const loadReadState = () => {
         try {
@@ -1830,7 +1877,7 @@ window.$docsify = {
           const obj = JSON.parse(raw);
           if (!obj || typeof obj !== 'object') return {};
 
-          // 兼容旧版本（值为 true 的情况）
+          // 閸忕厧顔愰弮褏澧楅張顒婄礄閸婇棿璐?true 閻ㄥ嫭鍎忛崘纰夌礆
           const normalized = {};
           Object.keys(obj).forEach((k) => {
             const v = obj[k];
@@ -1909,13 +1956,13 @@ window.$docsify = {
         const rel = joinUrlPath(getDocsifyBasePath(), `${paperId}.md`);
         const url = buildDocsUrl(rel);
         const res = await fetch(url, { cache: 'no-store' });
-        if (!res.ok) throw new Error(`无法读取文章 Markdown（HTTP ${res.status}）`);
+        if (!res.ok) throw new Error(`閺冪姵纭剁拠璇插絿閺傚洨鐝?Markdown閿涘湚TTP ${res.status}閿涘ˇ);
         return await res.text();
       };
 
       const loadChatHistoryForPaper = async (paperId) => {
         if (!paperId) return [];
-        // IndexedDB 优先：dpr_chat_db_v1 / paper_chats
+        // IndexedDB 娴兼ê鍘涢敍姝瀙r_chat_db_v1 / paper_chats
         if (typeof indexedDB !== 'undefined') {
           try {
             const db = await new Promise((resolve) => {
@@ -1949,7 +1996,7 @@ window.$docsify = {
             // ignore
           }
         }
-        // 兜底：旧版 localStorage
+        // 閸忔粌绨抽敍姘＋閻?localStorage
         try {
           if (!window.localStorage) return [];
           const raw = window.localStorage.getItem('dpr_chat_history_v1');
@@ -2004,8 +2051,8 @@ window.$docsify = {
         if (tags.length) parts.push(`- **Tags**: ${tags.join(', ')}`);
         if (safeMeta.evidence) parts.push(`- **Evidence**: ${String(safeMeta.evidence).trim()}`);
         if (safeMeta.tldr) parts.push(`- **TLDR**: ${String(safeMeta.tldr).trim()}`);
-        parts.push(`- **原始页面**: ${pageUrl}`);
-        parts.push(`- **生成时间**: ${new Date().toISOString()}`);
+        parts.push(`- **閸樼喎顫愭い鐢告桨**: ${pageUrl}`);
+        parts.push(`- **閻㈢喐鍨氶弮鍫曟？**: ${new Date().toISOString()}`);
         parts.push('');
         parts.push('---');
         parts.push('');
@@ -2013,10 +2060,10 @@ window.$docsify = {
         parts.push('');
         parts.push('---');
         parts.push('');
-        parts.push('## 💬 Chat History（本机记录）');
+        parts.push('## 棣冩尠 Chat History閿涘牊婀伴張楦款唶瑜版洩绱?);
         parts.push('');
         if (!chatMessages || !chatMessages.length) {
-          parts.push('暂无对话。');
+          parts.push('閺嗗倹妫ょ€电鐦介妴?);
           return parts.join('\n');
         }
         chatMessages.forEach((m) => {
@@ -2025,7 +2072,7 @@ window.$docsify = {
           const content = m && m.content ? String(m.content) : '';
           if (role === 'thinking') {
             parts.push('<details>');
-            parts.push(`<summary>🧠 思考过程 ${time ? `(${time})` : ''}</summary>`);
+            parts.push(`<summary>棣冾潵 閹繆鈧啳绻冪粙?${time ? `(${time})` : ''}</summary>`);
             parts.push('');
             parts.push('```');
             parts.push(content);
@@ -2034,7 +2081,7 @@ window.$docsify = {
             parts.push('');
             return;
           }
-          const label = role === 'ai' ? '🤖 AI' : role === 'user' ? '👤 你' : role;
+          const label = role === 'ai' ? '棣冾樆 AI' : role === 'user' ? '棣冩噥 娴? : role;
           parts.push(`### ${label}${time ? ` (${time})` : ''}`);
           parts.push(content);
           parts.push('');
@@ -2049,17 +2096,16 @@ window.$docsify = {
         overlay.id = 'dpr-gist-share-overlay';
         overlay.innerHTML = `
           <div class="dpr-gist-share-modal" role="dialog" aria-modal="true">
-            <div class="dpr-gist-share-title">分享链接</div>
+            <div class="dpr-gist-share-title">閸掑棔闊╅柧鐐复</div>
             <div class="dpr-gist-share-row">
               <input class="dpr-gist-share-input" type="text" readonly />
-              <button class="dpr-gist-share-copy" type="button">复制</button>
+              <button class="dpr-gist-share-copy" type="button">婢跺秴鍩?/button>
             </div>
             <div class="dpr-gist-share-hint"></div>
           </div>
         `;
         overlay.addEventListener('pointerdown', (e) => {
-          // 点空白处关闭
-          if (e && e.target === overlay) {
+          // 閻愬湱鈹栭惂钘夘槱閸忔娊妫?          if (e && e.target === overlay) {
             overlay.classList.remove('show');
           }
         });
@@ -2083,10 +2129,10 @@ window.$docsify = {
                 document.execCommand('copy');
               }
               const hint = overlay.querySelector('.dpr-gist-share-hint');
-              if (hint) hint.textContent = '已复制';
+              if (hint) hint.textContent = '瀹告彃顦查崚?;
             } catch {
               const hint = overlay.querySelector('.dpr-gist-share-hint');
-              if (hint) hint.textContent = '复制失败，请手动复制';
+              if (hint) hint.textContent = '婢跺秴鍩楁径杈Е閿涘矁顕幍瀣З婢跺秴鍩?;
             }
           });
         }
@@ -2111,7 +2157,7 @@ window.$docsify = {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            description: '论文分享（Daily Paper Reader）',
+            description: '鐠佺儤鏋冮崚鍡曢煩閿涘湒aily Paper Reader閿?,
             public: false,
             files: {
               [filename]: { content },
@@ -2121,18 +2167,18 @@ window.$docsify = {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
           const msg = data && data.message ? String(data.message) : '';
-          // GitHub 对不支持/无权限的 token（尤其是 fine-grained PAT 不支持 Gist）经常返回 404 Not Found
+          // GitHub 鐎甸€涚瑝閺€顖涘瘮/閺冪姵娼堥梽鎰畱 token閿涘牆鎸ㄩ崗鑸垫Ц fine-grained PAT 娑撳秵鏁幐?Gist閿涘绮＄敮姝岀箲閸?404 Not Found
           if (res.status === 404) {
             throw new Error(
-              'Not Found（常见原因：你用的是 Fine-grained PAT，GitHub Gist API 不支持；请改用 Classic PAT 并勾选 gist 权限）',
+              'Not Found閿涘牆鐖剁憴浣稿斧閸ョ媴绱版担鐘垫暏閻ㄥ嫭妲?Fine-grained PAT閿涘瓘itHub Gist API 娑撳秵鏁幐渚婄幢鐠囬攱鏁奸悽?Classic PAT 楠炶泛瀣€闁?gist 閺夊啴妾洪敍?,
             );
           }
           if (res.status === 401) {
-            throw new Error('未授权（Token 无效或已过期）');
+            throw new Error('閺堫亝宸块弶鍐跨礄Token 閺冪姵鏅ラ幋鏍у嚒鏉╁洦婀￠敍?);
           }
           if (res.status === 403) {
             throw new Error(
-              `权限不足（需要 Classic PAT 勾选 gist 权限）。${msg ? `详情：${msg}` : ''}`.trim(),
+              `閺夊啴妾烘稉宥堝喕閿涘牓娓剁憰?Classic PAT 閸曢箖鈧?gist 閺夊啴妾洪敍澶堚偓?{msg ? `鐠囷附鍎忛敍?{msg}` : ''}`.trim(),
             );
           }
           throw new Error(msg || `HTTP ${res.status}`);
@@ -2143,20 +2189,20 @@ window.$docsify = {
       const sharePaperToGist = async (paperId) => {
         const token = loadGithubTokenForGist();
         if (!token) {
-          showShareModal('', '未检测到 GitHub Token，请先在首页配置 GitHub Token。');
+          showShareModal('', '閺堫亝顥呭ù瀣煂 GitHub Token閿涘矁顕崗鍫濇躬妫ｆ牠銆夐柊宥囩枂 GitHub Token閵?);
           return;
         }
         const pageMd = await fetchPaperMarkdownById(paperId);
         const chat = await loadChatHistoryForPaper(paperId);
         const content = buildShareMarkdown(paperId, pageMd, chat);
 
-        // 文件名：paperId 最后一段 + .md
+        // 閺傚洣娆㈤崥宥忕窗paperId 閺堚偓閸氬簼绔村▓?+ .md
         const slug = String(paperId || 'paper').split('/').slice(-1)[0] || 'paper';
         const filename = `${slug}.md`;
         const data = await createGist(token, filename, content);
         const url = data && data.html_url ? String(data.html_url) : '';
         const preview = data && data.id ? `https://gist.io/${data.id}` : '';
-        showShareModal(url, preview ? `精美预览：${preview}` : '');
+        showShareModal(url, preview ? `缁墽绶ㄦ０鍕潔閿?{preview}` : '');
       };
 
 	      const markSidebarReadState = (currentPaperId) => {
@@ -2201,11 +2247,10 @@ window.$docsify = {
 	          const paperIdFromHref = m[1].replace(/\/$/, '');
 	          const li = a.closest('li');
 	          if (!li) return;
-	          // 标记这是一个具体论文条目，方便样式细化（避免整天标题一起高亮）
+	          // 閺嶅洩顔囨潻娆愭Ц娑撯偓娑擃亜鍙挎担鎾诡啈閺傚洦娼惄顕嗙礉閺傞€涚┒閺嶅嘲绱＄紒鍡楀閿涘牓浼╅崗宥嗘殻婢垛晜鐖ｆ０妯圭鐠х兘鐝禍顕嗙礆
 	          li.classList.add('sidebar-paper-item');
 
-          // 为侧边栏条目追加"书签标记"按钮（绿/蓝/橙/红）
-	          let actionWrapper = li.querySelector('.sidebar-paper-rating-icons');
+          // 娑撹桨鏅舵潏瑙勭埉閺夛紕娲版潻钘夊"娑旓妇顒烽弽鍥唶"閹稿鎸抽敍鍫㈣雹/閽?濮?缁绢澁绱?	          let actionWrapper = li.querySelector('.sidebar-paper-rating-icons');
 	          let goodIcon = actionWrapper
 	            ? actionWrapper.querySelector('.sidebar-paper-rating-icon.good')
 	            : null;
@@ -2219,58 +2264,56 @@ window.$docsify = {
 	            ? actionWrapper.querySelector('.sidebar-paper-rating-icon.bad')
 	            : null;
 
-          // 左侧按钮容器（分享 + 收藏）
-          let leftActions = li.querySelector('.sidebar-paper-left-actions');
+          // 瀹革缚鏅堕幐澶愭尦鐎圭懓娅掗敍鍫濆瀻娴?+ 閺€鎯版閿?          let leftActions = li.querySelector('.sidebar-paper-left-actions');
 	          if (!actionWrapper) {
 	            actionWrapper = document.createElement('span');
 	            actionWrapper.className = 'sidebar-paper-rating-icons';
 
 	            goodIcon = document.createElement('button');
 	            goodIcon.className = 'sidebar-paper-rating-icon good';
-	            goodIcon.title = '标记为「绿色书签」';
-	            goodIcon.setAttribute('aria-label', '绿色书签');
+	            goodIcon.title = '閺嶅洩顔囨稉鎭掆偓宀€璞㈤懝韫姛缁涗勘鈧?;
+	            goodIcon.setAttribute('aria-label', '缂佽儻澹婃稊锔绢劮');
 	            goodIcon.innerHTML = '';
 
               blueIcon = document.createElement('button');
               blueIcon.className = 'sidebar-paper-rating-icon blue';
-              blueIcon.title = '标记为「蓝色书签」';
-              blueIcon.setAttribute('aria-label', '蓝色书签');
+              blueIcon.title = '閺嶅洩顔囨稉鎭掆偓宀冩憫閼硅弓鍔熺粵淇扁偓?;
+              blueIcon.setAttribute('aria-label', '閽冩繆澹婃稊锔绢劮');
               blueIcon.innerHTML = '';
 
               orangeIcon = document.createElement('button');
               orangeIcon.className = 'sidebar-paper-rating-icon orange';
-              orangeIcon.title = '标记为「橙色书签」';
-              orangeIcon.setAttribute('aria-label', '橙色书签');
+              orangeIcon.title = '閺嶅洩顔囨稉鎭掆偓灞绢煻閼硅弓鍔熺粵淇扁偓?;
+              orangeIcon.setAttribute('aria-label', '濮楁瑨澹婃稊锔绢劮');
               orangeIcon.innerHTML = '';
 
 	            badIcon = document.createElement('button');
 	            badIcon.className = 'sidebar-paper-rating-icon bad';
-	            badIcon.title = '标记为「红色书签」';
-	            badIcon.setAttribute('aria-label', '红色书签');
+	            badIcon.title = '閺嶅洩顔囨稉鎭掆偓宀€瀛╅懝韫姛缁涗勘鈧?;
+	            badIcon.setAttribute('aria-label', '缁俱垼澹婃稊锔绢劮');
 	            badIcon.innerHTML = '';
 
-              // 创建左侧按钮容器
-              leftActions = document.createElement('span');
+              // 閸掓稑缂撳锔挎櫠閹稿鎸崇€圭懓娅?              leftActions = document.createElement('span');
               leftActions.className = 'sidebar-paper-left-actions';
 
               const favoriteIcon = document.createElement('button');
               favoriteIcon.className = 'sidebar-paper-favorite-icon';
-              favoriteIcon.title = '收藏';
-              favoriteIcon.setAttribute('aria-label', '收藏');
-              favoriteIcon.textContent = '☆';
+              favoriteIcon.title = '閺€鎯版';
+              favoriteIcon.setAttribute('aria-label', '閺€鎯版');
+              favoriteIcon.textContent = '閳?;
               favoriteIcon.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                // 切换收藏状态（功能待实现）
+                // 閸掑洦宕查弨鎯版閻樿埖鈧緤绱欓崝鐔诲厴瀵板懎鐤勯悳甯礆
                 const isActive = favoriteIcon.classList.toggle('active');
-                favoriteIcon.textContent = isActive ? '★' : '☆';
+                favoriteIcon.textContent = isActive ? '閳? : '閳?;
               });
 
               const shareIcon = document.createElement('button');
               shareIcon.className = 'sidebar-paper-share-icon';
-              shareIcon.title = '分享（生成 GitHub Gist 链接）';
-              shareIcon.setAttribute('aria-label', '分享');
-              shareIcon.textContent = '⤴';
+              shareIcon.title = '閸掑棔闊╅敍鍫㈡晸閹?GitHub Gist 闁剧偓甯撮敍?;
+              shareIcon.setAttribute('aria-label', '閸掑棔闊?);
+              shareIcon.textContent = '鐚?;
 
               const setStateAndRefresh = (value) => {
                 const latestState = loadReadState();
@@ -2316,10 +2359,10 @@ window.$docsify = {
                   await sharePaperToGist(paperIdFromHref);
                 } catch (err) {
                   const msg = String(err && err.message ? err.message : err);
-                  showShareModal('', `上传失败：${msg}`);
+                  showShareModal('', `娑撳﹣绱舵径杈Е閿?{msg}`);
                 } finally {
                   shareIcon.disabled = false;
-                  shareIcon.textContent = old || '⤴';
+                  shareIcon.textContent = old || '鐚?;
                 }
               });
 
@@ -2329,12 +2372,11 @@ window.$docsify = {
 	              setStateAndRefresh('bad');
 	            });
 
-              // 左侧容器添加收藏和分享按钮
-              leftActions.appendChild(favoriteIcon);
+              // 瀹革缚鏅剁€圭懓娅掑ǎ璇插閺€鎯版閸滃苯鍨庢禍顐ｅ瘻闁?              leftActions.appendChild(favoriteIcon);
               leftActions.appendChild(shareIcon);
               a.parentNode.insertBefore(leftActions, a);
 
-              // 右侧容器添加书签按钮
+              // 閸欏厖鏅剁€圭懓娅掑ǎ璇插娑旓妇顒烽幐澶愭尦
 	            actionWrapper.appendChild(goodIcon);
               actionWrapper.appendChild(blueIcon);
               actionWrapper.appendChild(orangeIcon);
@@ -2342,8 +2384,7 @@ window.$docsify = {
 	            a.parentNode.insertBefore(actionWrapper, a.nextSibling);
 	          }
 
-	          // 无论按钮是否刚创建，都要基于“最新 state”刷新激活态（支持空格键切换）
-	          try {
+	          // 閺冪姾顔戦幐澶愭尦閺勵垰鎯侀崚姘灡瀵ょ尨绱濋柈鍊燁洣閸╄桨绨垾婊勬付閺?state閳ユ繂鍩涢弬鐗堢负濞茬粯鈧緤绱欓弨顖涘瘮缁岀儤鐗搁柨顔煎瀼閹诡澁绱?	          try {
 	            const s = state[paperIdFromHref];
 	            if (goodIcon) goodIcon.classList.toggle('active', s === 'good');
               if (blueIcon) blueIcon.classList.toggle('active', s === 'blue');
@@ -2369,13 +2410,13 @@ window.$docsify = {
         const scoreNum = Number(scoreValue);
         const scoreText = Number.isFinite(scoreNum) ? scoreNum.toFixed(1) : '';
         const title = scoreText
-          ? `评分：${scoreText}/10（${rating.toFixed(1)}/5）`
-          : '评分：无';
+          ? `鐠囧嫬鍨庨敍?{scoreText}/10閿?{rating.toFixed(1)}/5閿涘ˇ
+          : '鐠囧嫬鍨庨敍姘￥';
         const pct = Math.max(0, Math.min(100, (rating / 5) * 100));
         return (
           `<span class="dpr-stars" title="${escapeHtml(title)}" aria-label="${rating.toFixed(1)} out of 5">` +
-          '<span class="dpr-stars-bg">☆☆☆☆☆</span>' +
-          `<span class="dpr-stars-fill" style="width:${pct.toFixed(0)}%">★★★★★</span>` +
+          '<span class="dpr-stars-bg">閳藉棌妲呴埥鍡忔閳?/span>' +
+          `<span class="dpr-stars-fill" style="width:${pct.toFixed(0)}%">閳藉應妲勯埥鍛閳?/span>` +
           '</span>'
         );
       };
@@ -2402,7 +2443,7 @@ window.$docsify = {
             }
           }
 
-          // 兼容历史 sidebar：从旧 DOM（title/tags/score）回填结构化数据
+          // 閸忕厧顔愰崢鍡楀蕉 sidebar閿涙矮绮犻弮?DOM閿涘澅itle/tags/score閿涘娲栨繅顐ょ波閺嬪嫬瀵查弫鐗堝祦
           if (!payload || typeof payload !== 'object') {
             const legacyTitle = String(
               (a.querySelector('.dpr-sidebar-title') && a.querySelector('.dpr-sidebar-title').textContent) ||
@@ -2413,7 +2454,7 @@ window.$docsify = {
             const legacyScoreTitle = String(
               (legacyScoreNode && legacyScoreNode.getAttribute('title')) || '',
             );
-            const scoreMatch = legacyScoreTitle.match(/评分：\s*([0-9]+(?:\.[0-9]+)?)\s*\/10/);
+            const scoreMatch = legacyScoreTitle.match(/鐠囧嫬鍨庨敍姝晄*([0-9]+(?:\.[0-9]+)?)\s*\/10/);
             const legacyScore = scoreMatch ? scoreMatch[1] : '-';
             const legacyTags = [];
             const tagNodes = a.querySelectorAll('.dpr-sidebar-tag');
@@ -2508,8 +2549,7 @@ window.$docsify = {
         });
       };
 
-      // 侧边栏/正文的论文页标题条：英文右侧，中文左侧，中间竖线
-      const isPaperRouteFile = (file) => {
+      // 娓氀嗙珶閺?濮濓絾鏋冮惃鍕啈閺傚洭銆夐弽鍥暯閺夆槄绱伴懟杈ㄦ瀮閸欏厖鏅堕敍灞艰厬閺傚洤涔忔笟褝绱濇稉顓㈡？缁旀牜鍤?      const isPaperRouteFile = (file) => {
         const f = String(file || '');
         return /^(?:\d{6}\/\d{2}|\d{8}-\d{8})\/(?!README\.md$).+\.md$/i.test(f);
       };
@@ -2523,16 +2563,13 @@ window.$docsify = {
         if (!el) return;
         let size = maxPx;
         el.style.fontSize = `${size}px`;
-        // 逐步缩小直到不溢出或达到最小值
-        // 注意：scrollHeight > clientHeight 表示溢出（包含被 line-clamp 截断的情况）
-        while (size > minPx && el.scrollHeight > el.clientHeight + 1) {
+        // 闁劖顒炵紓鈺佺毈閻╂潙鍩屾稉宥嗗閸戠儤鍨ㄦ潏鎯у煂閺堚偓鐏忓繐鈧?        // 濞夈劍鍓伴敍姝碿rollHeight > clientHeight 鐞涖劎銇氬┃銏犲毉閿涘牆瀵橀崥顐ヮ潶 line-clamp 閹搭亝鏌囬惃鍕剰閸愮绱?        while (size > minPx && el.scrollHeight > el.clientHeight + 1) {
           size -= 1;
           el.style.fontSize = `${size}px`;
         }
       };
 
-      // 为切页动效准备一个“正文包装层”，避免把聊天浮层/白色遮罩一起做淡入淡出（否则会闪烁）
-      const DPR_PAGE_CONTENT_CLASS = 'dpr-page-content';
+      // 娑撳搫鍨忔い闈涘З閺佸牆鍣径鍥︾娑擃亖鈧粍顒滈弬鍥у瘶鐟佸懎鐪伴垾婵撶礉闁灝鍘ら幎濠呬喊婢垛晜璇炵仦?閻у€熷闁喚鍍垫稉鈧挧宄颁粵濞ｂ€冲弳濞ｂ€冲毉閿涘牆鎯侀崚娆庣窗闂傤亞鍎婇敍?      const DPR_PAGE_CONTENT_CLASS = 'dpr-page-content';
 
       const ensurePageContentRoot = () => {
         const section = document.querySelector('.markdown-section');
@@ -2544,8 +2581,7 @@ window.$docsify = {
 
         const root = document.createElement('div');
         root.className = DPR_PAGE_CONTENT_CLASS;
-        // 将当前渲染出来的正文内容整体移入 root（此时 chat 模块尚未插入，避免把输入框一起移入）
-        while (section.firstChild) {
+        // 鐏忓棗缍嬮崜宥嗚閺屾挸鍤弶銉ф畱濮濓絾鏋冮崘鍛啇閺佺繝缍嬬粔璇插弳 root閿涘牊顒濋弮?chat 濡€虫健鐏忔碍婀幓鎺戝弳閿涘矂浼╅崗宥嗗Ω鏉堟挸鍙嗗鍡曠鐠ч些閸忋儻绱?        while (section.firstChild) {
           root.appendChild(section.firstChild);
         }
         section.appendChild(root);
@@ -2584,27 +2620,23 @@ window.$docsify = {
         const root =
           section.querySelector(`:scope > .${DPR_PAGE_CONTENT_CLASS}`) || section;
 
-        // 防止重复插入
-        const existing = root.querySelector('.dpr-title-bar');
+        // 闂冨弶顒涢柌宥咁槻閹绘帒鍙?        const existing = root.querySelector('.dpr-title-bar');
         if (existing) existing.remove();
         const h1s = Array.from(root.querySelectorAll('h1'));
         if (!h1s.length) return;
 
-        // 优先从带有 paper-title-zh / paper-title-en 类名的 h1 中获取标题（frontmatter 渲染）
-        const paperTitleZh = root.querySelector('h1.paper-title-zh');
+        // 娴兼ê鍘涙禒搴＄敨閺?paper-title-zh / paper-title-en 缁鎮曢惃?h1 娑擃叀骞忛崣鏍ㄧ垼妫版﹫绱檉rontmatter 濞撳弶鐓嬮敍?        const paperTitleZh = root.querySelector('h1.paper-title-zh');
         const paperTitleEn = root.querySelector('h1.paper-title-en');
 
         let cnTitle = '';
         let enTitle = '';
 
         if (paperTitleZh || paperTitleEn) {
-          // 新格式：从 frontmatter 渲染的带类名 h1 中获取
-          cnTitle = paperTitleZh ? (paperTitleZh.textContent || '').trim() : '';
+          // 閺傜増鐗稿蹇ョ窗娴?frontmatter 濞撳弶鐓嬮惃鍕敨缁鎮?h1 娑擃叀骞忛崣?          cnTitle = paperTitleZh ? (paperTitleZh.textContent || '').trim() : '';
           enTitle = paperTitleEn ? (paperTitleEn.textContent || '').trim() : '';
         } else {
-          // 旧格式兼容：如果有两个 h1，则第一个为英文、第二个为中文；
-          // 如果只有一个 h1，则认为是"单标题"，放在左侧（cn 区）
-          enTitle = (h1s[0].textContent || '').trim();
+          // 閺冄勭壐瀵繐鍚嬬€圭櫢绱版俊鍌涚亯閺堝琚辨稉?h1閿涘苯鍨粭顑跨娑擃亙璐熼懟杈ㄦ瀮閵嗕胶顑囨禍灞奸嚋娑撹桨鑵戦弬鍥风幢
+          // 婵″倹鐏夐崣顏呮箒娑撯偓娑?h1閿涘苯鍨拋銈勮礋閺?閸楁洘鐖ｆ０?閿涘本鏂侀崷銊ヤ箯娓氀嶇礄cn 閸栫尨绱?          enTitle = (h1s[0].textContent || '').trim();
           cnTitle = (h1s[1] ? (h1s[1].textContent || '').trim() : '').trim();
           if (h1s.length === 1) {
             cnTitle = enTitle;
@@ -2612,15 +2644,13 @@ window.$docsify = {
           }
         }
 
-        // 兜底：若只有英文标题（缺少 title_zh），将英文挪到左侧显示，
-        // 避免 dpr-title-single 样式把右侧英文区域隐藏后出现“无标题”。
-        if (!cnTitle && enTitle) {
+        // 閸忔粌绨抽敍姘冲閸欘亝婀侀懟杈ㄦ瀮閺嶅洭顣介敍鍫㈠繁鐏?title_zh閿涘绱濈亸鍡氬閺傚洦灏撻崚鏉夸箯娓氀勬▔缁€鐚寸礉
+        // 闁灝鍘?dpr-title-single 閺嶅嘲绱￠幎濠傚礁娓氀嗗閺傚洤灏崺鐔兼閽樺繐鎮楅崙铏瑰箛閳ユ粍妫ら弽鍥暯閳ユ縿鈧?        if (!cnTitle && enTitle) {
           cnTitle = enTitle;
           enTitle = '';
         }
 
-        // 隐藏原始 h1，但保留在 DOM 里供复制/SEO/元信息提取兜底
-        h1s.forEach((h) => h.classList.add('dpr-title-hidden'));
+        // 闂呮劘妫岄崢鐔奉潗 h1閿涘奔绲炬穱婵堟殌閸?DOM 闁插奔绶垫径宥呭煑/SEO/閸忓啩淇婇幁顖涘絹閸欐牕鍘规惔?        h1s.forEach((h) => h.classList.add('dpr-title-hidden'));
 
         const bar = document.createElement('div');
         bar.className = 'dpr-title-bar';
@@ -2635,8 +2665,7 @@ window.$docsify = {
 
         root.insertBefore(bar, root.firstChild);
 
-        // 字体自适应：让标题条高度稳定，长标题自动缩小
-        requestAnimationFrame(() => {
+        // 鐎涙ぞ缍嬮懛顏堚偓鍌氱安閿涙俺顔€閺嶅洭顣介弶锟犵彯鎼达妇菙鐎规熬绱濋梹鎸庣垼妫版鍤滈崝銊х級鐏?        requestAnimationFrame(() => {
           const cnEl = bar.querySelector('.dpr-title-cn');
           const enEl = bar.querySelector('.dpr-title-en');
           if (cnEl && cnTitle) fitTextToBox(cnEl, 14, 22);
@@ -2644,8 +2673,7 @@ window.$docsify = {
         });
       };
 
-      // 论文页导航：左右滑动 / 键盘方向键切换论文
-      const DPR_NAV_STATE = {
+      // 鐠佺儤鏋冩い闈涱嚤閼割亷绱板锕€褰稿鎴濆З / 闁款喚娲忛弬鐟版倻闁款喖鍨忛幑銏ｎ啈閺?      const DPR_NAV_STATE = {
         paperHrefs: [],
         reportHrefs: [],
         currentHref: '',
@@ -2696,8 +2724,7 @@ window.$docsify = {
           return { el: DPR_SIDEBAR_ACTIVE_INDICATOR.el, newlyCreated: false };
         }
 
-        // 清理旧的（例如热更新/重复初始化场景）
-        try {
+        // 濞撳懐鎮婇弮褏娈戦敍鍫滅伐婵″倻鍎归弴瀛樻煀/闁插秴顦查崚婵嗩潗閸栨牕婧€閺咁垽绱?        try {
           if (DPR_SIDEBAR_ACTIVE_INDICATOR.el && DPR_SIDEBAR_ACTIVE_INDICATOR.el.remove) {
             DPR_SIDEBAR_ACTIVE_INDICATOR.el.remove();
           }
@@ -2708,10 +2735,8 @@ window.$docsify = {
         const indicator = document.createElement('div');
         indicator.className = 'dpr-sidebar-active-indicator';
         indicator.setAttribute('aria-hidden', 'true');
-        // 刚创建时先禁用 transition，避免出现“从 sidebar 顶部滑下来”的二次动效
-        indicator.style.transition = 'none';
-        // 放在最前面，确保在所有 li 下面
-        nav.insertBefore(indicator, nav.firstChild);
+        // 閸掓艾鍨卞鐑樻閸忓牏顩﹂悽?transition閿涘矂浼╅崗宥呭毉閻滄壋鈧粈绮?sidebar 妞ゅ爼鍎村鎴滅瑓閺夈儮鈧繄娈戞禍灞绢偧閸斻劍鏅?        indicator.style.transition = 'none';
+        // 閺€鎯ф躬閺堚偓閸撳秹娼伴敍宀€鈥樻穱婵嗘躬閹碘偓閺?li 娑撳娼?        nav.insertBefore(indicator, nav.firstChild);
         DPR_SIDEBAR_ACTIVE_INDICATOR.el = indicator;
         DPR_SIDEBAR_ACTIVE_INDICATOR.parent = nav;
         return { el: indicator, newlyCreated: true };
@@ -2721,8 +2746,7 @@ window.$docsify = {
         const ensured = ensureSidebarActiveIndicator();
         if (!ensured || !ensured.el) return;
         const indicator = ensured.el;
-        // 避免后续复用时残留 good/bad 配色
-        indicator.classList.remove('is-good', 'is-bad', 'is-blue', 'is-orange');
+        // 闁灝鍘ら崥搴ｇ敾婢跺秶鏁ら弮鑸电暙閻?good/bad 闁板秷澹?        indicator.classList.remove('is-good', 'is-bad', 'is-blue', 'is-orange');
         indicator.style.opacity = '0';
         indicator.style.width = '0';
         indicator.style.height = '0';
@@ -2737,7 +2761,7 @@ window.$docsify = {
       const isSidebarItemVisible = (el) => {
         try {
           if (!el) return false;
-          // display:none / 被折叠时 offsetParent 会是 null
+          // display:none / 鐞氼偅濮岄崣鐘虫 offsetParent 娴兼碍妲?null
           if (el.offsetParent === null) return false;
           const rect = el.getBoundingClientRect();
           return rect && rect.width > 0 && rect.height > 0;
@@ -2754,16 +2778,14 @@ window.$docsify = {
         const indicator = ensured.el;
         const newlyCreated = ensured.newlyCreated;
 
-        // 先清空上一条目的配色状态，避免出现“取消勾选/叉选后仍残留底色”
-        try {
+        // 閸忓牊绔荤粚杞扮瑐娑撯偓閺夛紕娲伴惃鍕帳閼硅尙濮搁幀渚婄礉闁灝鍘ら崙铏瑰箛閳ユ粌褰囧☉鍫濆瑎闁?閸欏鈧鎮楁禒宥嗙暙閻ｆ瑥绨抽懝娴嬧偓?        try {
           indicator.classList.remove('is-good', 'is-bad', 'is-blue', 'is-orange');
         } catch {
           // ignore
         }
 
-        // 只对论文条目启用（避免日期分组标题等）
-        if (!li.classList || !li.classList.contains('sidebar-paper-item')) return;
-        // 若该条目在“折叠的日期”之下：隐藏高亮层，避免折叠后仍残留选中背景
+        // 閸欘亜顕拋鐑樻瀮閺夛紕娲伴崥顖滄暏閿涘牓浼╅崗宥嗘）閺堢喎鍨庣紒鍕垼妫版鐡戦敍?        if (!li.classList || !li.classList.contains('sidebar-paper-item')) return;
+        // 閼汇儴顕氶弶锛勬窗閸︺劉鈧粍濮岄崣鐘垫畱閺冦儲婀￠垾婵呯娑撳绱伴梾鎰妤傛ü瀵掔仦鍌︾礉闁灝鍘ら幎妯哄綌閸氬簼绮涘▓瀣殌闁鑵戦懗灞炬珯
         try {
           if (li.closest && li.closest('li.sidebar-day-collapsed')) {
             hideSidebarActiveIndicator();
@@ -2779,8 +2801,7 @@ window.$docsify = {
 
         showSidebarActiveIndicator();
 
-        // 选中高亮层配色：根据 good/bad 状态切换（用于“已打勾/打叉”的选中底色）
-        try {
+        // 闁鑵戞妯瑰瘨鐏炲倿鍘ら懝璇х窗閺嶈宓?good/bad 閻樿埖鈧礁鍨忛幑顫礄閻劋绨垾婊冨嚒閹垫挸瀣€/閹垫挸寮堕垾婵堟畱闁鑵戞惔鏇″閿?        try {
           const isGood =
             li.classList && li.classList.contains('sidebar-paper-good');
           const isBad = li.classList && li.classList.contains('sidebar-paper-bad');
@@ -2789,8 +2810,7 @@ window.$docsify = {
           const isOrange =
             li.classList && li.classList.contains('sidebar-paper-orange');
 
-          // 单选：如果同时存在（理论上不应发生），按优先级取第一个
-          const any = isGood || isBad || isBlue || isOrange;
+          // 閸楁洟鈧绱版俊鍌涚亯閸氬本妞傜€涙ê婀敍鍫㈡倞鐠佽桨绗傛稉宥呯安閸欐垹鏁撻敍澶涚礉閹稿绱崗鍫㈤獓閸欐牜顑囨稉鈧稉?          const any = isGood || isBad || isBlue || isOrange;
           indicator.classList.toggle('is-good', !!isGood && any && !isBad && !isBlue && !isOrange);
           indicator.classList.toggle('is-bad', !!isBad && any && !isGood && !isBlue && !isOrange);
           indicator.classList.toggle('is-blue', !!isBlue && any && !isGood && !isBad && !isOrange);
@@ -2799,10 +2819,7 @@ window.$docsify = {
           // ignore
         }
 
-        // 不能用 offsetTop/offsetLeft：
-        // 侧边栏是多层嵌套 li/ul，offset* 参照系会落在中间层，导致越往下选中偏移越明显。
-        // 统一使用相对 .sidebar-nav 的几何坐标，保证展开多天后仍准确对齐。
-        const nav = ensured.parent || (li.closest && li.closest('.sidebar-nav'));
+        // 娑撳秷鍏橀悽?offsetTop/offsetLeft閿?        // 娓氀嗙珶閺嶅繑妲告径姘湴瀹撳苯顨?li/ul閿涘ffset* 閸欏倻鍙庣化璁崇窗閽€钘夋躬娑擃參妫跨仦鍌︾礉鐎佃壈鍤х搾濠傜窔娑撳鈧鑵戦崑蹇曅╃搾濠冩閺勪勘鈧?        // 缂佺喍绔存担璺ㄦ暏閻╃顕?.sidebar-nav 閻ㄥ嫬鍤戞担鏇炴綏閺嶅浄绱濇穱婵婄槈鐏炴洖绱戞径姘亯閸氬簼绮涢崙鍡欌€樼€靛綊缍堥妴?        const nav = ensured.parent || (li.closest && li.closest('.sidebar-nav'));
         const navRect = nav ? nav.getBoundingClientRect() : null;
         const liRect = li.getBoundingClientRect();
         const x = navRect ? liRect.left - navRect.left + (nav.scrollLeft || 0) : li.offsetLeft;
@@ -2810,7 +2827,7 @@ window.$docsify = {
         const w = liRect.width || li.offsetWidth;
         const h = liRect.height || li.offsetHeight;
 
-        // 新建/或要求不动画时：先关 transition，直接定位到最终位置，再恢复 transition
+        // 閺傛澘缂?閹存牞顩﹀Ч鍌欑瑝閸斻劎鏁鹃弮璁圭窗閸忓牆鍙?transition閿涘瞼娲块幒銉ョ暰娴ｅ秴鍩岄張鈧紒鍫滅秴缂冾噯绱濋崘宥嗕划婢?transition
         if (newlyCreated || !animate) {
           indicator.style.transition = 'none';
         }
@@ -2842,8 +2859,7 @@ window.$docsify = {
         const nav = document.querySelector('.sidebar-nav');
         if (!nav) return;
 
-        // 1) 优先按“当前路由 href”精确匹配，避免 Docsify 多个 active 时命中错误项
-        const routeHref = DPR_NAV_STATE.currentHref || '';
+        // 1) 娴兼ê鍘涢幐澶嗏偓婊冪秼閸撳秷鐭鹃悽?href閳ユ繄绨跨涵顔煎爱闁板稄绱濋柆鍨帳 Docsify 婢舵矮閲?active 閺冭泛鎳℃稉顓㈡晩鐠囶垶銆?        const routeHref = DPR_NAV_STATE.currentHref || '';
         if (routeHref) {
           const links = Array.from(nav.querySelectorAll('a[href]'));
           for (let i = 0; i < links.length; i += 1) {
@@ -2858,7 +2874,7 @@ window.$docsify = {
           }
         }
 
-        // 2) 兜底：如果存在多个 active，取最后一个（通常是更深层、当前真正选中项）
+        // 2) 閸忔粌绨抽敍姘洤閺嬫粌鐡ㄩ崷銊ヮ樋娑?active閿涘苯褰囬張鈧崥搴濈娑擃亷绱欓柅姘埗閺勵垱娲垮ǎ鍗炵湴閵嗕礁缍嬮崜宥囨埂濮濓綁鈧鑵戞い鐧哥礆
         const activeLis = Array.from(
           nav.querySelectorAll('li.active.sidebar-paper-item'),
         );
@@ -2872,8 +2888,7 @@ window.$docsify = {
         hideSidebarActiveIndicator();
       };
 
-      // 暴露到全局，供 sidebar resize 时调用
-      window.syncSidebarActiveIndicator = syncSidebarActiveIndicator;
+      // 閺嗘挳婀堕崚鏉垮弿鐏炩偓閿涘奔绶?sidebar resize 閺冩儼鐨熼悽?      window.syncSidebarActiveIndicator = syncSidebarActiveIndicator;
 
       const DPR_TRANSITION = {
         // 'enter-from-left' | 'enter-from-right' | ''
@@ -2883,7 +2898,7 @@ window.$docsify = {
       const decodeLegacyIdHash = (rawHash) => {
         const raw = String(rawHash || '').trim();
         if (!raw) return '';
-        // 兼容 Docsify 旧式 hash：#/?id=%2f202602%2f06%2fxxx 或 #?id=/202602/06/xxx
+        // 閸忕厧顔?Docsify 閺冄冪础 hash閿?/?id=%2f202602%2f06%2fxxx 閹?#?id=/202602/06/xxx
         const m = raw.match(/^#\/?\?id=([^&]+)(?:&.*)?$/i);
         if (!m) return '';
         let decoded = '';
@@ -2894,8 +2909,7 @@ window.$docsify = {
         }
         decoded = String(decoded || '').trim();
         if (!decoded) return '';
-        // 统一为无 .md 的路由形式
-        decoded = decoded.replace(/\.md$/i, '');
+        // 缂佺喍绔存稉鐑樻￥ .md 閻ㄥ嫯鐭鹃悽鍗炶埌瀵?        decoded = decoded.replace(/\.md$/i, '');
         if (!decoded.startsWith('/')) decoded = '/' + decoded;
         return '#'+ decoded;
       };
@@ -2905,25 +2919,22 @@ window.$docsify = {
         if (!raw) return '';
         const legacy = decodeLegacyIdHash(raw);
         if (legacy) return legacy;
-        // 统一成 "#/xxxx" 形式
-        if (raw.startsWith('#/')) return raw;
+        // 缂佺喍绔撮幋?"#/xxxx" 瑜般垹绱?        if (raw.startsWith('#/')) return raw;
         if (raw.startsWith('#')) return '#/' + raw.slice(1).replace(/^\//, '');
         return '#/' + raw.replace(/^\//, '');
       };
 
       const isPaperHref = (href) => {
         const h = normalizeHref(href);
-        // 匹配论文页：
-        // - 传统路径：#/YYYYMM/DD/slug
-        // - 区间路径：#/YYYYMMDD-YYYYMMDD/slug
+        // 閸栧綊鍘ょ拋鐑樻瀮妞ょ绱?        // - 娴肩姷绮虹捄顖氱窞閿?/YYYYMM/DD/slug
+        // - 閸栨椽妫跨捄顖氱窞閿?/YYYYMMDD-YYYYMMDD/slug
         return /^#\/(?:\d{6}\/\d{2}|\d{8}-\d{8})\/(?!README$).+/i.test(h);
       };
 
       const isReportHref = (href) => {
         const h = normalizeHref(href);
-        // 匹配日报页：
-        // - 传统路径：#/YYYYMM/DD/README
-        // - 区间路径：#/YYYYMMDD-YYYYMMDD/README
+        // 閸栧綊鍘ら弮銉﹀Г妞ょ绱?        // - 娴肩姷绮虹捄顖氱窞閿?/YYYYMM/DD/README
+        // - 閸栨椽妫跨捄顖氱窞閿?/YYYYMMDD-YYYYMMDD/README
         return /^#\/(?:\d{6}\/\d{2}|\d{8}-\d{8})\/README$/i.test(h);
       };
 
@@ -3023,21 +3034,19 @@ window.$docsify = {
         DPR_SIDEBAR_CENTER_STATE.lastTs = Date.now();
         DPR_SIDEBAR_CENTER_STATE.lastHref = targetHref;
 
-        // 居中时只需要“滚动”动画，不做额外高亮动画
-        const duration = prefersReducedMotion() ? 0 : DPR_TRANSITION_MS;
+        // 鐏炲懍鑵戦弮璺哄涧闂団偓鐟曚讲鈧粍绮撮崝銊⑩偓婵嗗З閻紮绱濇稉宥呬粵妫版繂顦绘妯瑰瘨閸斻劎鏁?        const duration = prefersReducedMotion() ? 0 : DPR_TRANSITION_MS;
         animateScrollTop(scrollEl, clamped, duration);
       };
 
       const centerSidebarOnCurrent = () => {
-        // 优先跟随 Docsify 的“active”状态（这才是你看到的选中项）
-        const nav = document.querySelector('.sidebar-nav');
+        // 娴兼ê鍘涚捄鐔兼 Docsify 閻ㄥ嫧鈧竵ctive閳ユ繄濮搁幀渚婄礄鏉╂瑦澧犻弰顖欑稑閻鍩岄惃鍕偓澶夎厬妞ょ櫢绱?        const nav = document.querySelector('.sidebar-nav');
         if (nav) {
           const activeLi = nav.querySelector('li.active');
           const activeLink = nav.querySelector('a.active');
           const el = activeLi || activeLink;
           if (el) {
             const href = (activeLink && activeLink.getAttribute('href')) || '';
-            // 如果拿得到 href，就走 href 去重；否则用一个稳定的占位 key
+            // 婵″倹鐏夐幏鍨繁閸?href閿涘苯姘ㄧ挧?href 閸樺鍣搁敍娑樻儊閸掓瑧鏁ゆ稉鈧稉顏喦旂€规氨娈戦崡鐘辩秴 key
             const key = href ? normalizeHref(href) : '__active__';
             if (key && key === DPR_SIDEBAR_CENTER_STATE.lastHref) return;
 
@@ -3068,8 +3077,7 @@ window.$docsify = {
           }
         }
 
-        // 兜底：按当前路由 href 匹配
-        const href = DPR_NAV_STATE.currentHref || '';
+        // 閸忔粌绨抽敍姘瘻瑜版挸澧犵捄顖滄暠 href 閸栧綊鍘?        const href = DPR_NAV_STATE.currentHref || '';
         if (!href) return;
         centerSidebarOnHref(href);
       };
@@ -3100,8 +3108,7 @@ window.$docsify = {
         const list = reportMode ? reportList : paperList;
         if (!list.length) return;
 
-        // 首页：右键/左滑（delta=+1）跳到最新一天第一篇
-        if (isHome) {
+        // 妫ｆ牠銆夐敍姘礁闁?瀹革附绮﹂敍鍧塭lta=+1閿涘鐑﹂崚鐗堟付閺傞绔存径鈺冾儑娑撯偓缁?        if (isHome) {
           if (delta > 0) {
             triggerPageNav(list[0], 'forward');
           }
@@ -3127,8 +3134,7 @@ window.$docsify = {
         }
       };
 
-      // 统一“sidebar 居中滚动”和“页面切换”的动画时长，确保观感一致
-      const DPR_TRANSITION_MS = 320;
+      // 缂佺喍绔撮垾娓焛debar 鐏炲懍鑵戝姘З閳ユ繂鎷伴垾婊堛€夐棃銏犲瀼閹光懇鈧繄娈戦崝銊ф暰閺冨爼鏆遍敍宀€鈥樻穱婵婎潎閹扮喍绔撮懛?      const DPR_TRANSITION_MS = 320;
       try {
         document.documentElement.style.setProperty(
           '--dpr-transition-ms',
@@ -3189,17 +3195,15 @@ window.$docsify = {
         const target = normalizeHref(href);
         if (!target) return;
 
-        // 先把 sidebar 的“选中高亮层”滑动到目标条目，和页面切换同步
+        // 閸忓牊濡?sidebar 閻ㄥ嫧鈧粓鈧鑵戞妯瑰瘨鐏炲倵鈧繃绮﹂崝銊ュ煂閻╊喗鐖ｉ弶锛勬窗閿涘苯鎷版い鐢告桨閸掑洦宕查崥灞绢劄
         moveSidebarActiveIndicatorToHref(target, { animate: true });
         DPR_SIDEBAR_ACTIVE_INDICATOR.justMoved = true;
 
-        // 通过左右键/滑动切换时：提前把 sidebar 滚到目标项附近，提升“跟手”观感
-        if (DPR_NAV_STATE.lastNavSource !== 'click') {
+        // 闁俺绻冨锕€褰搁柨?濠婃垵濮╅崚鍥ㄥ床閺冭绱伴幓鎰閹?sidebar 濠婃艾鍩岄惄顔界垼妞ゅ綊妾潻鎴礉閹绘劕宕岄垾婊嗙閹靛鈧繆顫囬幇?        if (DPR_NAV_STATE.lastNavSource !== 'click') {
           centerSidebarOnHref(target);
         }
 
-        // 决定入场方向：forward => 新页从右进；backward => 新页从左进
-        DPR_TRANSITION.pendingEnter =
+        // 閸愬啿鐣鹃崗銉ユ簚閺傜懓鎮滈敍姝爋rward => 閺備即銆夋禒搴″礁鏉╂冻绱眀ackward => 閺備即銆夋禒搴′箯鏉?        DPR_TRANSITION.pendingEnter =
           direction === 'backward' ? 'enter-from-left' : 'enter-from-right';
 
         if (prefersReducedMotion()) {
@@ -3217,8 +3221,7 @@ window.$docsify = {
           direction === 'backward' ? 'dpr-page-exit-right' : 'dpr-page-exit-left';
 
         animEl.classList.add('dpr-page-exit', exitClass);
-        // 等退场动画结束后再切换路由
-        setTimeout(() => {
+        // 缁涘鈧偓閸﹀搫濮╅悽鑽ょ波閺夌喎鎮楅崘宥呭瀼閹广垼鐭鹃悽?        setTimeout(() => {
           window.location.hash = target;
         }, DPR_TRANSITION_MS);
       };
@@ -3241,12 +3244,11 @@ window.$docsify = {
         const key = url;
         const now = Date.now();
         const prev = PREFETCH_STATE.cache.get(key);
-        if (prev && now - prev.ts < 5 * 60 * 1000) return; // 5 分钟内不重复拉取
+        if (prev && now - prev.ts < 5 * 60 * 1000) return; // 5 閸掑棝鎸撻崘鍛瑝闁插秴顦查幏澶婂絿
         try {
           const res = await fetch(url, { cache: 'force-cache' });
           if (!res.ok) return;
-          // 读一下 body，确保写入浏览器缓存（同时做内存缓存兜底）
-          const text = await res.text();
+          // 鐠囪绔存稉?body閿涘瞼鈥樻穱婵嗗晸閸忋儲绁荤憴鍫濇珤缂傛挸鐡ㄩ敍鍫濇倱閺冭泛浠涢崘鍛摠缂傛挸鐡ㄩ崗婊冪俺閿?          const text = await res.text();
           PREFETCH_STATE.cache.set(key, { ts: now, len: text.length });
         } catch {
           // ignore
@@ -3258,8 +3260,7 @@ window.$docsify = {
         if (!list.length) return;
         const current = DPR_NAV_STATE.currentHref;
         if (!current) {
-          // 首页：预取最新一天第一篇
-          prefetchHref(list[0]);
+          // 妫ｆ牠銆夐敍姘额暕閸欐牗娓堕弬棰佺婢垛晝顑囨稉鈧弧?          prefetchHref(list[0]);
           return;
         }
         const idx = list.indexOf(current);
@@ -3274,19 +3275,16 @@ window.$docsify = {
         if (window.__dprNavBound) return;
         window.__dprNavBound = true;
 
-        // 禁用 Docsify 原生的标题锚点点击功能
-        document.addEventListener('click', (e) => {
+        // 缁備胶鏁?Docsify 閸樼喓鏁撻惃鍕垼妫版﹢鏁嬮悙鍦仯閸戣濮涢懗?        document.addEventListener('click', (e) => {
           try {
             if (!e || e.defaultPrevented) return;
             const target = e.target;
-            // 检测是否点击了标题或标题内的锚点
-            if (target && target.closest) {
+            // 濡偓濞村妲搁崥锔惧仯閸戣绨￠弽鍥暯閹存牗鐖ｆ０妯哄敶閻ㄥ嫰鏁嬮悙?            if (target && target.closest) {
               const heading = target.closest('h1, h2, h3, h4, h5, h6');
               if (heading && heading.closest('.markdown-section')) {
                 const link = target.closest('a');
                 if (link && link.hash && link.hash.startsWith('#') && !link.hash.startsWith('#/')) {
-                  // 阻止标题锚点的默认跳转行为
-                  e.preventDefault();
+                  // 闂冪粯顒涢弽鍥暯闁挎氨鍋ｉ惃鍕帛鐠併倛鐑︽潪顒冾攽娑?                  e.preventDefault();
                   e.stopPropagation();
                   return false;
                 }
@@ -3295,7 +3293,7 @@ window.$docsify = {
           } catch {
             // ignore
           }
-        }, true); // 使用捕获阶段，确保在 Docsify 之前拦截
+        }, true); // 娴ｈ法鏁ら幑鏇″箯闂冭埖顔岄敍宀€鈥樻穱婵嗘躬 Docsify 娑斿澧犻幏锔藉焻
 
         const toggleGoodForCurrent = () => {
           const current = DPR_NAV_STATE.currentHref || '';
@@ -3306,7 +3304,7 @@ window.$docsify = {
 
           const state = loadReadState();
           const cur = state[paperId];
-          // 空格：在 good 与 read 之间切换
+          // 缁岀儤鐗搁敍姘躬 good 娑?read 娑斿妫块崚鍥ㄥ床
           if (cur === 'good') {
             state[paperId] = 'read';
           } else {
@@ -3314,13 +3312,12 @@ window.$docsify = {
           }
 	          saveReadState(state);
 	          markSidebarReadState(null);
-	          // 同步选中高亮层颜色（good <-> read 切换时避免残留绿色底）
-	          requestAnimationFrame(() => {
+	          // 閸氬本顒為柅澶夎厬妤傛ü瀵掔仦鍌烆杹閼硅绱檊ood <-> read 閸掑洦宕查弮鍫曚缉閸忓秵鐣悾娆戣雹閼规彃绨抽敍?	          requestAnimationFrame(() => {
 	            syncSidebarActiveIndicator({ animate: false });
 	          });
 	        };
 
-        // 通用书签切换函数：数字键 1234 对应 绿蓝紫红
+        // 闁氨鏁ゆ稊锔绢劮閸掑洦宕查崙鑺ユ殶閿涙碍鏆熺€涙鏁?1234 鐎电懓绨?缂佽儻鎽戠槐顐ゅ
         const toggleBookmarkForCurrent = (bookmarkType) => {
           const current = DPR_NAV_STATE.currentHref || '';
           if (!current) return;
@@ -3330,8 +3327,7 @@ window.$docsify = {
 
           const state = loadReadState();
           const cur = state[paperId];
-          // 切换：如果当前已是该状态则取消（变为 read），否则设置为该状态
-          if (cur === bookmarkType) {
+          // 閸掑洦宕查敍姘洤閺嬫粌缍嬮崜宥呭嚒閺勵垵顕氶悩鑸碘偓浣稿灟閸欐牗绉烽敍鍫濆綁娑?read閿涘绱濋崥锕€鍨拋鍓х枂娑撻缚顕氶悩鑸碘偓?          if (cur === bookmarkType) {
             state[paperId] = 'read';
           } else {
             state[paperId] = bookmarkType;
@@ -3341,58 +3337,50 @@ window.$docsify = {
           requestAnimationFrame(() => {
             syncSidebarActiveIndicator({ animate: false });
           });
-          // 移除所有按钮焦点，避免数字键触发按钮
-          if (document.activeElement && document.activeElement.blur) {
+          // 缁夊娅庨幍鈧張澶嬪瘻闁筋喚鍔嶉悙鐧哥礉闁灝鍘ら弫鏉跨摟闁款喛袝閸欐垶瀵滈柦?          if (document.activeElement && document.activeElement.blur) {
             document.activeElement.blur();
           }
         };
 
-        // 键盘：左右方向键 + 数字键 1234
+        // 闁款喚娲忛敍姘箯閸欒櫕鏌熼崥鎴︽暛 + 閺佹澘鐡ч柨?1234
         window.addEventListener('keydown', (e) => {
           const key = e.key || '';
           if (shouldIgnoreKeyNav(e)) return;
 
-          // 数字键 1234：绿蓝紫红书签
-          if (key === '1') {
+          // 閺佹澘鐡ч柨?1234閿涙氨璞㈤拑婵堜紶缁绢澀鍔熺粵?          if (key === '1') {
             e.preventDefault();
-            toggleBookmarkForCurrent('good');   // 绿色
-            return;
+            toggleBookmarkForCurrent('good');   // 缂佽儻澹?            return;
           }
           if (key === '2') {
             e.preventDefault();
-            toggleBookmarkForCurrent('blue');   // 蓝色
-            return;
+            toggleBookmarkForCurrent('blue');   // 閽冩繆澹?            return;
           }
           if (key === '3') {
             e.preventDefault();
-            toggleBookmarkForCurrent('orange'); // 紫色（橙色）
-            return;
+            toggleBookmarkForCurrent('orange'); // 缁鳖偉澹婇敍鍫燁煻閼硅绱?            return;
           }
           if (key === '4') {
             e.preventDefault();
-            toggleBookmarkForCurrent('bad');    // 红色
-            return;
+            toggleBookmarkForCurrent('bad');    // 缁俱垼澹?            return;
           }
 
           if (key === ' ') {
-            // 空格键：切换"不错（绿色勾）"
+            // 缁岀儤鐗搁柨顕嗙窗閸掑洦宕?娑撳秹鏁婇敍鍫㈣雹閼规彃瀣€閿?
             e.preventDefault();
             toggleGoodForCurrent();
             return;
           }
           if (key !== 'ArrowLeft' && key !== 'ArrowRight') return;
-          // 只在当前页面聚焦时工作：浏览器已聚焦窗口即可
+          // 閸欘亜婀ぐ鎾冲妞ょ敻娼伴懕姘卞妽閺冭泛浼愭担婊愮窗濞村繗顫嶉崳銊ュ嚒閼辨氨鍔嶇粣妤€褰涢崡鍐插讲
           e.preventDefault();
           DPR_NAV_STATE.lastNavSource = 'key';
           navigateByDelta(key === 'ArrowRight' ? +1 : -1);
         });
 
-        // 点击论文链接也走同一套“整页切换”动效（避免只有滑动/方向键有动画）
-        document.addEventListener('click', (e) => {
+        // 閻愮懓鍤拋鐑樻瀮闁剧偓甯存稊鐔昏泲閸氬奔绔存總妞烩偓婊勬殻妞ら潧鍨忛幑鈶┾偓婵嗗З閺佸牞绱欓柆鍨帳閸欘亝婀佸鎴濆З/閺傜懓鎮滈柨顔芥箒閸斻劎鏁鹃敍?        document.addEventListener('click', (e) => {
           try {
             if (!e || e.defaultPrevented) return;
-            // 仅拦截普通左键点击，避免影响新标签页/复制链接等行为
-            if (typeof e.button === 'number' && e.button !== 0) return;
+            // 娴犲懏瀚ら幋顏呮珮闁艾涔忛柨顔惧仯閸戜紮绱濋柆鍨帳瑜板崬鎼烽弬鐗堢垼缁涢箖銆?婢跺秴鍩楅柧鐐复缁涘顢戞稉?            if (typeof e.button === 'number' && e.button !== 0) return;
             if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
 
             const link = e.target && e.target.closest ? e.target.closest('a[href]') : null;
@@ -3401,7 +3389,7 @@ window.$docsify = {
             if (link.classList && link.classList.contains('dpr-sidebar-export-link')) return;
             const rawHref = String(link.getAttribute('href') || '').trim();
             if (rawHref.startsWith('blob:')) return;
-            // 跳过外部链接（如 PDF 地址），让浏览器直接打开
+            // 鐠哄疇绻冩径鏍劥闁剧偓甯撮敍鍫濐洤 PDF 閸︽澘娼冮敍澶涚礉鐠佲晜绁荤憴鍫濇珤閻╁瓨甯撮幍鎾崇磻
             if (/^https?:\/\//i.test(rawHref)) return;
             const href = link.getAttribute('href') || '';
             const target = normalizeHref(href);
@@ -3411,11 +3399,9 @@ window.$docsify = {
             if (!target) return;
             if (target === (DPR_NAV_STATE.currentHref || '')) return;
 
-            // 鼠标点击 sidebar：不触发“居中”逻辑
-            DPR_NAV_STATE.lastNavSource = 'click';
+            // 姒х姵鐖ｉ悙鐟板毊 sidebar閿涙矮绗夌憴锕€褰傞垾婊冪湷娑擃厸鈧繈鈧槒绶?            DPR_NAV_STATE.lastNavSource = 'click';
 
-            // 推断方向：按侧边栏顺序判断“前进/后退”
-            let direction = 'forward';
+            // 閹恒劍鏌囬弬鐟版倻閿涙碍瀵滄笟褑绔熼弽蹇涖€庢惔蹇撳灲閺傤厸鈧粌澧犳潻?閸氬酣鈧偓閳?            let direction = 'forward';
             const list = DPR_NAV_STATE.paperHrefs || [];
             const cur = DPR_NAV_STATE.currentHref || '';
             if (list.length && cur) {
@@ -3426,8 +3412,7 @@ window.$docsify = {
               }
             }
 
-            // 只在论文页启用动效拦截，避免首页点击出现“无动画但有延迟”的体验
-            if (document.body && document.body.classList.contains('dpr-paper-page') && !prefersReducedMotion()) {
+            // 閸欘亜婀拋鐑樻瀮妞ら潧鎯庨悽銊ュЗ閺佸牊瀚ら幋顏庣礉闁灝鍘ゆ＃鏍€夐悙鐟板毊閸戣櫣骞囬垾婊勬￥閸斻劎鏁炬担鍡樻箒瀵ゆ儼绻滈垾婵堟畱娴ｆ捇鐛?            if (document.body && document.body.classList.contains('dpr-paper-page') && !prefersReducedMotion()) {
               e.preventDefault();
               triggerPageNav(target, direction);
             }
@@ -3436,8 +3421,7 @@ window.$docsify = {
           }
         });
 
-        // 鼠标/触控板横向滚动：切换论文，并阻止浏览器的“整页滑动/回退动效”
-        document.addEventListener(
+        // 姒х姵鐖?鐟欙附甯堕弶鎸幟崥鎴炵泊閸旑煉绱伴崚鍥ㄥ床鐠佺儤鏋冮敍灞借嫙闂冪粯顒涘ù蹇氼潔閸ｃ劎娈戦垾婊勬殻妞ゅ灚绮﹂崝?閸ョ偤鈧偓閸斻劍鏅ラ垾?        document.addEventListener(
           'wheel',
           (e) => {
             if (shouldIgnoreKeyNav(e)) return;
@@ -3446,16 +3430,13 @@ window.$docsify = {
             if (Math.abs(dx) < 28) return;
             if (Math.abs(dx) < Math.abs(dy) * 1.2) return;
             e.preventDefault();
-            // dx < 0：向左滑 => 下一篇
-            // dx > 0：向右滑 => 上一篇
-            DPR_NAV_STATE.lastNavSource = 'wheel';
+            // dx < 0閿涙艾鎮滃锔界拨 => 娑撳绔寸弧?            // dx > 0閿涙艾鎮滈崣铏拨 => 娑撳﹣绔寸弧?            DPR_NAV_STATE.lastNavSource = 'wheel';
             navigateByDelta(dx < 0 ? +1 : -1);
           },
           { passive: false },
         );
 
-        // 触摸滑动：左右切换
-        let startX = 0;
+        // 鐟欙附鎳滃鎴濆З閿涙艾涔忛崣鍐插瀼閹?        let startX = 0;
         let startY = 0;
         let startAt = 0;
         let lockHorizontal = false;
@@ -3480,8 +3461,7 @@ window.$docsify = {
             lockHorizontal = true;
           }
           if (lockHorizontal) {
-            // 阻止浏览器的横向滑动/回退动效，让切换更“丝滑”
-            if (e.cancelable) {
+            // 闂冪粯顒涘ù蹇氼潔閸ｃ劎娈戝Ο顏勬倻濠婃垵濮?閸ョ偤鈧偓閸斻劍鏅ラ敍宀冾唨閸掑洦宕查弴绮光偓婊€绗ｅ鎴斺偓?            if (e.cancelable) {
               e.preventDefault();
             }
           }
@@ -3493,13 +3473,10 @@ window.$docsify = {
           const dx = t.clientX - startX;
           const dy = t.clientY - startY;
           const dt = Date.now() - startAt;
-          // 排除长按、轻微滑动、明显上下滚动
-          if (dt > 900) return;
+          // 閹烘帡娅庨梹鎸庡瘻閵嗕浇浜ゅ顔界拨閸斻劊鈧焦妲戦弰鍙ョ瑐娑撳绮撮崝?          if (dt > 900) return;
           if (Math.abs(dx) < threshold) return;
           if (Math.abs(dx) < Math.abs(dy) * 1.2) return;
-          // dx < 0：向左滑 => 下一篇（相当于 ArrowRight）
-          // dx > 0：向右滑 => 上一篇（相当于 ArrowLeft）
-          DPR_NAV_STATE.lastNavSource = 'swipe';
+          // dx < 0閿涙艾鎮滃锔界拨 => 娑撳绔寸弧鍥风礄閻╃缍嬫禍?ArrowRight閿?          // dx > 0閿涙艾鎮滈崣铏拨 => 娑撳﹣绔寸弧鍥风礄閻╃缍嬫禍?ArrowLeft閿?          DPR_NAV_STATE.lastNavSource = 'swipe';
           navigateByDelta(dx < 0 ? +1 : -1);
         };
 
@@ -3508,7 +3485,7 @@ window.$docsify = {
         document.addEventListener('touchend', onTouchEnd, { passive: true });
       };
 
-      // --- 解析 YAML front matter 并转换为 HTML ---
+      // --- 鐟欙絾鐎?YAML front matter 楠炴儼娴嗛幑顫礋 HTML ---
       const parseFrontMatter = (content) => {
         if (!content || !content.startsWith('---')) {
           return { meta: null, body: content };
@@ -3520,7 +3497,7 @@ window.$docsify = {
         const yamlStr = content.slice(4, endIdx).trim();
         const body = content.slice(endIdx + 4).trim();
 
-        // 简单解析 YAML（不依赖外部库）
+        // 缁犫偓閸楁洝袙閺?YAML閿涘牅绗夋笟婵婄婢舵牠鍎存惔鎿勭礆
         const meta = {};
         const lines = yamlStr.split('\n');
         for (const line of lines) {
@@ -3529,11 +3506,10 @@ window.$docsify = {
           const key = line.slice(0, colonIdx).trim();
           let value = line.slice(colonIdx + 1).trim();
 
-          // 处理数组格式 [a, b, c]
+          // 婢跺嫮鎮婇弫鎵矋閺嶇厧绱?[a, b, c]
           if (value.startsWith('[') && value.endsWith(']')) {
             const inner = value.slice(1, -1);
-            // 简单分割，处理引号内的逗号
-            const items = [];
+            // 缁犫偓閸楁洖鍨庨崜璇х礉婢跺嫮鎮婂鏇炲娇閸愬懐娈戦柅妤€褰?            const items = [];
             let current = '';
             let inQuote = false;
             let quoteChar = '';
@@ -3552,10 +3528,10 @@ window.$docsify = {
               current += c;
             }
             if (current.trim()) items.push(current.trim());
-            // 去除引号
+            // 閸樺娅庡鏇炲娇
             meta[key] = items.map(s => s.replace(/^["']|["']$/g, ''));
           } else {
-            // 去除引号
+            // 閸樺娅庡鏇炲娇
             meta[key] = value.replace(/^["']|["']$/g, '').replace(/\\n/g, '\n').replace(/\\"/g, '"');
           }
         }
@@ -3606,13 +3582,13 @@ window.$docsify = {
       const renderFigureCarousel = (figures) => {
         if (!figures || !figures.length) return '';
         const slides = figures.map((figure, index) => {
-          const pageText = figure.page ? `PDF 第 ${figure.page} 页` : '';
+          const pageText = figure.page ? `PDF 缁?${figure.page} 妞ょぐ : '';
           const caption = figure.caption ? `<div class="paper-figure-caption">${escapePaperHtml(figure.caption)}</div>` : '';
           return [
             `<div class="paper-figure-slide${index === 0 ? ' is-active' : ''}" data-figure-slide="${index}">`,
             `<img class="paper-figure-image" src="${escapePaperHtml(resolveDocsAssetUrl(figure.url))}" alt="Paper Figure ${index + 1}" loading="lazy">`,
             '<div class="paper-figure-meta">',
-            `<div class="paper-figure-badge">Figure ${index + 1}${pageText ? ` · ${escapePaperHtml(pageText)}` : ''}</div>`,
+            `<div class="paper-figure-badge">Figure ${index + 1}${pageText ? ` 璺?${escapePaperHtml(pageText)}` : ''}</div>`,
             caption,
             '</div>',
             '</div>',
@@ -3620,9 +3596,9 @@ window.$docsify = {
         }).join('');
 
         const thumbs = figures.map((figure, index) => {
-          const thumbPageText = figure.page ? ` · PDF 第 ${figure.page} 页` : '';
+          const thumbPageText = figure.page ? ` 璺?PDF 缁?${figure.page} 妞ょぐ : '';
           return [
-            `<button class="paper-figure-thumb${index === 0 ? ' is-active' : ''}" type="button" data-figure-thumb="${index}" aria-label="切换到第 ${index + 1} 张插图">`,
+            `<button class="paper-figure-thumb${index === 0 ? ' is-active' : ''}" type="button" data-figure-thumb="${index}" aria-label="閸掑洦宕查崚鎵儑 ${index + 1} 瀵姵褰冮崶?>`,
             `<img class="paper-figure-thumb-image" src="${escapePaperHtml(resolveDocsAssetUrl(figure.url))}" alt="Thumbnail ${index + 1}" loading="lazy">`,
             `<span class="paper-figure-thumb-label">Figure ${index + 1}${thumbPageText ? escapePaperHtml(thumbPageText) : ''}</span>`,
             '</button>',
@@ -3635,9 +3611,9 @@ window.$docsify = {
           `<div class="paper-figure-counter"><span data-figure-current>1</span> / ${figures.length}</div>`,
           '</div>',
           '<div class="paper-figure-stage">',
-          figures.length > 1 ? '<button class="paper-figure-nav paper-figure-nav-prev" type="button" data-figure-prev aria-label="上一张">‹</button>' : '',
+          figures.length > 1 ? '<button class="paper-figure-nav paper-figure-nav-prev" type="button" data-figure-prev aria-label="娑撳﹣绔村?>閳?/button>' : '',
           `<div class="paper-figure-viewport">${slides}</div>`,
-          figures.length > 1 ? '<button class="paper-figure-nav paper-figure-nav-next" type="button" data-figure-next aria-label="下一张">›</button>' : '',
+          figures.length > 1 ? '<button class="paper-figure-nav paper-figure-nav-next" type="button" data-figure-next aria-label="娑撳绔村?>閳?/button>' : '',
           '</div>',
           figures.length > 1 ? `<div class="paper-figure-thumbs">${thumbs}</div>` : '',
           '</div>',
@@ -3695,11 +3671,11 @@ window.$docsify = {
         });
       };
 
-      // 根据 front matter 生成论文页面 HTML
+      // 閺嶈宓?front matter 閻㈢喐鍨氱拋鐑樻瀮妞ょ敻娼?HTML
       const renderPaperFromMeta = (meta) => {
         if (!meta) return '';
 
-        // 解析标签，生成带颜色的 HTML
+        // 鐟欙絾鐎介弽鍥╊劮閿涘瞼鏁撻幋鎰敨妫版粏澹婇惃?HTML
         const renderTags = (tags) => {
           if (!tags || !tags.length) return '';
           return tags.map(tag => {
@@ -3711,7 +3687,7 @@ window.$docsify = {
 
         const lines = [];
 
-        // 标题区域
+        // 閺嶅洭顣介崠鍝勭厵
         lines.push('<div class="paper-title-row">');
         if (meta.title_zh) {
           lines.push(`<h1 class="paper-title-zh">${escapeHtml(meta.title_zh)}</h1>`);
@@ -3722,10 +3698,10 @@ window.$docsify = {
         lines.push('</div>');
         lines.push('');
 
-        // 中间区域
+        // 娑擃參妫块崠鍝勭厵
         lines.push('<div class="paper-meta-row">');
 
-        // 左侧：Evidence 和 TLDR
+        // 瀹革缚鏅堕敍娆祐idence 閸?TLDR
         lines.push('<div class="paper-meta-left">');
         if (meta.evidence) {
           lines.push(`<p><strong>Evidence</strong>: ${escapeHtml(meta.evidence)}</p>`);
@@ -3735,8 +3711,7 @@ window.$docsify = {
         }
         lines.push('</div>');
 
-        // 右侧：基本信息
-        lines.push('<div class="paper-meta-right">');
+        // 閸欏厖鏅堕敍姘唨閺堫兛淇婇幁?        lines.push('<div class="paper-meta-right">');
         lines.push(`<p><strong>Authors</strong>: ${escapeHtml(meta.authors || 'Unknown')}</p>`);
         if (meta.source) {
           lines.push(`<p><strong>Source</strong>: ${escapeHtml(meta.source)}</p>`);
@@ -3758,7 +3733,7 @@ window.$docsify = {
         lines.push('</div>');
         lines.push('');
 
-        // 速览区域
+        // 闁喕顫嶉崠鍝勭厵
         if (meta.motivation || meta.method || meta.result || meta.conclusion) {
           lines.push('<div class="paper-glance-section">');
           lines.push('<div class="paper-glance-row">');
@@ -3793,19 +3768,17 @@ window.$docsify = {
           lines.push(renderFigureCarousel(figures));
         }
 
-        // 注意：在 Markdown 中插入 HTML block（如 <hr>）后，需要一个“空行”才能让后续的 `##` 等 Markdown 正常解析。
-        // 这里通过追加两个空行，确保最终输出以 `<hr>\n\n` 结尾。
-        lines.push('<hr>');
+        // 濞夈劍鍓伴敍姘躬 Markdown 娑擃厽褰冮崗?HTML block閿涘牆顩?<hr>閿涘鎮楅敍宀勬付鐟曚椒绔存稉顏佲偓婊呪敄鐞涘备鈧繃澧犻懗鍊燁唨閸氬海鐢婚惃?`##` 缁?Markdown 濮濓絽鐖剁憴锝嗙€介妴?        // 鏉╂瑩鍣烽柅姘崇箖鏉╄棄濮炴稉銈勯嚋缁岄缚顢戦敍宀€鈥樻穱婵囨付缂佸牐绶崙杞颁簰 `<hr>\n\n` 缂佹挸鐔妴?        lines.push('<hr>');
         lines.push('');
         lines.push('');
 
         return lines.join('\n');
       };
 
-      // --- Docsify beforeEach 钩子：解析 front matter ---
+      // --- Docsify beforeEach 闁解晛鐡欓敍姘承掗弸?front matter ---
       hook.beforeEach(function (content) {
         const file = vm && vm.route ? vm.route.file : '';
-        // 只对论文页面处理
+        // 閸欘亜顕拋鐑樻瀮妞ょ敻娼版径鍕倞
         if (!isPaperRouteFile(file)) {
           latestPaperRawMarkdown = '';
           return content;
@@ -3817,14 +3790,13 @@ window.$docsify = {
           return content;
         }
 
-        // 生成论文页面 HTML + 正文
-        const paperHtml = renderPaperFromMeta(meta);
+        // 閻㈢喐鍨氱拋鐑樻瀮妞ょ敻娼?HTML + 濮濓絾鏋?        const paperHtml = renderPaperFromMeta(meta);
         return paperHtml + body;
       });
 
-      // --- Docsify 生命周期钩子 ---
+      // --- Docsify 閻㈢喎鎳￠崨銊︽埂闁解晛鐡?---
       hook.doneEach(function () {
-        // 路由统一：将 #/?id=%2f... 自动规整为 #/...
+        // 鐠侯垳鏁辩紒鐔剁閿涙艾鐨?#/?id=%2f... 閼奉亜濮╃憴鍕殻娑?#/...
         try {
           const canonical = decodeLegacyIdHash(window.location.hash || '');
           if (canonical && canonical !== window.location.hash) {
@@ -3835,13 +3807,11 @@ window.$docsify = {
           // ignore
         }
 
-        // 当前路由对应的“论文 ID”（简单用文件名去掉 .md）
-        const paperId = getPaperId();
+        // 瑜版挸澧犵捄顖滄暠鐎电懓绨查惃鍕ㄢ偓婊嗩啈閺?ID閳ユ繐绱欑粻鈧崡鏇犳暏閺傚洣娆㈤崥宥呭箵閹?.md閿?        const paperId = getPaperId();
         const routePath = vm.route && vm.route.path ? vm.route.path : '';
         const lowerId = (paperId || '').toLowerCase();
 
-        // 首页（如 README.md 或根路径）不展示研讨区，只做数学渲染和 Zotero 元数据更新
-        const isHomePage =
+        // 妫ｆ牠銆夐敍鍫濐洤 README.md 閹存牗鐗寸捄顖氱窞閿涘绗夌仦鏇犮仛閻棁顓块崠鐚寸礉閸欘亜浠涢弫鏉款劅濞撳弶鐓嬮崪?Zotero 閸忓啯鏆熼幑顔芥纯閺?        const isHomePage =
           !paperId ||
           lowerId === 'readme' ||
           routePath === '/' ||
@@ -3852,28 +3822,22 @@ window.$docsify = {
         const isLandingLikePage = isHomePage || isReportPage;
         syncPageTypeClasses({ isHomePage, isReportPage, isPaperPage });
 
-        // A. 对正文区域进行一次全局公式渲染（支持 $...$ / $$...$$）
-        const mainContent = document.querySelector('.markdown-section');
+        // A. 鐎佃顒滈弬鍥у隘閸╃喕绻樼悰灞肩濞嗏€冲弿鐏炩偓閸忣剙绱″〒鍙夌厠閿涘牊鏁幐?$...$ / $$...$$閿?        const mainContent = document.querySelector('.markdown-section');
         if (mainContent) {
-          // 先创建正文包装层，避免后续切页动画影响聊天浮层
-          const root = isPaperPage ? ensurePageContentRoot() : null;
+          // 閸忓牆鍨卞鐑橆劀閺傚洤瀵樼憗鍛湴閿涘矂浼╅崗宥呮倵缂侇厼鍨忔い闈涘З閻㈣濂栭崫宥堜喊婢垛晜璇炵仦?          const root = isPaperPage ? ensurePageContentRoot() : null;
           renderMathInEl(root || mainContent);
         }
 
-        // 论文页标题条排版（只对 docs/YYYYMM/DD/*.md 生效）
-        applyPaperTitleBar();
+        // 鐠佺儤鏋冩い鍨垼妫版ɑ娼幒鎺斿閿涘牆褰х€?docs/YYYYMM/DD/*.md 閻㈢喐鏅ラ敍?        applyPaperTitleBar();
 
-        // 论文页左右切换：更新导航列表并绑定事件（只绑定一次）
+        // 鐠佺儤鏋冩い闈涗箯閸欏啿鍨忛幑顫窗閺囧瓨鏌婄€佃壈鍩呴崚妤勩€冮獮鍓佺拨鐎规矮绨ㄦ禒璁圭礄閸欘亞绮︾€规矮绔村▎鈽呯礆
         updateNavState();
         ensureNavHandlers();
-        // 预取相邻论文的 Markdown（利用浏览器 cache，让切换更丝滑）
-        prefetchAdjacent();
+        // 妫板嫬褰囬惄鎼佸仸鐠佺儤鏋冮惃?Markdown閿涘牆鍩勯悽銊︾セ鐟欏牆娅?cache閿涘矁顔€閸掑洦宕查弴缈犵濠婃埊绱?        prefetchAdjacent();
 
-        // 页面入场动画：根据上一跳的方向做滑入
-        const animEl = getPageAnimEl();
+        // 妞ょ敻娼伴崗銉ユ簚閸斻劎鏁鹃敍姘壌閹诡喕绗傛稉鈧捄宕囨畱閺傜懓鎮滈崑姘拨閸?        const animEl = getPageAnimEl();
         if (animEl) {
-          // 清理上一次退场残留（防止极端情况下没清掉）
-          animEl.classList.remove(
+          // 濞撳懐鎮婃稉濠佺濞嗭繝鈧偓閸︾儤鐣悾娆欑礄闂冨弶顒涢弸浣侯伂閹懎鍠屾稉瀣梾濞撳懏甯€閿?          animEl.classList.remove(
             'dpr-page-exit',
             'dpr-page-exit-left',
             'dpr-page-exit-right',
@@ -3883,8 +3847,7 @@ window.$docsify = {
           if (enter && !prefersReducedMotion()) {
             animEl.classList.add('dpr-page-enter', enter);
             requestAnimationFrame(() => {
-              // 触发 transition 到“静止态”
-              animEl.classList.add('dpr-page-enter-active');
+              // 鐟欙箑褰?transition 閸掓壋鈧粓娼ゅ銏♀偓浣测偓?              animEl.classList.add('dpr-page-enter-active');
               setTimeout(() => {
                 animEl.classList.remove(
                   'dpr-page-enter',
@@ -3904,39 +3867,32 @@ window.$docsify = {
         bindPaperFigureCarousels();
 
         // ----------------------------------------------------
-        // E. 小屏点击侧边栏条目后自动收起
+        // E. 鐏忓繐鐫嗛悙鐟板毊娓氀嗙珶閺嶅繑娼惄顔兼倵閼奉亜濮╅弨鎯版崳
         // ----------------------------------------------------
         setupMobileSidebarAutoCloseOnItemClick();
 
         // ----------------------------------------------------
-        // F. 侧边栏按日期折叠
-        // ----------------------------------------------------
+        // F. 娓氀嗙珶閺嶅繑瀵滈弮銉︽埂閹舵ê褰?        // ----------------------------------------------------
         setupCollapsibleSidebarByDay();
         hydrateStructuredSidebarItems();
         bindSidebarVirtualHashLinks();
         neutralizeSidebarNoactiveLinks();
 
         // ----------------------------------------------------
-        // G. 侧边栏已阅读论文状态高亮
-        // ----------------------------------------------------
+        // G. 娓氀嗙珶閺嶅繐鍑￠梼鍛邦嚢鐠佺儤鏋冮悩鑸碘偓渚€鐝禍?        // ----------------------------------------------------
         if (!isLandingLikePage && paperId) {
           markSidebarReadState(paperId);
         } else {
-          // 首页也需要应用已有的“已读高亮”，但不新增记录
-          markSidebarReadState(null);
+          // 妫ｆ牠銆夋稊鐔兼付鐟曚礁绨查悽銊ュ嚒閺堝娈戦垾婊冨嚒鐠囧鐝禍顔光偓婵撶礉娴ｅ棔绗夐弬鏉款杻鐠佹澘缍?          markSidebarReadState(null);
         }
 
-        // 让滑动高亮层跟随当前 active 项（点击、路由变化后会更新 active 类）
-        try {
+        // 鐠佲晜绮﹂崝銊╃彯娴滎喖鐪扮捄鐔兼瑜版挸澧?active 妞ょ櫢绱欓悙鐟板毊閵嗕浇鐭鹃悽鍗炲綁閸栨牕鎮楁导姘纯閺?active 缁紮绱?        try {
           const movedByNavAnim = !!DPR_SIDEBAR_ACTIVE_INDICATOR.justMoved;
           if (!movedByNavAnim) {
-            // 非“点击触发的预先滑动”场景：先立即贴齐一次
-            syncSidebarActiveIndicator({ animate: false });
+            // 闂堢偐鈧粎鍋ｉ崙鏄徯曢崣鎴犳畱妫板嫬鍘涘鎴濆З閳ユ繂婧€閺咁垽绱伴崗鍫㈢彌閸楀疇鍒涙鎰濞?            syncSidebarActiveIndicator({ animate: false });
           }
-          // 统一做一次延迟终态校准：
-          // - 点击切页时避免“先对齐 -> 上跳 -> 再回位”的双重抖动
-          // - 分组展开/收起有 max-height 过渡，布局稳定后再校准一次
-          setTimeout(() => {
+          // 缂佺喍绔撮崑姘濞嗏€虫鏉╃喓绮撻幀浣圭墡閸戝棴绱?          // - 閻愮懓鍤崚鍥€夐弮鍫曚缉閸忓秮鈧粌鍘涚€靛綊缍?-> 娑撳﹨鐑?-> 閸愬秴娲栨担宥佲偓婵堟畱閸欏矂鍣搁幎鏍уЗ
+          // - 閸掑棛绮嶇仦鏇炵磻/閺€鎯版崳閺?max-height 鏉╁洦娴敍灞界鐏炩偓缁嬪啿鐣鹃崥搴″晙閺嶁€冲櫙娑撯偓濞?          setTimeout(() => {
             try {
               requestAnimationFrame(() => {
                 syncSidebarActiveIndicator({ animate: false });
@@ -3950,8 +3906,7 @@ window.$docsify = {
           DPR_SIDEBAR_ACTIVE_INDICATOR.justMoved = false;
         }
 
-        // 自动把当前论文在 sidebar 中滚动到居中位置，便于连续阅读
-        if (DPR_NAV_STATE.lastNavSource !== 'click') {
+        // 閼奉亜濮╅幎濠傜秼閸撳秷顔戦弬鍥ф躬 sidebar 娑擃厽绮撮崝銊ュ煂鐏炲懍鑵戞担宥囩枂閿涘奔绌舵禍搴ょ箾缂侇參妲勭拠?        if (DPR_NAV_STATE.lastNavSource !== 'click') {
           requestAnimationFrame(() => {
             requestAnimationFrame(() => {
               centerSidebarOnCurrent();
@@ -3959,11 +3914,10 @@ window.$docsify = {
           });
         }
 
-        // 本次 doneEach 的来源只用于控制“是否居中”，用完即清理
-        DPR_NAV_STATE.lastNavSource = '';
+        // 閺堫剚顐?doneEach 閻ㄥ嫭娼靛┃鎰涧閻劋绨幒褍鍩楅垾婊勬Ц閸氾箑鐪虫稉顓涒偓婵撶礉閻劌鐣崡铏閻?        DPR_NAV_STATE.lastNavSource = '';
 
         // ----------------------------------------------------
-        // H. Zotero 元数据注入逻辑 (带延时和唤醒)
+        // H. Zotero 閸忓啯鏆熼幑顔芥暈閸忋儵鈧槒绶?(鐢箑娆㈤弮璺烘嫲閸炪倝鍟?
         // ----------------------------------------------------
         setTimeout(() => {
           updateZoteroMetaFromPage(
@@ -3971,11 +3925,9 @@ window.$docsify = {
             vm.route.file,
             latestPaperRawMarkdown,
           );
-        }, 1); // 延迟执行，等待 DOM 渲染完毕
-      });
+        }, 1); // 瀵ゆ儼绻滈幍褑顢戦敍宀€鐡戝?DOM 濞撳弶鐓嬬€瑰本鐦?      });
       // ----------------------------------------------------
-      // I. 响应式侧边栏：窄屏首次加载时确保收起（仅移除 close 类）
-      // ----------------------------------------------------
+      // I. 閸濆秴绨插蹇庢櫠鏉堣鐖敍姘辩崕鐏炲繘顩诲▎鈥冲鏉炶姤妞傜涵顔荤箽閺€鎯版崳閿涘牅绮庣粔濠氭珟 close 缁紮绱?      // ----------------------------------------------------
       const SIDEBAR_AUTO_COLLAPSE_WIDTH = 1024;
 
       const ensureCollapsedOnNarrowScreen = () => {
@@ -3985,12 +3937,15 @@ window.$docsify = {
 
         const body = document.body;
         if (!body.classList) return;
-        // 进入窄屏时使用 "默认不带 close" 的收起态，兼容 Docsify 的移动端语义
+        // 鏉╂稑鍙嗙粣鍕潌閺冩湹濞囬悽?"姒涙顓绘稉宥呯敨 close" 閻ㄥ嫭鏁圭挧閿嬧偓渚婄礉閸忕厧顔?Docsify 閻ㄥ嫮些閸斻劎顏拠顓濈疅
         body.classList.remove('close');
       };
 
-      // 初始化时执行一次
-      ensureCollapsedOnNarrowScreen();
+      // 閸掓繂顫愰崠鏍ㄦ閹笛嗩攽娑撯偓濞?      ensureCollapsedOnNarrowScreen();
     },
   ],
 };
+
+
+
+
