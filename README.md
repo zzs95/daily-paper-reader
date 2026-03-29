@@ -35,10 +35,6 @@
 
 ## 📰 News
 
-- **2026-03-28** 🧬 补齐多源论文维护链路：新增并打通 `bioRxiv`、`medRxiv`、`ChemRxiv` 以及多类会议论文的抓取、向量编码、Supabase 同步与检索 SQL，支持将多源论文纳入统一推荐与阅读流。
-- **2026-03-28** 🎯 后台管理支持按词条单独触发抓取：可对指定 tag 直接运行 `10 天`、`30 天速览`、`30 天标准` 等任务，便于灰度验证、单主题回补与问题排查。
-- **2026-03-28** 🛡️ 提升 embedding 与多源检索稳定性：修复多源 embedding 查询分组时机问题，并在远程 embedding 首次失败后对整轮任务熔断回退到本地模型，避免分片阶段反复超时。
-- **2026-03-28** 🖼️ 优化论文详情页阅读体验：支持 `bioRxiv` 论文插图提取与展示，并改进元信息区域中长 PDF 链接的换行与布局表现。
 - **2026-03-17** ⚙️ 修复 GitHub Actions 对 Python patch 版本路径的硬编码依赖，并将 `actions/checkout`、`actions/setup-python`、`actions/cache` 升级到 Node 24 对应版本，消除 runner 升级与 Node 20 弃用带来的工作流告警。
 - **2026-03-13** 🔌 接入固定远程 embedding 服务入口：query embedding 缓存下沉到每条 `keyword` / `intent_query` 并按 hash 复用；同时收紧 Upstream Sync 工作流与触发面板的非 Fork 场景提示，对齐相关测试断言并恢复全量 `pytest` 通过。
 - **2026-03-12** 🧠 调整统一候选池进入重排的策略：支持各 lane 保底候选进入统一池，并将统一池预算改为按论文规模与 `intent_query` 数量动态计算。
@@ -141,6 +137,27 @@ https://<你的用户名>.github.io/daily-paper-reader
 ```
 
 完成以上步骤后，后续大多数日常使用和配置都可以直接在网页端完成。后续教程参考：[daily-paper-reader 指引](https://ziwenhahaha.github.io/daily-paper-reader/#/tutorial/README)
+
+## 📬 邮件获取选项（Maton + Gmail）
+
+如果你希望通过 Gmail 中的论文提醒邮件来获取论文列表，可以按下面配置：
+
+### 1) 注册 Maton
+- 打开 [Maton 官网](https://www.maton.ai/)
+- 完成注册和登录
+
+### 2) 绑定 Gmail
+- 在 Maton 控制台中连接你的 Gmail 账号
+- 授权读取邮件（用于检索论文提醒邮件）
+
+### 3) 获取 API Key
+- 在 Maton 控制台创建并复制 `MATON_API_KEY`
+- 在本项目后台管理的“秘钥配置”中填入 `MATON_API_KEY`（可选）
+
+### 4) 在项目中使用邮件检索
+- 在控制面板选择邮件检索入口（`email-admin-quick-run-btn`）
+- 选择单日或日期范围，并填写可选关键词后运行
+- 后端会将该参数传递给 `main.py` 与 `src/1.fetch_email_paper_list.py`
 
 ## ❓ FAQ
 
