@@ -27,6 +27,7 @@ OPEN_ACCESS_DOMAINS = (
     "aclanthology.org",
     "aaai.org",
 )
+SOURCE_FRESH_FETCH = "fresh_fetch"
 
 
 def normalize_date_token(value: str) -> str:
@@ -174,6 +175,7 @@ def normalize_possible_pdf_url(url: str) -> str:
         return ""
 
     url = url.strip()
+    url = unwrap_google_scholar_redirect(url)
     if url.lower().endswith(".pdf"):
         return url
 
@@ -192,16 +194,36 @@ def normalize_possible_pdf_url(url: str) -> str:
     return url
 
 
+def unwrap_google_scholar_redirect(url: str) -> str:
+    text = str(url or "").strip()
+    if not text:
+        return ""
+    try:
+        parsed = urlparse(text)
+        host = (parsed.netloc or "").lower()
+        if host.endswith("scholar.google.com") and parsed.path == "/scholar_url":
+            q = parse_qs(parsed.query)
+            target = str((q.get("url") or [""])[0] or "").strip()
+            if target:
+                return target
+    except Exception:
+        return text
+    return text
+
+
 def is_open_access_pdf_url(url: str) -> bool:
     text = str(url or "").strip()
     if not text:
         return False
     lowered = text.lower()
-    if lowered.endswith(".pdf"):
-        return True
-    return any(domain in lowered for domain in OPEN_ACCESS_DOMAINS) and (
-        "/pdf" in lowered or "openaccesspdf" in lowered
-    )
+    parsed = urlparse(lowered)
+    host = (parsed.netloc or "").strip()
+    if host.startswith("www."):
+        host = host[4:]
+    is_open_host = any(host == d or host.endswith(f".{d}") for d in OPEN_ACCESS_DOMAINS)
+    if not is_open_host:
+        return False
+    return lowered.endswith(".pdf") or "/pdf" in lowered or "openaccesspdf" in lowered
 
 
 def title_norm(text: str) -> str:
@@ -299,6 +321,8 @@ def resolve_non_open_pdf_urls(papers: List[Dict]) -> int:
         current = normalize_possible_pdf_url(str(p.get("pdf_url") or p.get("link") or "").strip())
         if is_open_access_pdf_url(current):
             p["pdf_url"] = current
+            if not str(p.get("pdf_resolved_from") or "").strip():
+                p["pdf_resolved_from"] = "original_open_access"
             continue
 
         title = str(p.get("title") or "").strip()
@@ -313,6 +337,11 @@ def resolve_non_open_pdf_urls(papers: List[Dict]) -> int:
             p["pdf_url"] = replacement
             p["pdf_resolved_from"] = source
             updated += 1
+        else:
+            # fallback: keep original (possibly paid) link such as Springer.
+            if current:
+                p["pdf_url"] = current
+            p["pdf_resolved_from"] = "fallback_original_non_open"
     return updated
 
 
@@ -351,7 +380,7 @@ def parse_scholar_html_to_dict(html_content: str) -> Dict:
     title_links = soup.find_all("a", class_="gse_alrt_title")
     for a_tag in title_links:
         title = a_tag.get_text(strip=True)
-        link = a_tag.get("href", "").strip()
+        link = unwrap_google_scholar_redirect(a_tag.get("href", "").strip())
 
         h3_tag = a_tag.find_parent("h3")
         if not h3_tag:
@@ -382,8 +411,8 @@ def parse_scholar_html_to_dict(html_content: str) -> Dict:
 
 def convert_email_paper_to_deep_item(paper: Dict) -> Dict:
     title = (paper.get("title") or "").strip()
-    link = (paper.get("link") or "").strip()
-    pdf_url = (paper.get("pdf_url") or "").strip()
+    link = unwrap_google_scholar_redirect((paper.get("link") or "").strip())
+    pdf_url = unwrap_google_scholar_redirect((paper.get("pdf_url") or "").strip())
     snippet = (paper.get("snippet") or "").strip()
     authors = (paper.get("authors") or "").strip()
 
@@ -402,6 +431,7 @@ def convert_email_paper_to_deep_item(paper: Dict) -> Dict:
         "summary": snippet,
         "authors_and_venue": authors,
         "source": "google_scholar_email",
+        "selection_source": SOURCE_FRESH_FETCH,
     }
 
 
