@@ -465,6 +465,7 @@ window.SubscriptionsManager = (function () {
     window.DPRWorkflowRunner.runMainByDateToken(dateResult.token, {
       mode,
       fetchSource: 'email',
+      emailKeyword: profileTag,
       profileTag,
     });
     const tagTip = profileTag ? `, keyword=${profileTag}` : '';

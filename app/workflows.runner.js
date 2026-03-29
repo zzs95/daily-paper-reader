@@ -826,6 +826,7 @@ window.DPRWorkflowRunner = (function () {
     const mode = String(opts.mode || '').trim().toLowerCase();
     const fetchSource = String(opts.fetchSource || 'email').trim().toLowerCase() || 'email';
     const profileTag = String(opts.profileTag || '').trim();
+    const emailKeyword = String(opts.emailKeyword || '').trim();
 
     const baseInputs = {
       run_enrich: 'false',
@@ -840,6 +841,9 @@ window.DPRWorkflowRunner = (function () {
     }
     if (profileTag) {
       baseInputs.profile_tag = profileTag;
+    }
+    if (emailKeyword) {
+      baseInputs.email_keyword = emailKeyword;
     }
 
     const mergedInputs = combineInputs(baseInputs, opts.dispatchInputs);
