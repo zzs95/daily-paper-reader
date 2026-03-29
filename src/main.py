@@ -610,6 +610,11 @@ def main() -> None:
         help="仅运行指定 tag 对应的词条；大小写不敏感，支持空格。",
     )
     parser.add_argument(
+        "--email-keyword",
+        default="",
+        help="邮件检索关键字（用于 Step1 Gmail subject 过滤）。",
+    )
+    parser.add_argument(
         "--trace-arxiv-id",
         action="append",
         default=None,
@@ -661,6 +666,7 @@ def main() -> None:
 
     fetch_source = resolve_fetch_source(args.fetch_source)
     email_date_token = normalize_email_date_token(args.email_date)
+    email_keyword = str(args.email_keyword or "").strip()
     if fetch_source == "email" and email_date_token:
         run_date_token = email_date_token
         if re.match(r"^\d{8}-\d{8}$", run_date_token):
@@ -714,6 +720,10 @@ def main() -> None:
             "[INFO] email source selected: skip arxiv retrieval/rerank/select pipeline steps.",
             flush=True,
         )
+        print(
+            f"[INFO] email fetch params: date={run_date_token}, keyword={email_keyword or '(default)'}, mode={recommend_mode}",
+            flush=True,
+        )
         run_step(
             "Step 1 - fetch email paper list",
             [
@@ -723,6 +733,7 @@ def main() -> None:
                 run_date_token,
                 "--mode",
                 recommend_mode,
+                *(["--subject", email_keyword] if email_keyword else []),
             ],
         )
         run_step(

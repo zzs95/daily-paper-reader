@@ -240,8 +240,33 @@ def slugify_text(text: str, max_len: int = 80) -> str:
     return s[:max_len].strip("-") or "paper"
 
 
+def sanitize_arxiv_like_id(value: str) -> str:
+    raw = str(value or "").strip().lower()
+    if not raw:
+        return ""
+    # URL -> extract last token first.
+    if "arxiv.org/abs/" in raw:
+        raw = raw.split("arxiv.org/abs/", 1)[1].split("?", 1)[0].split("#", 1)[0]
+    elif "arxiv.org/pdf/" in raw:
+        raw = raw.split("arxiv.org/pdf/", 1)[1].split("?", 1)[0].split("#", 1)[0]
+        if raw.endswith(".pdf"):
+            raw = raw[:-4]
+
+    # Only keep arXiv-like identifiers; reject URL/slug style ids.
+    if re.match(r"^\d{4}\.\d{4,5}(v\d+)?$", raw):
+        return raw
+    if re.match(r"^[a-z\-]+(?:\.[a-z\-]+)?/\d{7}(v\d+)?$", raw):
+        return raw
+    return ""
+
+
 def build_stable_email_paper_id(title: str, link: str, pdf_url: str) -> str:
-    return slugify_text(title)
+    # Keep only safe arXiv-like id; otherwise leave empty so step6 falls back to title slug.
+    return (
+        sanitize_arxiv_like_id(pdf_url)
+        or sanitize_arxiv_like_id(link)
+        or ""
+    )
 
 
 def search_arxiv_pdf_by_title(title: str) -> str:
@@ -419,14 +444,16 @@ def convert_email_paper_to_deep_item(paper: Dict) -> Dict:
     if not pdf_url:
         pdf_url = normalize_possible_pdf_url(link)
     paper_id = build_stable_email_paper_id(title, link, pdf_url)
+    source_paper_id = slugify_text(title)
 
     return {
         "id": paper_id,
         "paper_id": paper_id,
+        "source_paper_id": source_paper_id,
         "title": title,
         "pdf_url": pdf_url,
         "url": link,
-        "entry_id": paper_id,
+        "entry_id": source_paper_id,
         "abstract": snippet,
         "summary": snippet,
         "authors_and_venue": authors,
@@ -526,16 +553,26 @@ def main() -> None:
 
     date_token, day_list = parse_date_input(args.date)
     mode = str(args.mode or "standard").strip() or "standard"
+    subject_text = str(args.subject or "").strip() or "new related research"
+
+    print(
+        f"[INFO] email fetch start: date_token={date_token}, days={len(day_list)}, mode={mode}, subject={subject_text}",
+        flush=True,
+    )
 
     all_email_papers: List[Dict] = []
     total_email_count = 0
     queries: list[str] = []
 
     for day in day_list:
-        result = get_related_research_emails_by_day(day, subject_text=args.subject)
+        result = get_related_research_emails_by_day(day, subject_text=subject_text)
         emails = result.get("emails", []) or []
         total_email_count += len(emails)
         q = str(result.get("query") or "").strip()
+        print(
+            f"[INFO] day={day} subject={subject_text} query={q} emails={len(emails)}",
+            flush=True,
+        )
         if q:
             queries.append(q)
         for mail in emails:
