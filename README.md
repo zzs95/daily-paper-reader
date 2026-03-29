@@ -140,7 +140,7 @@ https://<你的用户名>.github.io/daily-paper-reader
 
 ## 📬 邮件获取选项（Maton + Gmail）
 
-如果你希望通过 Gmail 中的论文提醒邮件来获取论文列表，可以按下面配置：
+如果你希望通过谷歌学术订阅的邮件来获取论文列表，可以按下面配置：
 
 ### 1) 注册 Maton
 - 打开 [Maton 官网](https://www.maton.ai/)
