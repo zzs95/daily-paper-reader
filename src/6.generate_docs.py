@@ -2537,7 +2537,13 @@ def main() -> None:
             return
 
     archive_dir = os.path.join(ROOT_DIR, "archive", date_str, "recommend")
-    recommend_path = os.path.join(archive_dir, f"arxiv_papers_{date_str}.{mode}.json")
+    arxiv_recommend_path = os.path.join(archive_dir, f"arxiv_papers_{date_str}.{mode}.json")
+    gmail_recommend_path = os.path.join(archive_dir, f"gmail_papers_{date_str}.{mode}.json")
+    recommend_path = arxiv_recommend_path
+    if os.path.exists(arxiv_recommend_path):
+        recommend_path = arxiv_recommend_path
+    elif os.path.exists(gmail_recommend_path):
+        recommend_path = gmail_recommend_path
     recommend_exists = os.path.exists(recommend_path)
     if not recommend_exists:
         log(f"[WARN] recommend 文件不存在（今天可能没有新论文）：{recommend_path}。将生成空日报并更新首页。")

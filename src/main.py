@@ -316,6 +316,23 @@ def resolve_summary_step_env() -> dict[str, str]:
     return env
 
 
+def resolve_fetch_source(fetch_source: str) -> str:
+    value = str(fetch_source or "").strip().lower()
+    if value in ("arxiv", "email"):
+        return value
+    # auto: prefer explicit env/config selection, fallback to arxiv.
+    if value == "auto":
+        env_value = str(os.getenv("DPR_FETCH_SOURCE") or "").strip().lower()
+        if env_value in ("arxiv", "email"):
+            return env_value
+        setting = load_arxiv_paper_setting()
+        cfg_value = str(setting.get("fetch_source") or "").strip().lower()
+        if cfg_value in ("arxiv", "email"):
+            return cfg_value
+        return "arxiv"
+    return "arxiv"
+
+
 def build_paper_index(papers: Any, trace_set: set[str]) -> dict[str, dict[str, Any]]:
     index: dict[str, dict[str, Any]] = {}
     if not isinstance(papers, list):
@@ -560,6 +577,12 @@ def main() -> None:
         help="Force fetch-run mode: auto(按阈值), standard(非skims), skims(强制skims).",
     )
     parser.add_argument(
+        "--fetch-source",
+        default="auto",
+        choices=("arxiv", "email", "auto"),
+        help="Step 1 source: arxiv (legacy) or email (Gmail fetch).",
+    )
+    parser.add_argument(
         "--profile-tag",
         default="",
         help="仅运行指定 tag 对应的词条；大小写不敏感，支持空格。",
@@ -614,6 +637,9 @@ def main() -> None:
     if trace_ids:
         print(f"[TRACE] 启用论文追踪: {', '.join(trace_ids)}", flush=True)
 
+    fetch_source = resolve_fetch_source(args.fetch_source)
+    print(f"[INFO] fetch_source={fetch_source}", flush=True)
+
     archive_dir = os.path.join(ROOT_DIR, "archive", run_date_token)
     raw_path = os.path.join(archive_dir, "raw", f"arxiv_papers_{run_date_token}.json")
     bm25_path = os.path.join(
@@ -635,12 +661,54 @@ def main() -> None:
         "recommend",
         f"arxiv_papers_{run_date_token}.{recommend_mode}.json",
     )
+    gmail_recommend_path = os.path.join(
+        archive_dir,
+        "recommend",
+        f"gmail_papers_{run_date_token}.{recommend_mode}.json",
+    )
 
     if args.run_enrich:
         run_step(
             "Step 0 - enrich config",
             [python, os.path.join(SRC_DIR, "0.enrich_config_queries.py")],
         )
+
+    if fetch_source == "email":
+        print(
+            "[INFO] email source selected: skip arxiv retrieval/rerank/select pipeline steps.",
+            flush=True,
+        )
+        run_step(
+            "Step 1 - fetch email paper list",
+            [
+                python,
+                os.path.join(SRC_DIR, "1.fetch_email_paper_list.py"),
+                "--date",
+                run_date_token,
+                "--mode",
+                recommend_mode,
+            ],
+        )
+        run_step(
+            "Step 6 - Generate Docs",
+            [
+                python,
+                os.path.join(SRC_DIR, "6.generate_docs.py"),
+                "--mode",
+                recommend_mode,
+                *(
+                    ["--sidebar-date-label", sidebar_date_label]
+                    if sidebar_date_label
+                    else []
+                ),
+            ],
+            env=resolve_summary_step_env(),
+        )
+        if os.path.exists(gmail_recommend_path):
+            print(f"[INFO] email recommend found: {gmail_recommend_path}", flush=True)
+        else:
+            print(f"[WARN] email recommend missing: {gmail_recommend_path}", flush=True)
+        return
 
     # 判断是否跳过 Step 1（全量数据拉取）
     if args.skip_fetch is None:
