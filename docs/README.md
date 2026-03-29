@@ -6,23 +6,33 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-03-24
-- 运行时间：2026-03-29 17:52:02 UTC
+- 最新运行日期：📧 2026-03-27
+- 运行时间：2026-03-29 18:47:23 UTC
 - 运行状态：成功
-- 本次总论文数：2
-- 精读区：2
+- 本次总论文数：7
+- 精读区：7
 - 速读区：0
 
 ### 今日简报（AI）
-今日聚焦半监督医疗影像分割，深入研读了对比学习结合多尺度切换与文本锚点引导的前沿突破。
-研究表明，通过多尺度机制优化超声影像及利用文本语义解耦目标特征，能显著提升少标注场景下的分割精度。
-建议关注跨模态信息融合与尺度自适应策略，以应对医疗AI在临床应用中数据标注匮乏的挑战。
-- 详情：[/202603/24/README](/202603/24/README)
+今日精读 7 篇前沿论文，聚焦 AI 在肺栓塞精准诊断与放射性肺炎预测中的深度应用。
+重点关注 Squeeze-and-Attention U-Net 对 CT 影像分割的精度提升，以及联邦学习在免疫治疗联合放疗预后中的跨机构建模优势。
+建议关注 AI 如何通过注意力机制与隐私计算，解决胸部复杂病灶的精准识别与多中心数据协作难题。
+- 详情：[/202603/27/README](/202603/27/README)
 
 ### 精读区论文标签
-1. [Multiscale Switch for Semi-Supervised and Contrastive Learning in Medical Ultrasound Image Segmentation](/202603/24/multiscale-switch-for-semi-supervised-and-contrastive-learning-in-medical-ultrasound-image-segmentation)  
+1. [Enhancing pulmonary embolism diagnosis: a squeeze-and-attention U-Net for precise detection and segmentation in CT angiography](/202603/27/enhancing-pulmonary-embolism-diagnosis-a-squeeze-and-attention-u-net-for-precise-detection-and-segmentation-in-ct-angiography)  
    标签：无标签
-2. [Decoupling Target Semantics via Text-anchored Visual Contrast for Semi-supervised Medical Image Segmentation](/202603/24/decoupling-target-semantics-via-text-anchored-visual-contrast-for-semi-supervised-medical-image-segmentation)  
+2. [Adapting Federated Radiomics Models for Radiation Pneumonitis Prediction in Patients Receiving Thoracic Radiotherapy with Immunotherapy](/202603/27/adapting-federated-radiomics-models-for-radiation-pneumonitis-prediction-in-patients-receiving-thoracic-radiotherapy-with-immunotherapy)  
+   标签：无标签
+3. [Decoding the pancreatic duct: Multi-structure radiomics redefines risk stratification and early cancer detection in intraductal papillary mucinous neoplasm](/202603/27/decoding-the-pancreatic-duct-multi-structure-radiomics-redefines-risk-stratification-and-early-cancer-detection-in-intraductal-papillary-mucinous-neoplasm)  
+   标签：无标签
+4. [On the power and limits of foundation model image embeddings for privacy-preserving federated learning](/202603/27/on-the-power-and-limits-of-foundation-model-image-embeddings-for-privacy-preserving-federated-learning)  
+   标签：无标签
+5. [SAM-Guided Semi-Supervised Breast Lesion Segmentation in Ultrasound Videos with A New Dataset](/202603/27/sam-guided-semi-supervised-breast-lesion-segmentation-in-ultrasound-videos-with-a-new-dataset)  
+   标签：无标签
+6. [TumorCLIP: Lightweight Vision-Language Fusion for Explainable MRI-Based Brain Tumor Classification](/202603/27/tumorclip-lightweight-vision-language-fusion-for-explainable-mri-based-brain-tumor-classification)  
+   标签：无标签
+7. [SHAPE: Structure-aware Hierarchical Unsupervised Domain Adaptation with Plausibility Evaluation for Medical Image Segmentation](/202603/27/2603.21904-shape-structure-aware-hierarchical-unsupervised-domain-adaptation-with-plausibility-evaluation-for-medical-image-segmentation)  
    标签：无标签
 
 ### 速读区论文标签
