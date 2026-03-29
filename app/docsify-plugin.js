@@ -1417,13 +1417,16 @@ window.$docsify = {
             rawText = (label && (label.textContent || '').trim()) || '';
           }
 
-          const rangeMatch = rawText.match(
+          const dayLabelText = String(rawText || '')
+            .replace(/^[^\d]*/, '')
+            .trim();
+          const rangeMatch = dayLabelText.match(
             /^(\d{4}-\d{2}-\d{2})\s*~\s*(\d{4}-\d{2}-\d{2})$/,
           );
-          const isSingleDay = /^\d{4}-\d{2}-\d{2}$/.test(rawText);
+          const isSingleDay = /^\d{4}-\d{2}-\d{2}$/.test(dayLabelText);
           if (!isSingleDay && !rangeMatch) return;
 
-          const dayKey = rangeMatch ? rangeMatch[2] : rawText; // 用区间“结束日”参与最新日判断
+          const dayKey = rangeMatch ? rangeMatch[2] : dayLabelText; // 用区间“结束日”参与最新日判断
           if (hiddenDays.has(dayKey)) return;
 
           dayItems.push({ li, text: rawText, firstTextNode, dayKey });
