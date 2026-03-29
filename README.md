@@ -152,12 +152,13 @@ https://<你的用户名>.github.io/daily-paper-reader
 
 ### 3) 获取 API Key
 - 在 Maton 控制台创建并复制 `MATON_API_KEY`
-- 在本项目后台管理的“秘钥配置”中填入 `MATON_API_KEY`（可选）
+- 在本项目后台管理的“秘钥配置”中填入 `MATON_API_KEY`
 
 ### 4) 在项目中使用邮件检索
 - 在控制面板选择邮件检索入口（`email-admin-quick-run-btn`）
-- 选择单日或日期范围，并填写可选关键词后运行
-- 后端会将该参数传递给 `main.py` 与 `src/1.fetch_email_paper_list.py`
+- 选择单日或日期范围
+- 填写可选关键词（默认获取当天谷歌学术的new related research邮件）
+- 运行邮件检索
 
 ## ❓ FAQ
 
