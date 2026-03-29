@@ -66,7 +66,6 @@ window.SubscriptionsSmartQuery = (function () {
   const PAPER_SOURCE_ORDER = [
     'arxiv',
     'biorxiv',
-    'email',
     'medrxiv',
     'chemrxiv',
     'neurips',
@@ -76,11 +75,10 @@ window.SubscriptionsSmartQuery = (function () {
     'emnlp',
     'aaai',
   ];
-  const VISIBLE_PAPER_SOURCES = ['arxiv', 'biorxiv', 'email'];
+  const VISIBLE_PAPER_SOURCES = ['arxiv', 'biorxiv'];
   const PAPER_SOURCE_LABELS = {
     arxiv: 'arXiv',
     biorxiv: 'bioRxiv',
-    email: 'Email',
     medrxiv: 'medRxiv',
     chemrxiv: 'ChemRxiv',
     neurips: 'NeurIPS',
