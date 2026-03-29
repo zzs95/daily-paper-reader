@@ -445,7 +445,7 @@
       const rerankerBaseUrl = normalizeBaseUrlForStorage(safeOptions.rerankerBaseUrl || '');
       const rerankerModel = normalizeText(safeOptions.rerankerModel || '');
 
-      if (!summarizedApiKey || !summarizedBaseUrl || !summarizedModel || !matonApiKey) {
+      if (!summarizedApiKey || !summarizedBaseUrl || !summarizedModel) {
         throw new Error('总结模型配置不完整，无法写入 GitHub Secrets。');
       }
 
@@ -507,9 +507,11 @@
         { name: secretNameBltSummaryModel, value: summarizedModel },
         { name: secretNameBltFilterModel, value: filterModel || summarizedModel },
         { name: secretNameBltRewriteModel, value: rewriteModel || summarizedModel },
-        { name: secretNameMatonKey, value: matonApiKey },
         { name: secretNameSkipRerank, value: skipRerank ? 'true' : 'false' },
       ];
+      if (matonApiKey) {
+        secrets.push({ name: secretNameMatonKey, value: matonApiKey });
+      }
 
       if (!skipRerank && providerType === 'plato' && rerankerApiKey && rerankerBaseUrl && rerankerModel) {
         secrets.push(
@@ -926,7 +928,7 @@
             需要具备 <code>repo</code> 和 <code>workflow</code> 权限。
           </div>
 
-          <div style="font-weight:500; margin-bottom:4px;">Gmail MATON_API_KEY（必填）</div>
+          <div style="font-weight:500; margin-bottom:4px;">Gmail MATON_API_KEY（可选）</div>
           <input
             id="secret-setup-maton"
             type="password"
@@ -938,7 +940,7 @@
             验证 MATON_API_KEY
           </button>
           <div id="secret-setup-maton-status" style="min-height:18px; font-size:12px; color:#999; margin-bottom:10px;">
-            将加密写入 GitHub Secret：<code>MATON_API_KEY</code>。
+            可选：填写后将加密写入 GitHub Secret：<code>MATON_API_KEY</code>。
           </div>
 
           <div style="font-weight:500; margin-bottom:6px;">聊天 / 论文概述模型来源</div>
@@ -1152,7 +1154,7 @@
       }
 
       let githubOk = !!initialGithubToken;
-      let matonOk = !!initialMatonApiKey;
+      let matonOk = true;
       let platoOk = currentProviderType === 'plato' && !!initialApiKey;
       let customOk =
         currentProviderType === 'openai-compatible'
@@ -1190,8 +1192,14 @@
       };
 
       const resetMatonStatus = () => {
-        matonOk = false;
-        matonStatusEl.innerHTML = '将加密写入 GitHub Secret：<code>MATON_API_KEY</code>。';
+        const key = normalizeText(matonInput && matonInput.value);
+        if (key) {
+          matonOk = false;
+          matonStatusEl.innerHTML = '可选：若填写 MATON_API_KEY，请先验证后再保存。';
+        } else {
+          matonOk = true;
+          matonStatusEl.innerHTML = '未填写 MATON_API_KEY，将跳过 Gmail API 密钥写入。';
+        }
         matonStatusEl.style.color = '#999';
       };
 
@@ -1408,9 +1416,9 @@
       matonVerifyBtn.addEventListener('click', async () => {
         const key = normalizeText(matonInput.value);
         if (!key) {
-          matonStatusEl.textContent = '请先输入 MATON_API_KEY。';
-          matonStatusEl.style.color = '#c00';
-          matonOk = false;
+          matonStatusEl.textContent = '未填写 MATON_API_KEY（可选），保存时将跳过该密钥。';
+          matonStatusEl.style.color = '#666';
+          matonOk = true;
           return;
         }
         matonVerifyBtn.disabled = true;
@@ -1509,8 +1517,8 @@
           setErrorText('请先填写并通过验证 GitHub Token。', '#c00');
           return;
         }
-        if (!matonKey || !matonOk) {
-          setErrorText('请先填写并通过验证 MATON_API_KEY。', '#c00');
+        if (matonKey && !matonOk) {
+          setErrorText('已填写 MATON_API_KEY，请先完成验证。', '#c00');
           return;
         }
 
