@@ -834,7 +834,7 @@ window.SubscriptionsManager = (function () {
               <input id="email-admin-run-date-end" type="date" style="width:100%;" />
             </div>
             <div class="chat-quick-run-row">
-              <label for="email-admin-run-keyword">检索关键字、作者姓名</label>
+              <label for="email-admin-run-keyword">检索邮件关键字/作者姓名</label>
               <input id="email-admin-run-keyword" type="text" placeholder="默认：new related research" style="width:100%;" />
             </div>
             <button id="email-admin-quick-run-btn" class="chat-quick-run-run-btn" type="button">运行邮件检索</button>
