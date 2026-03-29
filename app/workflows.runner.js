@@ -832,7 +832,10 @@ window.DPRWorkflowRunner = (function () {
       email_date: token,
       fetch_source: fetchSource,
     };
-    if (mode) {
+    // email 模式固定 standard；仅非 email 场景才透传外部 mode
+    if (fetchSource === 'email') {
+      baseInputs.fetch_mode = 'standard';
+    } else if (mode) {
       baseInputs.fetch_mode = mode;
     }
     if (profileTag) {

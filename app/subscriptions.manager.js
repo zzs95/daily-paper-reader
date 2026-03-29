@@ -20,7 +20,6 @@ window.SubscriptionsManager = (function () {
   let runDateSingleEl = null;
   let runDateRangeStartEl = null;
   let runDateRangeEndEl = null;
-  let runModeSelectEl = null;
   let emailKeywordEl = null;
   let quickRunConferenceBtn = null;
   let quickRunYearSelect = null;
@@ -461,7 +460,7 @@ window.SubscriptionsManager = (function () {
       return;
     }
 
-    const mode = normalizeText(runModeSelectEl && runModeSelectEl.value) || 'auto';
+    const mode = 'standard';
     const profileTag = normalizeText(emailKeywordEl && emailKeywordEl.value);
     window.DPRWorkflowRunner.runMainByDateToken(dateResult.token, {
       mode,
@@ -715,7 +714,7 @@ window.SubscriptionsManager = (function () {
       date_start: normalizeText(emailQuickRun.date_start || ''),
       date_end: normalizeText(emailQuickRun.date_end || ''),
       keyword: normalizeText(emailQuickRun.keyword || ''),
-      mode: normalizeText(emailQuickRun.mode || 'auto') || 'auto',
+      mode: 'standard',
     };
 
     if (!next.subscriptions) next.subscriptions = {};
@@ -837,14 +836,6 @@ window.SubscriptionsManager = (function () {
               <label for="email-admin-run-keyword">检索关键字</label>
               <input id="email-admin-run-keyword" type="text" placeholder="可选：词条标签或关键字" style="width:100%;" />
             </div>
-            <div class="chat-quick-run-row">
-              <label for="email-admin-run-mode-select">模式</label>
-              <select id="email-admin-run-mode-select">
-                <option value="auto">auto</option>
-                <option value="standard">standard</option>
-                <option value="skims">skims</option>
-              </select>
-            </div>
             <button id="email-admin-quick-run-btn" class="chat-quick-run-run-btn" type="button">运行邮件检索</button>
             <div id="arxiv-admin-quick-run-msg" class="chat-quick-run-msg"></div>
 
@@ -916,7 +907,6 @@ window.SubscriptionsManager = (function () {
       if (runDateRangeStartEl) runDateRangeStartEl.value = normalizeText(emailQuickRun.date_start || '');
       if (runDateRangeEndEl) runDateRangeEndEl.value = normalizeText(emailQuickRun.date_end || '');
       if (emailKeywordEl) emailKeywordEl.value = normalizeText(emailQuickRun.keyword || '');
-      if (runModeSelectEl) runModeSelectEl.value = normalizeText(emailQuickRun.mode || 'auto') || 'auto';
       refreshQuickRunButtons();
       if (window.SubscriptionsSmartQuery && window.SubscriptionsSmartQuery.clearPendingDeletedProfileIds) {
         window.SubscriptionsSmartQuery.clearPendingDeletedProfileIds();
@@ -957,7 +947,7 @@ window.SubscriptionsManager = (function () {
         date_start: normalizeText(runDateRangeStartEl && runDateRangeStartEl.value),
         date_end: normalizeText(runDateRangeEndEl && runDateRangeEndEl.value),
         keyword: normalizeText(emailKeywordEl && emailKeywordEl.value),
-        mode: normalizeText(runModeSelectEl && runModeSelectEl.value) || 'auto',
+        mode: 'standard',
       };
 
       const toSave = normalizeSubscriptions(draftToSave);
@@ -1078,7 +1068,6 @@ window.SubscriptionsManager = (function () {
     runDateSingleEl = document.getElementById('email-admin-run-date-single');
     runDateRangeStartEl = document.getElementById('email-admin-run-date-start');
     runDateRangeEndEl = document.getElementById('email-admin-run-date-end');
-    runModeSelectEl = document.getElementById('email-admin-run-mode-select');
     emailKeywordEl = document.getElementById('email-admin-run-keyword');
     quickRunMsgEl = document.getElementById('arxiv-admin-quick-run-msg');
     resetContentBtn = document.getElementById('arxiv-admin-reset-content-btn');
@@ -1138,7 +1127,7 @@ window.SubscriptionsManager = (function () {
       runByDateBtn._bound = true;
       runByDateBtn.addEventListener('click', runMainByDate);
     }
-    [runDateSingleEl, runDateRangeStartEl, runDateRangeEndEl, runModeSelectEl, emailKeywordEl].forEach((el) => {
+    [runDateSingleEl, runDateRangeStartEl, runDateRangeEndEl, emailKeywordEl].forEach((el) => {
       if (!el || el._boundConfigChange) return;
       el._boundConfigChange = true;
       const evt = el.tagName === 'SELECT' ? 'change' : 'input';
