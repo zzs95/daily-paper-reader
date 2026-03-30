@@ -1,0 +1,348 @@
+Title: Fine-Tuned Segment Anything Model with Low-Rank Adaptation for Chest X-Ray Images
+
+URL Source: https://www.mdpi.com/2075-4418/16/6/847
+
+Markdown Content:
+Logical Operator Operator
+
+Search Text
+
+Search Type
+
+_add\_circle\_outline_
+
+_remove\_circle\_outline_
+
+[![Image 1: diagnostics-logo](https://pub.mdpi-res.com/img/journals/diagnostics-logo.png?5d2b2bb8cfafbf2e)](https://www.mdpi.com/journal/diagnostics)
+
+## Article Menu
+
+Font Type:
+
+_Arial_ _Georgia_ _Verdana_
+
+Font Size:
+
+Aa Aa Aa
+
+Line Spacing:
+
+__ __ __
+
+Column Width:
+
+__ __ __
+
+Background:
+
+Open Access Article
+
+by 
+Saeed S. Alahmari
+
+ 1[](mailto:ssalahmari@nu.edu.sa), 
+Michael R. Gardner
+
+ 2,*[](mailto:mgardner@kfu.edu.sa)[![Image 2: ORCID](https://pub.mdpi-res.com/img/design/orcid.png?0465bc3812adeb52?1774514559)](https://orcid.org/0000-0002-2308-0707), 
+Fawaz Alqahtani
+
+ 3 and 
+Tawfiq Salem
+
+ 4
+
+1
+
+Department of Computer Science, Najran University, Najran 66462, Saudi Arabia
+
+2
+
+Department of Biomedical Engineering, College of Engineering, King Faisal University, Al Ahsa 31982, Saudi Arabia
+
+3
+
+Department of Radiological Sciences, College of Applied Medical Sciences, King Khalid University, Abha 61421, Saudi Arabia
+
+4
+
+School of Applied and Creative Computing, Purdue University, West Lafayette, IN 47906, USA
+
+*
+
+Author to whom correspondence should be addressed.
+
+Submission received: 16 November 2025 / Revised: 15 January 2026 / Accepted: 3 February 2026 / Published: 12 March 2026
+
+## Abstract
+
+**Background:** This paper investigates the use of the Segment Anything Model (SAM) for chest X-ray (CXR) image segmentation, with a focus on improving its performance using low-rank adaptation (LoRA). **Methods:** We evaluate three versions of SAM: two zero-shot methods (using coordinate and bounding box prompts) and a fine-tuned SAM using LoRA. To support these approaches, we also trained two standard convolutional neural networks (CNNs), U-Net and DeepLabv3+, to generate draft lung segmentations that serve as input prompts for the SAM methods. Our fine-tuning approach uses LoRA to add lightweight trainable adapters within the Transformer blocks of the SAM, allowing only a small subset of parameters to be updated. The rest of the SAM remains frozen, helping preserve its pre-trained knowledge while reducing memory and computational needs. We tested all models on a dataset of CXR images labeled for COVID-19, viral pneumonia, and normal cases. **Results:** Results show that fine-tuned SAM with LoRA outperforms zero-shot SAM methods and CNN baselines in terms of segmentation accuracy and efficiency. **Conclusions:** This demonstrates the potential of combining LoRA with SAM for practical and effective medical image segmentation.
+
+## 1. Introduction
+
+Chest X-rays (CXRs) are one of the most widely used diagnostic imaging modalities in clinical practice due to their low cost, speed, and effectiveness in detecting various thoracic diseases, including pneumonia and COVID-19 [[1](https://www.mdpi.com/2075-4418/16/6/847#B1-diagnostics-16-00847),[2](https://www.mdpi.com/2075-4418/16/6/847#B2-diagnostics-16-00847)]. Accurate segmentation of anatomical regions, particularly the lungs, is a critical step in many automated CXR analysis systems. Segmentation enables downstream tasks such as disease localization, severity assessment, and treatment planning [[3](https://www.mdpi.com/2075-4418/16/6/847#B3-diagnostics-16-00847),[4](https://www.mdpi.com/2075-4418/16/6/847#B4-diagnostics-16-00847)]. Traditional convolutional neural networks (CNNs), such as U-Net [[5](https://www.mdpi.com/2075-4418/16/6/847#B5-diagnostics-16-00847)] and DeepLabv3+ [[6](https://www.mdpi.com/2075-4418/16/6/847#B6-diagnostics-16-00847)], have demonstrated strong performance in medical image segmentation. However, these models often require large amounts of annotated data and extensive training time. Moreover, they are typically designed and trained for specific tasks, limiting their flexibility and generalizability to new domains or datasets [[7](https://www.mdpi.com/2075-4418/16/6/847#B7-diagnostics-16-00847),[8](https://www.mdpi.com/2075-4418/16/6/847#B8-diagnostics-16-00847)]. The Segment Anything Model (SAM) [[9](https://www.mdpi.com/2075-4418/16/6/847#B9-diagnostics-16-00847)], recently introduced by Meta AI, represents a new class of foundation models designed for general-purpose image segmentation. SAM is trained on a large and diverse dataset and can perform zero-shot segmentation using user-provided prompts such as points, bounding boxes, or masks. While promising, SAM’s performance in the medical domain—particularly on grayscale images like CXRs—remains largely unexplored. Early studies suggest that domain-specific fine-tuning is needed to adapt such large models for medical imaging tasks [[10](https://www.mdpi.com/2075-4418/16/6/847#B10-diagnostics-16-00847)]. To address this, we explore the fine-tuning of SAM using low-rank adaptation (LoRA) [[11](https://www.mdpi.com/2075-4418/16/6/847#B11-diagnostics-16-00847)], a parameter-efficient learning technique that enables targeted adaptation of pre-trained Transformer-based models. LoRA reduces the number of trainable parameters by injecting trainable low-rank matrices into existing model layers, allowing the base model to remain mostly frozen. This makes LoRA particularly attractive in medical imaging settings, where computational resources and labeled data are often limited. In this paper, we compare three SAM-based approaches for lung segmentation in CXR images: (1) zero-shot SAM with coordinate prompting, (2) zero-shot SAM with bounding box prompting, and (3) fine-tuned SAM using LoRA. For comparison, we also evaluate two CNN baselines (U-Net and DeepLabv3+) trained from scratch. We validate our methods on that include COVID-19, viral pneumonia, and normal CXR cases. Our contributions are summarized as follows:
+
+1.
+We benchmark zero-shot SAM segmentation using coordinate and bounding box prompts derived from CNN-generated masks.
+
+2.
+We propose a fine-tuning strategy for SAM using LoRA, tailored to the chest X-ray segmentation task.
+
+3.
+We evaluate the performance of all models on curated CXR datasets, demonstrating that LoRA-tuned SAM outperforms both zero-shot methods and CNN baselines under constrained settings.
+
+## 2. Background
+
+Chest X-ray segmentation is essential for accurate diagnosis of diseases. Many approaches have been studied and developed for lung segmentation. An approach was proposed by Rajaraman et al. for the generalizability of lung segmentation from adult to pediatric cases. The authors performed a systematic evaluation and proposed the mean lung contour distance (MLCD) and average hash score (AHS) [[12](https://www.mdpi.com/2075-4418/16/6/847#B12-diagnostics-16-00847)]. For tuberculosis chest X-ray segmentation and detection, a TB-UNet deep learning architecture was proposed by Iqbal et al. that uses dilated fusion blocks and attention blocks for lung segmentation. This work showed high precision and recall and was validated for different respiratory diseases such as pneumonia, COVID-19, and tuberculosis [[13](https://www.mdpi.com/2075-4418/16/6/847#B13-diagnostics-16-00847)]. Since the original U-Net architecture is large in its number of parameters, a smaller and lighter-weight U-Net was proposed by Arvind et al. to avoid overfitting of the model [[14](https://www.mdpi.com/2075-4418/16/6/847#B14-diagnostics-16-00847)]. This approach utilizes dropout in the deconvolution layers and was validated for semantic segmentation of chest X-rays using three datasets: the JSRT dataset, the Shenzhen dataset, and the MC dataset.
+
+An attention-U-Net-based neural network that uses a general adversarial network [[15](https://www.mdpi.com/2075-4418/16/6/847#B15-diagnostics-16-00847)] was proposed in [[16](https://www.mdpi.com/2075-4418/16/6/847#B16-diagnostics-16-00847)] for lung segmentation. This approach was validated using the JSRT dataset and showed an average dice similarity coefficient of 97%. Another approach that uses an attention Transformer layer at the bottleneck was proposed by Din et al. [[17](https://www.mdpi.com/2075-4418/16/6/847#B17-diagnostics-16-00847)]. This approach consists of four components: an encoder that is a pre-trained EfficientNet, a module for spatial enhancement in the skip connection, an attention Transformer module in the bottleneck layer, and a fusion of multi-scale features used for the decoder. This approach was validated using multiple chest X-ray datasets, including MC, Darwin, and Chenzhen datasets. Another study proposed Attention U-Net, where an attention module is added in the skipping connection of the U-Net layer for lung segmentation to enhance tuberculosis detection [[18](https://www.mdpi.com/2075-4418/16/6/847#B18-diagnostics-16-00847)] using the Montgomery Chest X-ray dataset ([https://www.kaggle.com/datasets/raddar/tuberculosis-chest-xrays-montgomery](https://www.kaggle.com/datasets/raddar/tuberculosis-chest-xrays-montgomery) (accessed on 16 November 2025)) and Shenzhen Chest X-ray dataset ([https://www.kaggle.com/datasets/raddar/tuberculosis-chest-xrays-shenzhen](https://www.kaggle.com/datasets/raddar/tuberculosis-chest-xrays-shenzhen) (accessed on 16 November 2025)). The authors also proposed a modified V-Net architecture, where they added a non-local block in the bottleneck layer. Furthermore, the authors modified and configured Seg-Net to use VGG16. The three neural network architectures were used for lung segmentation, where the proposed U-Net and V-Net showed the highest dice similarity coefficient compared to Seg-Net.
+
+An experimental study by Hasan et al. uses DeepLabv3+ for the segmentation of the chest X-ray lung region [[19](https://www.mdpi.com/2075-4418/16/6/847#B19-diagnostics-16-00847)]. This approach uses DeepLabv3+, which uses Atrous convolution and modified pooling layers. This approach has an average dice coefficient of 96.63% using the Chenzhen chest X-ray dataset. Another experimental study that uses an ensemble of four convolutional neural network models pre-trained on ImageNet as an encoder for the U-Net architecture was undertaken by Abedalla et al. [[20](https://www.mdpi.com/2075-4418/16/6/847#B20-diagnostics-16-00847)]. The authors used four pre-trained models: ResNet50, DenseNet169, ResNext50, and EfficientNetB4. Furthermore, the authors experimented with stochastic weight averaging (SWA), test-time augmentation, and data augmentation. This experiment was done using the Pneumothorax challenge dataset (2019), where the ensemble neural network model showed an average dice similarity coefficient of 0.860. Similarly, a study was carried out by Rahman et al. for chest X-ray lung segmentation and tuberculosis detection [[21](https://www.mdpi.com/2075-4418/16/6/847#B21-diagnostics-16-00847)]. The authors used a U-Net for lung segmentation and nine neural network pre-trained models for tuberculosis detection. The dataset for this approach was based on several public datasets, where the total chest X-ray images with tuberculosis is 3500, and the total number of normal chest X-ray images is 3500.
+
+A modified U-Net architecture was proposed in [[22](https://www.mdpi.com/2075-4418/16/6/847#B22-diagnostics-16-00847)]. This approach uses the EfficientNet-B4 model pre-trained on ImageNet as the encoder. Furthermore, a residual block and leakyReLU activation are used in the decoder. This modification showed an improvement in the Jaccard Index of 6% on two benchmark datasets, including the JSRT dataset [[23](https://www.mdpi.com/2075-4418/16/6/847#B23-diagnostics-16-00847)] and Montgomery dataset [[24](https://www.mdpi.com/2075-4418/16/6/847#B24-diagnostics-16-00847)]. Furthermore, this approach showed 9% improvement on a private chest X-ray dataset.
+
+Precise lung segmentation improves the accurate detection of certain respiratory diseases. However, lung segmentation in chest X-ray images is challenging due to the acquisition settings, the disease’s impact on lung appearance, and the variation in lung shape. The authors of [[25](https://www.mdpi.com/2075-4418/16/6/847#B25-diagnostics-16-00847)] applied multiple models, including vision Transformer models. The models are ARSeg [[26](https://www.mdpi.com/2075-4418/16/6/847#B26-diagnostics-16-00847)], TransM [[27](https://www.mdpi.com/2075-4418/16/6/847#B27-diagnostics-16-00847)], Medical Transformer [[28](https://www.mdpi.com/2075-4418/16/6/847#B28-diagnostics-16-00847)], TransUNet [[27](https://www.mdpi.com/2075-4418/16/6/847#B27-diagnostics-16-00847)], and UNeXt [[29](https://www.mdpi.com/2075-4418/16/6/847#B29-diagnostics-16-00847)] for lung segmentation. The authors trained and validated these models using three datasets, including the Shenzhen chest X-ray dataset [[30](https://www.mdpi.com/2075-4418/16/6/847#B30-diagnostics-16-00847)], the Montgomery chest X-ray dataset [[24](https://www.mdpi.com/2075-4418/16/6/847#B24-diagnostics-16-00847)], and the JSRT chest X-ray dataset [[23](https://www.mdpi.com/2075-4418/16/6/847#B23-diagnostics-16-00847)]. The best performing model achieved an average F1 score of 97.47%. Another study used the segmentation of chest X-ray lung region for the explainability of convolutional neural networks (CNNs) such as VGG16, ResNet, and Inception [[31](https://www.mdpi.com/2075-4418/16/6/847#B31-diagnostics-16-00847)]. The authors applied the segmentation of the lung by masking out the non-lung region, then classified each image into pneumonia, COVID-19, or normal. The authors also assessed training on one source dataset and testing on the other source datasets. The findings indicate that there are biases inherited in the datasets that limit the generalizability of CNN models across datasets.
+
+An approach was proposed to address the difficulty of segmenting the chest X-ray lung region due to the abnormality associated with opacities [[32](https://www.mdpi.com/2075-4418/16/6/847#B32-diagnostics-16-00847)]. This approach patches the chest X-ray image, classifying each patch using a CNN model called AlexNet, then generates masks by constructing patches classified as lung, followed by post-processing. This approach was validated using the Montgomery chest X-ray dataset [[24](https://www.mdpi.com/2075-4418/16/6/847#B24-diagnostics-16-00847)].
+
+## 3. Dataset
+
+To evaluate the proposed methodology, chest X-ray (CXR) images were sourced from a local hospital in the Najran region, Kingdom of Saudi Arabia. The image dataset comprises COVID-19 and normal chest X-ray images obtained from King Khalid Hospital (KKH) in Najran and viral pneumonia images collected from publicly available datasets [[33](https://www.mdpi.com/2075-4418/16/6/847#B33-diagnostics-16-00847)]. Specifically, our dataset includes 552 COVID-19 CXR images acquired between June 2020 and May 2021. For normal images, 511 CXRs were gathered from KKH between March 2017 and February 2018 following a review of corresponding medical imaging reports. Viral pneumonia images, totaling 549, were sourced from publicly available datasets [[33](https://www.mdpi.com/2075-4418/16/6/847#B33-diagnostics-16-00847)].
+
+Ethical approval for this retrospective study was obtained from the institutional review boards of the General Directorate of Health Affairs, Najran (King Khalid Hospital). To enhance the dataset’s diversity, data augmentation techniques such as zooming and horizontal and vertical flipping were applied before model training. [Table 1](https://www.mdpi.com/2075-4418/16/6/847#table_body_display_diagnostics-16-00847-t001) summarizes our dataset, detailing the number of images per class and data sources. The dataset was split into training, validation, and testing subsets. The images in our datasets were resized and center-cropped to 244 × 244-pixel squares, avoiding any image distortion. Segmentation ground truth was collected by two researchers using the Label Studio tool. Example images from the dataset are shown in [Figure 1](https://www.mdpi.com/2075-4418/16/6/847#fig_body_display_diagnostics-16-00847-f001).
+
+**Figure 1.** Images and masks from our dataset are resized and cropped to 224 × 224 pixel squares, avoiding any image distortion. The first column is for images and masks of cases labeled as COVID-19, the second column for images and masks of cases labeled as pneumonia, and the third column for images and masks of cases labeled as normal.
+
+**Table 1.** Summary of image dataset and source.
+
+## 4. Method
+
+To conduct a comprehensive analysis of SAM networks for chest X-ray (CXR) segmentation, the SAM is examined through three distinct approaches: (1) a pre-trained zero-shot SAM utilizing coordinate prompts, (2) a pre-trained zero-shot SAM employing bounding box prompts, and (3) a fine-tuned SAM adapted using LoRA. The performance of these three SAM-based methods is further compared with two widely used convolutional neural networks (CNNs): (1) DeepLab-v3+ and (2) U-Net. These were both applied to CXR image segmentation. Since the zero-shot SAM approaches—based on coordinate and bounding box prompting—require an initial or “draft” segmentation of the image, this section first presents an overview of CNN-based segmentation before introducing and analyzing each of the three SAM-based methods.
+
+### 4.1. Convolutional Neural Networks
+
+We trained, validated, and tested two CNNs on an internal dataset of image/mask pairs partitioned into training (944), validation (329), and testing (311) sets. Both U-Net and DeepLabv3+ networks were trained from scratch using a stochastic gradient descent with momentum (SGDM) solver with an initial learn rate of 0.001. The maximum number of epochs was set to 5. Both networks were trained on a single-CPU MacBook Pro (2021) equipped with an Apple M1 Pro chip (Cupertino, CA, USA).
+
+The two networks were assessed in terms of accuracy, intersection over union (IoU), and dice coefficient. The better-performing network was also used to segment images in the external dataset to test its generalizability. Its accuracy, dice coefficient, and IoU are also reported. In [Figure 2](https://www.mdpi.com/2075-4418/16/6/847#fig_body_display_diagnostics-16-00847-f002), we show the DeepLabv3 training pipeline [[34](https://www.mdpi.com/2075-4418/16/6/847#B34-diagnostics-16-00847)].
+
+**Figure 2.** DeepLabv3 training for CXR images segmentation.
+
+### 4.2. Zero-Shot SAM with Coordinate Prompting
+
+To assess the zero-shot segmentation performance of the SAM on chest X-ray (CXR) images, the CNN model that demonstrated superior performance in our preliminary comparisons was selected as the base network for generating initial, or draft, lung segmentations. These preliminary segmentations were subsequently utilized to guide the SAM through two distinct prompting strategies: coordinate-based prompting and bounding-box-based prompting.
+
+In the coordinate-based prompting strategy for zero-shot SAM, a total of 105 prompting points were generated. These points were randomly sampled from the lung regions identified in the CNN-derived probability maps. The sampling process was probabilistically weighted such that pixels with higher lung-label probabilities had an increased likelihood of being selected as prompts. This approach ensured that the coordinate prompts were concentrated in high-confidence lung regions, thereby strengthening the reliability of the SAM’s zero-shot segmentation performance. The overall pipeline for generating both coordinate and bounding box prompts, based on DeepLabv3 segmentation masks, is illustrated in [Figure 3](https://www.mdpi.com/2075-4418/16/6/847#fig_body_display_diagnostics-16-00847-f003), which demonstrates their role in guiding the SAM to produce segmentation masks for chest X-ray images.
+
+**Figure 3.** Zero-shot SAM where the input image is encoded, and the prompt is encoded for generating a segmentation mask.
+
+### 4.3. Pre-Trained SAM with Bounding Box Prompting
+
+For the bounding-box-based prompting strategy of the SAM, we utilized the lung segmentation masks generated by the CNN to derive tight bounding boxes around each lung in the chest X-ray images. These bounding boxes were computed by identifying the smallest rectangular region that fully encompassed the predicted lung area. Each derived bounding box, together with the corresponding raw chest X-ray image, was then provided as input to the SAM. Upon receiving this input, the SAM generated a segmentation output based on the spatial information provided by the bounding box, effectively leveraging the prior localization to guide its zero-shot segmentation predictions.
+
+### 4.4. Fine-Tuned SAM Using LoRA
+
+In this section, we describe our approach to fine-tuning the SAM using the low-rank adaptation (LoRA) technique, which aims to reduce the number of trainable parameters while maintaining high performance. LoRA introduces low-rank matrix adapters into the Transformer architecture, enabling efficient training by adjusting only a small subset of weights. This method is particularly effective when computational resources or labeled data are limited. [Figure 4](https://www.mdpi.com/2075-4418/16/6/847#fig_body_display_diagnostics-16-00847-f004) shows the design of the LoRA decomposition of the backpropagation matrix into two matrices with hyperparameter r.
+
+**Figure 4.** An illustration of LoRA approach for augmenting the original weights with A and B matrices.
+
+To accelerate the fine-tuning process of SAM, we integrated LoRA modules between each Transformer block in the image encoder, treating them as residual bypass connections. The original weights of the SAM were kept frozen to preserve the pre-trained knowledge, while only the newly introduced LoRA modules, the prompt encoder, and the mask decoder were set to be trainable. This selective training strategy enables targeted adaptation to the chest X-ray domain, significantly reducing memory and compute requirements compared to full model fine-tuning and making the approach more practical for medical imaging applications. The pipeline of fine-tuning is shown in [Figure 5](https://www.mdpi.com/2075-4418/16/6/847#fig_body_display_diagnostics-16-00847-f005), where fine-tuning and testing of SAM were done on an NVIDIA GeForce 1080Ti GPU (Santa Clara, CA, USA).
+
+**Figure 5.** Fine-tuning SAM LoRA for segmentation of CXR images.
+
+## 5. Results and Discussion
+
+In this section, we detail the results of our zero-shot assessment of the SAM versus other fine-tuning approaches, such as fine-tuning the SAM with LoRA. [Table 2](https://www.mdpi.com/2075-4418/16/6/847#table_body_display_diagnostics-16-00847-t002) presents the performance of the Segment Anything Model (SAM) in segmenting chest X-ray (CXR) images when varying the number of coordinate prompts with a zero-shot approach. The number of coordinates ranged from 15 to 105, increasing in steps of 15. Six evaluation metrics are reported: accuracy (%), intersection over union (IOU), dice coefficient, precision, recall, and F1-score. This experiment aimed to assess how increasing spatial supervision via coordinate prompts impacts segmentation quality in a zero-shot setting.
+
+**Table 2.** Performance of SAM using prompts with different numbers of coordinates, starting at 15 with an increment of 15 coordinates up to 105 coordinates.
+
+The results demonstrate a consistent performance improvement with more coordinate prompts. Starting with 15 points, the SAM achieved 56.2% accuracy, 0.409 IOU, 0.571 dice coefficient, 0.441 precision, 0.856 recall, and 0.571 F1-score. As the number of coordinates increased, all metrics showed steady gains. For example, at 60 coordinates, the accuracy rose to 59.6%, IOU to 0.439, dice coefficient to 0.599, precision to 0.463, recall to 0.891, and F1-score to 0.599.
+
+The best overall performance was observed between 90 and 105 coordinates, where accuracy plateaued at approximately 60.3–60.6%, IOU reached up to 0.451, dice coefficient peaked at 0.611, precision peaked at 0.474, recall reached the highest value at 0.916, and F1-score reached the highest value at 0.611. These results suggest that the SAM benefits from a denser sampling of spatial cues, although the performance gains diminish beyond 75–90 coordinates, indicating a saturation point. This analysis reinforces the importance of prompt design in zero-shot SAM applications. It also provides a comparative baseline for evaluating the improvements achieved by our fine-tuned SAM using LoRA, which surpasses these results, as discussed in the subsequent sections.
+
+In [Table 3](https://www.mdpi.com/2075-4418/16/6/847#table_body_display_diagnostics-16-00847-t003), we present a comprehensive comparison between three segmentation models—U-Net [[5](https://www.mdpi.com/2075-4418/16/6/847#B5-diagnostics-16-00847)], DeepLabv3 [[35](https://www.mdpi.com/2075-4418/16/6/847#B35-diagnostics-16-00847)], and SAM [[9](https://www.mdpi.com/2075-4418/16/6/847#B9-diagnostics-16-00847)]—evaluated on the test set using six widely adopted performance metrics: average accuracy, average intersection over union (IoU), average dice coefficient, average precision, average recall, and average F1-score. These metrics were chosen to provide a balanced assessment of both pixel-level classification quality and region-level segmentation overlap. As shown in the table, fine-tuning the SAM on the newly curated dataset leads to a substantial and consistent improvement over all other evaluated configurations. Specifically, the fine-tuned SAM outperforms its zero-shot variant, as well as the U-Net and DeepLabv3 baselines, across all six metrics. This performance gain indicates that adapting the SAM to the target domain not only enhances its ability to accurately classify individual pixels but also improves its spatial consistency in capturing object boundaries and structural details. The superior IoU and dice coefficient scores further demonstrate the model’s effectiveness in reducing both false positives and false negatives in segmentation outputs. These results collectively suggest that while U-Net and DeepLabv3 remain competitive architectures in many segmentation tasks, the combination of the SAM’s powerful pre-trained representations with task-specific fine-tuning offers a more robust and generalizable approach for high-precision segmentation in this application domain.
+
+**Table 3.** Comparison between the segmentation performance of U-Net, DeepLabv3, and SAM.
+
+In [Figure 6](https://www.mdpi.com/2075-4418/16/6/847#fig_body_display_diagnostics-16-00847-f006), we present the observed improvements in the zero-shot performance of the SAM when supplemented with additional spatial coordinates as part of the input prompt. The results indicate a slight upward trend in performance metrics—including accuracy, IoU, dice coefficient, precision, recall, and F1-score—as the number of spatial coordinates increases, demonstrating that providing the SAM with richer spatial context can slightly enhance its ability to delineate target regions without task-specific fine-tuning. This performance gain persisted up to the inclusion of 90 coordinates, beyond which a noticeable slight decline was observed for some metrics. The degradation in performance at higher coordinate counts suggests a potential saturation, where excessive prompting introduces redundant or noisy spatial information that may confuse the model rather than guide it effectively. Such findings highlight an important trade-off in prompt design: while additional spatial cues can be beneficial, over-selecting coordinates may overwhelm the model’s inference process, thereby impairing its segmentation capabilities under a zero-shot setting. This observation underscores the need for careful calibration of prompt complexity for better segmentation results.
+
+**Figure 6.** Comparison between the number of coordinates and accuracy, IoU, dice coefficient, precision, recall, and F1-score (**bottom**).
+
+In [Figure 7](https://www.mdpi.com/2075-4418/16/6/847#fig_body_display_diagnostics-16-00847-f007), we provide a visualization for comparing U-Net, DeepLabv3+, SAM zero-shot coordinate-based prompting, SAM zero-shot bounding-box-based prompting, and fine-tuned SAM with LoRA capabilities, which shows the superiority of the fine-tuned SAM over all other models.
+
+**Figure 7.** Avisual comparison between different segmentation methods for lungs in CXR images, where SAM ZS BB denotes the SAM zero-shot bounding box approach, SAM ZS (90) denotes the SAM zero-shot with 90 coordinates, and FT SAM + LoRA denotes fine-tuned SAM + LoRA [[6](https://www.mdpi.com/2075-4418/16/6/847#B6-diagnostics-16-00847),[27](https://www.mdpi.com/2075-4418/16/6/847#B27-diagnostics-16-00847)].
+
+A comparative visualization between DeepLabv3, SAM zero-shot with coordinates (90 coordinates), SAM zero-shot with bounding box, and fine-tuned SAM with LoRA is provided in [Figure 8](https://www.mdpi.com/2075-4418/16/6/847#fig_body_display_diagnostics-16-00847-f008). The SAM bounding box underperformed compared with the other approaches. DeepLabv3 performance and the fine-tuned SAM were mostly similar on the visualization.
+
+**Figure 8.** Avisualization of the performance of different models on three categories of chest X-ray images. The masks are overlaid on the original image in purple.
+
+## 6. Conclusions
+
+This study investigated the use of the Segment Anything Model (SAM) for chest X-ray lung segmentation and introduced a lightweight fine-tuning strategy using low-rank adaptation (LoRA). We compared zero-shot SAM approaches with coordinate and bounding box prompts against CNN baselines (U-Net and DeepLabv3+), showing that while prompt design improves zero-shot results, fine-tuned SAM with LoRA achieved the best overall performance across accuracy, IoU, and dice coefficient metrics. These results demonstrate the value of adapting foundation models like SAM to medical imaging and highlight LoRA as an efficient method for achieving high-quality segmentation with limited computational resources. Future work will explore extending this approach to other imaging modalities and tasks, further reducing annotation needs and supporting scalable clinical applications.
+
+## Author Contributions
+
+Conceptualization, S.S.A., M.R.G., F.A. and T.S.; methodology, S.S.A., M.R.G. and T.S.; software, S.S.A., M.R.G. and T.S.; validation, S.S.A., M.R.G. and T.S.; formal analysis, S.S.A., M.R.G. and T.S.; investigation, S.S.A., M.R.G., F.A. and T.S.; resources, S.S.A., M.R.G., F.A. and T.S.; data curation, S.S.A., M.R.G., F.A. and T.S.; writing—original draft preparation, S.S.A., M.R.G., F.A. and T.S.; writing—review and editing, S.S.A., M.R.G., F.A. and T.S.; visualization, S.S.A., M.R.G., F.A. and T.S.; supervision, S.S.A.; project administration, S.S.A.; funding acquisition, M.R.G. All authors have read and agreed to the published version of the manuscript.
+
+## Funding
+
+This work was supported by the Deanship of Scientific Research, Vice Presidency for Graduate Studies and Scientific Research, King Faisal University, Saudi Arabia [Grant No. KFU260633].
+
+## Institutional Review Board Statement
+
+The study was conducted in accordance with the Declaration of Helsinki and was approved by the Institutional Review Board of the General Directorate of Health Affairs, Najran (King Khalid Hospital) (IRB Log Number: 2021-36E; approval date: 31 October 2021).
+
+## Informed Consent Statement
+
+Patient consent was waived by the Institutional Review Board due to the use of fully anonymized retrospective imaging data obtained from the institutional PACS system, with no identifiable personal information included. Written informed consent for publication is not applicable, as no identifiable patient data or images were included in this study.
+
+## Data Availability Statement
+
+Viral pneumoniadata presented in the study are openly available as reported in [[33](https://www.mdpi.com/2075-4418/16/6/847#B33-diagnostics-16-00847)]. COVID-19 and normal data are withheld for patient privacy but available upon request.
+
+## Conflicts of Interest
+
+The authors declare no conflicts of interest. The funders had no role in the design of the study; in the collection, analyses, or interpretation of data; in the writing of the manuscript; or in the decision to publish the results.
+
+## Abbreviations
+
+The following abbreviations are used in this manuscript:
+
+CXR Chest X-ray
+LoRA Low-rank adaptation
+CNN Convolutional neural network
+SAM Segment anything model
+
+## References
+
+1.   Irmici, G.; Cè, M.; Caloro, E.; Khenkina, N.; Della Pepa, G.; Ascenti, V.; Martinenghi, C.; Papa, S.; Oliva, G.; Cellina, M. Chest x-ray in emergency radiology: What artificial intelligence applications are available? Diagnostics**2023**, 13, 216. [[Google Scholar](https://scholar.google.com/scholar_lookup?title=Chest+x-ray+in+emergency+radiology:+What+artificial+intelligence+applications+are+available?&author=Irmici,+G.&author=C%C3%A8,+M.&author=Caloro,+E.&author=Khenkina,+N.&author=Della+Pepa,+G.&author=Ascenti,+V.&author=Martinenghi,+C.&author=Papa,+S.&author=Oliva,+G.&author=Cellina,+M.&publication_year=2023&journal=Diagnostics&volume=13&pages=216&doi=10.3390/diagnostics13020216)] [[CrossRef](https://doi.org/10.3390/diagnostics13020216)]
+2.   Elbarougy, R.; Aboghrara, E.; Behery, G.; Younes, Y.; El-Badry, N.M. COVID-19 detection on chest x-ray images by combining histogram-oriented gradient and convolutional neural network features. Inf. Sci. Lett.**2023**, 12, 2247–2260. [[Google Scholar](https://scholar.google.com/scholar_lookup?title=COVID-19+detection+on+chest+x-ray+images+by+combining+histogram-oriented+gradient+and+convolutional+neural+network+features&author=Elbarougy,+R.&author=Aboghrara,+E.&author=Behery,+G.&author=Younes,+Y.&author=El-Badry,+N.M.&publication_year=2023&journal=Inf.+Sci.+Lett.&volume=12&pages=2247%E2%80%932260)]
+3.   Ma, J.; Yang, Z.; Kim, S.; Chen, B.; Baharoon, M.; Fallahpour, A.; Asakereh, R.; Lyu, H.; Wang, B. Medsam2: Segment anything in 3d medical images and videos. arXiv**2025**, arXiv:2504.03600. [[Google Scholar](https://scholar.google.com/scholar_lookup?title=Medsam2:+Segment+anything+in+3d+medical+images+and+videos&author=Ma,+J.&author=Yang,+Z.&author=Kim,+S.&author=Chen,+B.&author=Baharoon,+M.&author=Fallahpour,+A.&author=Asakereh,+R.&author=Lyu,+H.&author=Wang,+B.&publication_year=2025&journal=arXiv&doi=10.48550/arXiv.2504.03600)] [[CrossRef](https://doi.org/10.48550/arXiv.2504.03600)]
+4.   Sahoo, P.; Sharma, S.K.; Saha, S.; Jain, D.; Mondal, S. A multistage framework for respiratory disease detection and assessing severity in chest X-ray images. Sci. Rep.**2024**, 14, 12380. [[Google Scholar](https://scholar.google.com/scholar_lookup?title=A+multistage+framework+for+respiratory+disease+detection+and+assessing+severity+in+chest+X-ray+images&author=Sahoo,+P.&author=Sharma,+S.K.&author=Saha,+S.&author=Jain,+D.&author=Mondal,+S.&publication_year=2024&journal=Sci.+Rep.&volume=14&pages=12380&doi=10.1038/s41598-024-60861-6)] [[CrossRef](https://doi.org/10.1038/s41598-024-60861-6)]
+5.   Ronneberger, O.; Fischer, P.; Brox, T. U-net: Convolutional networks for biomedical image segmentation. In Proceedings of the International Conference on Medical Image Computing and Computer-Assisted Intervention, Munich, Germany, 5–9 October 2015; Springer: Cham, Switzerland, 2015; pp. 234–241. [[Google Scholar](https://scholar.google.com/scholar_lookup?title=U-net:+Convolutional+networks+for+biomedical+image+segmentation&author=Ronneberger,+O.&author=Fischer,+P.&author=Brox,+T.&publication_year=2015&pages=234%E2%80%93241)]
+6.   Chen, L.C.; Zhu, Y.; Papandreou, G.; Schroff, F.; Adam, H. Encoder-decoder with atrous separable convolution for semantic image segmentation. In Proceedings of the European Conference on Computer Vision (ECCV), Munich, Germany, 8–14 September 2018; pp. 801–818. [[Google Scholar](https://scholar.google.com/scholar_lookup?title=Encoder-decoder+with+atrous+separable+convolution+for+semantic+image+segmentation&conference=Proceedings+of+the+European+Conference+on+Computer+Vision+(ECCV)&author=Chen,+L.C.&author=Zhu,+Y.&author=Papandreou,+G.&author=Schroff,+F.&author=Adam,+H.&publication_year=2018&pages=801%E2%80%93818)]
+7.   Paschali, M.; Chen, Z.; Blankemeier, L.; Varma, M.; Youssef, A.; Bluethgen, C.; Langlotz, C.; Gatidis, S.; Chaudhari, A. Foundation models in radiology: What, how, why, and why not. Radiology**2025**, 314, e240597. [[Google Scholar](https://scholar.google.com/scholar_lookup?title=Foundation+models+in+radiology:+What,+how,+why,+and+why+not&author=Paschali,+M.&author=Chen,+Z.&author=Blankemeier,+L.&author=Varma,+M.&author=Youssef,+A.&author=Bluethgen,+C.&author=Langlotz,+C.&author=Gatidis,+S.&author=Chaudhari,+A.&publication_year=2025&journal=Radiology&volume=314&pages=e240597&doi=10.1148/radiol.240597)] [[CrossRef](https://doi.org/10.1148/radiol.240597)]
+8.   Azad, B.; Azad, R.; Eskandari, S.; Bozorgpour, A.; Kazerouni, A.; Rekik, I.; Merhof, D. Foundational models in medical imaging: A comprehensive survey and future vision. arXiv**2023**, arXiv:2310.18689. [[Google Scholar](https://scholar.google.com/scholar_lookup?title=Foundational+models+in+medical+imaging:+A+comprehensive+survey+and+future+vision&author=Azad,+B.&author=Azad,+R.&author=Eskandari,+S.&author=Bozorgpour,+A.&author=Kazerouni,+A.&author=Rekik,+I.&author=Merhof,+D.&publication_year=2023&journal=arXiv&doi=10.48550/arXiv.2310.18689)] [[CrossRef](https://doi.org/10.48550/arXiv.2310.18689)]
+9.   Kirillov, A.; Mintun, E.; Ravi, N.; Mao, H.; Rolland, C.; Gustafson, L.; Xiao, T.; Whitehead, S.; Berg, A.C.; Lo, W.Y.; et al. Segment anything. In Proceedings of the IEEE/CVF International Conference on Computer Vision 2023, Paris, France, 2–6 October 2023; pp. 4015–4026. [[Google Scholar](https://scholar.google.com/scholar_lookup?title=Segment+anything&conference=Proceedings+of+the+IEEE/CVF+International+Conference+on+Computer+Vision+2023&author=Kirillov,+A.&author=Mintun,+E.&author=Ravi,+N.&author=Mao,+H.&author=Rolland,+C.&author=Gustafson,+L.&author=Xiao,+T.&author=Whitehead,+S.&author=Berg,+A.C.&author=Lo,+W.Y.&author=et+al.&publication_year=2023&pages=4015%E2%80%934026)]
+10.   Zhang, D.; Feng, T.; Xue, L.; Wang, Y.; Dong, Y.; Tang, J. Parameter-efficient fine-tuning for foundation models. arXiv**2025**, arXiv:2501.13787. [[Google Scholar](https://scholar.google.com/scholar_lookup?title=Parameter-efficient+fine-tuning+for+foundation+models&author=Zhang,+D.&author=Feng,+T.&author=Xue,+L.&author=Wang,+Y.&author=Dong,+Y.&author=Tang,+J.&publication_year=2025&journal=arXiv)]
+11.   Hu, E.J.; Shen, Y.; Wallis, P.; Allen-Zhu, Z.; Li, Y.; Wang, S.; Wang, L.; Chen, W. Lora: Low-rank adaptation of large language models. In Proceedings of the 2022 International Conference on Learning Representations (ICLR 2022), Virtual, 25–29 April 2022; Volume 1, p. 3. [[Google Scholar](https://scholar.google.com/scholar_lookup?title=Lora:+Low-rank+adaptation+of+large+language+models&conference=Proceedings+of+the+2022+International+Conference+on+Learning+Representations+(ICLR+2022)&author=Hu,+E.J.&author=Shen,+Y.&author=Wallis,+P.&author=Allen-Zhu,+Z.&author=Li,+Y.&author=Wang,+S.&author=Wang,+L.&author=Chen,+W.&publication_year=2022&pages=3)]
+12.   Rajaraman, S.; Yang, F.; Zamzmi, G.; Xue, Z.; Antani, S. Can deep adult lung segmentation models generalize to the pediatric population? Expert Syst. Appl.**2023**, 229, 120531. [[Google Scholar](https://scholar.google.com/scholar_lookup?title=Can+deep+adult+lung+segmentation+models+generalize+to+the+pediatric+population?&author=Rajaraman,+S.&author=Yang,+F.&author=Zamzmi,+G.&author=Xue,+Z.&author=Antani,+S.&publication_year=2023&journal=Expert+Syst.+Appl.&volume=229&pages=120531&doi=10.1016/j.eswa.2023.120531&pmid=37397242)] [[CrossRef](https://doi.org/10.1016/j.eswa.2023.120531)] [[PubMed](https://www.ncbi.nlm.nih.gov/pubmed/37397242)]
+13.   Iqbal, A.; Usman, M.; Ahmed, Z. Tuberculosis chest X-ray detection using CNN-based hybrid segmentation and classification approach. Biomed. Signal Process. Control**2023**, 84, 104667. [[Google Scholar](https://scholar.google.com/scholar_lookup?title=Tuberculosis+chest+X-ray+detection+using+CNN-based+hybrid+segmentation+and+classification+approach&author=Iqbal,+A.&author=Usman,+M.&author=Ahmed,+Z.&publication_year=2023&journal=Biomed.+Signal+Process.+Control&volume=84&pages=104667&doi=10.1016/j.bspc.2023.104667)] [[CrossRef](https://doi.org/10.1016/j.bspc.2023.104667)]
+14.   Arvind, S.; Tembhurne, J.V.; Diwan, T.; Sahare, P. Improvised light weight deep CNN based U-Net for the semantic segmentation of lungs from chest X-rays. Results Eng.**2023**, 17, 100929. [[Google Scholar](https://scholar.google.com/scholar_lookup?title=Improvised+light+weight+deep+CNN+based+U-Net+for+the+semantic+segmentation+of+lungs+from+chest+X-rays&author=Arvind,+S.&author=Tembhurne,+J.V.&author=Diwan,+T.&author=Sahare,+P.&publication_year=2023&journal=Results+Eng.&volume=17&pages=100929&doi=10.1016/j.rineng.2023.100929)] [[CrossRef](https://doi.org/10.1016/j.rineng.2023.100929)]
+15.   Goodfellow, I.J.; Pouget-Abadie, J.; Mirza, M.; Xu, B.; Warde-Farley, D.; Ozair, S.; Courville, A.; Bengio, Y. Generative adversarial nets. In Proceedings of the 28th International Conference on Neural Information Processing Systems, Montreal, QC, Canada, 8–13 December 2014. [[Google Scholar](https://scholar.google.com/scholar_lookup?title=Generative+adversarial+nets&conference=Proceedings+of+the+28th+International+Conference+on+Neural+Information+Processing+Systems&author=Goodfellow,+I.J.&author=Pouget-Abadie,+J.&author=Mirza,+M.&author=Xu,+B.&author=Warde-Farley,+D.&author=Ozair,+S.&author=Courville,+A.&author=Bengio,+Y.&publication_year=2014)]
+16.   Gaál, G.; Maga, B.; Lukács, A. Attention u-net based adversarial architectures for chest X-ray lung segmentation. arXiv**2020**, arXiv:2003.10304. [[Google Scholar](https://scholar.google.com/scholar_lookup?title=Attention+u-net+based+adversarial+architectures+for+chest+X-ray+lung+segmentation&author=Ga%C3%A1l,+G.&author=Maga,+B.&author=Luk%C3%A1cs,+A.&publication_year=2020&journal=arXiv)]
+17.   Din, S.; Shoaib, M.; Serpedin, E. CXR-Seg: A Novel Deep Learning Network for Lung Segmentation from Chest X-ray Images. Bioengineering**2025**, 12, 167. [[Google Scholar](https://scholar.google.com/scholar_lookup?title=CXR-Seg:+A+Novel+Deep+Learning+Network+for+Lung+Segmentation+from+Chest+X-ray+Images&author=Din,+S.&author=Shoaib,+M.&author=Serpedin,+E.&publication_year=2025&journal=Bioengineering&volume=12&pages=167&doi=10.3390/bioengineering12020167&pmid=40001687)] [[CrossRef](https://doi.org/10.3390/bioengineering12020167)] [[PubMed](https://www.ncbi.nlm.nih.gov/pubmed/40001687)]
+18.   Turk, F.; Kılıçaslan, M. Lung image segmentation with improved U-Net, V-Net and Seg-Net techniques. PeerJ Comput. Sci.**2025**, 11, e2700. [[Google Scholar](https://scholar.google.com/scholar_lookup?title=Lung+image+segmentation+with+improved+U-Net,+V-Net+and+Seg-Net+techniques&author=Turk,+F.&author=K%C4%B1l%C4%B1%C3%A7aslan,+M.&publication_year=2025&journal=PeerJ+Comput.+Sci.&volume=11&pages=e2700&pmid=40062241)] [[PubMed](https://www.ncbi.nlm.nih.gov/pubmed/40062241)]
+19.   Hasan, D.; Abdulazeez, A.M. Lung segmentation from chest X-ray images using deeplabv3plus-based cnn model. Indones. J. Comput. Sci.**2024**, 13, 13–24. [[Google Scholar](https://scholar.google.com/scholar_lookup?title=Lung+segmentation+from+chest+X-ray+images+using+deeplabv3plus-based+cnn+model&author=Hasan,+D.&author=Abdulazeez,+A.M.&publication_year=2024&journal=Indones.+J.+Comput.+Sci.&volume=13&pages=13%E2%80%9324&doi=10.33022/ijcs.v13i1.3700)] [[CrossRef](https://doi.org/10.33022/ijcs.v13i1.3700)]
+20.   Abedalla, A.; Abdullah, M.; Al-Ayyoub, M.; Benkhelifa, E. Chest X-ray pneumothorax segmentation using U-Net with EfficientNet and ResNet architectures. PeerJ Comput. Sci.**2021**, 7, e607. [[Google Scholar](https://scholar.google.com/scholar_lookup?title=Chest+X-ray+pneumothorax+segmentation+using+U-Net+with+EfficientNet+and+ResNet+architectures&author=Abedalla,+A.&author=Abdullah,+M.&author=Al-Ayyoub,+M.&author=Benkhelifa,+E.&publication_year=2021&journal=PeerJ+Comput.+Sci.&volume=7&pages=e607&pmid=34307860)] [[PubMed](https://www.ncbi.nlm.nih.gov/pubmed/34307860)]
+21.   Rahman, T.; Khandakar, A.; Kadir, M.A.; Islam, K.R.; Islam, K.F.; Mazhar, R.; Hamid, T.; Islam, M.T.; Kashem, S.; Mahbub, Z.B.; et al. Reliable tuberculosis detection using chest X-ray with deep learning, segmentation and visualization. IEEE Access**2020**, 8, 191586–191601. [[Google Scholar](https://scholar.google.com/scholar_lookup?title=Reliable+tuberculosis+detection+using+chest+X-ray+with+deep+learning,+segmentation+and+visualization&author=Rahman,+T.&author=Khandakar,+A.&author=Kadir,+M.A.&author=Islam,+K.R.&author=Islam,+K.F.&author=Mazhar,+R.&author=Hamid,+T.&author=Islam,+M.T.&author=Kashem,+S.&author=Mahbub,+Z.B.&author=et+al.&publication_year=2020&journal=IEEE+Access&volume=8&pages=191586%E2%80%93191601&doi=10.1109/access.2020.3031384)] [[CrossRef](https://doi.org/10.1109/access.2020.3031384)]
+22.   Liu, W.; Luo, J.; Yang, Y.; Wang, W.; Deng, J.; Yu, L. Automatic lung segmentation in chest X-ray images using improved U-Net. Sci. Rep.**2022**, 12, 8649. [[Google Scholar](https://scholar.google.com/scholar_lookup?title=Automatic+lung+segmentation+in+chest+X-ray+images+using+improved+U-Net&author=Liu,+W.&author=Luo,+J.&author=Yang,+Y.&author=Wang,+W.&author=Deng,+J.&author=Yu,+L.&publication_year=2022&journal=Sci.+Rep.&volume=12&pages=8649&doi=10.1038/s41598-022-12743-y)] [[CrossRef](https://doi.org/10.1038/s41598-022-12743-y)]
+23.   Shiraishi, J.; Katsuragawa, S.; Ikezoe, J.; Matsumoto, T.; Kobayashi, T.; Komatsu, K.i.; Matsui, M.; Fujita, H.; Kodera, Y.; Doi, K. Development of a digital image database for chest radiographs with and without a lung nodule: Receiver operating characteristic analysis of radiologists’ detection of pulmonary nodules. Am. J. Roentgenol.**2000**, 174, 71–74. [[Google Scholar](https://scholar.google.com/scholar_lookup?title=Development+of+a+digital+image+database+for+chest+radiographs+with+and+without+a+lung+nodule:+Receiver+operating+characteristic+analysis+of+radiologists%E2%80%99+detection+of+pulmonary+nodules&author=Shiraishi,+J.&author=Katsuragawa,+S.&author=Ikezoe,+J.&author=Matsumoto,+T.&author=Kobayashi,+T.&author=Komatsu,+K.i.&author=Matsui,+M.&author=Fujita,+H.&author=Kodera,+Y.&author=Doi,+K.&publication_year=2000&journal=Am.+J.+Roentgenol.&volume=174&pages=71%E2%80%9374&doi=10.2214/ajr.174.1.1740071)] [[CrossRef](https://doi.org/10.2214/ajr.174.1.1740071)]
+24.   Candemir, S.; Jaeger, S.; Palaniappan, K.; Musco, J.P.; Singh, R.K.; Xue, Z.; Karargyris, A.; Antani, S.; Thoma, G.; McDonald, C.J. Lung segmentation in chest radiographs using anatomical atlases with nonrigid registration. IEEE Trans. Med. Imaging**2013**, 33, 577–590. [[Google Scholar](https://scholar.google.com/scholar_lookup?title=Lung+segmentation+in+chest+radiographs+using+anatomical+atlases+with+nonrigid+registration&author=Candemir,+S.&author=Jaeger,+S.&author=Palaniappan,+K.&author=Musco,+J.P.&author=Singh,+R.K.&author=Xue,+Z.&author=Karargyris,+A.&author=Antani,+S.&author=Thoma,+G.&author=McDonald,+C.J.&publication_year=2013&journal=IEEE+Trans.+Med.+Imaging&volume=33&pages=577%E2%80%93590&doi=10.1109/TMI.2013.2290491)] [[CrossRef](https://doi.org/10.1109/TMI.2013.2290491)]
+25.   Ghali, R.; Akhloufi, M.A. Vision transformers for lung segmentation on CXR images. SN Comput. Sci.**2023**, 4, 414. [[Google Scholar](https://scholar.google.com/scholar_lookup?title=Vision+transformers+for+lung+segmentation+on+CXR+images&author=Ghali,+R.&author=Akhloufi,+M.A.&publication_year=2023&journal=SN+Comput.+Sci.&volume=4&pages=414&doi=10.1007/s42979-023-01848-4)] [[CrossRef](https://doi.org/10.1007/s42979-023-01848-4)]
+26.   Ghali, R.; Akhloufi, M.A. Arseg: An attention regseg architecture for cxr lung segmentation. In Proceedings of the 2022 IEEE 23rd International Conference on Information Reuse and Integration for Data Science (IRI), San Diego, CA, USA, 9–11 August 2022; pp. 291–296. [[Google Scholar](https://scholar.google.com/scholar_lookup?title=Arseg:+An+attention+regseg+architecture+for+cxr+lung+segmentation&conference=Proceedings+of+the+2022+IEEE+23rd+International+Conference+on+Information+Reuse+and+Integration+for+Data+Science+(IRI)&author=Ghali,+R.&author=Akhloufi,+M.A.&publication_year=2022&pages=291%E2%80%93296)]
+27.   Chen, J.; Lu, Y.; Yu, Q.; Luo, X.; Adeli, E.; Wang, Y.; Lu, L.; Yuille, A.L.; Zhou, Y. Transunet: Transformers make strong encoders for medical image segmentation. arXiv**2021**, arXiv:2102.04306. [[Google Scholar](https://scholar.google.com/scholar_lookup?title=Transunet:+Transformers+make+strong+encoders+for+medical+image+segmentation&author=Chen,+J.&author=Lu,+Y.&author=Yu,+Q.&author=Luo,+X.&author=Adeli,+E.&author=Wang,+Y.&author=Lu,+L.&author=Yuille,+A.L.&author=Zhou,+Y.&publication_year=2021&journal=arXiv&doi=10.48550/arXiv.2102.04306)] [[CrossRef](https://doi.org/10.48550/arXiv.2102.04306)]
+28.   Valanarasu, J.M.J.; Oza, P.; Hacihaliloglu, I.; Patel, V.M. Medical transformer: Gated axial-attention for medical image segmentation. In Proceedings of the International Conference on Medical Image Computing and Computer-Assisted Intervention, Strasbourg, France, 27 September–1 October 2021; Springer: Cham, Switzerland, 2021; pp. 36–46. [[Google Scholar](https://scholar.google.com/scholar_lookup?title=Medical+transformer:+Gated+axial-attention+for+medical+image+segmentation&author=Valanarasu,+J.M.J.&author=Oza,+P.&author=Hacihaliloglu,+I.&author=Patel,+V.M.&publication_year=2021&pages=36%E2%80%9346)]
+29.   Valanarasu, J.M.J.; Patel, V.M. Unext: Mlp-based rapid medical image segmentation network. In Proceedings of the International Conference on Medical Image Computing and Computer-Assisted Intervention, Singapore, 18–22 September 2022; Springer: Cham, Switzerland, 2022; pp. 23–33. [[Google Scholar](https://scholar.google.com/scholar_lookup?title=Unext:+Mlp-based+rapid+medical+image+segmentation+network&author=Valanarasu,+J.M.J.&author=Patel,+V.M.&publication_year=2022&pages=23%E2%80%9333)]
+30.   Jaeger, S.; Candemir, S.; Antani, S.; Wáng, Y.X.J.; Lu, P.X.; Thoma, G. Two public chest X-ray datasets for computer-aided screening of pulmonary diseases. Quant. Imaging Med. Surg.**2014**, 4, 475. [[Google Scholar](https://scholar.google.com/scholar_lookup?title=Two+public+chest+X-ray+datasets+for+computer-aided+screening+of+pulmonary+diseases&author=Jaeger,+S.&author=Candemir,+S.&author=Antani,+S.&author=W%C3%A1ng,+Y.X.J.&author=Lu,+P.X.&author=Thoma,+G.&publication_year=2014&journal=Quant.+Imaging+Med.+Surg.&volume=4&pages=475&pmid=25525580)] [[PubMed](https://www.ncbi.nlm.nih.gov/pubmed/25525580)]
+31.   Teixeira, L.O.; Pereira, R.M.; Bertolini, D.; Oliveira, L.S.; Nanni, L.; Cavalcanti, G.D.; Costa, Y.M. Impact of lung segmentation on the diagnosis and explanation of COVID-19 in chest X-ray images. Sensors**2021**, 21, 7116. [[Google Scholar](https://scholar.google.com/scholar_lookup?title=Impact+of+lung+segmentation+on+the+diagnosis+and+explanation+of+COVID-19+in+chest+X-ray+images&author=Teixeira,+L.O.&author=Pereira,+R.M.&author=Bertolini,+D.&author=Oliveira,+L.S.&author=Nanni,+L.&author=Cavalcanti,+G.D.&author=Costa,+Y.M.&publication_year=2021&journal=Sensors&volume=21&pages=7116&doi=10.3390/s21217116)] [[CrossRef](https://doi.org/10.3390/s21217116)]
+32.   Souza, J.C.; Diniz, J.O.B.; Ferreira, J.L.; Da Silva, G.L.F.; Silva, A.C.; De Paiva, A.C. An automatic method for lung segmentation and reconstruction in chest X-ray using deep neural networks. Comput. Methods Programs Biomed.**2019**, 177, 285–296. [[Google Scholar](https://scholar.google.com/scholar_lookup?title=An+automatic+method+for+lung+segmentation+and+reconstruction+in+chest+X-ray+using+deep+neural+networks&author=Souza,+J.C.&author=Diniz,+J.O.B.&author=Ferreira,+J.L.&author=Da+Silva,+G.L.F.&author=Silva,+A.C.&author=De+Paiva,+A.C.&publication_year=2019&journal=Comput.+Methods+Programs+Biomed.&volume=177&pages=285%E2%80%93296&doi=10.1016/j.cmpb.2019.06.005)] [[CrossRef](https://doi.org/10.1016/j.cmpb.2019.06.005)]
+33.   Chowdhury, M.E.; Rahman, T.; Khandakar, A.; Mazhar, R.; Kadir, M.A.; Mahbub, Z.B.; Islam, K.R.; Khan, M.S.; Iqbal, A.; Al Emadi, N.; et al. Can AI help in screening viral and COVID-19 pneumonia? IEEE Access**2020**, 8, 132665–132676. [[Google Scholar](https://scholar.google.com/scholar_lookup?title=Can+AI+help+in+screening+viral+and+COVID-19+pneumonia?&author=Chowdhury,+M.E.&author=Rahman,+T.&author=Khandakar,+A.&author=Mazhar,+R.&author=Kadir,+M.A.&author=Mahbub,+Z.B.&author=Islam,+K.R.&author=Khan,+M.S.&author=Iqbal,+A.&author=Al+Emadi,+N.&author=et+al.&publication_year=2020&journal=IEEE+Access&volume=8&pages=132665%E2%80%93132676&doi=10.1109/ACCESS.2020.3010287)] [[CrossRef](https://doi.org/10.1109/ACCESS.2020.3010287)]
+34.   Rahman, T.; Khandakar, A.; Qiblawey, Y.; Tahir, A.; Kiranyaz, S.; Kashem, S.B.A.; Islam, M.T.; Al Maadeed, S.; Zughaier, S.M.; Khan, M.S.; et al. Exploring the effect of image enhancement techniques on COVID-19 detection using chest X-ray images. Comput. Biol. Med.**2021**, 132, 104319. [[Google Scholar](https://scholar.google.com/scholar_lookup?title=Exploring+the+effect+of+image+enhancement+techniques+on+COVID-19+detection+using+chest+X-ray+images&author=Rahman,+T.&author=Khandakar,+A.&author=Qiblawey,+Y.&author=Tahir,+A.&author=Kiranyaz,+S.&author=Kashem,+S.B.A.&author=Islam,+M.T.&author=Al+Maadeed,+S.&author=Zughaier,+S.M.&author=Khan,+M.S.&author=et+al.&publication_year=2021&journal=Comput.+Biol.+Med.&volume=132&pages=104319&doi=10.1016/j.compbiomed.2021.104319)] [[CrossRef](https://doi.org/10.1016/j.compbiomed.2021.104319)]
+35.   Chen, L.C.; Papandreou, G.; Schroff, F.; Adam, H. Rethinking atrous convolution for semantic image segmentation. arXiv**2017**, arXiv:1706.05587. [[Google Scholar](https://scholar.google.com/scholar_lookup?title=Rethinking+atrous+convolution+for+semantic+image+segmentation&author=Chen,+L.C.&author=Papandreou,+G.&author=Schroff,+F.&author=Adam,+H.&publication_year=2017&journal=arXiv&doi=10.48550/arXiv.1706.05587)] [[CrossRef](https://doi.org/10.48550/arXiv.1706.05587)]
+
+**Figure 1.** Images and masks from our dataset are resized and cropped to 224 × 224 pixel squares, avoiding any image distortion. The first column is for images and masks of cases labeled as COVID-19, the second column for images and masks of cases labeled as pneumonia, and the third column for images and masks of cases labeled as normal.
+
+[![Image 3: Diagnostics 16 00847 g001](https://www.mdpi.com/diagnostics/diagnostics-16-00847/article_deploy/html/images/diagnostics-16-00847-g001.png)](https://www.mdpi.com/diagnostics/diagnostics-16-00847/article_deploy/html/images/diagnostics-16-00847-g001.png)
+
+**Figure 2.** DeepLabv3 training for CXR images segmentation.
+
+[![Image 4: Diagnostics 16 00847 g002](https://www.mdpi.com/diagnostics/diagnostics-16-00847/article_deploy/html/images/diagnostics-16-00847-g002.png)](https://www.mdpi.com/diagnostics/diagnostics-16-00847/article_deploy/html/images/diagnostics-16-00847-g002.png)
+
+**Figure 3.** Zero-shot SAM where the input image is encoded, and the prompt is encoded for generating a segmentation mask.
+
+[![Image 5: Diagnostics 16 00847 g003](https://www.mdpi.com/diagnostics/diagnostics-16-00847/article_deploy/html/images/diagnostics-16-00847-g003.png)](https://www.mdpi.com/diagnostics/diagnostics-16-00847/article_deploy/html/images/diagnostics-16-00847-g003.png)
+
+**Figure 4.** An illustration of LoRA approach for augmenting the original weights with A and B matrices.
+
+[![Image 6: Diagnostics 16 00847 g004](https://www.mdpi.com/diagnostics/diagnostics-16-00847/article_deploy/html/images/diagnostics-16-00847-g004.png)](https://www.mdpi.com/diagnostics/diagnostics-16-00847/article_deploy/html/images/diagnostics-16-00847-g004.png)
+
+**Figure 5.** Fine-tuning SAM LoRA for segmentation of CXR images.
+
+[![Image 7: Diagnostics 16 00847 g005](https://www.mdpi.com/diagnostics/diagnostics-16-00847/article_deploy/html/images/diagnostics-16-00847-g005.png)](https://www.mdpi.com/diagnostics/diagnostics-16-00847/article_deploy/html/images/diagnostics-16-00847-g005.png)
+
+**Figure 6.** Comparison between the number of coordinates and accuracy, IoU, dice coefficient, precision, recall, and F1-score (**bottom**).
+
+[![Image 8: Diagnostics 16 00847 g006](https://www.mdpi.com/diagnostics/diagnostics-16-00847/article_deploy/html/images/diagnostics-16-00847-g006.png)](https://www.mdpi.com/diagnostics/diagnostics-16-00847/article_deploy/html/images/diagnostics-16-00847-g006.png)
+
+**Figure 7.** Avisual comparison between different segmentation methods for lungs in CXR images, where SAM ZS BB denotes the SAM zero-shot bounding box approach, SAM ZS (90) denotes the SAM zero-shot with 90 coordinates, and FT SAM + LoRA denotes fine-tuned SAM + LoRA [[6](https://www.mdpi.com/2075-4418/16/6/847#B6-diagnostics-16-00847),[27](https://www.mdpi.com/2075-4418/16/6/847#B27-diagnostics-16-00847)].
+
+[![Image 9: Diagnostics 16 00847 g007](https://www.mdpi.com/diagnostics/diagnostics-16-00847/article_deploy/html/images/diagnostics-16-00847-g007.png)](https://www.mdpi.com/diagnostics/diagnostics-16-00847/article_deploy/html/images/diagnostics-16-00847-g007.png)
+
+**Figure 8.** Avisualization of the performance of different models on three categories of chest X-ray images. The masks are overlaid on the original image in purple.
+
+[![Image 10: Diagnostics 16 00847 g008](https://www.mdpi.com/diagnostics/diagnostics-16-00847/article_deploy/html/images/diagnostics-16-00847-g008.png)](https://www.mdpi.com/diagnostics/diagnostics-16-00847/article_deploy/html/images/diagnostics-16-00847-g008.png)
+
+**Table 1.** Summary of image dataset and source.
+
+| Image Class | Number of Images | Source |
+| --- | --- | --- |
+| COVID-19 | 552 | KKH |
+| Normal | 511 | KKH |
+| Viral Pneumonia | 549 | Chowdhury[[33](https://www.mdpi.com/2075-4418/16/6/847#B33-diagnostics-16-00847)] |
+
+**Table 2.** Performance of SAM using prompts with different numbers of coordinates, starting at 15 with an increment of 15 coordinates up to 105 coordinates.
+
+| Number of Coordinates | Accuracy % | IoU | Dice Coefficient | Precision | Recall | F1 Score |
+| --- | --- | --- | --- | --- | --- | --- |
+| 15 | 56.2 | 0.409 | 0.571 | 0.441 | 0.856 | 0.571 |
+| 30 | 57.1 | 0.414 | 0.575 | 0.443 | 0.859 | 0.575 |
+| 45 | 58.2 | 0.427 | 0.587 | 0.452 | 0.879 | 0.587 |
+| 60 | 59.6 | 0.439 | 0.599 | 0.463 | 0.891 | 0.599 |
+| 75 | 60.3 | 0.445 | 0.605 | 0.469 | 0.899 | 0.605 |
+| 90 | 60.6 | 0.450 | 0.610 | 0.473 | 0.908 | 0.610 |
+| 105 | 60.3 | 0.451 | 0.611 | 0.474 | 0.916 | 0.611 |
+
+**Table 3.** Comparison between the segmentation performance of U-Net, DeepLabv3, and SAM.
+
+| Number of Coordinates | Accuracy % | IoU | Dice Coef | Precision | Recall | F1 Score |
+| --- | --- | --- | --- | --- | --- | --- |
+| U-Net[[5](https://www.mdpi.com/2075-4418/16/6/847#B5-diagnostics-16-00847)] | 57.6 | 0.313 | 0.470 | 0.427 | 0.576 | 0.470 |
+| DeepLabv3+[[35](https://www.mdpi.com/2075-4418/16/6/847#B35-diagnostics-16-00847)] | 95.1 | 0.862 | 0.925 | 0.928 | 0.926 | 0.925 |
+| SAM zero-shot bounding box | 76.2 | 0.569 | 0.718 | 0.594 | 0.933 | 0.718 |
+| SAM zero-shot (90 coord) | 60.6 | 0.450 | 0.610 | 0.473 | 0.908 | 0.610 |
+| Fine-tuned SAM + LoRA | 95.8 | 0.882 | 0.937 | 0.955 | 0.922 | 0.937 |
+
+**Disclaimer/Publisher’s Note:** The statements, opinions and data contained in all publications are solely those of the individual author(s) and contributor(s) and not of MDPI and/or the editor(s). MDPI and/or the editor(s) disclaim responsibility for any injury to people or property resulting from any ideas, methods, instructions or products referred to in the content.
+
+© 2026 by the authors. Licensee MDPI, Basel, Switzerland. This article is an open access article distributed under the terms and conditions of the [Creative Commons Attribution (CC BY) license](https://creativecommons.org/licenses/by/4.0/).
+
+## [](https://www.mdpi.com/2075-4418/16/6/847)Share and Cite
+
+**MDPI and ACS Style**
+
+Alahmari, S.S.; Gardner, M.R.; Alqahtani, F.; Salem, T. Fine-Tuned Segment Anything Model with Low-Rank Adaptation for Chest X-Ray Images. _Diagnostics_**2026**, _16_, 847. https://doi.org/10.3390/diagnostics16060847
+
+**AMA Style**
+
+Alahmari SS, Gardner MR, Alqahtani F, Salem T. Fine-Tuned Segment Anything Model with Low-Rank Adaptation for Chest X-Ray Images. _Diagnostics_. 2026; 16(6):847. https://doi.org/10.3390/diagnostics16060847
+
+**Chicago/Turabian Style**
+
+Alahmari, Saeed S., Michael R. Gardner, Fawaz Alqahtani, and Tawfiq Salem. 2026. "Fine-Tuned Segment Anything Model with Low-Rank Adaptation for Chest X-Ray Images" _Diagnostics_ 16, no. 6: 847. https://doi.org/10.3390/diagnostics16060847
+
+**APA Style**
+
+Alahmari, S. S., Gardner, M. R., Alqahtani, F., & Salem, T. (2026). Fine-Tuned Segment Anything Model with Low-Rank Adaptation for Chest X-Ray Images. _Diagnostics_, _16_(6), 847. https://doi.org/10.3390/diagnostics16060847
+
+Note that from the first issue of 2016, this journal uses article numbers instead of page numbers. See further details [here](https://www.mdpi.com/about/announcements/784).
+
+## [](https://www.mdpi.com/2075-4418/16/6/847)Article Metrics
+
+### Citations
+
+No citations were found for this article, but you may check on [Google Scholar](https://scholar.google.com/scholar_lookup?title=Fine-Tuned+Segment+Anything+Model+with+Low-Rank+Adaptation+for+Chest+X-Ray+Images&volume=16&doi=10.3390%2Fdiagnostics16060847&journal=Diagnostics&publication_year=2026&author=Saeed+S.+Alahmari&author=Michael+R.+Gardner&author=Fawaz+Alqahtani&author=Tawfiq+Salem)
+
+### Article Access Statistics
+
+For more information on the journal statistics, click [here](https://www.mdpi.com/journal/diagnostics/stats).
+
+Multiple requests from the same IP address are counted as one view.
