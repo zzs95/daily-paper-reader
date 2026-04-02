@@ -1,14 +1,14 @@
 # 日报 · 📧 2026-04-02
 
-- 生成时间：2026-04-02 18:56:01 UTC
+- 生成时间：2026-04-02 19:35:59 UTC
 - 当次推荐总数：16
 - 精读区：16
 - 速读区：0
 
 ## 今日简报（AI）
-今日精选16篇前沿论文，深度聚焦医疗AI在影像报告生成与病理分割中的技术突破。
-重点推荐通过病理引导缓解胸片报告偏差，以及利用三轴上下文编码提升脑肿瘤分割精度的创新方案。
-建议关注多模态融合与偏差修正技术，探索AI如何更精准地辅助临床复杂诊断。
+今日精读 16 篇论文，深度聚焦医疗 AI 在胸部 X 光报告生成与脑肿瘤精准分割上的技术突破。
+重点推荐通过病理引导提示缓解视觉偏差的新方法，以及利用三轴上下文编码提升肿瘤分割可靠性的 UTriGate-Net。
+建议关注多模态融合与偏差修正技术，这是提升医疗模型临床实用性与诊断准确性的关键。
 
 ## 精读区
 1. [Enhancing chest X-ray report generation with pathology-guided prompts and vision-language shortcut bias mitigation](/202604/02/enhancing-chest-x-ray-report-generation-with-pathology-guided-prompts-and-vision-language-shortcut-bias-mitigation) 
