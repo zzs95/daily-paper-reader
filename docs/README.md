@@ -6,57 +6,101 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：📧 2026-04-05
-- 运行时间：2026-04-05 19:53:13 UTC
+- 最新运行日期：📧 2026-04-03 ~ 2026-04-05
+- 运行时间：2026-04-05 22:21:09 UTC
 - 运行状态：成功
-- 本次总论文数：19
-- 精读区：19
+- 本次总论文数：41
+- 精读区：41
 - 速读区：0
 
 ### 今日简报（AI）
-今日深挖 19 篇医疗 AI 精选论文，重点攻克多中心影像分割安全性与病理报告自动生成难题。
-核心突破在于利用协作残差 U-Net 实现安全的肝脏肿瘤分割，以及通过跨模态对齐技术提升病理报告的生成质量。
-建议关注隐私计算与多模态融合技术在智慧医疗垂直领域的深度应用。
-- 详情：[/202604/05/README](/202604/05/README)
+本期精选 41 篇前沿论文，深度解析 AI 如何重塑癌症预后预测与多模态诊疗。
+重点推荐无需标注的肺癌影像预测算法，以及融合病理与影像交互信息的泛癌生存分析模型。
+建议关注多模态数据融合趋势，探索 AI 在精准医疗与临床决策中的实战价值。
+- 详情：[/20260403-20260405/README](/20260403-20260405/README)
 
 ### 精读区论文标签
-1. [A Skip-Free Collaborative Residual U-Net for Secure Multi-Center Liver and Tumor Segmentation](/202604/05/a-skip-free-collaborative-residual-u-net-for-secure-multi-center-liver-and-tumor-segmentation)  
+1. [Artificial Intelligence-based Algorithm for Predicting Outcomes in Early-stage Lung Cancer (AI PREDICTION): An Annotation-free Imaging AI Study](/20260403-20260405/artificial-intelligence-based-algorithm-for-predicting-outcomes-in-early-stage-lung-cancer-ai-prediction-an-annotation-free-imaging-ai-study)  
    标签：无标签
-2. [Hierarchical context modeling and prototype-mediated cross-modal alignment for histopathology report generation](/202604/05/hierarchical-context-modeling-and-prototype-mediated-cross-modal-alignment-for-histopathology-report-generation)  
+2. [Leveraging co-attention-based interactions between pathology and radiology for pan-cancer survival prediction](/20260403-20260405/leveraging-co-attention-based-interactions-between-pathology-and-radiology-for-pan-cancer-survival-prediction)  
    标签：无标签
-3. [Vision-language Models for Structured Report Generation in Radiology: Towards Consistent and Reliable Chest X-ray Reporting](/202604/05/vision-language-models-for-structured-report-generation-in-radiology-towards-consistent-and-reliable-chest-x-ray-reporting)  
+3. [Zero-Shot Lung Disease Detection Using Radiological Symptomatic Descriptors and Pretrained Neural Networks](/20260403-20260405/zero-shot-lung-disease-detection-using-radiological-symptomatic-descriptors-and-pretrained-neural-networks)  
    标签：无标签
-4. [Efficient Deep Ladle-Net for fast universal 3D lesion segmentation on chest–abdomen–pelvis computed tomography](/202604/05/efficient-deep-ladle-net-for-fast-universal-3d-lesion-segmentation-on-chestabdomenpelvis-computed-tomography)  
+4. [AXIS-Net: Asymmetric attention and Scale-Integrated fusion network for robust breast lesion segmentation in ultrasound images](/20260403-20260405/axis-net-asymmetric-attention-and-scale-integrated-fusion-network-for-robust-breast-lesion-segmentation-in-ultrasound-images)  
    标签：无标签
-5. [Foundation models in medical image segmentation](/202604/05/foundation-models-in-medical-image-segmentation)  
+5. [Thought Graph Traversal for Test-time Scaling in Chest X-ray VLLMs](/20260403-20260405/thought-graph-traversal-for-test-time-scaling-in-chest-x-ray-vllms)  
    标签：无标签
-6. [Foundation Models in Medical Image Segmentation: How Foundational Are Foundation Models Really?](/202604/05/foundation-models-in-medical-image-segmentation-how-foundational-are-foundation-models-really)  
+6. [RIHA: Report-Image Hierarchical Alignment for Radiology Report Generation](/20260403-20260405/riha-report-image-hierarchical-alignment-for-radiology-report-generation)  
    标签：无标签
-7. [Advancing Radiograph Representation Learning via Cascading Graph Alignment for Vision-Language Clinical Concepts](/202604/05/advancing-radiograph-representation-learning-via-cascading-graph-alignment-for-vision-language-clinical-concepts)  
+7. [A Regularized Backbone-Level Cross-Modal Interaction Framework for Stable Temporal Reasoning in Video-Language Models](/20260403-20260405/a-regularized-backbone-level-cross-modal-interaction-framework-for-stable-temporal-reasoning-in-video-language-models)  
    标签：无标签
-8. [Pseudo-Likelihood Training for Reasoning Diffusion Language Models](/202604/05/pseudo-likelihood-training-for-reasoning-diffusion-language-models)  
+8. [Preoperative Prediction of Axillary Lymph Node Metastasis in Breast Cancer Using a Three-tier MRI Radiomics Model with Nested Cross-validation](/20260403-20260405/preoperative-prediction-of-axillary-lymph-node-metastasis-in-breast-cancer-using-a-three-tier-mri-radiomics-model-with-nested-cross-validation)  
    标签：无标签
-9. [Semantic-Aware Data Imputation in Dynamic Relational Databases via Pre-trained Language Models](/202604/05/semantic-aware-data-imputation-in-dynamic-relational-databases-via-pre-trained-language-models)  
+9. [Stable or not? unraveling the reliability of radiomic features in 4d-computed tomography in early-stage non-small cell lung cancer](/20260403-20260405/stable-or-not-unraveling-the-reliability-of-radiomic-features-in-4d-computed-tomography-in-early-stage-non-small-cell-lung-cancer)  
    标签：无标签
-10. [Energy Matching based Preference Learning for Diffusion Language Models](/202604/05/energy-matching-based-preference-learning-for-diffusion-language-models)  
+10. [A Skip-Free Collaborative Residual U-Net for Secure Multi-Center Liver and Tumor Segmentation](/20260403-20260405/a-skip-free-collaborative-residual-u-net-for-secure-multi-center-liver-and-tumor-segmentation)  
    标签：无标签
-11. [CMedBench: A Comprehensive Benchmark for Efficient Medical Large Language Models](/202604/05/cmedbench-a-comprehensive-benchmark-for-efficient-medical-large-language-models)  
+11. [Hierarchical context modeling and prototype-mediated cross-modal alignment for histopathology report generation](/20260403-20260405/hierarchical-context-modeling-and-prototype-mediated-cross-modal-alignment-for-histopathology-report-generation)  
    标签：无标签
-12. [VCGD: Visual Clue Guided Decoding with Caption Model for Mitigating Hallucination in Multimodal Large Language Models](/202604/05/vcgd-visual-clue-guided-decoding-with-caption-model-for-mitigating-hallucination-in-multimodal-large-language-models)  
+12. [Vision-language Models for Structured Report Generation in Radiology: Towards Consistent and Reliable Chest X-ray Reporting](/20260403-20260405/vision-language-models-for-structured-report-generation-in-radiology-towards-consistent-and-reliable-chest-x-ray-reporting)  
    标签：无标签
-13. [Adaptive-PVT: Unlocking the Power of Adaptive Mechanisms for Medical Image Segmentation](/202604/05/adaptive-pvt-unlocking-the-power-of-adaptive-mechanisms-for-medical-image-segmentation)  
+13. [Efficient Deep Ladle-Net for fast universal 3D lesion segmentation on chest–abdomen–pelvis computed tomography](/20260403-20260405/efficient-deep-ladle-net-for-fast-universal-3d-lesion-segmentation-on-chestabdomenpelvis-computed-tomography)  
    标签：无标签
-14. [Application of adaptive deep learning-based automatic segmentation in radiomics model for preoperative WHO/ISUP grading of clear cell renal cell carcinoma: a …](/202604/05/application-of-adaptive-deep-learning-based-automatic-segmentation-in-radiomics-model-for-preoperative-whoisup-grading-of-clear-cell-renal-cell-carcinoma-a-)  
+14. [Foundation models in medical image segmentation](/20260403-20260405/foundation-models-in-medical-image-segmentation)  
    标签：无标签
-15. [VIVID-Med: LLM-Supervised Structured Pretraining for Deployable Medical ViTs](/202604/05/2603.09109-vivid-med-llm-supervised-structured-pretraining-for-deployable-medical-vits)  
+15. [Foundation Models in Medical Image Segmentation: How Foundational Are Foundation Models Really?](/20260403-20260405/foundation-models-in-medical-image-segmentation-how-foundational-are-foundation-models-really)  
    标签：无标签
-16. [Examining Reasoning LLMs-as-Judges in Non-Verifiable LLM Post-Training](/202604/05/2603.12246-examining-reasoning-llms-as-judges-in-non-verifiable-llm-post-training)  
+16. [Advancing Radiograph Representation Learning via Cascading Graph Alignment for Vision-Language Clinical Concepts](/20260403-20260405/advancing-radiograph-representation-learning-via-cascading-graph-alignment-for-vision-language-clinical-concepts)  
    标签：无标签
-17. [Test-time RL alignment exposes task familiarity artifacts in LLM benchmarks](/202604/05/2603.12875-test-time-rl-alignment-exposes-task-familiarity-artifacts-in-llm-benchmarks)  
+17. [Pseudo-Likelihood Training for Reasoning Diffusion Language Models](/20260403-20260405/pseudo-likelihood-training-for-reasoning-diffusion-language-models)  
    标签：无标签
-18. [Cognitive Mismatch in Multimodal Large Language Models for Discrete Symbol Understanding](/202604/05/2603.18472-cognitive-mismatch-in-multimodal-large-language-models-for-discrete-symbol-understanding)  
+18. [Semantic-Aware Data Imputation in Dynamic Relational Databases via Pre-trained Language Models](/20260403-20260405/semantic-aware-data-imputation-in-dynamic-relational-databases-via-pre-trained-language-models)  
    标签：无标签
-19. [Calibrated Confidence Expression for Radiology Report Generation](/202604/05/2603.29492-calibrated-confidence-expression-for-radiology-report-generation)  
+19. [Energy Matching based Preference Learning for Diffusion Language Models](/20260403-20260405/energy-matching-based-preference-learning-for-diffusion-language-models)  
+   标签：无标签
+20. [CMedBench: A Comprehensive Benchmark for Efficient Medical Large Language Models](/20260403-20260405/cmedbench-a-comprehensive-benchmark-for-efficient-medical-large-language-models)  
+   标签：无标签
+21. [VCGD: Visual Clue Guided Decoding with Caption Model for Mitigating Hallucination in Multimodal Large Language Models](/20260403-20260405/vcgd-visual-clue-guided-decoding-with-caption-model-for-mitigating-hallucination-in-multimodal-large-language-models)  
+   标签：无标签
+22. [Adaptive-PVT: Unlocking the Power of Adaptive Mechanisms for Medical Image Segmentation](/20260403-20260405/adaptive-pvt-unlocking-the-power-of-adaptive-mechanisms-for-medical-image-segmentation)  
+   标签：无标签
+23. [Application of adaptive deep learning-based automatic segmentation in radiomics model for preoperative WHO/ISUP grading of clear cell renal cell carcinoma: a …](/20260403-20260405/application-of-adaptive-deep-learning-based-automatic-segmentation-in-radiomics-model-for-preoperative-whoisup-grading-of-clear-cell-renal-cell-carcinoma-a-)  
+   标签：无标签
+24. [VIVID-Med: LLM-Supervised Structured Pretraining for Deployable Medical ViTs](/20260403-20260405/2603.09109-vivid-med-llm-supervised-structured-pretraining-for-deployable-medical-vits)  
+   标签：无标签
+25. [Examining Reasoning LLMs-as-Judges in Non-Verifiable LLM Post-Training](/20260403-20260405/2603.12246-examining-reasoning-llms-as-judges-in-non-verifiable-llm-post-training)  
+   标签：无标签
+26. [Test-time RL alignment exposes task familiarity artifacts in LLM benchmarks](/20260403-20260405/2603.12875-test-time-rl-alignment-exposes-task-familiarity-artifacts-in-llm-benchmarks)  
+   标签：无标签
+27. [Projection Guided Personalized Federated Learning for Low Dose CT Denoising](/20260403-20260405/2603.13422-projection-guided-personalized-federated-learning-for-low-dose-ct-denoising)  
+   标签：无标签
+28. [CAMD: Coverage-Aware Multimodal Decoding for Efficient Reasoning of Multimodal Large Language Models](/20260403-20260405/2603.14745-camd-coverage-aware-multimodal-decoding-for-efficient-reasoning-of-multimodal-large-language-models)  
+   标签：无标签
+29. [Cognitive Mismatch in Multimodal Large Language Models for Discrete Symbol Understanding](/20260403-20260405/2603.18472-cognitive-mismatch-in-multimodal-large-language-models-for-discrete-symbol-understanding)  
+   标签：无标签
+30. [Automatic Configuration of LLM Post-Training Pipelines](/20260403-20260405/2603.18773-automatic-configuration-of-llm-post-training-pipelines)  
+   标签：无标签
+31. [ForestPrune: High-ratio Visual Token Compression for Video Multimodal Large Language Models via Spatial-Temporal Forest Modeling](/20260403-20260405/2603.22911-forestprune-high-ratio-visual-token-compression-for-video-multimodal-large-language-models-via-spatial-temporal-forest-modeling)  
+   标签：无标签
+32. [VISion On Request: Enhanced VLLM efficiency with sparse, dynamically selected, vision-language interactions](/20260403-20260405/2603.23495-vision-on-request-enhanced-vllm-efficiency-with-sparse-dynamically-selected-vision-language-interactions)  
+   标签：无标签
+33. [Perturbation: A simple and efficient adversarial tracer for representation learning in language models](/20260403-20260405/2603.23821-perturbation-a-simple-and-efficient-adversarial-tracer-for-representation-learning-in-language-models)  
+   标签：无标签
+34. [Seeing Like Radiologists: Context-and Gaze-Guided Vision-Language Pretraining for Chest X-rays](/20260403-20260405/2603.26049-seeing-like-radiologists-context-and-gaze-guided-vision-language-pretraining-for-chest-x-rays)  
+   标签：无标签
+35. [MUST: Modality-Specific Representation-Aware Transformer for Diffusion-Enhanced Survival Prediction with Missing Modality](/20260403-20260405/2603.26071-must-modality-specific-representation-aware-transformer-for-diffusion-enhanced-survival-prediction-with-missing-modality)  
+   标签：无标签
+36. [Towards GUI Agents: Vision-Language Diffusion Models for GUI Grounding](/20260403-20260405/2603.26211-towards-gui-agents-vision-language-diffusion-models-for-gui-grounding)  
+   标签：无标签
+37. [Mitigating the Reasoning Tax in Vision-Language Fine-Tuning with Input-Adaptive Depth Aggregation](/20260403-20260405/2603.26330-mitigating-the-reasoning-tax-in-vision-language-fine-tuning-with-input-adaptive-depth-aggregation)  
+   标签：无标签
+38. [Learning to Predict Future-Aligned Research Proposals with Language Models](/20260403-20260405/2603.27146-learning-to-predict-future-aligned-research-proposals-with-language-models)  
+   标签：无标签
+39. [MEDIC-AD: Towards Medical Vision-Language Model's Clinical Intelligence](/20260403-20260405/2603.27176-medic-ad-towards-medical-vision-language-models-clinical-intelligence)  
+   标签：无标签
+40. [Project Imaging-X: A Survey of 1000+ Open-Access Medical Imaging Datasets for Foundation Model Development](/20260403-20260405/2603.27460-project-imaging-x-a-survey-of-1000-open-access-medical-imaging-datasets-for-foundation-model-development)  
+   标签：无标签
+41. [Calibrated Confidence Expression for Radiology Report Generation](/20260403-20260405/2603.29492-calibrated-confidence-expression-for-radiology-report-generation)  
    标签：无标签
 
 ### 速读区论文标签

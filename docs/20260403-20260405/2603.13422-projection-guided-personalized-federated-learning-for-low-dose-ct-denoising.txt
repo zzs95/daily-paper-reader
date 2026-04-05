@@ -1,0 +1,490 @@
+Title: Projection Guided Personalized Federated Learning for Low Dose CT Denoising
+
+URL Source: https://arxiv.org/pdf/2603.13422.pdf
+
+Published Time: Tue, 17 Mar 2026 00:22:30 GMT
+
+Number of Pages: 17
+
+Markdown Content:
+# Projection Guided Personalized Federated Learning for Low Dose CT Denoising 
+
+Anas Zafar 1, Muhammad Waqas 1, Amgad Muneer 1, Rukhmini Bandyopadhyay 1, and Jia Wu 1
+
+The University of Texas MD Anderson Cancer Center, Houston, TX, USA 
+
+Abstract. Low-dose CT (LDCT) reduces radiation exposure but in-troduces protocol dependent noise and artifacts that vary across insti-tutions. While federated learning enables collaborative training without centralizing patient data, existing methods personalize in image space, making it difficult to separate scanner noise from patient anatomy. We propose ProFed ( Pro jection Guided Personalized Fed erated Learning), a framework that complements the image space approach by performing dual-level personalization in the projection space, where noise originates during CT measurements before reconstruction combines protocol and anatomy effects. ProFed introduces: (i) anatomy-aware and protocol-aware networks that personalize CT reconstruction to patient and scan-ner specific features, (ii) multi- constraint projection losses that enforce consistency with CT measurements, and (iii) uncertainty guided selec-tive aggregation that weights clients by prediction confidence. Extensive experiments on the Mayo Clinic 2016 dataset demonstrate that ProFed achieves 42.56 dB PSNR with CNN backbones and 44.83 dB with Trans-formers, outperforming 11 federated learning baselines, including the physics-informed SCAN-PhysFed by +1.42 dB. 
+
+1 Introduction 
+
+Computed tomography (CT) is a critical medical imaging modality that pro-vides detailed resolution cross sectional views of anatomical structures with superior contrast resolution compared to conventional radiography [5]. How-ever, it involves exposure to radiation that has been associated with increased cancer risk [2]. Low-dose CT (LDCT) [34] addresses this concern by reducing radiation dose through decreased tube current and sampling fewer projection views [18, 19, 29]. However, dose reduction introduces complex noise, artifacts, and loss of anatomical details, limiting their clinical utility. Deep learning methods have achieved strong results for LDCT reconstruction [6,13,25,27,40,45,50], but requires large centralized datasets that are difficult to obtain due to privacy constraints [16, 55, 56]. Federated learning [8, 36] enables collaborative training across institutions without sharing patient data, address-ing this limitation. However, existing federated LDCT methods [1, 20, 36, 43, 47] personalize in image space after reconstruction, where protocol dependent noise and patient anatomy are already fused. This makes it challenging to adapt to  
+
+> arXiv:2603.13422v1 [eess.IV] 12 Mar 2026 2A. Zafar et al.
+
+heterogeneous scanning protocols [14] and to separate scanner artifacts from anatomical structures. CT image quality depends on two interrelated factors: patient anatomy and the scanning protocols used. Patient anatomy determines how X-rays are ab-sorbed by different tissues, while scanning protocols control the radiation dose and noise characteristics. Noise in CT scans originates in the raw measurement (sinogram) before image reconstruction. Our key insight is that protocol noise and anatomy are naturally separated in the projection space. Noise appears as inconsistent measurements, while anatomical structures maintain consistent patterns across viewing angles. This enables more effective personalization than methods operating in an image space. Existing federated methods treat these as independent factors or adapt to only one [15, 35, 47], neglecting that noise originates in sinogram space during photon detection even before image reconstruction, where protocol and anatomy effects are fused. Current approaches either personalize to patient variations or protocol differences in image space, limiting their ability to separate protocol-dependent artifacts from anatomical structures, particularly for unseen protocol configurations. To address these limitations, we propose ProFed (Projection Guided Person-alized Federated Learning), which operates in projection space using sinogram measurements from CT scanners. This projection domain approach enables bet-ter separation of scanner noise from patient anatomy than image space methods. Our framework combines dual adaptation for patient and scanner characteristics, projection domain consistency losses with CT measurements, and uncertainty weighted aggregation for robust federated learning. Our main contributions are: 
+
+– Projection guided federated learning: To the best of our knowledge, we are the first federated LDCT method that uses sinogram measurements for physics based supervision, enabling cleaner separation of scanner noise from patient anatomy than image only approaches. 
+
+– Dual adaptation with projection consistency: Anatomy-aware and protocol-aware networks combined with multi-constraint losses that ensure reconstruc-tions match CT measurements. 
+
+– Multi-constraint projection consistency: We introduce forward projec-tion, backward projection, and cycle consistency losses with CT sinograms, providing stronger supervision than image only. 
+
+– Uncertainty guided aggregation: Uncertainty guided approach that bal-ances personalization and collaborative learning across different hospitals. Extensive experiments on the Mayo Clinic 2016 dataset demonstrate that ProFed achieves 42.56 dB PSNR (CNN) and 44.83 dB PSNR (Transformer), out-performing 11 federated learning baselines, including physics-informed SCAN-PhysFed by +1.42 dB. Projection Guided Personalized Federated Learning 3
+
+2 Related Work 
+
+Deep learning for LDCT reconstruction. Early approaches focused on model based iterative methods with handcrafted priors, including dictionary learning [49], penalized weighted least squares [54], and learned union of trans-forms regularization [44]. Deep learning methods achieved significant improve-ments through residual encoder decoder networks RED-CNN [6], generative ad-versarial networks (GANs) [9, 25, 45], transformer architectures TransCT [52], RegFormer [42], and diffusion based models [11,12,51]. However, these supervised methods require paired LDCT and NDCT data. Self-supervised alternatives rely on inter-slice redundancy [4], wavelet transforms [53], and vector quantized code-books [33] to reduce data requirements. While these methods are effective within single institutions, they struggle with protocol heterogeneity and require data centralization for multi-institutional deployment. 
+
+Federated learning for medical imaging. Federated learning [31] enables collaborative training across institutions without centralizing patient data. Stan-dard aggregation methods include FedAvg [31], FedProx [23], FedNova [37], they average model weights but assume homogeneous data distributions. Personal-ization approaches address heterogeneity through local adaptation layers [3], batch normalization [24], hypernetworks [48], and feature decomposition [7]. For medical imaging, FedMRI [10] handles anatomical variations, while recent work explores contrastive learning [22] and knowledge distillation [41]. However, these methods operate in image space and do not leverage the CT measurement data available from the scanners. 
+
+Physics based LDCT reconstruction. Recent work integrates CT physics and anatomy into reconstruction. ALDEN [38] conditions generation on anatomi-cal prompts, while SCAN-PhysFed [46] introduces physics-aware federated learn-ing with orthogonality constraints to separate protocol and anatomy features in image space. SUPER Learning [26] combines supervised deep learning with unsupervised penalized weighted least square updates for iterative reconstruc-tion. While these methods incorporate physics and anatomical information, they operate in image space after reconstruction, where protocol noise and patient anatomy are already mixed. In contrast, ProFed performs personalization in pro-jection space using sinogram measurements, directly modeling heterogeneity in the measurement domain where noise originates before reconstruction, enabling more effective separation of protocol artifacts from anatomical structures. 
+
+3 Method 
+
+ProFed performs personalization in the projection space using sinogram measure-ments. The framework combines: (i) projection guided federated learning that uses sinogram measurements for physics based supervision, enabling cleaner sep-aration of scanner noise from patient anatomy, (ii) dual-level personalized adap-tation using anatomy-aware and protocol-aware networks, (iii) multi-constraint projection consistency through forward projection, backward projection, and cy-cle consistency losses that ensure reconstructions maintain consistency with CT 4 A. Zafar et al. Protocol       
+
+> Sinogram
+> BioBERT
+> BioBERT
+> Embedding
+> Protocol
+> Aware Network
+> Encoder
+> Loss Block
+> Anatomy
+> Aware Network
+> Latent Modulation
+> Block
+> Gate
+> Decoder
+> Backward Projection
+> Reconstructed
+> CT
+> Forward
+> Projection
+> Client #1 (Hospital 1) Client #
+> k(Hospital
+> k)
+> Input
+> ProFed Model
+> (Local Training)
+> ProFed Model
+> (Local Training)
+> Updates Updates
+> Server Uncertainty aware
+> aggregation
+> Low-Dose CT ProFed Model
+> Input
+
+Fig. 1: ProFed framework: Architectural overview for projection-guided personalized federated learning. 
+
+measurements, and (iv) uncertainty guided selective aggregation that balances personalization and collaborative learning across heterogeneous institutional pro-tocols. Figure 1 and Algorithm 1 provide an overview of the proposed ProFed. 
+
+3.1 Problem Formulation 
+
+Given K distributed clients, Dk = {(I(i)
+
+LD , I(i)
+
+F D , R(i), p(i), a(i))}Nk
+
+i=1 containing: 
+
+– I(i)
+
+LD , I(i)
+
+F D ∈ RH×W : low dose and full dose CT images 
+
+– R(i) ∈ RNθ ×Nd : sinogram measurements with Nθ projection angles and Nd
+
+detector bins 
+
+– p(i) ∈ [0 , 1] 7: normalized protocol vector 
+
+– a(i) ∈ R768 : anatomy feature vector Our goal is to learn a reconstruction function fθ :
+
+ˆIFD = fθ (ILD , p, a, R) (1) 
+
+3.2 Dual Adaptation with Projection Consistency Architecture Overview Our encoder decoder architecture combines recon-struction with dual adaptation. The encoder Eθ processes low-dose images into latent features: 
+
+z = Eθ (ILD ) ∈ R192 ×H/ 32 ×W/ 32  (2) where z is the latent representation with C = 192 channels for input size W/ 32 .
+
+Anatomy Aware Adaptation We extract patient specific features through two pathways: image-based pathway and the text-based pathway. The image-pathway uses two visual backbones (RED-CNN and Uformer): 
+
+aimg = Backbone (I) ∈ R512  (3) Projection Guided Personalized Federated Learning 5
+
+The text pathway generates synthetic medical descriptions and encodes them with BioBERT [21]: 
+
+atxt = BioBERT (LLM (I)) ∈ R768  (4) We fuse both and project modalities through an MLP: 
+
+a = MLP fusion ([ aimg ; atxt ]) ∈ R768  (5) The anatomy-aware adaptation network generates modulation parameters: 
+
+γa, βa = Hα(a) ∈ R192  (6) 
+
+Protocol-Aware Adaptation with LoRA Scanner protocols p ∈ [0 , 1] 7 en-code geometry and dose parameters. We embed protocols through an MLP: 
+
+ep = MLP ξ (p) ∈ R192  (7) For efficient decoder adaptation, we use Low Rank Adaptation (LoRA) with rank r = 8 :
+
+W = W0 + BA  (8) where B ∈ Rdout ×r and A ∈ Rr×din . Protocol modulation parameters are: 
+
+γp, βp = LinearProj (ep) ∈ R192  (9) 
+
+Gated Feature Modulation Since anatomy features may be unreliable, we introduce a learnable reliability gate: 
+
+g = σ(FC g (a)) ∈ [0 , 1]  (10) Final modulation parameters combine both adaptation levels: 
+
+γ = g · γa + (1 − g) · γp, β = g · βa + (1 − g) · βp (11) Channel-wise modulation is applied: 
+
+fmod = γ ⊙ z + β (12) The decoder produces the reconstructed image: 
+
+ˆIFD = Dϕ(fmod ) (13) We then project this reconstruction to sinogram space and apply three com-plementary consistency constraints. 6 A. Zafar et al. 
+
+Differentiable Projection Operators We implement differentiable Radon transform RΘ and filtered backprojection R† 
+
+> Θ
+
+using coordinate rotation and bilinear interpolation. For an image I(x, y ), the Radon transform computes line integrals: 
+
+RΘ (I)[ θ, s ] = 
+
+Z ∞−∞ 
+
+I(s cos θ − t sin θ, s sin θ + t cos θ) dt  (14) 
+
+3.3 Multi-Constraint Projection Consistency 
+
+We enforce three complementary consistency losses with sinogram measurements 
+
+R.
+
+Forward projection consistency ensures the predicted sinogram matches CT measurements: 
+
+Lforward = ∥R Θ (ˆIFD ) − R∥22 (15) 
+
+Backward projection consistency ensures the reconstruction matches for-ward back projection from CT data: 
+
+Lbackward = ∥ˆIFD − R † 
+
+> Θ
+
+(R)∥22 (16) 
+
+Cycle consistency regularizes the reconstruction: 
+
+Lcycle = ∥ˆIFD − R † 
+
+> Θ
+
+(RΘ (ˆIFD )) ∥22 (17) The combined projection loss is: 
+
+Lprojection = λf L forward + λbLbackward + λcLcycle  (18) 
+
+3.4 Uncertainty Guided Federated Aggregation 
+
+We extend FedAvg with uncertainty weighting. Each client computes predictive uncertainty using Monte Carlo dropout: 
+
+uk = E(I,p)∼D val 
+
+> k
+
+h
+
+Var( ˆI)
+
+i
+
+(19) 
+
+3.5 Training Objectives 
+
+We combine three loss components. Image reconstruction loss :
+
+Lrecon = ∥ˆIFD − IFD ∥22 (20) Projection Guided Personalized Federated Learning 7
+
+Algorithm 1: ProFed: Projection-domain Personalized Federated Learning 
+
+Input: Clients C = {1, . . . , K }, datasets {D k }, rounds T , local epochs E
+
+Output: Global model θglobal 
+
+Initialize θglobal randomly 
+
+// Pre-compute anatomy features offline 
+
+foreach client k do for (ILD , IF D , R, p) ∈ D k do 
+
+aimg ← UformerCNN (IF D )
+
+Report ← ImageCaptioner (IF D )
+
+atxt ← BioBERT (Report )
+
+a ← MLP fusion ([ aimg ; atxt ]) 
+
+Store a with sample 
+
+for t = 1 to T do 
+
+Broadcast θglobal to all clients 
+
+foreach client k ∈ { 1, . . . , K } in parallel do 
+
+θk ← θglobal 
+
+for e = 1 to E do for batch (ILD , IFD , R, p, a) ∈ D k do 
+
+// Dual-level personalization 
+
+(γa, βa) ← Hα(a)(γp, βp) ← Hβ (p)
+
+g ← σ(FC g (a)) 
+
+γ ← g γa + (1 − g) γp
+
+β ← g βa + (1 − g) βp
+
+// Forward pass with modulation 
+
+z ← Eθ (ILD )
+
+fmod ← γ ⊙ z + β
+
+ˆIFD ← Dϕ(fmod )
+
+// Projection-guided consistency losses 
+
+ˆR ← R Θ (ˆIFD )
+
+IFBP ← R † 
+
+> Θ
+
+(R)
+
+Lforward ← ∥ ˆR − R∥22
+
+Lbackward ← ∥ ˆIFD − IFBP ∥22
+
+Lcycle ← ∥ ˆIFD − R † 
+
+> Θ
+
+(RΘ (ˆIFD )) ∥22
+
+Lproj ← λf Lforward + λbLbackward + λcLcycle 
+
+// Image-domain losses 
+
+Lrecon ← ∥ ˆIFD − IFD ∥22
+
+σ2 ← VarianceNet( ILD , p)
+
+Lhet ← P
+
+> x,y
+
+ (ˆIFD −IFD )22σ2 + 12 log σ2
+
+
+
+// Total loss and update 
+
+Ltotal ← λrecon Lrecon + λhet Lhet + λproj Lproj 
+
+Backpropagate Ltotal and update θk
+
+// Compute client uncertainty via MC-dropout 
+
+uk ← 0
+
+for (I, p, a) ∈ D val  
+
+> k
+
+do 
+
+{ˆI(m)}Mm=1 ← MC-dropout predictions 
+
+uk ← uk + Var( {ˆI(m)})
+
+uk ← uk /|D val  
+
+> k
+
+|
+
+Send (θshared  
+
+> k
+
+, u k , N k ) to server 
+
+// Server-side uncertainty-weighted aggregation 
+
+foreach client k do 
+
+wk ← NkNtotal (uk +ϵ)
+
+Normalize: wk ← wk / P 
+
+> j
+
+wj
+
+// Selective aggregation: shared vs. local layers 
+
+θshared  
+
+> global
+
+← P 
+
+> k
+
+wk θshared  
+
+> k
+
+(aggregate Eθ , D ϕ, H β )Keep local: Hα, FC g
+
+η ← CosineAnnealing( η, t, T )
+
+return θglobal 8 A. Zafar et al. 
+
+Table 1: CNN-based quantitative performance (PSNR/SSIM) Client #1 Client #2 Client #3 Client #4 Client #5 Client #6 Client #7 Client #8 Average PSNR SSIM PSNR SSIM PSNR SSIM PSNR SSIM PSNR SSIM PSNR SSIM PSNR SSIM PSNR SSIM PSNR SSIM FedAvg [31] 29.99 82.20 32.82 78.23 34.68 86.99 32.30 80.63 36.87 92.06 37.36 89.02 32.73 80.66 35.46 87.65 34.03 84.70 FedProx [23] 29.94 83.12 32.69 75.46 36.95 91.58 32.32 80.91 38.95 95.34 37.58 88.13 32.94 81.62 35.86 88.65 34.65 85.60 FedNova [37] 29.95 82.29 32.57 80.57 37.77 92.16 32.09 78.98 34.42 88.69 36.05 89.57 32.81 81.41 35.89 88.71 33.94 85.30 MOON [22] 32.50 75.61 35.55 85.41 35.72 80.30 35.69 82.10 35.38 78.47 36.31 84.35 35.70 81.17 35.62 80.40 35.31 80.98 FedDG [28] 33.37 81.40 34.01 82.39 33.56 76.37 34.43 81.49 34.06 76.70 33.97 80.17 34.75 80.87 34.25 79.23 34.05 79.83 FedKD [41] 29.74 83.11 32.17 71.65 36.65 90.93 32.10 79.19 40.58 96.71 37.07 82.55 32.88 81.30 36.28 89.08 34.68 84.31 FedPer [3] 33.23 88.20 35.06 84.89 38.79 92.70 35.58 86.12 41.76 96.97 36.85 89.96 35.69 86.30 38.48 91.69 36.93 89.60 FedBN [24] 32.55 84.59 34.76 84.15 38.18 90.30 34.77 83.30 41.24 96.11 38.66 91.19 34.74 83.35 37.89 90.35 36.60 87.92 FedMRI [10] 33.28 83.43 34.51 85.81 38.62 92.47 35.86 87.21 41.49 96.27 38.22 91.32 35.87 86.34 38.09 91.94 36.99 89.35 HyperFed [48] 33.74 88.57 34.83 85.05 38.87 92.78 35.44 85.40 42.94 97.48 39.15 92.96 34.99 85.19 38.12 91.29 37.26 89.84 FedFDD [7] 36.18 93.67 38.43 94.19 39.72 96.47 38.51 95.30 45.56 98.73 42.72 97.61 40.74 96.01 38.54 94.39 40.05 95.79 SCAN-PhysFed [46] 34.49 96.40 39.21 96.09 40.45 97.93 40.51 97.61 47.81 99.14 44.08 98.51 42.54 97.86 40.02 97.37 41.14 97.62 
+
+ProFed (Ours) 36.63 97.18 41.79 97.88 42.43 98.31 42.29 98.25 47.87 98.91 43.82 98.54 42.94 98.36 42.69 98.19 42.56 98.23 
+
+Table 2: Transformer-based quantitative performance (PSNR/SSIM) Client #1 Client #2 Client #3 Client #4 Client #5 Client #6 Client #7 Client #8 Average PSNR SSIM PSNR SSIM PSNR SSIM PSNR SSIM PSNR SSIM PSNR SSIM PSNR SSIM PSNR SSIM PSNR SSIM FedAvg [31] 34.31 87.88 38.06 90.54 43.51 97.56 41.05 95.43 45.24 98.47 43.15 97.09 41.45 95.95 42.88 96.16 41.21 94.89 FedProx [23] 34.32 87.01 37.74 88.89 43.73 97.95 41.12 93.92 45.39 98.61 42.99 97.08 41.38 94.31 42.10 94.55 41.10 94.04 FedNova [37] 29.55 78.44 31.38 68.13 37.07 82.47 31.79 73.45 40.61 88.80 35.46 79.77 32.38 73.66 35.77 82.22 34.25 78.37 MOON [22] 34.28 93.20 38.09 91.17 43.64 97.77 41.09 95.66 45.25 98.43 42.82 96.91 41.42 95.97 42.20 96.18 41.10 95.66 FedKD [41] 35.92 89.93 38.70 91.21 44.26 98.13 42.30 95.99 45.93 98.75 43.57 97.41 42.54 96.22 43.51 96.23 42.09 95.48 FedPer [3] 35.37 93.18 39.03 93.55 42.75 97.13 40.88 96.20 46.55 98.83 42.87 96.68 41.87 96.70 40.79 94.78 41.26 95.82 FedMRI [10] 34.60 93.67 38.04 94.55 42.94 97.44 39.34 95.78 46.79 98.91 42.82 97.30 40.81 95.32 40.85 95.70 40.78 96.01 HyperFed [48] 34.60 87.59 38.62 91.08 44.13 97.61 42.25 96.24 45.92 98.59 43.71 97.37 42.44 96.66 43.56 96.63 41.90 95.22 FedFDD [7] 37.35 96.20 39.67 95.18 44.31 98.26 39.00 95.21 47.89 99.20 43.81 98.06 42.17 97.40 40.50 95.49 41.84 96.89 SCAN-PhysFed [46] 38.55 94.06 41.74 96.20 45.52 98.52 42.48 96.55 49.50 99.39 45.32 97.93 43.35 96.73 42.71 96.79 43.65 97.03 
+
+ProFed (Ours) 39.26 96.18 44.33 98.63 44.90 98.95 44.60 98.89 48.91 99.40 46.58 99.02 45.30 98.97 44.76 98.84 44.83 98.61 
+
+Heteroscedastic Loss: Noise variance in low-dose CT depends on radiation dose and scanning protocol, following poisson statistics in the projection domain. We model per-pixel variance to account for this heteroscedastic noise: 
+
+Lhet = X
+
+x,y 
+
+"   ˆIFD (x, y ) − IFD (x, y )2
+
+2 σ2(x, y ) + 12 log σ2(x, y )
+
+#
+
+, (21) where σ2(x, y ) = VarianceNet (ILD , p) predicts spatially-varying noise variance conditioned on the low-dose image and protocol parameters. 
+
+Total Training Objective: The complete loss function combines image-domain, dose-aware, and projection-domain terms: 
+
+Ltotal = λrecon Lrecon + λhet Lhet + λproj Lprojection . (22) 
+
+4 Experimentation and Results 
+
+4.1 Datasets 
+
+ProFed is evaluated using the NIH-AAPM-Mayo Clinic 2016 dataset for the Low-Dose CT [30]. This benchmark includes 5,936 CT scans from ten patients. We follow a similar experimentation setting as SCAN PhysFed [46]; eight pa-tients were used for training, and 2 were reserved for testing. To simulate multi-institutional collaboration, we divide the 8 training patients across K=8 virtual Projection Guided Personalized Federated Learning 9Ground Truth Input FedAvg MOON FedKD FedMRI HyperFed FedFDD SCAN-
+
+PhysFed 
+
+ProFed 
+
+(Ours) 
+
+Fig. 2: Qualitative results of six selected comparison methods and our method across different clients using the classical convolutional-based LDCT imaging network. Rows one to five represent Clients #2, #3, #5, #6, and #7, respectively 
+
+clients, with each client assigned a different protocol configuration. For unseen client evaluation, the 2 held-out test patients were forward-projected using 4 new protocol configurations not seen during training (NV: 100–896 views, PN: 
+
+9×10 4–1.1×10 6), evaluating both anatomical generalization (unseen patients) and protocol generalization (unseen scanning configurations) simultaneously. 
+
+Table 3: Quantitative evaluation on unseen clients: PSNR and SSIM 
+
+Unseen Client #1 Unseen Client #2 Unseen Client #3 Unseen Client #4 Average PSNR SSIM PSNR SSIM PSNR SSIM PSNR SSIM PSNR SSIM FedAvg [31] 35.57 88.68 34.00 85.26 32.52 76.71 36.86 91.44 32.89 81.35 FedProx [23] 36.69 91.16 34.30 86.39 32.58 72.13 39.13 94.87 34.74 85.52 FedNova [37] 35.45 88.83 34.23 86.29 32.39 69.20 35.40 89.99 34.38 83.58 MOON [22] 35.21 78.19 35.30 79.81 34.55 83.07 35.56 78.94 35.16 80.00 FedDG [28] 34.86 79.54 34.79 80.91 33.15 80.31 34.49 77.42 34.32 79.55 FedKD [41] 36.82 91.60 34.27 86.37 32.49 70.54 40.73 95.90 36.08 86.10 FedPer [3] 36.86 88.58 35.46 87.02 31.96 71.64 38.56 90.90 35.71 84.53 FedBN [24] 37.84 89.95 36.16 88.46 33.67 81.63 40.21 94.89 36.97 88.73 FedMRI [10] 31.12 82.42 31.95 79.95 31.72 71.96 32.04 81.63 31.71 78.99 HyperFed [48] 36.18 89.60 33.47 82.49 31.94 65.52 41.70 94.85 35.90 83.12 FedFDD [7] 37.80 92.33 37.06 91.77 33.71 80.26 40.53 95.12 37.27 89.87 SCAN-PhysFed 40.77 97.69 38.77 95.75 34.38 81.80 40.27 96.92 38.55 93.04 
+
+ProFed (Ours) 41.26 97.85 39.31 96.06 35.27 82.23 40.83 97.18 39.17 93.33 
+
+4.2 Evaluation Metrics 
+
+We evaluate our method using two established image quality metrics standard in low-dose CT reconstruction. 10 A. Zafar et al. 
+
+Peak Signal-to-Noise Ratio (PSNR). PSNR calculates pixel level re-construction accuracy in decibels (dB), measuring the similarity between recon-structed low-dose images and reference full-dose images: 
+
+PSNR (IFD , ˆIFD ) = 10 · log 10 
+
+MAX 2
+
+MSE (IFD , ˆIFD )
+
+!
+
+(23) where IFD represents the reference full-dose CT image, ˆIFD denotes the re-constructed image from low-dose input, MAX is the maximum possible pixel value, and MSE = 1 
+
+> HW
+
+∥IFD − ˆIFD ∥22 is the mean squared error. Higher PSNR values indicate lower reconstruction error; clinical studies suggest PSNR ≥ 35 Ground Truth Input FedAvg MOON FedKD FedMRI HyperFed FedFDD SCAN-
+
+> PhysFed
+> ProFed
+> (Ours)
+
+Fig. 3: Qualitative comparison of methods across different clients using the Transformer-based reconstruction network. Rows 1-5 show results for Clients #2, #3, #5, #6, and #7, respectively. 
+
+dB is typically required for diagnostic quality in LDCT imaging [6]. 
+
+Structural Similarity Index Measure (SSIM). SSIM evaluates image quality by comparing brightness, contrast, and structural details between recon-structed and reference CT images [32]: 
+
+SSIM (IFD , ˆIFD ) = (2 μIμˆI + C1)(2 σIˆI + C2)(μ2 
+
+> I
+
++ μ2ˆI + C1)( σ2 
+
+> I
+
++ σ2ˆI + C2) (24) where μI and μˆI are the mean Hounsfield unit (HU) values, σI and σˆI are the standard deviations, σIˆI is the covariance, and C1 = (0 .01 · L)2, C2 = (0 .03 ·
+
+L)2 are constants for numerical stability where L is the dynamic range. SSIM ranges from 0 to 1, with values closer to 1 indicating better preservation of Projection Guided Personalized Federated Learning 11 
+
+structural information and tissue contrast, which are essential for maintaining diagnostic features such as organ boundaries, vascular structures, and soft tissue differentiation in LDCT reconstruction. 
+
+4.3 Implementation Details 
+
+ProFed is implemented in PyTorch and optimized using Adam [17] using a learning rate of 0.001. We used 200 federated communication rounds, with a batch size of 20. We evaluate two reconstruction backbones: RED-CNN [6] for CNN-based experiments and Uformer [39] for Transformer-based experiments. Anatomy features are computed using BioBERT [21]. All experiments are con-ducted on 4 NVIDIA H100 GPUs. Like all 11 baselines we compare against, ProFed uses paired LDCT/NDCT data available from standard clinical acquisi-tions [46]; our projection-domain consistency losses are orthogonal to supervision type and compatible with self-supervised extensions. 
+
+4.4 Comparison With Other Methods 
+
+We compare ProFed against 11 federated learning baselines spanning standard aggregation (FedAvg [31], FedProx [23], FedNova [37]), representation learning (MOON [22], FedDG [28]), knowledge distillation (FedKD [41]), personaliza-tion (FedPer [3], FedBN [24], FedMRI [10], HyperFed [48]), feature disentan-glement (FedFDD [7]), and physics-informed methods (SCAN-PhysFed [46]). Tables 1 and 2 show results for CNN-based (RED-CNN) and Transformer-based (Uformer) architectures across 8 federated clients, while Table 3 evaluates gener-alization to 4 unseen clients. ProFed achieves the best performance in all settings: 42.56 dB/98.23% (CNN), 44.83 dB/98.61% (Transformer), and 39.17 dB/93.33% (unseen clients). Compared to SCAN-PhysFed, our strongest baseline using physics constraints in image space, ProFed improves by +1.42 dB (CNN), +1.18 dB (Transformer), and +0.62 dB (unseen), validating that projection guided per-sonalization provides stronger supervision by ensuring measurement consistency with sinograms measurements. Generic personalization methods (FedPer: 36.93 dB, HyperFed: 37.26 dB) and feature disentanglement (FedFDD: 40.05 dB) un-derperform substantially, showing that effective CT reconstruction requires ad-ditional physics based supervision approaches rather than just generic domain adaptation methods. Qualitative results in figures 2 and 3 show ProFed pro-duces sharper anatomical boundaries and cleaner soft-tissue regions with fewer artifacts across heterogeneous protocols. While SCAN-PhysFed suppresses noise effectively, it over smooths low-contrast regions, whereas ProFed preserves tex-ture detail by ensuring that reconstructions satisfy actual CT measurements in projection space. The consistent improvements across architectures (CNN and Transformer), evaluation scenarios (training and unseen clients), and visual qual-ity confirm that projection guided dual-level personalization successfully sepa-rates protocol dependent noise from patient specific anatomical structures in the measurement domain, where both naturally occur. 12 A. Zafar et al. 
+
+Table 4: Ablation study on different components in ProFed. Component Average Pers. Domain Proj. Cons. Proto. Anat. Uncert. PSNR SSIM Aware Aware Weight (dB) (%) Image ✗ ✗ ✗ ✗ 40.72 97.92 Image ✗ ✓ ✗ ✗ 40.98 97.98 Image ✗ ✗ ✓ ✗ 41.07 98.01 Image ✗ ✓ ✓ ✗ 41.12 98.03 Image ✗ ✓ ✓ ✓ 41.16 98.05 Proj. ✓ ✗ ✗ ✗ 41.62 98.12 Proj. ✓ ✓ ✗ ✗ 42.02 98.18 Proj. ✓ ✗ ✓ ✗ 42.18 98.20 Proj. ✓ ✓ ✓ ✗ 42.43 98.22 Proj. ✓ ✓ ✓ ✓ 42.56 98.23 Table 5: Ablation study on individual projection losses                
+
+> Configuration PSNR (dB) SSIM (%)
+> Image loss only 41.16 98.05 + Forward projection 41.37 98.09 + Backward projection 41.29 98.07 + Cycle consistency 41.33 98.08 + All three ( λf= 1 , λ b= 1 , λ c= 1 )41.62 98.12
+
+4.5 Ablation Study 
+
+Table 4 and Table 5 systematically evaluates each component’s contribution using the CNN-based architecture. We start from image domain personaliza-tion, we observe that protocol-aware networks (+0.26 dB) and anatomy-aware works (+0.35 dB) improve performance, with their combination reaching 41.12 dB. Adding uncertainty guided weighting achieves 41.16 dB, matching SCAN-PhysFed’s approach. Adding projection guidance improves consistency losses, increasing performance to 41.62 dB (+0.90 dB over the image baseline), which validates that it provides stronger supervision. Adding protocol-aware networks (42.02 dB), anatomy-aware networks (42.18 dB), and both together (42.43 dB) shows larger gains, as protocol noise and anatomical integrals are more natu-rally disentangled in sinogram space. The full ProFed model achieves 42.56 dB, improving +1.40 dB over the best image domain configuration. The ablation study reveals three key findings: (1) Projection guided superi-ority performing identical personalization operations in projection space (rows 6-10) consistently outperforms image space (rows 1-5) by 0.9-1.4 dB, confirm-ing that modeling heterogeneity here CT physics is directly represented, pro-vides stronger inductive biases (2) Complementary components protocol net-works adapt to scanner-dependent noise while anatomy networks handle patient specific anatomy, using both together (42.43 dB) significantly exceeding com-pared to stand alone components (42.02 dB or 42.18 dB); (3) Modest uncertainty gains , while uncertainty weighting helps (+0.13 dB), addressing heterogeneity Projection Guided Personalized Federated Learning 13 
+
+Table 6: Computational Comparison                            
+
+> Perf. Arch. & Scale Computation
+> Method PSNR Params Params Scale Train Infer Extract Comm. (K=8) (K=100) SCAN 43.65 1.5M 18.8M O(K)Base Backbone Per-ep. Full ProFed 44.83 3.0M 3.0M O(1) +Proj Same Offline -14%
+> (+0.46 dB)
+
+at the model level through projection guided personalization contributes more substantially (+1.27 dB) than just aggregation level strategies. Table 6 further shows that unlike SCAN-PhysFed, whose parameter count scales as O(K) reach-ing 18.8M at K=100 clients, ProFed maintains constant O(1) scaling at 3.0M parameters regardless of federation size, while reducing communication overhead by 14% through offline anatomy feature extraction. 
+
+5 Limitations 
+
+ProFed uses protocol metadata (kVp, mAs, scanner geometry) for protocol-aware adaptation; this information is routinely available in clinical DICOM headers and standard in federated CT deployments. While our reliability-gated fusion mechanism handles cases where metadata may be incomplete, future work could explore more robust protocol inference directly from sinogram measurements. Additionally, a dedicated self-supervised anatomy encoder trained directly on CT volumes could capture finer anatomical variations beyond the current BioBERT-based approach. 
+
+6 Conclusion 
+
+We presented ProFed, a projection guided personalized federated learning frame-work that addresses heterogeneity in distributed low-dose CT reconstruction. By performing dual-level personalization in the sinogram space, where protocol de-pendent noise and patient specific anatomical structures naturally occur. ProFed achieves 42.56 dB PSNR (CNN) and 44.83 dB PSNR (Transformer) on the Mayo Clinic 2016 dataset, outperforming 11 federated learning baselines and improv-ing +1.42 dB over the physics-informed SCAN-PhysFed method. ProFed makes three key contributions: First, we introduce projection guided federated learning that, to our knowledge, is the first federated LDCT method to use sinogram mea-surements for physics based supervision, enabling cleaner separation of scanner noise from patient anatomy than just image only approaches. Second, we propose dual adaptation networks combining anatomy-aware and protocol-aware per-sonalization with multi-constraint projection losses (forward, backward, cycle) that ensure reconstructions remain consistent with CT measurements. Third, we develop uncertainty guided aggregation that balances personalization and 14 A. Zafar et al. 
+
+collaborative learning across heterogeneous hospital sites. Systematic ablations demonstrate that projection guided personalization (+1.40 dB) substantially outperforms stand alone image based approaches by separating heterogeneity sources in their physical measurement space. ProFed shows robust generaliza-tion to unseen clients (39.17 dB) and shows consistent effectiveness across CNN and Transformer backbones. These results demonstrate a practical framework for privacy preserving medical AI that handles heterogeneous hospital data while preserving the image quality required for clinical use. 
+
+References 
+
+1. Al-Saleh, A., Tejani, G.G., Mishra, S., Sharma, S.K., Mousavirad, S.J.: A federated learning-based privacy-preserving image processing framework for brain tumor de-tection from ct scans. Scientific Reports 15 (1), 23578 (2025) 2. Ali, Y.F., Cucinotta, F.A., Ning-Ang, L., Zhou, G.: Cancer risk of low dose ionizing radiation. Frontiers in Physics 8, 234 (2020) 3. Arivazhagan, M.G., Aggarwal, V., Singh, A.K., et al.: Federated learning with personalization layers. arXiv preprint arXiv:1912.00818 (2019) 4. Bera, S., Biswas, P.K.: Self supervised low dose computed tomography image de-noising using invertible network exploiting inter slice congruence. In: Proceedings of the IEEE/CVF winter conference on applications of computer vision. pp. 5614– 5623 (2023) 5. Buzug, T.M.: Computed tomography. In: Springer handbook of medical technology, pp. 311–342. Springer (2011) 6. Chen, H., Zhang, Y., Kalra, M.K., Lin, F., Chen, Y., Liao, P., Zhou, J., Wang, G.: Low-dose ct with a residual encoder-decoder convolutional neural network. IEEE transactions on medical imaging 36 (12), 2524–2535 (2017) 7. Chen, X., Li, Z., Xu, Z., Ouyang, C., Qin, C., et al.: Fedfdd: Federated learning with frequency domain decomposition for low-dose ct denoising. In: Medical Imaging with Deep Learning (2024) 8. Darzidehkalani, E., Ghasemi-Rad, M., Van Ooijen, P.: Federated learning in med-ical imaging: part i: toward multicentral health care ecosystems. Journal of the american college of radiology 19 (8), 969–974 (2022) 9. Du, W., Chen, H., Yang, H., Zhang, Y.: Disentangled generative adversarial net-work for low-dose ct. EURASIP Journal on Advances in Signal Processing 2021 (1), 34 (2021) 10. Feng, C.M., Yan, Y., Wang, S., Xu, Y., Shao, L., Fu, H.: Specificity-preserving federated learning for mr image reconstruction. IEEE Transactions on Medical Imaging 42 (7), 2010–2021 (2022) 11. Gao, Q., Chen, Z., Zeng, D., Zhang, J., Ma, J., Shan, H.: Noise-inspired diffusion model for generalizable low-dose ct reconstruction. arXiv preprint arXiv:2506.22012 (2025) 12. Gao, Q., Li, Z., Zhang, J., Zhang, Y., Shan, H.: Corediff: Contextual error-modulated generalized diffusion model for low-dose ct denoising and generalization. IEEE Transactions on Medical Imaging 43 (2), 745–759 (2023) 13. Gu, J., Yang, T.S., Ye, J.C., Yang, D.H.: Cyclegan denoising of extreme low-dose cardiac ct using wavelet-assisted noise disentanglement. Medical image analysis 
+
+74 , 102209 (2021) Projection Guided Personalized Federated Learning 15 14. Guo, B., Lu, D., Szumel, G., Gui, R., Wang, T., Konz, N., Mazurowski, M.A.: The impact of scanner domain shift on deep learning performance in medical imaging: an experimental study. arXiv preprint arXiv:2409.04368 (2024) 15. Guo, P., Wang, P., Zhou, J., Jiang, S., Patel, V.M.: Multi-institutional collabora-tions for improving deep learning-based magnetic resonance image reconstruction using federated learning. In: Proceedings of the IEEE/CVF conference on com-puter vision and pattern recognition. pp. 2423–2432 (2021) 16. Gupta, S., Kumar, S., Chang, K., Lu, C., Singh, P., Kalpathy-Cramer, J.: Collab-orative privacy-preserving approaches for distributed deep learning using multi-institutional data. RadioGraphics 43 (4), e220107 (2023) 17. Kingma, D.P.: Adam: A method for stochastic optimization. arXiv preprint arXiv:1412.6980 (2014) 18. Kniep, I., Mieling, R., Gerling, M., Schlaefer, A., Heinemann, A., Ondruschka, B.: Bayesian reconstruction algorithms for low-dose computed tomography are not yet suitable in clinical context. Journal of Imaging 9(9), 170 (2023) 19. Kudo, H., Suzuki, T., Rashed, E.A.: Image reconstruction for sparse-view ct and interior ct—introduction to compressed sensing and differentiated backprojection. Quantitative imaging in medicine and surgery 3(3), 147 (2013) 20. Kumar, R., Zeng, S., Kumar, J., Mao, X., et al.: Privacy-preserving federated transfer learning for enhanced liver lesion segmentation in pet-ct imaging. Artificial Intelligence in Medicine p. 103245 (2025) 21. Lee, J., Yoon, W., Kim, S., Kim, D., Kim, S., So, C.H., Kang, J.: Biobert: a pre-trained biomedical language representation model for biomedical text mining. Bioinformatics 36 (4), 1234–1240 (2020) 22. Li, Q., He, B., Song, D.: Model-contrastive federated learning. In: Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR). pp. 10713–10722 (2021) 23. Li, T., Sahu, A.K., Zaheer, M., et al.: Federated optimization in heterogeneous networks. In: Proc. Mach. Learn. Syst. (MLSys). vol. 2, pp. 429–450 (2020) 24. Li, X., JIANG, M., Zhang, X., Kamp, M., Dou, Q.: Fedbn: Federated learning on non-iid features via local batch normalization. In: International Conference on Learning Representations (2021) 25. Li, Z., Zhou, S., Huang, J., Yu, L., Jin, M.: Investigation of low-dose ct image denoising using unpaired deep learning methods. IEEE transactions on radiation and plasma medical sciences 5(2), 224–234 (2020) 26. Li, Z., Ye, S., Long, Y., Ravishankar, S.: Super learning: a supervised-unsupervised framework for low-dose ct image reconstruction. In: Proceedings of the IEEE/CVF International Conference on Computer Vision Workshops. pp. 0–0 (2019) 27. Lin, W.A., Liao, H., Peng, C., Sun, X., Zhang, J., Luo, J., Chellappa, R., Zhou, S.K.: Dudonet: Dual domain network for ct metal artifact reduction. In: Proceed-ings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition. pp. 10512–10521 (2019) 28. Liu, Q., Chen, C., Qin, J., Dou, Q., Heng, P.A.: Feddg: Federated domain gener-alization on medical image segmentation via episodic learning in continuous fre-quency space. In: Proceedings of the IEEE/CVF conference on computer vision and pattern recognition. pp. 1013–1023 (2021) 29. Lu, S., Yang, B., Xiao, Y., Liu, S., Liu, M., Yin, L., Zheng, W.: Iterative recon-struction of low-dose ct based on differential sparse. Biomedical Signal Processing and Control 79 , 104204 (2023) 30. McCollough, C.: Tu-fg-207a-04: overview of the low dose ct grand challenge. Med-ical physics 43 (6Part35), 3759–3760 (2016) 16 A. Zafar et al. 31. McMahan, B., Moore, E., Ramage, D., et al.: Communication-efficient learning of deep networks from decentralized data. In: Artificial Intelligence and Statistics. pp. 1273–1282. PMLR (2017) 32. Mudeng, V., Kim, M., Choe, S.w.: Prospects of structural similarity index for medical image analysis. Applied Sciences 12 (8), 3754 (2022) 33. Su, B., Xu, J., Hu, X., Deng, K., Li, J., Lu, Z.: Vq-scd: Vector quantization meets unknown scan condition self-supervised low-dose ct denoising. In: International Conference on Medical Image Computing and Computer-Assisted Intervention. pp. 673–683. Springer (2025) 34. Team, N.L.S.T.R.: Reduced lung-cancer mortality with low-dose computed tomo-graphic screening. New England Journal of Medicine 365 (5), 395–409 (2011) 35. Wang, H., He, R., Zhang, X., Bian, Z., Zeng, D., Ma, J.: A peer-to-peer federated continual learning network for improving ct imaging from multiple institutions. arXiv preprint arXiv:2306.02037 (2023) 36. Wang, H., Zhang, X., Ren, X., Zhang, Z., Yang, S., Lian, C., Ma, J., Zeng, D.: Collaborative and privacy-preserving cross-vendor united diagnostic imaging via server-rotating federated machine learning. Communications Engineering 4(1), 148 (2025) 37. Wang, J., Liu, Q., Liang, H., Joshi, G., Poor, H.V.: Tackling the objective in-consistency problem in heterogeneous federated optimization. Advances in neural information processing systems 33 , 7611–7623 (2020) 38. Wang, R., Chen, Z., Song, Z., Fang, W., Zhang, J., Tu, D., Tang, Y., Xu, M., Ye, X., Lu, L., et al.: Anatomy-aware low-dose ct denoising via pretrained vision models and semantic-guided contrastive learning. In: International Conference on Medical Image Computing and Computer-Assisted Intervention. pp. 13–23. Springer (2025) 39. Wang, Z., Cun, X., Bao, J., Zhou, W., Liu, J., Li, H.: Uformer: A general u-shaped transformer for image restoration. In: Proceedings of the IEEE/CVF conference on computer vision and pattern recognition. pp. 17683–17693 (2022) 40. Wolterink, J.M., Leiner, T., Viergever, M.A., Išgum, I.: Generative adversarial networks for noise reduction in low-dose ct. IEEE transactions on medical imaging 
+
+36 (12), 2536–2545 (2017) 41. Wu, C., Wu, F., Lyu, L., Huang, Y., Xie, X.: Communication-efficient federated learning via knowledge distillation. Nature Communications 13 (1), 2032 (2022) 42. Xia, W., Yang, Z., Lu, Z., Wang, Z., Zhang, Y.: Regformer: A local–nonlocal regularization-based model for sparse-view ct reconstruction. IEEE Transactions on Radiation and Plasma Medical Sciences 8(2), 184–194 (2023) 43. Xu, J., Zhu, Y.n., Zhang, X., Ding, Q.: Personalized artifacts modeling and feder-ated learning for multi-institutional low-dose ct reconstruction. Inverse Problems and Imaging 19 (5), 858–876 (2025) 44. Xu, Q., Yu, H., Mou, X., Zhang, L., Hsieh, J., Wang, G.: Low-dose x-ray ct re-construction via dictionary learning. IEEE transactions on medical imaging 31 (9), 1682–1697 (2012) 45. Yang, Q., Yan, P., Zhang, Y., Yu, H., Shi, Y., Mou, X., Kalra, M.K., Zhang, Y., Sun, L., Wang, G.: Low-dose ct image denoising using a generative adversarial net-work with wasserstein distance and perceptual loss. IEEE transactions on medical imaging 37 (6), 1348–1357 (2018) 46. Yang, Z., Chen, Y., Wang, Z., Shan, H., Chen, Y., Zhang, Y.: Patient-level anatomy meets scanning-level physics: Personalized federated low-dose ct denoising empow-ered by large language model. In: Proceedings of the Computer Vision and Pattern Recognition Conference. pp. 5154–5163 (2025) Projection Guided Personalized Federated Learning 17 47. Yang, Z., Xia, W., Lu, Z., Chen, Y., Li, X., Zhang, Y.: Hypernetwork-based personalized federated learning for multi-institutional ct imaging. arXiv preprint arXiv:2206.03709 (2022) 48. Yang, Z., Xia, W., Lu, Z., Chen, Y., Li, X., Zhang, Y.: Hypernetwork-based physics-driven personalized federated learning for ct imaging. IEEE Transactions on Neural Networks and Learning Systems (2023) 49. Ye, S., Ravishankar, S., Long, Y., Fessler, J.A.: Spultra: Low-dose ct image recon-struction with joint statistical and learned image models. IEEE transactions on medical imaging 39 (3), 729–741 (2019) 50. Yin, Z., Xia, K., Wang, S., He, Z., Zhang, J., Zu, B.: Unpaired low-dose ct denoising via an improved cycle-consistent adversarial network with attention ensemble. The Visual Computer 39 (10), 4423–4444 (2023) 51. Zhang, W., Huang, B., Chen, S., Xu, X., Wu, W., Liu, Q.: Partitioned hankel-based diffusion models for few-shot low-dose ct reconstruction. arXiv preprint arXiv:2405.17167 (2024) 52. Zhang, Z., Yu, L., Liang, X., Zhao, W., Xing, L.: Transct: dual-path transformer for low dose computed tomography. In: International Conference on Medical Image Computing and Computer-Assisted Intervention. pp. 55–64. Springer (2021) 53. Zhao, H., Gu, Y., Zhao, Z., Du, B., Xu, Y., Yu, R.: Wia-ld2nd: Wavelet-based image alignment for self-supervised low-dose ct denoising. In: International Conference on Medical Image Computing and Computer-Assisted Intervention. pp. 764–774. Springer (2024) 54. Zheng, X., Ravishankar, S., Long, Y., Fessler, J.A.: Pwls-ultra: An efficient clus-tering and learning-based approach for low-dose 3d ct image reconstruction. IEEE transactions on medical imaging 37 (6), 1498–1510 (2018) 55. Zhou, S.K., Greenspan, H., Davatzikos, C., Duncan, J.S., Van Ginneken, B., Mad-abhushi, A., Prince, J.L., Rueckert, D., Summers, R.M.: A review of deep learning in medical imaging: Imaging traits, technology trends, case studies with progress highlights, and future promises. Proceedings of the IEEE 109 (5), 820–838 (2021) 56. Ziller, A., Mueller, T.T., Stieger, S., Feiner, L.F., Brandt, J., Braren, R., Rueckert, D., Kaissis, G.: Reconciling privacy and accuracy in ai for medical imaging. Nature Machine Intelligence 6(7), 764–774 (2024)
