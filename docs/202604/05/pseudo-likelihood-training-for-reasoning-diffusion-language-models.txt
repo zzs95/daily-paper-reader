@@ -1,0 +1,897 @@
+Title: 2026.eacl-long.257.pdf
+
+URL Source: https://aclanthology.org/2026.eacl-long.257.pdf
+
+Published Time: Wed, 18 Mar 2026 20:35:45 GMT
+
+Number of Pages: 16
+
+Markdown Content:
+> Proceedings of the 19th Conference of the European Chapter of the Association for Computational Linguistics Volume 1: Long Papers , pages 5514–5529 March 24-29, 2026 ©2026 Association for Computational Linguistics
+
+# PADRE: Pseudo-Likelihood Training for Reasoning Diffusion Language Models 
+
+## Shiv Shankar 
+
+## University of Massachusetts 
+
+## sshankar@cs.umass.edu 
+
+## Abstract 
+
+Policy-gradient reinforcement learning (PGRL) forms the backbone of current methods used to enhance alignment and reasoning in Large Language Models (LLMs). However, these methods are incompatible with diffusion based language models (dLLMs). Most attempts to apply PGRL to dLLMs, are either not scalable or use unprincipled approximations. This work, introduces PADRE a framework that uses a novel pseudo-likelihood based objective for alignment of dLLMs. Our objective has the same optima as PGRL based optimization, but does not need to evaluate exact likelihood from dLLMs. Experiments on various coding and mathematical reasoning benchmarks show that our method matches or surpasses the perfor-mance of recent dLLM training baselines such as diffu-GRPO/d1. Our approach provides a stable and practical alternative for RL-based fine-tuning of reasoning-focused dLLMs. 
+
+## 1 Introduction 
+
+Large Language Models (LLMs) have become the backbone of modern natural language processing and is powering applications ranging from code generation (Gehring et al., 2024) to robotic control (Wang et al., 2024b) to autonomous agents (Deng et al., 2023) and many other language based tasks (Ouyang et al., 2022). Extensive pre-training on massive text corpora induces impressive language generation capacity (Ouyang et al., 2022). These capabilities are then channeled towards high-value downstream tasks (such as solving mathematical problems) by post-training (or fine-tuning) LLMs to improve their complex reasoning capabilities. Most of the methods in these applications are based on reinforcement learning (RL) to enhance the’ reasoning and generation abilities of LLMs (Lu-ong et al., 2024). The core principle of these RL based is to give positive rewards when the model generates correct outputs while penalizing wrong answers, and optimizing for the average reward. RL methods based on the policy gradient (Sut-ton et al., 1999) methods (PGRL), have been the dominant approaches for post-training LLMs in reasoning-heavy tasks such as solving mathemati-cal problems (Xu et al., 2025). PGRL estimators require the ability to compute likelihoods of the generations. Most current LLMs are based on au-toregressive (AR) transformer models which have a naturally efficient way to compute the requisite likelihoods for the gradient update. While most current LLMS are based on autore-gressive models, recently diffusion based language models (dLLMs) have emerged as an equally pow-erful way to train language models (Nie et al., 2025; Shi et al., 2024). dLLMs (also sometimes called Masked Diffusion Language Models) model se-quence generation as an iterative denoising process, which allows them to break the inherent sequential-ity of autoregressive models. This allows dLLMs to significantly outperform autoregressive (AR) mod-els, especially when generating long sequences. Unfortunately, the policy-gradient methods which underpin the success of standard LLMs, cannot di-rectly be applied to dLLMs. This is because the token-level likelihoods used in PGRL are compu-tationally expensive to compute for dLLMs . This is because computing likelihoods of a sentence is difficult for dLLMs. Interestingly, the standard KL-regularized RL perspective of LLMs training naturally connects to probabilistic inference (Jaynes, 1979; Khalifa et al., 2020; Ziebart et al., 2008)). Building on this insight, we propose a novel objective for align-ment of dLLMs that does not rely on monte-carlo estimation of probabilities. Our approach is in-spired by pseudo-likelihood (Besag, 1975, 2001) and achieves the same optimality conditions as RLHF and KL-regularized RL; but crucially avoids the inefficiencies of PGRL with dLLMs. This en-ables stable, and practical alignment for reasoning-intensive tasks in dLLMs. 
+
+5514 Figure 1: Visual depiction of probability estimation from dLLMs (based upon Figure 2 in Zhao et al. (2025). After generating completion y1: L from prompt x using full diffusion denoising (left), we compute conditional log probabilities from the model. This is achieved by running the model on the augmented sequence x ⊕ y1: L ⊕
+
+mask sequence . The additional masked sequence is provided with shared positions embedddings as compared to y.Additionally perturbation can be applied to increase robustness of the model. 
+
+## 2 Preliminaries 
+
+Proximal Policy Optimization (PPO) PPO (Schulman et al., 2017b) is a classic on-policy algo-rithm for policy gradient based optimization. While the vanilla Reinforce (Williams, 1992) and other similar gradient methods yield an unbiased gra-dient, taking large steps often leads to instability in training. Improving upon the TRPO (Schulman et al., 2017a) method, PPO uses a clipped surrogate objective to prevent large charge updates. Each it-eration of PPO can be written as optimizing: 
+
+J(π) = Ey∈Dk
+
+[
+
+min 
+
+(
+
+πθ(y)
+
+πθk (y) · A(y),
+
+clip 
+
+( π(y)
+
+πθk (y) , ε 
+
+)
+
+· A(y)) 
+
+)]̂ 
+
+A is an advantage function, ε is a hyperparameter, 
+
+πθk is the previous policy (parameterized via θ), clip is a function which clamps its input in the range [1 − ε, 1 + ε], and Dk is a set of trajectories 
+
+y obtained by executing πθk on the MDP. Note that the objective involves the likelihood of a generation from the model π. Theoretically the likelihood is of the entire trajectory or output 
+
+y(i); however when the model allows a per term decomposition such as in auto-regressive models or in state conditioned policies in MDPs, the objective can be written in terms of such a per token likeli-hood. We refer the readers to Sutton et al. (1999); Sutton and Barto (1998) for details. 
+
+Group Relative Policy Optimization (GRPO) 
+
+GRPO (Shao et al., 2024) is a PPO based method for finetuning LLMs. GRPO usually samples multi-ple responses y(i) for each prompt x, uses a verifier (for math-like problems) or other reward functions to rate these samples, and computes advantages by normalizing rewards within each prompt group. The advantage for the i-th response yi is computed as: ̂
+
+Ai = r(x, y i) − mean( r(x, y 1), .., r (x, o G)) stdev( r(x, y 1), .., r (x, y G)) ,
+
+(1) where r(x, y i) is the outcome for response yi to prompt x as we defined above. This response-level advantage ̂ Ai is in the PPO objective LPPO , along with KL-regularization to compute the update 
+
+JGRPO (π) = 
+
+> G
+
+∑
+
+> i=1
+
+1
+
+|yi|
+
+> |yi|
+
+∑
+
+> t=1
+
+min 
+
+[
+
+π(ai 
+
+> t
+
+| si
+
+> t
+
+)
+
+πθk (ai 
+
+> t
+
+| si
+
+> t
+
+)̂ Ai,
+
+clip 
+
+( π(ai 
+
+> t
+
+| si
+
+> t
+
+)
+
+πθθk (ai 
+
+> t
+
+| si
+
+> t
+
+) , ϵ 
+
+)̂ 
+
+Ai
+
+]
+
+− βD KL (π∥πref ),
+
+where ait is the tth token in the sequence yi, and 
+
+sit = ( yi<t , x ) is the concatenation of all processed tokens. Effectively instead of a per step/action reward as in PPO; by using the entire trajectory reward in the objective as given, GRPO implicitly assigns each token in the response the correspond-ing reward. The standardization of the reward re-places the value function estimate in standard PPO. However its overall effect is similar, to stabilize training by reducing variance. Thus GRPO is often simpler to implement than PPO for post-training LLMs (Wang et al., 2024a). 5515 2.1 Masked Diffusion 
+
+Our proposed method crucially relies on the ar-chitectural and theoretical properties of Masked Diffusion Language Models (dLLMs). Thus, be-fore proceeding further we give an introduction to dLLMs that is relevant for this work. Our presenta-tion here broadly follows the description in Zhao et al. (2025). The forward process in dLLM is a discrete nois-ing process that gradually corrupts an input se-quence x0 (where x0 is a sequence of one-hot token vectors) by replacing tokens with a special [MASK] 
+
+token. Let xt denote the sequence at timestep 
+
+t ∈ [0 , 1] , where t = 0 corresponds to the clean in-put and t = 1 corresponds to the fully masked state. The corruption is governed by a noise schedule αt,which is strictly decreasing in t.The model πθ is trained to predict x0 given xt,similar to BERT but conditioned on the noise level or in this case the masking level t.
+
+Training Objective Normally an LLM is trained to optimize the likelihood of the text πθ(x0), how-ever for dLLMs this is intractable. Instead , one op-timizes the Evidence Lower Bound (ELBO) which serves as a lower bound for the true probability. Of-ten instead of a continuous time input, the temporal space [0 , 1] is split into T discrete chunks. In that case the ELBO loss becomes:         
+
+> E
+> [
+> ∂tαt
+> 1−αtL∑
+> i=1
+> I[xit=[MASK] ]·log πθ(xi
+> 0|xt)
+> ]
+> ,
+
+where the indicator function I[xit = [MASK] ] en-sures only masked tokens contribute to the loss. 
+
+## 3 Related Work 
+
+Policy Gradient Methods Policy gradient meth-ods (Williams and Peng, 1990) have been foun-dational in modern RL. Recent advancements for language model training (Ouyang et al., 2022; Shao et al., 2024) have been based on PPO (Schulman et al., 2017b) and its variants (Wu et al., 2023). However these methods rely on being able to com-pute the log-probabilities of the generated samples. However, in the context of alignment of fine-tuning diffusion language models, the densities required for computing these are not available efficiently. Furthermore methods which use approximations of the density (Zhao et al., 2025) , are using biased gradients and hence not optimizing the expected reward. 
+
+Reinforcement Learning for LLM Reasoning 
+
+Since the work of Ouyang et al. (2022), applica-tion of RL to large language models (LLMs) has seen significant progress, especially in MDP-based formulations of reasoning, as seen in OpenAI’s O1 and DeepSeek’s R1. While policy-based methods such as GRPO (Guo et al., 2025), and their variants (e.g., DAPO (Yu et al., 2025), Dr. GRPO (Liu et al., 2025)) dominate this space, other approaches like ReMax (Li et al., 2023) and RAFT (Dong et al., 2023) have also been explored. Building on the idea of Bellman Residuals (Schweitzer and Seid-mann, 1985; Baird, 1995), recently value based methods (Jia et al., 2025) have also been proposed for post-training of language models. 
+
+Language Diffusion Models While diffusion models have revolutionized continuous data gen-eration in the visual domain (Song et al., 2020; Ho et al., 2020), their adaptation to textual data presents unique challenges. The fundamental ten-sion arises from the categorical nature of language tokens, which necessitates specialized approaches beyond the standard diffusion framework. The masked diffusion paradigm has emerged as a partic-ularly successful instantiation of discrete diffusion for language (Sahoo et al., 2024; Shi et al., 2024). This approach, a special case of discrete diffusion (Austin et al., 2021a), has recently achieved sig-nificant scaling milestones. Recently, LLaDA-8B (Nie et al., 2025), has been shown to match or sur-passes LLaMA-3 8B on MMLU, ARC-C and other few-shot reasoning tasks. 
+
+Alignment and Fine-tuning of Language Dif-fusion Models There have been a few methods pro-posed for alignment of dLLMs. The naive method to adopt PGRL does not work well due to in-tractable log-likelihoods. Nie et al. (2025) estimate the log-likelihood log pθ(y|x) via a Monte-Carlo estimate of the ELBO. Instead of Monte-Carlo es-timates, Zhao et al. (2025) propose a mean-field variant for the likelihood of an output. This allows them to approximate the likelihood by performs a single denoising step to approximate likelihood for each token position. As mentioned before, this leads to biased optimization, and in practice they also need to randomly masking different portions of the output. However, even with such heuristics, the fundamental problem of using biased gradients persists, and hence even under idealized conditions are not guaranteed to optimize the reward. Zhu et al. (2025) have also noted the issue with the Monte-Carlo ELBO approximation of likelihood, and the issue of variance in the estimate. They pro-pose to use an antithetic sampling based method to reduce this variance. Tang et al. (2025) also 5516 follow the GRPO style training, but to reduce im-portance sampling ratios, reformulates the training as a weighted likelihood objective with a geometric interpolation between current and reference model as prior. 
+
+## 4 Method 
+
+Modern diffusion-based language models, such as LLaDA (Nie et al., 2025), generate sequences by it-eratively denoising masked tokens toward complete text. Let x denote the prompt and y = ( y1, . . . , y L)
+
+the completed generation. Unlike autoregressive (AR) models, which decompose log-likelihoods as 
+
+log πθ(y|x) = ∑Ll=1 log πθ(yl|y<l , x ), diffusion models produce outputs in a non-sequential and non-factorized manner. As such the straightfor-ward method of using PGRL for dLLMs, does not scale. Additionally, the estimation procedure used for computing the probability can be biased, which then leads to unstable behavior. To alleviate this we propose a new probabilistic objective for alignment of dLLMs. 
+
+4.1 RL alignment as Probabilistic Inference 
+
+We begin with a well known result regarding the KL-constrained RL, which will then motivate a different probabilistic objective that can be used with dLLMs. Consider the unnormalized target distribution 
+
+˜q(τ ) given as: 
+
+˜q(τ ) = πref (τ ) exp( r(τ )/β ), (2) which leads to the Boltzmann distribution (Jaynes, 1979): 
+
+q(τ ) = 1
+
+Z πref (τ ) exp( r(τ )/β ), . (3) where Z = ∑ 
+
+> τ
+
+πref (τ ) exp( r(τ ) 
+
+> β
+
+) is the normal-ization constant. A classic result from Ziebart et al. (2008); Jaynes (1979) shows that maximizing J is equivalent to minimizing DKL (πθ∥q). This result also provides multiple pathways for preference-tuning LLMs. The goal is to align a policy distribution πθ) with an unnormalized target q ∝ πref (τ )er(τ )/β , where 
+
+πref is reference policy and r the reward func-tion. However, instead of committing to optimizing Kullback-Leibler (KL) divergence (which is im-plicitly what these RL methods are doing), one can consider the broader perspective of matching the model distribution π with the target q. This match-ing can be implemented by optimizing different divergences. Under ideal conditions (e.g., unlim-ited model expressivity and global optimization), the final learned policy is invariant to the choice of divergence. However, in practice, different objec-tives can exhibit varying empirical behaviors. For our applications, an ideal objective should satisfy three key criteria: a) avoid requiring the partition function Z of ˜q (efficiency) and b) can be computed without access to full densities from 
+
+πθ (dLLM) and c) theoretical guarantees of con-vergence to the target distribution q. In the next section, we discuss an objective based on pseudo-likelihood matching, a candidate objective with such properties. 
+
+4.2 Pseudo-likelihood Alignment 
+
+The direct minimization of the KL divergence be-tween joint sequence distributions πθ(y | x) and 
+
+˜q(y | x) is generally infeasible for dLLMs. This is because dLLMs do not directly parameterize a joint distribution over complete sequences. Instead, it defines a collection of conditional distributions corresponding to local denoising steps. As a result, the implied joint distribution is either intractable, requiring summing over many denoising paths. In contrast, dLLMs explicitly trained to model condi-tional distributions in the denoising function. This motivates an objective defined over the conditional distributions. Fortunately, for distributions with full support, the joint distribution is uniquely determined by its single-token conditional marginals. This follows from the classic Hammersley–Clifford factoriza-tion (Clifford and Hammersley, 1971) of positive distributions. In practice, modern LLMs define dis-tributions with full or near-full support, and strict positivity can be enforced if needed via tempera-ture scaling. Thus, matching the per token condi-tional distributions is sufficient for matching two distributions. 
+
+Theorem 1 (Conditional equality implies joint equality) . Let p and q be strictly positive distri-butions over y = ( y1, . . . , y L). Define y−i as the sequence y with the i-th token removed. If 
+
+p(yi | y−i) = q(yi | y−i) for all i and all y−i,
+
+then p(y) = q(y) for all y.Motivated by Theorem 1, we wish to align the conditional marginals of πθ(y|x) and ˜q(y|x). A natural objective to match all the conditionals is 5517 the sum of all the conditional KL divergences: 
+
+> |L|
+
+∑
+
+> i=1
+
+∑
+
+> y−i
+
+KL( πθ(yi|y−i)∥˜q(yi|y−i)) . (4) where we have suppressed the dependence on the prompt x for notational convenience. This objec-tive vanishes if and only if all conditional distri-butions match, which by Theorem 1 implies that 
+
+πθ = ˜ q. However, directly evaluating this loss is intractable due to the combinatorial size of the context space y−i.To address this computational bottleneck, we introduce a weighted variant of the objective in eq. (4). The key idea is that instead of treating all the terms in the sum equally, we score them accord-ing to their probability under the model distribution 
+
+πθ(y−i).
+
+J = ∑
+
+> y
+
+∑
+
+> i
+
+πθ(y−i)KL( πθ(yi|y−i)∥˜q(yi|y−i)) 
+
+(5) 
+
+= ∑
+
+> y
+
+∑
+
+> i
+
+πθ(y−i)Eyi∼πθ (·| y−i)
+
+[
+
+log πθ(yi|y−i)˜q(yi|y−i)
+
+]
+
+(6) 
+
+= ∑
+
+> y
+
+∑
+
+> i
+
+πθ(y−i)πθ(·| y−i)
+
+[
+
+log πθ(yi|y−i)˜q(yi|y−i)
+
+]
+
+(7) 
+
+= ∑
+
+> y
+
+∑
+
+> i
+
+πθ(y)
+
+[
+
+log πθ(yi|y−i)˜q(yi|y−i)
+
+]
+
+(8) 
+
+= ∑
+
+> i
+
+Ey∼πθ (y)
+
+[
+
+log πθ(yi|y−i)˜q(yi|y−i)
+
+]
+
+(9) By multiplying each term by πθ(y−i) and apply-ing the law of total expectation, the weighted KL objective turns into our final tractable objective: 
+
+JP KL (θ) = Ey∼πθ
+
+> L
+
+∑
+
+> i=1
+
+[
+
+log πθ(yi|y−i)
+
+− log ˜ q(yi|y−i)
+
+]
+
+(10) This formulation offers two main advantages. First, it eliminates the need for enumerating con-texts or of explicit sampling from the conditional distributions πθ(·| y−i). Instead this objective can be estimated using samples from πθ alone, allowing for online learning. Second, it maintains the theo-retical property that the global optimum is achieved precisely when all conditional distributions match their target counterparts, provided πθ has full sup-port. To see this note that Eqn 5 and Eqn 4 are both sum of the same positive terms ( the KL diver-gences). Since the weights themselves are positive, the global minimum value of either objective is achieved only when each individual term is zero. We further note that the conditional marginal distribution of q inherits the same exponential tilted structure as the reference model: 
+
+˜q(yi|y−i) ∝ πref (yi|y−i) exp( r(yi, y −i)) (11) This enables efficient computation when πref ’s conditionals are tractable. The log-conditional of ˜q
+
+simply becomes: 
+
+log ˜ q(yi|y−i) = log πref (yi|y−i) + r(yi, y −i)
+
+− log Z(y−i)
+
+where Z(y−i) is the conditional partition func-tion. Importantly, the Z(y−i) term is independent of the model πθ. Thus it can be omitted from the objective, as it contributes an additive constant that does not affect the optimization landscape. 
+
+Relation to pseudo-likelihood Besag (1975) pro-vides a statistically consistent approach to learning joint distributions through their local behaviour. Similar to the previous discussion, the basic idea in Besag (1975) is to represent the multivariate joint distribution using the respective conditional distributions. Specifically, for a sequence y =(y1, . . . , y L) modeled by πθ, consider the product of its conditional marginals: 
+
+PL( y) = 
+
+> L
+
+∏
+
+> i=1
+
+πθ(yi|y−i), (12) where y−i denotes the sequence with the i-th token removed. Besag (1975) established that this prod-uct (also called pseudo-likelihood) forms a proper statistical score function i.e. optimizing PL will converge to the true underlying generative model. Taking expectations under πθ, the negative pseudo-log-likelihood corresponds to 
+
+−Ey∼πθ
+
+> L
+
+∑
+
+> i=1
+
+log πθ(yi | y−i),
+
+which is the first term of JPKL (Eqn 10). The sec-ond term in Eqn 10, replaces the empirical data dis-tribution with a target conditional model ˜q (which 5518 is fixed). Comparing this against the KL decompo-sition ( ∫ p(y)[log p(y) − log q(y)] dy ) and likeli-hood, JPKL can be seen as a pseudo-KL divergence between the distributions πθ and q.
+
+Optimization We can use the gradient equiva-lence between KL optimization and entropic RL (Se 4.1), to turn Eq 10 into RL like alignment pro-cedure (detail in the Appendix). Sepecifically, we can write the following PG style gradient rule for the objective in Eqn 10. 
+
+∇JP KL = Ey∼πθ
+
+[
+
+∇θ log π(yi|y−i, x )
+
+(
+
+log πθ(yi|y−i) − log ˜ q(yi|y−i)
+
+)] 
+
+= Ey∼πθ
+
+[
+
+∇θ log π(yi|y−i, x )
+
+(
+
+log πθ(yi|y−i) − log πref (yi|y−i) − r(y)
+
+)] 
+
+(13) To achieve stable training and for efficient use of multiple generations, we still follow the GRPO recipe of group normalized advantage. We train in an online fashion, i.e. as the model trains, new completions are generated and rewards computed on them to compute new gradient steps. To do this effectively, we once again need to go back to the PPO/GRPO like setup where we do clipping of the weighting ratio.                        
+
+> |L|
+> ∑
+> l=1
+> min
+> [(πθ(yl|y−l, x )(πref (yl|y−l, x )̂A, clip
+> ((πθ(yl|y−l, x )(πref (yl|y−l, x ), ϵ
+> )̂
+> A
+> ]
+> −
+> |L|
+> ∑
+> l=1
+> βD KL (( πθ(yl|y−l, x )|| (πref (yl|y−l, x )) ,
+> (14)
+
+Remark 1. An astute observer may note that the training objective seems to replace the like-lihoods in the GRPO/PGRL update with pseudo-likelihoods; and the overall approach can be con-sidered a different way to approximate the like-lihood. While practically this interpretation is reasonable, using incorrect likelihoods for PGRL methods can lead to incorrect optimization. Fur-thermore, the corresponding parameter update can be incompatible with any objective (Nota and Thomas, 2019); and hence it is not clear what such an optimization procedure does. We instead de-velop a principled argument for why replacing the likelihood by pseudolikelihoods is a mathemati-cally reasonable and does not change the optima of the training. 
+
+4.3 Evaluating Conditional Likelihood 
+
+To evaluate the aforementioned objective efficiently we still need to be able to compute the conditional densities. For approaches similar to LLaDA (Nie et al., 2025), which learn a masked diffusion model, one can efficiently approximate conditional token probabilities for any given token trajectory. This trick stems from the unique factorization proper-ties of the reverse diffusion kernel in these models. While originally used for full likelihood, we use it for quickly estimating the conditional likelihood. Consider a clean sequence y0 = [ y10 , . . . , y L 
+
+> 0
+
+] ∈VL be a token sequence. and its corrupted version 
+
+yt at timestep t, where [MASK] denotes the mask token. The key insight lies in the structure of the re-verse process kernel, which factorizes over masked positions Mt:
+
+πθ(yt−1 | yt) = ∏
+
+> k∈Mt
+
+fθ(yk | yt) ∏
+
+> k / ∈Mt
+
+δ(ykt )
+
+(15) where fθ is the denoising network and δ main-tains unmasked tokens. This factorization emerges from the independent token corruption in the for-ward process. Here we explicitly wrote the denoiser as f to distinguish it from the implied likelihood model πθ.To compute πθ(yi | y−i 
+
+> 0
+
+), we construct a par-tially masked sequence y1 = y−i 
+
+> 0
+
+∪ { [MASK] i}
+
+where only position i is masked. This represents a valid sample from the forward process with 
+
+M = {i}. Through approximate marginalization and Markovian factorization one can approximate the conditional probability via the denoiser’s output as 
+
+pθ(wi | y−i 
+
+> 0
+
+) = fθ(wi | y1) (16) We note that this is a commonly used trick, and we just adapt it to the conditional likelihood term. For more detailed calculation we refer the readers to the Appendix as well as the work of Zhao et al. (2025). 
+
+4.4 Efficient multi-conditional evaluation 
+
+The previous paragraphs described evaluation of a single conditional. However the optimization objective uses conditionals for all token positions. One way to achieve this is to simply randomize over token positions, which provides unbiased gra-dient estimates. However this slows down the opti-mization process, and a more efficient process can 5519 be desirable. To be able to achieve this, we next propose a slight tweak to the objective, which will allow us to use a single pass through the model. Another disadvantage of this trick is that we need to keep track of the sequence in which the tokens were revealed during sentence generation. We high-light this trick next. Assume that the denoiser is modeled by a trans-former. Transformers are position inveriant and one typically uses some form of position embed-ding to induce it in the model. However this also means, that if a two identical tokens are provided at different positions but with the same position embedding, the downstream computation of these tokens remains identical ( assuming they do not attend on each other). We will use this feature, and pad the prompt with the output tokens but with shared position embeddings. Specifically, if y is the decoded sequence and x the prompt, then we construct the augmented input 
+
+˜x = x ⊕ y1: L ⊕ mL+1:2 L,
+
+For the masked position mL+i will use the [MASK] 
+
+token paired with position i i.e. we will tie the po-sitional encodings by setting pos( L + i) = pos( i)
+
+for each i.Define an attention mask M with the following constraints: 
+
+(A) Token rows of x and from y positions 1 : L
+
+cannot attend to any mask rows L+1 : 2 L.
+
+(B) Mask row L + i may attend to all tokens in x,but it cannot attend to token i (in y). It can also attend to itself L + i; but it may not attend to other mask rows L + j (j̸ = i). Constraint (A) ensures the hidden states of the tokens y1: L are same to those obtained without the appended masks (no feedback from masks to to-kens). Constraint (B) ensures each appended mask 
+
+L + i sees only the visible context y−i (and its own mask embedding) and no other mask information. Finally having the same position embedding L + i
+
+and i means that the computation at L + i condi-tioned on other hidden embeddings is the same as if it was at i. Therefore, for a single transformer layer the computation at row L + i coincides with evaluating the denoiser on the hypothetical input 
+
+xit (only i masked). We would like to extend this trick to multiple layers; however note that yj has attended to yi in a previous layer, and the computation ahead is no longer exactly the same. We propose two solutions to this challenge: • PKL-U Choose a subset of indices U ⊂ [1 , L ],mask all attention from j ∈ [1 , L ] to j′ ∈ U
+
+(in the y tokens), as well as any attention be-tween them in mask. This effectively tries to approximate πθ(yi|y−i, x ) with a mean field approximation of πθ(yU |y−U , x ) where y−U
+
+skips any positions in U . This is still stochas-tic and does not include all tokens in L. This is similar to the perturbation technique used in Zhao et al. (2025). • PKL-T Use the sequence of tokens unveiled during denoising. Define for every any po-sition i, ti as the time step where it would have become non-mask token . Let Ui be the set of all positions before i that are un-masked i.e. Ui = j such that tj > t i. Dur-ing unmasking, at time ti, the attention on any non-mask token could only have been on Ui. Now we use the same mask on the mask tokens mL+i i.e. allow it to only attend on self-position , the prompt x, and the po-sitions of y corresponding to Ui. Thus we approximate πθ(yi|y−i, x ) as πθ(yit|yUi
+
+> t+1
+
+, x ).A similar trick is used for any-order models by Hoogeboom et al. (2021). As a consequence, the gradient of the pseudo-divergence loss can be computed in much fewer than L forward pass by reading the L mask rows 
+
+L + 1 , . . . , 2L. Note that this construction does not attempt to reproduce decode-time logits or a trajectory factorization; it computes conditionals of the joint , so attending to “future” tokens (under any decode order) is not only allowed but required, because they belong to y−i.
+
+Prompt Perturbation Additionally, following Zhao et al. (2025), we consider masking tokens in the prompt x during likelihood computation. For-mally if the prompt is x = [ x1, x 2, .., x K ], each token gets independently dropped byprobability 
+
+pdrop . So for example from x we get the pertubed prompt xdr = [ x1, [MASK] , .., x K ] with probabil-ity pdrop . his has a regularizing effect, as these prompts implicitly act as dropout based augmen-tation. While our model is able to learn normally, we found that having such perturbations helped the model generalize better. 5520 Algorithm 1 Optimization  
+
+> 1:
+
+Initialize πθ ← πref  
+
+> 2:
+
+while not converged do  
+
+> 3:
+
+Sample a prompt x ∼ D  
+
+> 4:
+
+Sample G completions y ∼ πθ(· | x), i ∈
+
+[G] 
+
+> 5:
+
+For each y, compute reward r 
+
+> 6:
+
+Normalize to get GRPO style reward ˆr(πθ) 
+
+> 7:
+
+x′ ← randomly mask tokens of prompt x
+
+with probability p 
+
+> 8:
+
+For πθ, πref , get conditional log-probabilities of yik given x′, y i 
+
+> −k
+> 9:
+
+Update πθ by gradient ascent on Equation 14  
+
+> 10:
+
+end while return πθ
+
+## 5 Experiments 
+
+We first show the issue with using the one-step approximation in Zhao et al. (2025). Specifically, for the LLaDA-8B model (Nie et al., 2025), we compute the KL divergence between the true prob-ability (obtained by summing over all time steps) vs the different approximations discussed in this work. These include the one-step mean-field approxima-tion of d1 Zhao et al. (2025), the method described in Section 4.3 (denoted PKL), and the two heuris-tics in Section 4.4 (labeled PKL-U and PKL-T). These were evaluated on GSM8K (Cobbe et al., 2021) and MATH500 (Hendrycks et al., 2021) datasets 1. For d1 we get this value to be 2.87 and 3.15, respectively, showing that the one-step approximation is not great. Next, we do the same for the conditional likelihood terms (without pertur-bation) used in our method against the true terms. For the PKL version we found the average condi-tional KL to be around or less than 1. While this means our proposal is much more accurate, it still is not perfect. Additionally the two faster alterna-tives PKL-U and PKL-T , while worse than PKL are better than d1. On the two datasets, their rela-tive numbers did not show any pattern between the two methods. These results are presented in fig. 2 Next for our experiments, we use the recent dLLM LLaDA-8B (Nie et al., 2025) as the base-line model, which we then fine-tune based on dif-ferent alignment methods. Our experiments are based on the code and hyperparameter provided in 
+
+> 1Due to the computational cost of computing the probabil-ities, this was done on a small subset of test data
+> Figure 2: KL divergence comparison between different methods on the GSM8K and MATH500 datasets. d1 shows the KL divegence between true model and the mean-field approximation. The others compare the av-erage KL divergence between the true conditional and the approximate conditionals.
+
+Zhao et al. (2025) 2. Experiments are conducted on multiple benchmarks including math reason-ing and coding benchmarks. For math bencham-rks we use: a) GSM8K (Cobbe et al., 2021), a dataset of multi-step grade school math problems, b) MATH (Hendrycks et al., 2021) a set of high-level math problems and c) MATH500(Lightman et al., 2023), a curated subset of MATH as well as coding benchmarks. Coding abilities are evalu-ated on: a) HumanEval (Chen, 2021) and b) MBPP (Austin et al., 2021b). We also report results from the dream model of Ye et al. (2025), VRPO of Zhu et al. (2025) and wd1 of Tang et al. (2025) as additional baseline comparisons. 
+
+Methodology For fair comparison, we follow the experimental procedure of Zhao et al. (2025). For rewards, we use the composite reward function that combines formatting and correctness rewards as recommended by Zhao et al. (2025). We test our model under 0-shot prompting with the prompts as reported in Zhao et al. (2025). The results on math reasoning tasks (reported in Table 1 demonstrate that PKL outperforms all baselines across bench-marks. The code benchmark results are presented in the Appendix. We also perform an ablation on the use of prompt token perturbation in the prompt for pseudolikeli-hood computation. This version (called PKL + ) is compared along with baselines as well as with the heuristic methods of PKL-U and PKL-T. We see that even the simpler version is competitive with Dream on MATH and outperforms d1. On GSM8K, it achieves 87.3% accuracy, significantly surpass-ing competing methods. On the MATH500, PKL +
+
+reaches 42.4%, outperforming d1 by +2.2% . Ad-ditionally we see that PKL + outperforms DREAM  
+
+> 2available at https://github.com/dllm-reasoning/ d1
+
+5521 Table 1: Performance of Diffusion Language Models on Math Benchmarks. We can see that our proposed method matches our outperforms other methods. All baseline results are from literature. The results denoted by N/A are due to the corresponding paper not having reported the results. 
+
+Method GSM8K MATH500 MATH 
+
+Dream 7B 81.1 N/A 42.9 VRPO 83.3 36.8 42.6 wd1 82.3 39.0 N/A LLaDA 8B 78.3 36.2 38.9 + SFT 81.1 34.8 N/A + diffu-GRPO 81.9 39.2 N/A + d1-LLaDA 82.1 40.2 N/A PKL-U 83.6 41.9 43.2 PKL-T 84.8 41.2 43.0 PKL 85.6 40.9 41.6 PKL + 87.3 42.4 44.3 (Ye et al., 2025) on MATH. 
+
+## 6 Conclusion 
+
+We have introduced a novel approach to tune dLLMs for reasoning . Our method is a version of the pseudo-likelihood training (Besag, 1975). The probabilistic objective only relies on sampling and estimating conditional distributions, both of which are efficient with dLLMs. Additionally, un-like other methods, our approach learns the same optima as standard PGRL methods. Experiments show that our method matches or outperforms other methods for finetuning dLLMs on challeng-ing math reasoning as well as coding based tasks. 
+
+## 7 Limitations 
+
+The biggest limitation of our proposed method is theoretically principled scaling. While we present different heuristics to quickly approximate likeli-hoods, such approximation have the same theoreti-cal problem as the methods of Nie et al. (2025) and Zhao et al. (2025). Additionally, we experimented only on limited datasets. Previous works have also experimented with tasks like simple sudoku solv-ing, and the dLLM methods have generally been worse at solving those tasks. That not only might apply to our model, but might make it worse as sudoku like challenges require long steps of reason-ing, where the conditioning approximations might be worse. 
+
+## References 
+
+Jacob Austin, Daniel D Johnson, Jonathan Ho, Daniel Tarlow, and Rianne Van Den Berg. 2021a. Structured denoising diffusion models in discrete state-spaces. 
+
+Advances in neural information processing systems ,34:17981–17993. Jacob Austin, Augustus Odena, Maxwell Nye, Maarten Bosma, Henryk Michalewski, David Dohan, Ellen Jiang, Carrie Cai, Michael Terry, Quoc Le, et al. 2021b. Program synthesis with large language mod-els. arXiv preprint arXiv:2108.07732 .Mohammad Gheshlaghi Azar, Zhaohan Daniel Guo, Bi-lal Piot, Remi Munos, Mark Rowland, Michal Valko, and Daniele Calandriello. 2024. A general theoret-ical paradigm to understand learning from human preferences. In International Conference on Arti-ficial Intelligence and Statistics , pages 4447–4455. PMLR. Leemon Baird. 1995. Residual algorithms: Reinforce-ment learning with function approximation. In Pro-ceedings of the Twelfth International Conference on Machine Learning , pages 30–37. Julian Besag. 1975. Statistical analysis of non-lattice data. Journal of the Royal Statistical Society Series D: The Statistician , 24(3):179–195. Julian Besag. 2001. [conditionally specified distribu-tions: An introduction]: Comment. Statistical Sci-ence , 16(3):265–267. Mark Chen. 2021. Evaluating large language models trained on code. arXiv preprint arXiv:2107.03374 .Leshem Choshen, Lior Fox, Zohar Aizenbud, and Omri Abend. 2019. On the weaknesses of reinforce-ment learning for neural machine translation. arXiv preprint arXiv:1907.01752 .Peter Clifford and John M Hammersley. 1971. Markov fields on finite graphs and lattices. Karl Cobbe, Vineet Kosaraju, Mohammad Bavarian, Mark Chen, Heewoo Jun, Lukasz Kaiser, Matthias Plappert, Jerry Tworek, Jacob Hilton, Reiichiro Nakano, et al. 2021. Training verifiers to solve math word problems. arXiv preprint arXiv:2110.14168 .Xiang Deng, Yu Gu, Boyuan Zheng, Shijie Chen, Sam Stevens, Boshi Wang, Huan Sun, and Yu Su. 2023. Mind2web: Towards a generalist agent for the web. 
+
+Advances in Neural Information Processing Systems ,36:28091–28114. Hanze Dong, Wei Xiong, Deepanshu Goyal, Yihan Zhang, Winnie Chow, Rui Pan, Shizhe Diao, Jipeng Zhang, Kashun Shum, and Tong Zhang. 2023. Raft: Reward ranked finetuning for generative foundation model alignment. arXiv preprint arXiv:2304.06767 .Jonas Gehring, Kunhao Zheng, Jade Copet, Vegard Mella, Quentin Carbonneaux, Taco Cohen, and Gabriel Synnaeve. 2024. Rlef: Grounding code llms 5522 in execution feedback with reinforcement learning. 
+
+arXiv preprint arXiv:2410.02089 .Daya Guo, Dejian Yang, Haowei Zhang, Junxiao Song, Ruoyu Zhang, Runxin Xu, Qihao Zhu, Shirong Ma, Peiyi Wang, Xiao Bi, et al. 2025. Deepseek-r1: In-centivizing reasoning capability in llms via reinforce-ment learning. arXiv preprint arXiv:2501.12948 .Tuomas Haarnoja, Haoran Tang, Pieter Abbeel, and Sergey Levine. 2017. Reinforcement learning with deep energy-based policies. In International Con-ference on Machine Learning , pages 1352–1361. PMLR. Tuomas Haarnoja, Aurick Zhou, Pieter Abbeel, and Sergey Levine. 2018. Soft actor-critic: Off-policy maximum entropy deep reinforcement learning with a stochastic actor. In International Conference on Machine Learning , pages 1861–1870. PMLR. Dan Hendrycks, Collin Burns, Saurav Kadavath, Akul Arora, Steven Basart, Eric Tang, Dawn Song, and Ja-cob Steinhardt. 2021. Measuring mathematical prob-lem solving with the math dataset. arXiv preprint arXiv:2103.03874 .Jonathan Ho, Ajay Jain, and Pieter Abbeel. 2020. De-noising diffusion probabilistic models. Advances in neural information processing systems , 33:6840– 6851. Emiel Hoogeboom, Alexey A Gritsenko, Jasmijn Bast-ings, Ben Poole, Rianne van den Berg, and Tim Sali-mans. 2021. Autoregressive diffusion models. arXiv preprint arXiv:2110.02037 .Edwin T Jaynes. 1979. Concentration of distributions at entropy maxima. ET Jaynes: Papers on probability, statistics and statistical physics , page 315. Zeyu Jia, Alexander Rakhlin, and Tengyang Xie. 2025. Do we need to verify step by step? rethinking process supervision from a theoretical perspective. arXiv preprint arXiv:2502.10581 .Muhammad Khalifa, Hady Elsahar, and Marc Dymet-man. 2020. A distributional approach to controlled text generation. arXiv preprint arXiv:2012.11635 .Tomasz Korbak, Hady Elsahar, Germán Kruszewski, and Marc Dymetman. 2022. On reinforcement learn-ing and distribution matching for fine-tuning lan-guage models with no catastrophic forgetting. Ad-vances in Neural Information Processing Systems ,35:16203–16220. Ziniu Li, Tian Xu, Yushun Zhang, Zhihang Lin, Yang Yu, Ruoyu Sun, and Zhi-Quan Luo. 2023. Remax: A simple, effective, and efficient reinforcement learning method for aligning large language models. arXiv preprint arXiv:2310.10505 .Hunter Lightman, Vineet Kosaraju, Yura Burda, Harri Edwards, Bowen Baker, Teddy Lee, Jan Leike, John Schulman, Ilya Sutskever, and Karl Cobbe. 2023. Let’s verify step by step. arXiv preprint arXiv:2305.20050 .Zichen Liu, Changyu Chen, Wenjun Li, Penghui Qi, Tianyu Pang, Chao Du, Wee Sun Lee, and Min Lin. 2025. Understanding r1-zero-like training: A critical perspective. arXiv preprint arXiv:2503.20783 .Trung Quoc Luong, Xinbo Zhang, Zhanming Jie, Peng Sun, Xiaoran Jin, and Hang Li. 2024. Reft: Rea-soning with reinforced fine-tuning. arXiv preprint arXiv:2401.08967 , 3. Gergely Neu, Anders Jonsson, and Vicenç Gómez. 2017. A unified view of entropy-regularized markov deci-sion processes. arXiv preprint arXiv:1705.07798 .Shen Nie, Fengqi Zhu, Zebin You, Xiaolu Zhang, Jingyang Ou, Jun Hu, Jun Zhou, Yankai Lin, Ji-Rong Wen, and Chongxuan Li. 2025. Large language dif-fusion models. Preprint , arXiv:2502.09992. Chris Nota and Philip S Thomas. 2019. Is the policy gra-dient a gradient? arXiv preprint arXiv:1906.07073 .Long Ouyang, Jeffrey Wu, Xu Jiang, Diogo Almeida, Carroll Wainwright, Pamela Mishkin, Chong Zhang, Sandhini Agarwal, Katarina Slama, Alex Ray, et al. 2022. Training language models to follow instruc-tions with human feedback. Advances in Neural Information Processing Systems , 35:27730–27744. Romain Paulus, Caiming Xiong, and Richard Socher. 2017. A deep reinforced model for abstractive sum-marization. arXiv preprint arXiv:1705.04304 .Rafael Rafailov, Archit Sharma, Eric Mitchell, Christo-pher D. Manning, Stefano Ermon, and Chelsea Finn. 2023. Direct preference optimization: Your lan-guage model is secretly a reward model. Advances in Neural Information Processing Systems , 36:53728– 53741. Subham Sekhar Sahoo, Marianne Arriola, Aaron Gokaslan, Edgar Mariano Marroquin, Alexander M Rush, Yair Schiff, Justin T Chiu, and Volodymyr Kuleshov. 2024. Simple and effective masked diffu-sion language models. In The Thirty-eighth Annual Conference on Neural Information Processing Sys-tems .John Schulman, Sergey Levine, Philipp Moritz, Michael I. Jordan, and Pieter Abbeel. 2017a. Trust region policy optimization. Preprint ,arXiv:1502.05477. John Schulman, Filip Wolski, Prafulla Dhariwal, Alec Radford, and Oleg Klimov. 2017b. Proximal policy optimization algorithms. arXiv preprint arXiv:1707.06347 .Paul J. Schweitzer and Abraham Seidmann. 1985. Gen-eralized polynomial approximations in markovian decision processes. Journal of Mathematical Analy-sis and Applications , 110(2):568–582. 5523 Zhihong Shao, Peiyi Wang, Qihao Zhu, Runxin Xu, Junxiao Song, Xiao Bi, Haowei Zhang, Mingchuan Zhang, Y. K. Li, Y. Wu, et al. 2024. Deepseekmath: Pushing the limits of mathematical reasoning in open language models. arXiv preprint arXiv:2402.03300 .Jiaxin Shi, Kehang Han, Zhe Wang, Arnaud Doucet, and Michalis Titsias. 2024. Simplified and general-ized masked diffusion for discrete data. Advances in neural information processing systems , 37:103131– 103167. Yang Song, Jascha Sohl-Dickstein, Diederik P Kingma, Abhishek Kumar, Stefano Ermon, and Ben Poole. 2020. Score-based generative modeling through stochastic differential equations. In International Conference on Learning Representations .Richard S. Sutton and Andrew G. Barto. 1998. Rein-forcement Learning: An Introduction . MIT Press. Richard S Sutton, David McAllester, Satinder Singh, and Yishay Mansour. 1999. Policy gradient methods for reinforcement learning with function approxima-tion. Advances in neural information processing systems , 12. Xiaohang Tang, Rares Dolga, Sangwoong Yoon, and Ilija Bogunovic. 2025. wd1: Weighted policy opti-mization for reasoning in diffusion language models. 
+
+Preprint , arXiv:2507.08838. Haoxiang Wang, Yong Lin, Wei Xiong, Rui Yang, Shizhe Diao, Shuang Qiu, Han Zhao, and Tong Zhang. 2024a. Arithmetic control of llms for diverse user preferences: Directional preference alignment with multi-objective rewards. Preprint ,arXiv:2402.18571. Zihan Wang, Brian Liang, Varad Dhat, Zander Brum-baugh, Nick Walker, Ranjay Krishna, and Maya Cak-mak. 2024b. I can tell what i am doing: Toward real-world natural language grounding of robot expe-riences. arXiv preprint arXiv:2411.12960 .Ronald J Williams. 1992. Simple statistical gradient-following algorithms for connectionist reinforcement learning. Machine learning , 8:229–256. Ronald J Williams and Jing Peng. 1990. An efficient gradient-based algorithm for on-line training of re-current network trajectories. Neural computation ,2(4):490–501. Tianhao Wu, Banghua Zhu, Ruoyu Zhang, Zhaojin Wen, Kannan Ramchandran, and Jiantao Jiao. 2023. Pair-wise proximal policy optimization: Harnessing rel-ative feedback for llm alignment. arXiv preprint arXiv:2310.00212 .Fengli Xu, Qianyue Hao, Zefang Zong, Jingwei Wang, Yunke Zhang, Jingyi Wang, Xiaochong Lan, Jiahui Gong, Tianjian Ouyang, Fanjin Meng, Chenyang Shao, Yuwei Yan, Qinglong Yang, Yiwen Song, Si-jian Ren, Xinyuan Hu, Yu Li, Jie Feng, Chen Gao, and Yong Li. 2025. Towards large reasoning models: A survey of reinforced reasoning with large language models. Jiacheng Ye, Zhihui Xie, Lin Zheng, Jiahui Gao, Zirui Wu, Xin Jiang, Zhenguo Li, and Lingpeng Kong. 2025. Dream 7b. Qiying Yu, Zheng Zhang, Ruofei Zhu, Yufeng Yuan, Xiaochen Zuo, Yu Yue, Tiantian Fan, Gaohong Liu, Lingjun Liu, Xin Liu, et al. 2025. Dapo: An open-source llm reinforcement learning system at scale. 
+
+arXiv preprint arXiv:2503.14476 .Siyan Zhao, Devaansh Gupta, Qinqing Zheng, and Aditya Grover. 2025. d1: Scaling reasoning in diffu-sion large language models via reinforcement learn-ing. arXiv preprint arXiv:2504.12216 .Fengqi Zhu, Rongzhen Wang, Shen Nie, Xiaolu Zhang, Chunwei Wu, Jun Hu, Jun Zhou, Jianfei Chen, Yankai Lin, Ji-Rong Wen, and Chongxuan Li. 2025. Llada 1.5: Variance-reduced preference optimiza-tion for large language diffusion models. Preprint ,arXiv:2505.19223. Brian D. Ziebart. 2010. Modeling Purposeful Adap-tive Behavior with the Principle of Maximum Causal Entropy . Ph.D. thesis, Carnegie Mellon University. Brian D. Ziebart, Andrew L. Maas, J. Andrew Bagnell, and Anind K. Dey. 2008. Maximum entropy inverse reinforcement learning. In AAAI Conference on Arti-ficial Intelligence .5524 8 Additional Derivations 
+
+8.1 Policy Gradient for Pseudo-Divergence 
+
+We consider, for a fixed position i and context x,
+
+Li(θ) := Eno-grad  
+
+> y−i∼πθ(·| x)
+
+[
+
+KL 
+
+(
+
+πθ(yi | y−i, x )
+
+∥∥∥ q(yi | y−i, x )
+
+)]
+
+, (17) where the outer expectation is treated with a stop–gradient (i.e., no gradient flows through πθ(y−i | x)), and q( · | y−i, x ) does not depend on θ.For fixed y−i, write pθ(·) = πθ(· | y−i, x ) and q(·) = q(· | y−i, x ). Then 
+
+KL( pθ∥q) = Eyi∼pθ[ log pθ(yi) − log q(yi)] . (18) The score-function identity (Williams and Peng, 1990) says that 
+
+∇θEpθ [f ] = Epθ [∇θ log pθ f + ∇θf ]
+
+Applying this, we obtain 
+
+∇θ KL( pθ∥q) = Eyi∼pθ
+
+[
+
+∇θ log pθ(yi) ( log pθ(yi) − log q(yi)) + ∇θ log pθ(yi)
+
+]
+
+− Eyi∼pθ
+
+[
+
+∇θ log pθ(yi) log q(yi)
+
+]
+
+= Eyi∼pθ
+
+[
+
+∇θ log pθ(yi) ( log pθ(yi) − log q(yi)) 
+
+]
+
+, (19) since Epθ [∇θ log pθ] = 0 .Putting (19) inside (17) and recalling that the outer sampling over y−i is held fixed (no score term from 
+
+πθ(y−i | x)), we get 
+
+∇L (θ) = Eno-grad  
+
+> y−i∼πθ(·| x)
+
+E yi∼πθ(·| y−i,x )
+
+[
+
+∇θ log πθ(yi | y−i, x )
+
+(
+
+log πθ(yi | y−i, x ) − log q(yi | y−i, x )
+
+)] 
+
+(20) 
+
+8.2 Conditional Likelihood Evaluation 
+
+Consider a clean sequence y0 = [ y10 , . . . , y L 
+
+> 0
+
+] ∈ V L be a token sequence. and its corrupted version yt at timestep t, where [MASK] denotes the mask token. The key insight lies in the structure of the reverse process kernel, which factorizes over masked positions Mt:
+
+πθ(yt−1 | yt) = ∏
+
+> k∈Mt
+
+fθ(yk | yt) ∏
+
+> k / ∈Mt
+
+δ(ykt ) (21) where fθ is the denoising network and δ maintains unmasked tokens. This factorization emerges from the independent token corruption in the forward process. Here we explicitly wrote the denoiser as f to distinguish it from the implied likelihood model πθ.To compute πθ(yi | y−i 
+
+> 0
+
+), we construct a partially masked sequence y1 = y−i 
+
+> 0
+
+∪ { [MASK] i} where only position i is masked. This represents a valid sample from the forward process with M = {i}.Through marginalization over latent variables y1: T , we have: 
+
+πθ(wi | y0,−i) = ∑
+
+> y1: T
+
+πθ(wi | y1)πθ(y1: T | y−i 
+
+> 0
+
+) (22) The Markov property of the diffusion process ensures w depends only on y1. Crucially, y1 is approxi-mately deterministic given y−i 
+
+> 0
+
+, causing the summation to collapse 3. We note that this is a commonly 
+
+> 3More accurately a single conditioned term is used as the approximation
+
+5525 used trick, and we just adapt it to the conditional likelihood term. For more detailed calculation we refer the readers to Zhao et al. (2025). 
+
+πθ(wi | y−i 
+
+> 0
+
+) = πθ(wi | y1) (23) Examining the reverse kernel reveals: 
+
+πθ(y0 | y1) = fθ(wi | y1) ∏ 
+
+> j̸=i
+
+δ(yj
+
+> 1
+
+) (24) Thus, the conditional probability can be quickly approximated via the denoiser’s output: 
+
+pθ(wi | y−i 
+
+> 0
+
+) = fθ(wi | y1) (25) 
+
+8.3 Equivalence between RLHF and Kl minimization 
+
+Consider the unnormalized target distribution ˜q(τ ) given as: 
+
+˜q(τ ) = πref (τ ) exp( r(τ )/β ), (26) which leads to the Boltzmann distribution (Jaynes, 1979): 
+
+q(τ ) = 1
+
+Z πref (τ ) exp( r(τ )/β ), . (27) where Z = ∑ 
+
+> τ
+
+πref (τ ) exp( r(τ ) 
+
+> β
+
+) is the normalization constant. Expanding the KL term in Jβ , we can rewrite the standard policy gradient objective J as:                                     
+
+> J(θ) = Eτ∼πθ[r(τ)] −βEτ∼πθ[log πθ(τ)−log πref (τ)] (28)
+> =−βEτ∼pθ[log πθ(τ)−log πref (τ)−r(τ)/β ](29)
+> =−β(DKL (πθ∥q) + log Z).(30)
+
+Hence, maximizing J is equivalent to minimizing DKL (πθ∥q).
+
+## 9 Additional Details 
+
+9.1 dLLM Details 
+
+Masked Diffusion Language Models are a class of discrete diffusion models that generate text by gradually denoising a sequence of tokens, starting from a fully masked state. Unlike autoregressive (AR) models that generate tokens sequentially, or standard BERT-style masked language models that perform single-step infilling, dlLMs iteratively refine predictions over multiple steps, allowing for more flexible and globally coherent generation. 
+
+Forward and Reverse Process The forward process in dLLM is a discrete noising process that gradually corrupts an input sequence x0 (where x0 is a sequence of one-hot token vectors) by replacing tokens with a special [MASK] token. Let xt denote the sequence at timestep t ∈ [0 , 1] , where t = 0 
+
+corresponds to the clean input and t = 1 corresponds to the fully masked state. The corruption is governed by a noise schedule αt, which is strictly decreasing in t.For each token xit in the sequence at time t, the forward process is defined as:             
+
+> q(xit|xi
+> 0) =
+> {
+> αt,if xit=xi
+> 0(token unchanged) ,
+> 1−αt,if xit=[MASK] (token is masked) .
+
+This can also be written as a categorical distribution: 
+
+q(xt|x0) = Cat (xt; αtx0 + (1 − αt)[MASK] ) .
+
+Here, αt controls the probability of a token being preserved . Common schedule choices include: linear: 
+
+αt = 1 − t and cosine: αt = cos( π 
+
+> 2
+
+t)schedules. LLada (Nie et al., 2025) propose using the linear schedule. 5526 Figure 3: Training Curves for training Our models against d1 
+
+The reverse process learns to denoise xt back to x0. Unlike the forward process, which is fixed, the reverse process is parameterized by a neural network fθ that predicts the original tokens given a masked sequence. The reverse transition q(xs|xt) for s < t is derived from Bayes’ rule and has three cases: 1. If xit̸ = [MASK] : The token is already unmasked and remains unchanged: 
+
+q(xis|xit) = δ(xis = xit).
+
+2. If xit = [MASK] and xis = [MASK] : The token stays masked: 
+
+q(xis|xit) = 1 − αs
+
+1 − αt
+
+.
+
+3. If xit = [MASK] and xis̸ = [MASK] : The token is unmasked, and the model predicts the original token: 
+
+q(xis|xit) = αs − αt
+
+1 − αt
+
+· πθ(xi
+
+> 0
+
+|xt).
+
+The model πθ is trained to predict x0 given xt, similar to BERT but conditioned on the noise level or in this case the masking level t.
+
+Training Objective Normally an LLM is trained to optimize the likelihood of the text πθ(x0), however for dLLMs this is intractable. Instead , one optimizes the Evidence Lower Bound (ELBO) which serves as a lower bound for the true probability. Often instead of a continuous time input, the temporal space 
+
+[0 , 1] is split into T discrete chunks. In that case the ELBO loss becomes: 
+
+Et,x 0,x t
+
+[
+
+∂tαt
+
+1 − αtL∑
+
+> i=1
+
+1[xit = [MASK] ] · log πθ(xi
+
+> 0
+
+|xt)
+
+]
+
+,
+
+where the indicator function 1[xit = [MASK] ] ensures only masked tokens contribute to the loss. We trained on a lambda labs machine with 8 NVIDIA A100-80G GPU. We used AdamW optimizer with cosine learning rate annealing. The fine tuning was conducted with β parameters 0.9 and 0.99, and learning rate of 5e-6. For token perturbation in training we followd Zhao et al. (2025) and mask prompt tokens with p=0.15. We train for 10k steps and use validation set based early stopping for finding the best results. For all datasets, we deployed the split available from huggingface. 5527 Model HumanEval MBPP 128 256 512 128 256 512 LLaDA-8B 21.3 32.3 32.9 40.1 39.7 41.2 + d1 31.1 32.9 37.8 40.5 44.7 42.8 + PKL 32.7 36.2 38.6 41.9 47.4 45.4 
+
++ PKL-U 32.4 34.1 38.0 40.6 46.6 43.4 + PKL-T 32.5 33.4 37.9 40.3 45.1 43.2 
+
+> Table 2: Performance on HumanEval and MBPP at different sequence lengths.
+
+9.2 Discusson on PKL-U and PKL-T and pseudo-divergence PKL-U: Block mean-field approximation. Let U ⊆ { 1, . . . , L } denote a subset of token indices. PKL-U employs a one-step mean-field approximation in which all positions in U are unmasked simultaneously, yielding 
+
+πθ(yU | y−U , x ) ≈ ∏
+
+> j∈U
+
+˜πθ(yj | y−U , x ), (31) where ˜πθ is computed from a single unmasking step. Thus, the block conditional πθ(yU | y−U , x ) is replaced by a mean-field approximation, resulting in a block pseudo-likelihood objective. When U = {1, . . . , L }, PKL-U reduces exactly to the one-step fully mean-field update used in d1 / Diffu-GRPO (Zhao et al., 2025). Conversely, when |U |= 1 and U ranges over all positions, PKL-U recovers the full PKL objective. Therefore, PKL-U can be viewed as a computationally adjustable interpolation between the full PKL objective and the d1 (Zhao et al., 2025) update. 
+
+PKL-T: Trajectory-based approximation. PKL-T leverages the sampling order produced during generation. Let Ui denote the set of token positions that were unmasked prior to position i along the sampling trajectory. PKL-T approximates the one-token conditional as 
+
+πθ(yi | y−i, x ) ≈ ˜πθ(yi | yUi , x ). (32) This approximation requires only a single masked-diffusion step, but restricts the attention mechanism to the positions in Ui. Substituting these trajectory-based conditionals into the pseudo-likelihood yields 
+
+> L
+
+∏
+
+> i=1
+
+πθ(yi | yUi , x ), (33) which resembles an autoregressive factorization. If the sampling order is replaced by a random permutation σ of {1, . . . , L }, this expression reduces to the random-order autoregressive decomposition used in the ELBO of Hoogeboom et al. (2021). In that formulation, conditionals of the form πθ(yσ(i) | yσ(<i ), x ) are evaluated for random permutations σ.Thus, PKL-T can be interpreted as a trajectory-aligned generalization of this estimator, recovering the Hoogeboom ELBO when all random orders are used. 
+
+## 10 Additional Experimental Results 
+
+In Table 2, we present results on the coding benchmarks HumanEval and MBPP benchmarks 4. We see that PKL-based training consistently improves code generation performance over the LLaDA-8B baseline and the diffu-GRPO/d1 training. In particular, PKL achieves the strongest overall results, yielding the highest accuracy at all sequence lengths in both benchmarks. The PKL variants, PKL-U and PKL-T, also provide consistent improvements over the baseline and the d1 objective, though they underperform full PKL. Overall, these results indicate that optimizing conditional pseudo-KL objectives is an effective approach for improving masked diffusion language models. 
+
+> 4Results for baseline are reported from Zhao et al. (2025)
+
+5528 Figure 4: FLOP Adjusted performance on GSM 
+
+Compute Cost Naively PKL requires K times as much computation as 1 pass of d1/diffu-GRPO where K is the block size. However, PKL is summing up losses over token positions, and so by randomly choosing indices we can in one backward pass get an unbiased gradient estimate. We then use gradient accumulation and MC sampling to compute gradients. The same applies to PKL-U where we accumulate gradients over different random choices of U. Furthermore both PKL-U and PKL-T take for each step the same time as d1. The main reason for this is that most of the computation is similar to d1, with the additional differences having minor impact on gradient cost. In Figure 4 we present a FLOP equalized performance for both d1 and for our approach on GSM. At very low flops, when PKL is still picking random indices, d1 outperforms. However as the budget increases and our model has updated gradients across enough token positions, we start doing better. 
+
+## 11 Additional Related Work 
+
+KL Regularization Commonly in RL the objective is to find a policy π that maximizes the expected cumulative reward J(π) = Eτ ∼π[r(τ )] , where r(τ ). However direct maximization is often undesired (especially in the context of LLMs), as the resulting models converge to narrow, high-reward outputs with low diversity (Choshen et al., 2019; Paulus et al., 2017). To alleviate this models are often trained with a regularization term (given by the KL divergence to a reference model). This approach inherently prevents distribution collapse. By maintaining diversity through KL regularization, the model retains its generative capabilities while learning to favor high-reward behaviors (Ziebart et al., 2008; Ziebart, 2010; Neu et al., 2017; Ouyang et al., 2022). The standard KL regularized return is defined as 
+
+Jβ (π) = J(π) − β · Eτ ∼π
+
+[
+
+log π(τ )
+
+πref (τ )
+
+]
+
+(34) where β > 0 is a regularization parameter that controls the strength of the penalty DKL (π∥πref ) = 
+
+Eτ ∼π
+
+[
+
+log π(τ )  
+
+> πref (τ)
+
+]
+
+which is the Kullback-Leibler divergence from π to πref . This is effectively equivalent to adding the log propensity term to the rewards r.
+
+KL regularized RL KL regularized learning has its roots in maximum-entropy RL Ziebart et al. (2008); Neu et al. (2017), where a KL penalty ensures that learned policies remain close to a reference distribution. This framework has led to several influential algorithms, including Soft Q-Learning (SQL) (Haarnoja et al., 2017) and Soft Actor-Critic (SAC) (Haarnoja et al., 2018). The relation between entropy-regularized control and divergence-minimisation is known since the seminal work of Jaynes (1979). Bsed on the form of the optimal policy of such an entropy regularized optimization procedure (Ziebart et al., 2008), various direct alignment algorithms like DPO (Rafailov et al., 2023), IPO (Azar et al., 2024) etc. have been proposed. Khalifa et al. (2020); Korbak et al. (2022) proposed an alternative for fine-tuning language models, achieving results comparable to KL-regularized RL. Their GDC method minimizes KL (q|| p)
+
+rather than KL (p|| q), making it theoretically distinct from standard RL objectives (Korbak et al., 2022). 5529

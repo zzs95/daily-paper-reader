@@ -1,0 +1,207 @@
+Title: VIVID-Med: LLM-Supervised Structured Pretraining for Deployable Medical ViTs
+
+URL Source: https://arxiv.org/pdf/2603.09109
+
+Published Time: Thu, 12 Mar 2026 00:37:01 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# VIVID-Med: LLM-Supervised Structured Pretraining for Deployable Medical ViTs 
+
+Xiyao Wang 1, Xiaoyu Tan 2, Yang Dai 1, Yuxuan Fu 1, Shuo Li 3, and Xihe Qiu 1⋆ 
+
+> 1
+
+Shanghai University of Engineering Science, China  
+
+> 2
+
+National University of Singapore, Singapore  
+
+> 3
+
+Case Western Reserve University, United States 
+
+Abstract. Vision-language pretraining has driven significant progress in medical image analysis. However, current methods typically supervise visual encoders using one-hot labels or free-form text, neither of which effectively captures the complex semantic relationships among clinical findings. In this study, we introduce VIVID-Med , a novel framework that leverages a frozen large language model (LLM) as a structured seman-tic teacher to pretrain medical vision transformers (ViTs). VIVID-Med 
+
+translates clinical findings into verifiable JSON field-state pairs via a Unified Medical Schema (UMS), utilizing answerability-aware masking to focus optimization. It then employs Structured Prediction Decomposition (SPD) to partition cross-attention into orthogonality-regularized query groups, extracting complementary visual aspects. Crucially, the LLM is discarded post-training, yielding a lightweight, deployable ViT-only back-bone. We evaluated VIVID-Med across multiple settings: on CheXpert linear probing, it achieves a macro-AUC of 0.8588, outperforming Biomed-CLIP by +6.65 points while using 500 × less data. It also demonstrates robust zero-shot cross-domain transfer to NIH ChestX-ray14 (0.7225 macro-AUC) and strong cross-modality generalization to CT, achiev-ing 0.8413 AUC on LIDC-IDRI lung nodule classification and 0.9969 macro-AUC on OrganAMNIST 11-organ classification. VIVID-Med 
+
+offers a highly efficient, scalable alternative to deploying resource-heavy vision-language models in clinical settings. 
+
+Keywords: Medical imaging · Chest X-ray · CT · Vision transformer ·
+
+Semantic distillation · Frozen LLM supervision 
+
+## 1 Introduction 
+
+Learning transferable visual representations is central to robust medical image analysis. Existing approaches, such as supervised pretraining [4], self-supervised methods (MAE [6], DINO [3, 19]), general vision-language models [18, 10, 12, 1, 5, 14], and medical vision-language pretraining (ConVIRT [25], GLoRIA [8], MedCLIP [22], BiomedCLIP [24], CheXzero [20]), have driven strong progress. Recent work has also explored multimodal data integration [16] and few-shot  
+
+> ⋆
+
+Corresponding author.  
+
+> arXiv:2603.09109v2 [cs.CV] 11 Mar 2026 2Wang et al.
+
+medical image translation [15] to enhance representation learning. However, existing methods predominantly supervise the visual encoder using one-hot labels or free-form text. Consequently, these learned representations often fail to explicitly encode the complex semantic relationships among clinical findings. For example, conditions like pleural effusion and pulmonary edema frequently co-occur, share radiographic signs, and are pathophysiologically linked. A one-hot vector treats them as strictly orthogonal, while free-text descriptions mention them in highly variable phrasing, masking their underlying clinical relatedness. Results from recent advancements in large language models (LLMs) suggest an elegant solution to this semantic gap. A pretrained LLM inherently embeds related clinical concepts in a continuous, structured space where proximity reflects actual clinical relatedness. In this study, we leverage this insight to develop a novel semantic distillation strategy for medical vision transformers (ViTs). We present the discovery that a ViT carefully optimized to align with the structured output space of a frozen LLM can learn highly transferable representations, eliminating the need to retain the resource-heavy LLM during inference. We propose VIVID-Med (Verifiable Instruction-driven Visual Intelligence 
+
+Deployment for Med ical ViT), a framework that executes this strategy by using a frozen LLM as a structured semantic teacher. To bridge the visual and linguistic domains effectively, VIVID-Med introduces two key technical components. First, the Unified Medical Schema (UMS) converts raw clinical findings into verifi-able JSON field-state pairs. UMS utilizes answerability-aware masking to filter out non-informative gradients from unassessable findings, focusing optimization on clinically meaningful signals. Second, Structured Prediction Decomposition (SPD) partitions the cross-attention mechanism into orthogonality-regularized query groups via Q-Former-style [11] modules, extending knowledge distillation [7] with structured decomposition. Crucially, keeping the LLM frozen provides a sta-ble optimization target, which is particularly critical for learning representations of long-tail clinical findings. 
+
+VIVID-Med draws inspiration from instruction-driven methods such as ViTP [13], which also embed a ViT into a trainable vision-language model. However, ViTP relies on free-form text generation with random token dropping and requires the LLM to remain active during deployment. In contrast, VIVID-Med offers a more structured and deployable methodology. By utilizing verifiable JSON formats and structured query decomposition rather than random masking, and by completely discarding the LLM post-training, VIVID-Med produces a lightweight, deployable ViT-only backbone. 
+
+Contributions. In summary, our main contributions are as follows: 1. We introduce a novel frozen-LLM distillation framework that produces a highly transferable and easily deployable ViT-only backbone. 2. We propose UMS, a structured JSON supervision method featuring field query training and answerability-aware masking to focus optimization. 3. We design SPD, a multi-group cross-attention projector with orthogonality regularization that efficiently decomposes visual features. VIVID-Med: LLM-Supervised Pretraining for Medical ViTs 3
+
+Fig. 1. VIVID-Med overview. The frozen LLM provides structured token supervision during training only. Gradients update the parameters of the ViT and SPD projector, while the deployed model retains only the lightweight ViT backbone. 
+
+4. We demonstrate the effectiveness of VIVID-Med through comprehensive evaluations, including CheXpert linear probing, zero-shot cross-domain trans-fer to NIH Chest X-ray14, cross-modality CT transfer (LIDC-IDRI, Or-ganAMNIST), and a detailed single-variable ablation chain. 
+
+## 2 Method 
+
+Given a training set D = {Ij , C j }Nj=1 of medical images Ij with clinical findings Cj ,
+
+VIVID-Med (Fig. 1) comprises three components: a trainable ViT encoder fθ
+
+that maps I to token features X ∈ RL×dv ; a Structured Prediction Decomposition (SPD) projector gϕ that produces decomposed semantic tokens from X; and a frozen LLM M that maps projected tokens into structured text predictions. At test time, only the optimized backbone fθ∗ is deployed, discarding gϕ and M.
+
+2.1 Unified Medical Schema (UMS) Supervision 
+
+To avoid the semantic ambiguity of one-hot labels and free-form text, each training sample Cj is converted into a Unified Medical Schema (UMS) JSON sequence encoding finding-level field-state pairs. A real example constructed from the CheXpert dataset is formatted as follows: 
+
+> {"findings": {"Lung Opacity": {"state": "present"}, "Pneumonia": {"state": "uncertain"}, "Pleural Effusion": {"state": "present"}, "Cardiomegaly": {"state": null}}, "answerability": {"Lung Opacity": true, "Pneumonia": true, "Pleural Effusion": true, "Cardiomegaly": false}}
+
+Each finding’s state ∈ {present , absent , uncertain , null }, where null indi-cates the finding is not assessable from Ij . The answerability boolean mask indicates whether each finding has a valid label. This formulation drives two training mechanisms: 4 Wang et al. 
+
+Field Query Training. Each forward pass randomly samples 4–6 finding fields per image, with elevated sampling probability (0.6) for low-frequency findings to ensure robust coverage across the long-tail distribution. 
+
+Answerability-Aware Masking. To prevent the network from learning noisy gradients from unassessable findings, we utilize the answerability field to formulate a dynamic loss weight wt for each token t in the target sequence: 
+
+wt =
+
+(
+
+1, if t ∈ Ωanswerable ,
+
+0, otherwise .
+
+During training, the frozen LLM M receives projected visual tokens followed by a task instruction. We employ teacher forcing: the ground-truth UMS-JSON sequence is provided directly, and fθ , gϕ are optimized via next-token prediction loss, bypassing autoregressive decoding. 
+
+2.2 Structured Prediction Decomposition (SPD) 
+
+The SPD projector gϕ decomposes X into G complementary semantic groups. For each group g ∈ { 1, . . . , G }, learnable queries Qg ∈ RM ×dv perform cross-attention over X:
+
+Ag = softmax 
+
+ (Qg WQ)( XW K )⊤
+
+√dh
+
+
+
+, Tg = Ag (XW V ),
+
+where WQ, W K , W V are learnable projections shared across all groups. We set 
+
+G = 4 , M = 2 (8 SPD tokens total). All SPD tokens and selected patch tokens are projected by a shared MLP to match the LLM embedding dimension. To force the query groups to attend to diverse and complementary visual aspects, we impose an orthogonality regularizer on the attention maps: 
+
+Lortho = X 
+
+> g̸=g′
+
+Ag A⊤ 
+
+> g′
+> 2
+> F
+
+.
+
+As shown in Fig. 3, each group consistently specializes in distinct anatomical structures across both frontal and lateral views, confirming that the orthogonality regularization drives complementary feature extraction. 
+
+2.3 Training Objective and Inference 
+
+At training time, we jointly optimize the parameters of the ViT ( θ) and the SPD projector ( ϕ). The base objective is the answerability-weighted next-token prediction loss over the UMS-JSON sequence y:
+
+Ltok = − X
+
+> t
+
+wt log p(yt | y<t , I j ).
+
+The final optimization target combines this token loss with the structural con-straint: 
+
+L = Ltok + λortho Lortho ,VIVID-Med: LLM-Supervised Pretraining for Medical ViTs 5  
+
+> Fig. 2. Structured Prediction Decomposition (SPD). Multiple query groups perform cross-attention over shared ViT tokens. Orthogonality regularization encourages com-plementary branches before shared projection to the LLM embedding space.
+> Fig. 3. SPD cross-attention maps for a frontal (top) and lateral (bottom) CXR. Each group attends to distinct anatomical regions.
+
+where we empirically set λortho = 0 .01 .
+
+Deployment. After training, we discard gϕ and M. The released artifact is a standalone ViT backbone fθ∗ that integrates with task-specific heads (linear probing or fine-tuning), avoiding LLM inference cost entirely. 
+
+## 3 Experiments and Results 
+
+We evaluated VIVID-Med across three medical image representation paradigms: in-domain classification, cross-domain transfer, and cross-modality generalization. We pretrained and evaluated on CheXpert [9] (30k CXRs, 12-label linear probing, excluding No Finding and Pleural Other ). To assess cross-domain robustness zero-shot, we evaluated this CheXpert-trained model directly on NIH ChestX-ray14 [21] (8 shared labels, 25,596 samples). Finally, to test cross-modality generalization without any CT pretraining, we evaluated on two CT datasets: LIDC-IDRI [2] (slice-level benign/malignant classification) and OrganAMNIST [23] (11-way organ classification). 6 Wang et al. 
+
+Table 1. Quantitative performance of VIVID-Med and baselines on in-domain (CheXpert) and cross-domain (NIH) tasks. Results are reported as mean ±std over 3 seeds. NIH results are evaluated purely zero-shot without retraining. Method CheXpert-12 (in-domain) NIH-8 (cross-domain) Macro-AUC Macro-F1 Macro-AUC Macro-F1 ImageNet supervised [4] 0.7746 ± 0.0081 0.8813 ± 0.0046 0.6147 ± 0.0012 0.2090 ± 0.0111                                                              
+
+> MAE [6] 0.7211 ±0.0031 0.8657 ±0.0096 0.5945 ±0.0013 0.1847 ±0.0005
+> DINOv3 [19] 0.6876 ±0.0053 0.8760 ±0.0014 0.6287 ±0.0023 0.2049 ±0.0050
+> BiomedCLIP [24] 0.7923 ±0.0249 0.8989 ±0.0050 0.6725 ±0.0076 0.2246 ±0.0058
+> Random-mask proxy (75%) 0.7396 ±0.0020 0.8705 ±0.0156 0.6000 ±0.0018 0.1969 ±0.0031
+> VIVID-Med (ours) 0.8588 ±0.0033 0.9016 ±0.0060 0.7225 ±0.0019 0.2621 ±0.0010
+
+Implementation. We utilized a vit_base_patch16_224 backbone ( ∼86M parameters) and a frozen Qwen2.5-1.5B-Instruct teacher [17]. The SPD projector (4 groups, 2 tokens/group, 4-head cross-attention, 2-layer MLP, ∼6M parameters) maps features to the LLM dimension ( 1536 ). Models were trained for up to 10k steps (effective batch size 32) using AdamW, BF16, and a cosine schedule (peak LRs: 2×10 −5 for ViT, 10 −4 for SPD). We set λortho = 0 .01 . During field query training, k ∈ [4 , 6] fields were sampled per image, oversampling low-frequency findings (0.6 probability) to mitigate imbalance. For evaluation, linear classifiers were trained for 3,000 steps over the frozen ViT backbones. 
+
+Baselines. We compare against generic visual pretraining (ImageNet-super-vised [4], MAE [6], DINOv3 [19]) and medical vision-language models (Biomed-CLIP [24], pretrained on 15M pairs). We also include a Random-mask proxy 
+
+(simulating ViTP [13] via 75% random token dropping instead of SPD) in the main comparison. Internal ablation variants ( VIVID-Med (no SPD) , Q-Former proxy ) are reported separately in Table 3 to isolate each component’s contribution. 
+
+3.1 CXR Representation and Cross-Domain Transfer 
+
+Table 1 summarizes performance on CheXpert and NIH. In-domain, VIVID-Med achieves an exceptional 0.8588 macro-AUC on CheXpert, outperforming BiomedCLIP by +6.65 points despite using 500 × less pretraining data. Conversely, self-supervised baselines (MAE, DINOv3) show competitive F1s but substantially lower AUCs, highlighting their inability to capture clinical ranking structures without explicit semantic guidance. Under zero-shot transfer to NIH, VIVID-Med demonstrates robust out-of-distribution generalization, reaching 0.7225 macro-AUC (+5.00 over Biomed-CLIP). Because NIH exhibits severe class imbalance ( <5% positives), AUC remains the more reliable metric over absolute F1. Furthermore, VIVID-Med 
+
+significantly surpasses the Random-mask proxy, confirming that SPD’s adaptive decomposition is far superior to random token dropping. Fig. 4 further shows that the resulting CLS embeddings form tighter, more separable clusters compared to ImageNet supervised and BiomedCLIP baselines, indicating that structured LLM VIVID-Med: LLM-Supervised Pretraining for Medical ViTs 7
+
+Fig. 4. t-SNE of CLS embeddings on CheXpert. VIVID-Med produces tighter, more separable clusters than ImageNet supervised and BiomedCLIP baselines. 
+
+Table 2. Cross-modality transfer: CXR-pretrained ViT → CT slice classification (mean ±std, 3 seeds). No CT data is used during pretraining. Method LIDC-IDRI (binary) OrganAMNIST (11-class) AUC F1 Macro-AUC Macro-F1 ImageNet supervised [4] 0.7933 ± 0.0336 0.6760 ± 0.0251 0.9928 ± 0.0001 0.8846 ± 0.0007 
+
+MAE [6] 0.7607 ± 0.0507 0.5341 ± 0.0350 0.9826 ± 0.0001 0.7743 ± 0.0024 
+
+DINOv3 [19] 0.6675 ± 0.0668 0.4389 ± 0.0191 0.9221 ± 0.0009 0.4570 ± 0.0065 
+
+BiomedCLIP [24] 0.8465 ± 0.0148 0.7235 ± 0.0040 0.9913 ± 0.0002 0.8732 ± 0.0052 
+
+VIVID-Med (ours) 0.8413 ± 0.0260 0.7563 ± 0.0357 0.9969 ± 0.0001 0.9322 ± 0.0004 
+
+supervision encourages the ViT to organize its representation space according to clinically meaningful semantic distinctions. 
+
+3.2 Cross-Modality Transfer to CT 
+
+Table 2 details CXR-pretrained representations evaluated on CT slices. VIVID-Med consistently outperforms all external baselines on OrganAMNIST despite zero CT exposure during pretraining, achieving near-perfect macro-AUC (0.9969) and macro-F1 (0.9322, +5.90 over BiomedCLIP), confirming that structured CXR supervision captures highly generalizable anatomical priors. DINOv3 suffers a severe drop (0.4570 F1), as its natural-image self-distillation translates poorly to medical CTs. On same-anatomy LIDC-IDRI, VIVID-Med achieves comparable AUC to BiomedCLIP (0.8413 vs. 0.8465, within one standard deviation) while substantially exceeding it in F1 (+3.28). The high variance on LIDC-IDRI (875 cases, std >0.02) reflects the inherent instability of small-scale clinical datasets, yet VIVID-Med still outperforms all other baselines (ImageNet, MAE, DINOv3) by a wide margin on both metrics. 
+
+3.3 Ablation Studies 
+
+Table 3 isolates the impact of our framework’s components. Replacing free-form text supervision with structured UMS JSON improves macro-AUC by +1.78 points. Adding SPD adds another +1.57 points, netting a +3.35 improvement over 8 Wang et al.                                    
+
+> Table 3. Ablation studies isolating the impact of supervision and architecture on the CheXpert linear probe task. Results are reported as mean ±std over 3 seeds. Setting UMS SPD Macro-AUC Macro-F1
+> VIVID-Med (free-text) 0.8253 ±0.0028 0.8877 ±0.0027
+> VIVID-Med (no SPD) ✓0.8431 ±0.0035 0.8963 ±0.0012
+> VIVID-Med ✓✓0.8588 ±0.0033 0.9016 ±0.0060
+> Q-Former proxy ✓△0.8182 ±0.0195 0.9167 ±0.0016
+
+the free-text baseline. We also evaluated a Q-Former proxy (one 8-token group, no orthogonality). While it marginally improves F1, it yields a substantially lower AUC (0.8182) with high variance. Per-class analysis confirms SPD’s gains are heavily concentrated on long-tail findings (e.g., Pneumonia +3.9, Lung Lesion +3.6 AUC points), proving orthogonal decomposition fundamentally improves tail-class ranking. 
+
+## 4 Discussion and Conclusion 
+
+Results demonstrate that VIVID-Med achieves strong representation trans-fer consistently across in-domain, cross-domain, and cross-modality settings, with improvements most pronounced in macro-AUC. VIVID-Med offers a new perspective on medical vision-language pretraining by decoupling semantic su-pervision from the deployment architecture: a frozen LLM defines a stable target manifold, and the ViT explicitly learns to predict structured tokens within this space. Ablation results, particularly the Q-Former proxy’s high-F1/low-AUC pattern (Table 3), confirm that our structured prediction decomposition (SPD) strategy is crucial for success, improving global ranking quality rather than merely fitting source-specific thresholds. Because structured supervision aligns visual features with a continuous seman-tic space, VIVID-Med captures transferable visual priors well beyond the source modality. As demonstrated by the CT results (Table 2), VIVID-Med achieves strong performance without any CT data during pretraining (0.9969 AUC on OrganAMNIST and 0.8413 AUC on LIDC-IDRI). While OrganAMNIST AUC is near saturation across most baselines ( >0.99), the substantial F1 gap (+5.90 over BiomedCLIP) highlights the discriminative superiority of our method. On LIDC-IDRI, the high variance inherent to small-scale clinical datasets (875 cases) limits absolute AUC gains, yet VIVID-Med still outperforms all non-medical baselines by a wide margin. 
+
+VIVID-Med learns robust features, is resource-friendly, and effectively distills structured semantic knowledge. At deployment, only the ∼86M-parameter ViT backbone is retained, discarding the ∼1.5B-parameter LLM pipeline and thereby substantially reducing inference costs. In an age where medical AI often requires increasing resource and computational investments, VIVID-Med provides a fresh, scalable alternative. A clean ablation chain confirms that each component VIVID-Med: LLM-Supervised Pretraining for Medical ViTs 9
+
+contributes independently, demonstrating that verifiable structured supervision is a highly effective route to robust medical visual representations without the need to retain massive LLMs at inference. 
+
+## References 
+
+1. Alayrac, J.B., Donahue, J., Luc, P., Miech, A., Barr, I., Hasson, Y., Lenc, K., Mensch, A., Millican, K., Reynolds, M., et al.: Flamingo: a visual language model for few-shot learning. Advances in neural information processing systems 35 , 23716– 23736 (2022) 2. Armato III, S.G., McLennan, G., Bidaut, L., McNitt-Gray, M.F., Meyer, C.R., Reeves, A.P., Zhao, B., Aberle, D.R., Henschke, C.I., Hoffman, E.A., et al.: The lung image database consortium (lidc) and image database resource initiative (idri): a completed reference database of lung nodules on ct scans. Medical physics 38 (2), 915–931 (2011) 3. Caron, M., Touvron, H., Misra, I., Jégou, H., Mairal, J., Bojanowski, P., Joulin, A.: Emerging properties in self-supervised vision transformers. In: Proceedings of the IEEE/CVF international conference on computer vision. pp. 9650–9660 (2021) 4. Dosovitskiy, A., Beyer, L., Kolesnikov, A., Weissenborn, D., Zhai, X., Unterthiner, T., Dehghani, M., Minderer, M., Heigold, G., Gelly, S., et al.: An image is worth 16x16 words: Transformers for image recognition at scale. arXiv preprint arXiv:2010.11929 (2020) 5. Driess, D., Xia, F., Sajjadi, M.S., Lynch, C., Chowdhery, A., Ichter, B., Wahid, A., Tompson, J., Vuong, Q., Yu, T., et al.: Palm-e: An embodied multimodal language model. arXiv preprint arXiv:2303.03378 (2023) 6. He, K., Chen, X., Xie, S., Li, Y., Dollár, P., Girshick, R.: Masked autoencoders are scalable vision learners. In: Proceedings of the IEEE/CVF conference on computer vision and pattern recognition. pp. 16000–16009 (2022) 7. Hinton, G., Vinyals, O., Dean, J.: Distilling the knowledge in a neural network. arXiv preprint arXiv:1503.02531 (2015) 8. Huang, S.C., Shen, L., Lungren, M.P., Yeung, S.: Gloria: A multimodal global-local representation learning framework for label-efficient medical image recognition. In: Proceedings of the IEEE/CVF international conference on computer vision. pp. 3942–3951 (2021) 9. Irvin, J., Rajpurkar, P., Ko, M., Yu, Y., Ciurea-Ilcus, S., Chute, C., Marklund, H., Haghgoo, B., Ball, R., Shpanskaya, K., et al.: Chexpert: A large chest radiograph dataset with uncertainty labels and expert comparison. In: Proceedings of the AAAI conference on artificial intelligence. vol. 33, pp. 590–597 (2019) 10. Jia, C., Yang, Y., Xia, Y., Chen, Y.T., Parekh, Z., Pham, H., Le, Q., Sung, Y.H., Li, Z., Duerig, T.: Scaling up visual and vision-language representation learning with noisy text supervision. In: International conference on machine learning. pp. 4904–4916. PMLR (2021) 11. Li, J., Li, D., Savarese, S., Hoi, S.: Blip-2: Bootstrapping language-image pre-training with frozen image encoders and large language models. In: International conference on machine learning. pp. 19730–19742. PMLR (2023) 12. Li, J., Li, D., Xiong, C., Hoi, S.: Blip: Bootstrapping language-image pre-training for unified vision-language understanding and generation. In: International conference on machine learning. pp. 12888–12900. PMLR (2022) 10 Wang et al. 13. Li, Y., Zhang, Y., Tang, W., Dai, Y., Cheng, M.M., Li, X., Yang, J.: Visual instruction pretraining for domain-specific foundation models. arXiv preprint arXiv:2509.17562 (2025) 14. Liu, H., Li, C., Wu, Q., Lee, Y.J.: Visual instruction tuning. Advances in neural information processing systems 36 , 34892–34916 (2023) 15. Qiu, X., Dai, Y., Tan, X., Li, S., Sun, F., Gan, L., Liu, L.: SRU-Pix2Pix: A fusion-driven generator network for medical image translation with few-shot learning. arXiv preprint arXiv:2601.04785 (2026) 16. Qiu, X., Wei, Y., Tan, X., Xu, W., Wang, H., Ma, J., Huang, J., Fang, Z.: Mimar-osa: Enhancing obstructive sleep apnea diagnosis through multimodal data integration and missing modality reconstruction. Pattern Recognition 169 , 111917 (2026) 17. Qwen, :, Yang, A., Yang, B., Zhang, B., Hui, B., Zheng, B., Yu, B., Li, C., Liu, D., Huang, F., Wei, H., Lin, H., Yang, J., Tu, J., Zhang, J., Yang, J., Yang, J., Zhou, J., Lin, J., Dang, K., Lu, K., Bao, K., Yang, K., Yu, L., Li, M., Xue, M., Zhang, P., Zhu, Q., Men, R., Lin, R., Li, T., Tang, T., Xia, T., Ren, X., Ren, X., Fan, Y., Su, Y., Zhang, Y., Wan, Y., Liu, Y., Cui, Z., Zhang, Z., Qiu, Z.: Qwen2.5 technical report (2025), https://arxiv.org/abs/2412.15115 
+
+18. Radford, A., Kim, J.W., Hallacy, C., Ramesh, A., Goh, G., Agarwal, S., Sastry, G., Askell, A., Mishkin, P., Clark, J., et al.: Learning transferable visual models from natural language supervision. In: International conference on machine learning. pp. 8748–8763. PmLR (2021) 19. Siméoni, O., Vo, H.V., Seitzer, M., Baldassarre, F., Oquab, M., Jose, C., Khali-dov, V., Szafraniec, M., Yi, S., Ramamonjisoa, M., et al.: Dinov3. arXiv preprint arXiv:2508.10104 (2025) 20. Tiu, E., Talius, E., Patel, P., Langlotz, C.P., Ng, A.Y., Rajpurkar, P.: Expert-level detection of pathologies from unannotated chest x-ray images via self-supervised learning. Nature biomedical engineering 6(12), 1399–1406 (2022) 21. Wang, X., Peng, Y., Lu, L., Lu, Z., Bagheri, M., Summers, R.M.: Chestx-ray8: Hospital-scale chest x-ray database and benchmarks on weakly-supervised classifi-cation and localization of common thorax diseases. In: Proceedings of the IEEE conference on computer vision and pattern recognition. pp. 2097–2106 (2017) 22. Wang, Z., Wu, Z., Agarwal, D., Sun, J.: Medclip: Contrastive learning from unpaired medical images and text. In: Proceedings of the 2022 Conference on Empirical Methods in Natural Language Processing. pp. 3876–3887 (2022) 23. Yang, J., Shi, R., Wei, D., Liu, Z., Zhao, L., Ke, B., Pfister, H., Ni, B.: Medmnist v2-a large-scale lightweight benchmark for 2d and 3d biomedical image classification. Scientific data 10 (1), 41 (2023) 24. Zhang, S., Xu, Y., Usuyama, N., Xu, H., Bagga, J., Tinn, R., Preston, S., Rao, R., Wei, M., Valluri, N., et al.: Biomedclip: A multimodal biomedical foundation model pretrained from fifteen million scientific image-text pairs. arxiv 2023. arXiv preprint arXiv:2303.00915 70 (2023) 25. Zhang, Y., Jiang, H., Miura, Y., Manning, C.D., Langlotz, C.P.: Contrastive learning of medical visual representations from paired images and text. In: Machine learning for healthcare conference. pp. 2–25. PMLR (2022)
