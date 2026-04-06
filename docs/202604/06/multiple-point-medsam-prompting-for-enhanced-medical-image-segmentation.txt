@@ -1,0 +1,235 @@
+Title: Multiple Point MedSAM Prompting for Enhanced Medical Image Segmentation
+
+URL Source: https://www.sciencedirect.com/org/science/article/pii/S1546221826002882
+
+Markdown Content:
+## 1. Introduction
+
+Medical image segmentation is now branching into two main areas. Some continue to research specific designs, like SwinHCAD [[1](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#ref-1)] and the Med-ReLU activation function [[2](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#ref-2)]. These results indicate that task-specific work is still required. However, the release of the Segment Anything Model (SAM) [[3](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#ref-3)] and MedSAM [[4](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#ref-4)] has shifted much of the focus to foundation models. MedSAM, which was trained on lots of biomedical data [[4](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#ref-4)], aims to be a universal tool. It can segment different body parts using simple cues, possibly removing the need to retrain models. This paradigm represents a fundamental change from conventional task-specific deep learning approaches exemplified by architectures like nnU-Net [[5](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#ref-5)].
+
+Moving from focused models to general ones has resulted in a trade-off between ease of interaction and stability of results. Tools like Scribble Prompt have shown that drawing inputs can cut down marking time [[6](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#ref-6)]. However, using simple point-based prompts is still a risk. Recent work suggests a potential issue with prompting in clinical use. Chang et al. [[7](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#ref-7)] found that MedSAM performs well with bounding boxes, but its correctness drops significantly with point prompts. It does not do as well as specialized models like nnU-Net. Saha and van der Pol [[8](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#ref-8)] observed that MedSAM undergoes significant changes based on the size and clarity of lesions. It often makes smooth borders that hide irregular issues. This shakiness comes from depending on a fixed process driven by unclear input. Li et al. [[9](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#ref-9)] note that different user clicks introduce user-caused uncertainty, resulting in mixed results. While Test-Time Augmentation (TTA) has helped address data uncertainty in images [[10](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#ref-10)], there is currently no standard way to handle the uncertainty arising from the placement of prompts. However, point prompts are especially useful for inference because they offer a cheap and precise way to steer the predicted mask without changing the model: a few clicks inject local information that helps correct under- or over-segmentation due to domain shift or ambiguous appearance. Unlike boxes, which only provide a rough region prior, points can be placed exactly on uncertain boundaries or tiny scattered lesions, yielding better refinements while remaining fast and accessible to non-experts. Compared to scribbles, which demand more time and suitable interfaces, point prompting keeps interactions simple, making it ideal for inference-time use, such as clinical review, where the aim is to adjust an existing mask with minimal effort rather than produce dense annotations.
+
+To match the speed of points with the safety of boxes, we propose a new method for inference: multi-point MedSAM prompting through aggregation. Instead of using one click from the user, we see the prompt spot as random. By generating _N_ random point prompts in a key area and grouping the predictions based on the ensemble of the probability maps, our method eliminates unusual results and improves the segmentation mask. This method leverages test-time augmentation [[10](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#ref-10)] in the prompt area, ensuring robust performance even with minor changes in user input.
+
+To the best of our knowledge, the combination of the results of multiple point prompts has not been explored in the existing literature. The MedSAM model has a multiple prompt mode, but it tries to enforce all point prompts at the same time. Therefore, if just one point is noisy, the whole process is likely to fail. Our method takes the opposite strategy because it is a consensus mechanism that filters out such errors. Our approach is not related to ensembles because the components of an ensemble are different models that receive the same inputs, in this case, the same point prompt. Furthermore, our proposal is not linked to Monte Carlo sampling either because Monte Carlo would require a previous tentative segmented region as input, while we only require several point prompts. Also, this proposal differs from our previous work on segmentation stability and robust interactive segmentation [[11](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#ref-11)] because our previous work does not consider multiple point prompts as an input to the segmentation system.
+
+The main contributions of this work are:
+
+*   A segmentation method based on the adaptation of test-time augmentation from multiple versions of the same test image to multiple point-based prompts. Prompt placement variation is used to enhance segmentation strength without retraining the model.
+
+*   A deep optimization of the hyperparameters using segmentation measures: the number of prompts and the aggregation function.
+
+*   A set of experiments with benchmark datasets indicating similar or better gains than direct or bounding-box based segmentation, specifically in the conflictive cases.
+
+The rest of the paper is organized as follows: [Section 2](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#s2) summarizes the recent techniques. Then, our methodology and experiments are described in [Section 3](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#s3). The results and the discussion are depicted in [Sections 4](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#s4) and [5](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#s5). Finally, conclusions and future work are presented in [Section 6](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#s6).
+
+## 2. Related Work
+
+Generating effective prompts for foundation models is now a key area of research. Prompts in segmentation models usually have semantic prompts (text) or spatial prompts (points, boxes, etc.). Bounding boxes provide good spatial information and are not overly sensitive to user changes, but point prompts are easier to use, albeit very sensitive to the location of the click [[12](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#ref-12)].
+
+Researchers have explored automatic prompt generation strategies. Zhang et al. [[13](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#ref-13)] created UR-SAM, which fixes SAM outputs that are not certain by using estimated uncertainty maps. This greatly improved things for many organs without requiring manual intervention. This suggests that understanding the uncertainty of a model can help guide the improvement of automatic prompts. Using learning to improve prompts has also shown promise. Some ways train models to make the best prompts for specific tasks, but these often need to be adjusted for each task [[14](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#ref-14),[15](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#ref-15)]. Finding the right balance between automating tasks and giving users control remains a challenge.
+
+Recent work on calibration and uncertainty in medical imaging has also highlighted the importance of ensemble voting. Aldhahi and Sull [[16](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#ref-16)] developed Uncertain-CAM, which uses machine learning and confidence calibration to make predictions more reliable. This is particularly useful for methods that combine predictions, where you need to integrate multiple predictions effectively. While considerable progress has been made in quantifying data and model uncertainty [[17](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#ref-17)], the exploration of prompt-related uncertainty is necessary in medical image segmentation. Iterative methods have been proposed to mitigate user-induced uncertainty. PRISM [[12](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#ref-12)] enables users to refine segmentations over time with additional prompts.
+
+Test-Time Augmentation (TTA) is a fast method for reducing data-related uncertainty. Wang et al. [[10](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#ref-10)] demonstrated that TTA can address data issues without requiring additional training. By adjusting the input images slightly and combining the predictions, TTA improves the accuracy and reliability across various medical imaging tasks. Using ensembles, where multiple models are combined, is another effective way to estimate uncertainty. Deep Ensembles, where models are trained independently, provide better uncertainty estimates than single models [[18](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#ref-18)]. However, they are expensive to train and operate. Knowledge distillation is a viable option, demonstrating that uncertainty estimates from deep ensembles can be incorporated into single models, achieving comparable performance while reducing costs [[19](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#ref-19)].
+
+Combining multiple predictions is a common practice in machine learning, using approaches such as majority voting for classification and probability averaging for dense predictions [[20](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#ref-20)]. In medical image segmentation, aggregation methods must maintain spatial consistency, and recent work has explored more effective strategies like confidence-weighted averaging, for example, calibration-based ensembles that weigh predictions by model confidence to improve segmentation and uncertainty estimates [[21](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#ref-21)].
+
+## 3. Materials and Methods
+
+### 3.1. Proposed Method: Multi-Point MedSAM Prompting and Aggregation
+
+The proposed Multi-Point Aggregation method enhances the baseline MedSAM model by generating multiple prompts and aggregating the resulting predictions. Let us consider the baseline MedSAM model. Given a 2D input image X of size W×H pixels, and a point prompt q∈{1,…,W}×{1,…,H}, MedSAM outputs a probability map Y of size W×H: (1)Y=ℱ(X,q)
+
+Our proposal consists of building a consensus of the segmentations yielded by the MedSAM for multiple relevant point prompts. Let _R_ be a suitable region of interest within the input image: (2)R⊆{1,…,W}×{1,…,H}
+
+Then, a set of _N_ query points q i are drawn uniformly at random from _R_, i.e., q i∈R, i∈{1,…,N}. After that, the MedSAM is run on the selected query points: (3)Y i=ℱ(X,q i)
+
+Finally, the _N_ probability maps are combined by a suitable aggregation function φ in order to yield the aggregated probability map: (4)Y^=φ({Y i|i∈{1,…,N}})
+
+In the particular case that φ is the sample average function, the law of large numbers can be applied to prove that the aggregated probability map Y^ converges in probability to the expected value of the probability maps over _R_, as N→∞: (5)lim N→∞mean({Y i|i∈{1,…,N}})=E q∈R[ℱ(X,q)]
+
+The overall workflow is illustrated in [Fig. 1](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#fig-1). The process branches into two strategies for defining the sampling region _R_: Semi-Automatic Ground Truth (GT) sampling or Automatic sampling based on a baseline MedSAM prediction. Then, inference is performed using multiple random prompts, and the outputs are fused via an aggregation function φ.
+
+![Image 1: Figure 1](https://ars.els-cdn.com/content/image/1-s2.0-S1546221826002882-CMC_77561-fig-1.gif)
+1.   [Download: Download high-res image (293KB)](https://ars.els-cdn.com/content/image/1-s2.0-S1546221826002882-CMC_77561-fig-1_lrg.gif "Download high-res image (293KB)")
+2.   [Download: Download full-size image](https://ars.els-cdn.com/content/image/1-s2.0-S1546221826002882-CMC_77561-fig-1.gif "Download full-size image")
+
+Figure 1. Schematic overview of the proposed Multi-Point MedSAM Prompting framework.
+
+The specific procedure for a given 2D slice is as follows: The specific procedure for a given 2D slice is as follows: (1) Generate _N_ random points from a defined region of interest (e.g., ground truth mask or prior segmentation); (2) Execute MedSAM _N_ times, using each point as an individual prompt, yielding _N_ probability maps; (3) Combine the probability maps via a pixel-wise mean or median operation to produce an aggregated map; and (4) Threshold the aggregated map at 0.5 to generate the final binary segmentation mask.
+
+### 3.2. Competing Methods
+
+We compared the proposed test-time augmentation strategy with three existing segmentation models: SAM [[3](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#ref-3)], Scribble Prompt [[6](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#ref-6)], and MedSAM [[4](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#ref-4)]. Comparison was centered on the point-prompt performance of each model to establish a benchmark of minimum user input performance. SAM is a general-purpose segmentation model that uses a lightweight decoder and a Vision Transformer encoder to produce real-time segmentation masks on various visual scenes. Scribble Prompt is a biomedical imaging interactive resource that modifies the SAM architecture by tuning the decoder with a training policy based on synthetic interactions and artificial labels. MedSAM is a baseline model trained on more than 1.57 million biomedical image pairs that transforms the generalist architecture for medical segmentation. Although the original version focuses on bounding boxes, we trained the point-prompt checkpoint on the FLARE2022 dataset [[22](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#ref-22)] in order to make a direct comparison.
+
+### 3.3. Datasets and Preprocessing
+
+The number of selected public datasets to evaluate the proposed method is nine: FLARE2022_Abdominal [[22](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#ref-22)], the MSD datasets (Spleen, Liver, Pancreas, Colon, and BrainTumor) [[23](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#ref-23)], KiTS_Kidney [[24](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#ref-24)], MsLesSeg_MSLesion [[25](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#ref-25)], and LASC_Heart [[26](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#ref-26)]. A detailed summary of these datasets is presented in the Supplementary Material. The dataset used to analyze the hyperparameters of the model, specifically the optimal choice of the number of queries, _N_, and the aggregation function, was the FLARE2022_Abdominal dataset. It is composed of 50 abdominal CT images with standardized annotations of 13 different organs. Nonetheless, during preprocessing, one label of organs was excluded due to its scattered nature, leaving 12 organs to be used for tuning the hyperparameters. The remaining datasets comprised the validation suite, which was selected to test the generalization of the model to various imaging modalities and anatomical complexities.
+
+The preprocessing pipeline that was applied in preparation of the data was based on the MedSAM methodology to normalize the diverse nature of the selected datasets. The pipeline was used to process control NIfTI files of both CT and MRI modalities of the training sets. Preprocessing began with cleaning the ground truth label mask. All volumes were filtered by removing small, unconnected volumes with a 3D connected-components threshold (1000 voxels) and a 2D threshold (100 pixels) on each slide. Thereafter, there was intensity normalization based on modality. Normalization of CT scans was done by windowing (Window Level 40, Window Width 400). Using MRI, there was a normalization of the scan by cutting off the scans between 0.5 and 99.5 percentiles to remove outliers. Every volume was trimmed to the annotations’ _Z_-axis range and stored as .nii.gz files. For inference, the 2D slices were resized to 1024×1024 pixels to fit the MedSAM architecture. This resizing was performed using bicubic interpolation for the image data to maintain smooth intensity gradients, whereas nearest-neighbor interpolation was applied to the segmentation masks to preserve the integrity of the categorical labels.
+
+### 3.4. Experimental Design
+
+Experiments were conducted on a workstation with an Intel i7 CPU, 32 GB RAM, and an NVIDIA Titan X. The implementation used Python 3.10.13, PyTorch 2.2.0, CUDA 11.8, and standard libraries (NumPy, SciPy, SimpleITK, segment_anything). The Dice Similarity Coefficient (DSC) and Normalized Surface Dice (NSD) were used to determine the performance of the methods, as they are the gold standard in segmentation accuracy [[27](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#ref-27)].
+
+The FLARE2022 dataset was used to determine the optimal aggregation function (mean vs median) and the optimal number of query points (_N_, ranging from 2 to 25) to use. The initial data point was kept separate to assess the stability of the consensus strategy. The study evaluated success by considering both the accuracy of the image segmentations and the time required for the process. To ensure distinct test configurations, the analysis excluded anatomical components smaller than 26 pixels, avoiding sampling with repetition.
+
+To quantify the variance introduced by the stochastic nature of the prompts, a repeatability study was performed. For every test slice, K=5 independent inference trials were executed using N=14 random points per trial, and the standard deviation (STD) was measured. The total variance was decomposed into Across-Sampling STD (measuring instability due to prompt randomness) and Across-Slice STD (measuring variability due to anatomical differences).
+
+Two types of experiments were then conducted: the first compared the improved multi-point combination method with a single-point MedSAM baseline in a semi-automatic setup. This experiment pretends to emulate a real-world scenario in which a doctor makes the choices of the point prompts within the GT region. The model does not use any GT information itself. Here, N+1 points were taken straight from the correct data. The first point was for the baseline simulation, and the remaining _N_ points were for the combination method. Sampling was done with replacement. The second one examined a fully automated process that refines segmentations without requiring constant human input. In this process, a starting mask was created using MedSAM with a single-point prompt generated from a random point of the GT, and this baseline result mask itself served as the Region of Interest (ROI) of the proposed method to sample _N_ additional points. A primary failure mode arises if this initial mask is empty, leaving no valid area for refinement sampling. The predictions from these auto-generated prompts were combined to make a refined mask. This test evaluated the effectiveness of the combination strategy in a hands-off clinical setting, enabling the model to refine its initial segmentation predictions independently.
+
+## 4. Results
+
+### 4.1. Hyperparameter Setup: Optimal N and Aggregation Function
+
+Results for the mean aggregation function are displayed in the first row of [Fig. 2](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#fig-2). The horizontal dashed line represents the fixed MedSAM baseline using the geometric center of the ROI (mean DSC 0.7116). The solid curve illustrates the performance of the proposed multi-point aggregation method. The solid curve begins at N=1 with a mean DSC of 0.6952. The mean DSC increases to 0.7194 at N=10. Between N=10 and N=14, the DSC increases to 0.7208, after which the curve stabilizes. This pattern can also be observed for objects of different sizes. Medium and large parts exhibited the best DSC performance, while for small parts, the main improvement occurs in the NSD measure (plots provided in Supplementary Material) starting from N=7 and further.
+
+![Image 2: Figure 2](https://ars.els-cdn.com/content/image/1-s2.0-S1546221826002882-CMC_77561-fig-2.gif)
+1.   [Download: Download high-res image (463KB)](https://ars.els-cdn.com/content/image/1-s2.0-S1546221826002882-CMC_77561-fig-2_lrg.gif "Download high-res image (463KB)")
+2.   [Download: Download full-size image](https://ars.els-cdn.com/content/image/1-s2.0-S1546221826002882-CMC_77561-fig-2.gif "Download full-size image")
+
+Figure 2. Parameter analysis on FLARE2022. Mean and median DSC values are displayed for the mean and median aggregation functions. Solid lines: multi-point method; dashed lines: MedSAM (1-point) baseline.
+
+The second row of [Fig. 2](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#fig-2) presents results for the median aggregation function. The random point methodology achieves a mean DSC of 0.7181 at N=10. At N=14, the DSC reaches 0.7197, and at N=25, it reaches 0.7203. When analyzing performance by object size, a distinct stratification is observed. Large and medium anatomical structures consistently maintain high accuracy, with median DSC values exceeding 0.90. In contrast, small objects exhibit lower absolute performance (mean DSC ≈ 0.60) but demonstrate a steady upward trend as _N_ increases, showing that while large objects are stable with few prompts, small lesions require the redundancy of multiple points to achieve a reliable segmentation.
+
+Since performance gains were minimal after N=14, we selected N=14 and mean aggregation for the subsequent experiments.
+
+### 4.2. Repeatability and Stability Analysis
+
+Before comparing the proposed method against state-of-the-art models, we validated the intrinsic stability of the aggregation strategy. This analysis ensures that the stochastic nature of the prompt placement does not introduce significant variance into the final segmentation.
+
+A statistical breakdown of the repeatability trials (K=5) was performed using Ground Truth-guided sampling to isolate prompt variance. The analysis showed that the Sampling STD values were consistently low, ranging from a minimum of 0.0052 in the LASC_Heart dataset to a maximum of 0.0251 in the KiTS_Kidney dataset. Crucially, these values are markedly lower than the corresponding anatomical variations (Across-Slice SD of 0.2305 and 0.2088, respectively), confirming that segmentation stability is driven by anatomy rather than prompt randomness.
+
+[Fig. 3](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#fig-3) plots the relationship between the Across-Slice STD (x-axis) and the Across-Sampling STD (y-axis). The data points for all eight datasets are positioned below the line of equality (y=x), indicating that the variance between different slices is numerically larger than the variance between different sampling trials. This confirms that the proposed method is consistent, with performance driven primarily by anatomical complexity rather than prompt randomness.
+
+![Image 3: Figure 3](https://ars.els-cdn.com/content/image/1-s2.0-S1546221826002882-CMC_77561-fig-3.gif)
+1.   [Download: Download high-res image (78KB)](https://ars.els-cdn.com/content/image/1-s2.0-S1546221826002882-CMC_77561-fig-3_lrg.gif "Download high-res image (78KB)")
+2.   [Download: Download full-size image](https://ars.els-cdn.com/content/image/1-s2.0-S1546221826002882-CMC_77561-fig-3.gif "Download full-size image")
+
+Figure 3. Repeatability analysis: dataset variability vs. instability.
+
+### 4.3. Experiment 1: Semi-Automatic GT-Guided Prompt
+
+Using N=14 and mean aggregation, we compared the Semi-Automatic GT-guided Prompt method against SAM, Scribble Prompt, and the MedSAM (1-point) baseline. Our method is aimed to outperform single-point prompt methods and not bounding box prompt methods. In other words, our proposal is designed to manage situations where the doctor is more comfortable with making several clicks rather than delineating a bounding box. Therefore, comparisons with bounding box prompt methods have not been conducted.
+
+#### 4.3.1. Quantitative Analysis: Volumetric Accuracy and Boundary Adherence
+
+[Table 1](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#table-1) presents the mean and standard deviation DSC scores. In MSD_Liver, the Semi-Automatic GT-guided method achieved a mean DSC of 0.8545 compared to 0.8097 for the MedSAM baseline. For MSD_Pancreas, the mean DSC was 0.7607 vs. 0.7219 for the baseline. In MSD_BrainTumor, the method yielded 0.7205 compared to 0.6910. [Table 2](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#table-2) shows the Normalized Surface Dice metric. For KiTS_Kidney, the mean NSD was 0.8009 with the proposed method, compared to 0.7684 for the baseline. LASC_Heart showed a mean NSD of 0.8664 vs. 0.8577. In general, the proposed method outperforms between 0.01–0.04 of the original MedSAM metric values, which is a great improvement for medical purposes.
+
+Table 1. Mean DSC comparison of the proposed Multi-Point Aggregation strategies against SAM, Scribble Prompt, and the MedSAM (1-point) baseline. The best results are highlighted in bold.
+
+| Dataset | SAM | Scribble Prompt | MedSAM (1-point) baseline | Semi-Aut. GT-guided |
+| --- | --- | --- | --- | --- |
+| MSD_Spleen | 0.7584 (0.2798) | 0.7567 (0.2866) | 0.9118 (0.1299) | **0.9213 (0.1067)** |
+| MSD_Liver | 0.6764 (0.2791) | 0.6511 (0.3516) | 0.8097 (0.3044) | **0.8545 (0.2576)** |
+| MSD_Pancreas | 0.5431 (0.2763) | 0.5039 (0.2383) | 0.7219 (0.2147) | **0.7607 (0.1853)** |
+| MSD_Colon | 0.4387 (0.2962) | 0.5455 (0.2385) | 0.5351 (0.2765) | **0.5638 (0.2771)** |
+| KiTS_Kidney | 0.8133 (0.2656) | 0.6081 (0.3087) | 0.7795 (0.2411) | **0.8208 (0.2155)** |
+| MSD_BrainTumor | 0.2678 (0.2521) | 0.3903 (0.2442) | 0.6910 (0.2670) | **0.7205 (0.2519)** |
+| MsLesSeg_MSLesion | 0.2717 (0.3307) | 0.6344 (0.2312) | 0.6593 (0.2222) | **0.6781 (0.2175)** |
+| LASC_Heart | 0.6375 (0.2784) | 0.6673 (0.2245) | 0.8214 (0.2338) | **0.8275 (0.2307)** |
+
+Table 2. Mean NSD comparison demonstrating boundary adherence of SAM, Scribble Prompt, and the MedSAM (1-point) baseline vs. Multi-Point Aggregation. The best results are highlighted in bold.
+
+| Dataset | SAM | Scribble Prompt | MedSAM (1-point) baseline | Semi-Aut. GT-guided |
+| --- | --- | --- | --- | --- |
+| MSD_Spleen | 0.5585 (0.3056) | 0.5849 (0.2347) | 0.7734 (0.1617) | **0.7812 (0.1562)** |
+| MSD_Liver | 0.3564 (0.3138) | 0.4294 (0.2515) | 0.6596 (0.2524) | **0.6943 (0.2289)** |
+| MSD_Pancreas | 0.3618 (0.2403) | 0.3249 (0.1868) | 0.5055 (0.2180) | **0.5329 (0.2181)** |
+| MSD_Colon | 0.2682 (0.2540) | 0.3784 (0.1945) | 0.4007 (0.2178) | **0.4272 (0.2250)** |
+| KiTS_Kidney | 0.7739 (0.2907) | 0.6200 (0.2853) | 0.7684 (0.2301) | **0.8009 (0.2256)** |
+| MSD_BrainTumor | 0.1412 (0.2001) | 0.4272 (0.2288) | 0.6362 (0.2088) | **0.6563 (0.2071)** |
+| MsLesSeg_MSLesion | 0.3044 (0.3663) | **0.7725 (0.1880)** | 0.7501 (0.1889) | 0.7658 (0.1914) |
+| LASC_Heart | 0.5478 (0.3091) | 0.5590 (0.2337) | 0.8577 (0.1898) | **0.8664 (0.1869)** |
+
+Inference time results are reported in the Supplementary material, Section S5. Although our proposal slightly increases the time it takes for a particular computation compared to the single-point MedSAM baseline (e.g., 0.4697 vs. 0.1337 s to complete the MSD_Spleen step), it is still much faster than the Scribble Prompt method, which takes 0.5614 s to perform the same operation. This indicates that the proposed strategy of aggregation is advantageous in terms of performance, as it provides better segmentation and incurs a minimal cost in inference latency.
+
+#### 4.3.2. Visual Qualitative Assessment
+
+[Fig. 4](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#fig-4) displays segmentation masks for the compared methods. In the KiTS_Kidney example, the single-point baseline masks cover a portion of the region of interest. The Semi-Automatic GT-guided Prompt masks cover the full extent of the organ structures in these examples. In the MSD_Liver case, the baseline mask includes areas outside the organ boundary, whereas the proposed method’s mask is contained within the organ boundary.
+
+![Image 4: Figure 4](https://ars.els-cdn.com/content/image/1-s2.0-S1546221826002882-CMC_77561-fig-4.gif)
+1.   [Download: Download high-res image (3MB)](https://ars.els-cdn.com/content/image/1-s2.0-S1546221826002882-CMC_77561-fig-4_lrg.gif "Download high-res image (3MB)")
+2.   [Download: Download full-size image](https://ars.els-cdn.com/content/image/1-s2.0-S1546221826002882-CMC_77561-fig-4.gif "Download full-size image")
+
+Figure 4. Qualitative results for Experiment 1. Rows correspond to (top to bottom): MSD_Spleen, MSD_Liver, MSD_Pancreas, and KiTS_Kidney.
+
+In the MSD_Pancreas example, the MedSAM (1-point) baseline mask occupies the central body of the organ but does not extend to the lateral tail region. The Semi-Automatic GT-guided mask covers this lateral area, overlapping with the ground truth geometry. Similarly, in the MSD_Spleen case, the baseline prediction is strictly central and smaller than the ground truth area, whereas the proposed method yields a segmentation mask that extends to the outer boundaries of the structure.
+
+### 4.4. Experiment 2: Automatic MedSAM-Guided Prompt
+
+We evaluated the fully automatic pipeline using N=14 and the mean aggregation function. This experiment measured segmentation performance when the model uses its initial prediction to generate the prompts for the refinement stage.
+
+The DSC distributions are presented in the Supplementary Material (Fig. S19). To evaluate the method’s ability to capture fine-grained boundaries, we analyzed the Normalized Surface Dice (NSD) in [Fig. 5](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#fig-5). The median NSD for the Automatic method is higher than the baseline in the MSD_Pancreas and KiTS_Kidney datasets. In MSD_BrainTumor, the 75th percentile values for the Automatic method are higher than those of the baseline, while in MSD_Colon, the method achieves a higher maximum NSD.
+
+![Image 5: Figure 5](https://ars.els-cdn.com/content/image/1-s2.0-S1546221826002882-CMC_77561-fig-5.gif)
+1.   [Download: Download high-res image (229KB)](https://ars.els-cdn.com/content/image/1-s2.0-S1546221826002882-CMC_77561-fig-5_lrg.gif "Download high-res image (229KB)")
+2.   [Download: Download full-size image](https://ars.els-cdn.com/content/image/1-s2.0-S1546221826002882-CMC_77561-fig-5.gif "Download full-size image")
+
+Figure 5. Normalized Surface Dice (NSD) distributions comparing the MedSAM (1-point) baseline, Automatic MedSAM-guided Prompt, and Semi-Automatic GT-guided Prompt across all datasets.
+
+_Conflictive Cases Analysis_
+
+“Conflictive cases” were defined as instances where the initial MedSAM (1-point) baseline yielded a DSC <0.5. [Table 3](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#table-3) lists the frequency of these cases and the recovery rates. The percentage of conflictive cases ranged from 3.23% in MSD_Spleen to 41.44% in MSD_Colon. The automatic method recovered 32.20% of the conflictive cases in MSD_BrainTumor (2448 cases) and 31.48% in KiTS_Kidney (2628 cases). In MSD_Colon, the method recovered 26.22% (151 cases).
+
+Table 3. Summary of conflictive cases and resolution rates.
+
+| Dataset | Conflictive Cases | Conflictive (%) | Semi-Aut. GT-Guided Prompt Cases | Semi-Aut. GT-Guided Prompt (%) | Aut. MedSAM-Guided Prompt Cases | Aut. MedSAM-Guided Prompt (%) |
+| --- | --- | --- | --- | --- | --- | --- |
+| MSD_Spleen | 34 | 3.23% | 22 | 64.71% | 4 | 11.76% |
+| MSD_Liver | 3344 | 15.29% | 2273 | 67.97% | 598 | 17.88% |
+| MSD_Pancreas | 1385 | 14.60% | 1011 | 73.00% | 308 | 22.24% |
+| MSD_Colon | 576 | 41.44% | 378 | 65.62% | 151 | 26.22% |
+| KiTS_Kidney | 8349 | 14.81% | 6318 | 75.67% | 2628 | 31.48% |
+| MSD_BrainTumor | 7602 | 20.57% | 5025 | 66.10% | 2448 | 32.20% |
+| MsLesSeg_MSLesion | 528 | 19.89% | 352 | 66.67% | 167 | 31.63% |
+| LASC_Heart | 175 | 13.09% | 107 | 61.14% | 16 | 9.14% |
+
+[Fig. 6](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#fig-6) displays conflictive cases from the MSD_Colon, MSD_BrainTumor, and LASC_Heart datasets. In the MSD_Colon example (top row), SAM and Scribble Prompt yielded DSC scores of 0.207 and 0.270, respectively. The MedSAM (1-point) baseline produced a mask with a DSC of 0.465, whereas the Automatic MedSAM-guided method achieved a DSC of 0.632. In the MSD_BrainTumor example (middle row), SAM showed a DSC of 0.183, and Scribble Prompt showed 0.511. The baseline mask resulted in a DSC of 0.468, while the Automatic method produced a mask with a DSC of 0.842. In the LASC_Heart example (bottom row), the DSC values for SAM and Scribble Prompt were 0.116 and 0.582, respectively. The baseline model resulted in a DSC of 0.276, indicating a conflictive case, while the Automatic MedSAM-guided method yielded a DSC of 0.747.
+
+![Image 6: Figure 6](https://ars.els-cdn.com/content/image/1-s2.0-S1546221826002882-CMC_77561-fig-6.gif)
+1.   [Download: Download high-res image (2MB)](https://ars.els-cdn.com/content/image/1-s2.0-S1546221826002882-CMC_77561-fig-6_lrg.gif "Download high-res image (2MB)")
+2.   [Download: Download full-size image](https://ars.els-cdn.com/content/image/1-s2.0-S1546221826002882-CMC_77561-fig-6.gif "Download full-size image")
+
+Figure 6. Visual analysis of conflictive cases (rows: MSD_Colon, MSD_brain, LASC_Heart). These examples illustrate instances where the single-point MedSAM baseline fails (D S C<0.5).
+
+## 5. Discussion
+
+During the parameter setup stage, the decision to use mean aggregation with N=14 was made due to a balance between segmentation accuracy and computational efficiency. The performance, based on the parameter analysis, has a logarithmic growth trend with the DSC growing very fast at the beginning of prompts but slowing down considerably beyond 14 points. Further sampling does not add value to the marginal utility outside of this point; the difference in accuracy between N=14 and N=25 was not statistically significant. Additionally, mean aggregation was chosen over median aggregation because it yielded a better peak DSC (0.7208 vs. 0.7197), indicating that pixel-wise mean provides better smoothing of the variance in stochastic prompt positioning. The repeatability analysis confirms the method’s robustness, with Sampling STD (0.005–0.025) remaining approximately an order of magnitude lower than anatomical variation. This demonstrates that aggregation effectively neutralizes prompt noise, ensuring performance is driven by anatomy rather than specific click locations.
+
+The findings of the Semi-Automatic GT-guided experiment prove that multiple random prompts are beneficial in achieving segmentation consistency without loss of clinical usefulness. As demonstrated by [Table 1](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#table-1) (mean and standard deviation DSC), the proposed aggregation method performed significantly better than the MedSAM (1-point) baseline, showing notable improvements in complex tasks, such as MSD_Liver (mean DSC improvement of ∼4.5%) and MSD_BrainTumor (mean DSC improvement of ∼3%). This increase indicates that the aggregation strategy is successful in reducing the variability associated with single-point prompting. The process of averaging the predictions from 14 different locations causes the strategy to reduce local errors where the model might otherwise misinterpret the boundary (see [Fig. 4](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#fig-4)). Although aggregation increases inference time (e.g., 0.09 vs. 0.03 s for MSD_Liver), it remains much faster than interactive tools like Scribble Prompt (1.0 s for MSD_Colon), ensuring better accuracy within real-time constraints (see Supplementary material for inference time analysis).
+
+The proposed aggregation strategy has the potential to act as a self-correcting mechanism in a fully automated workflow, a fact emphasized by the Automatic MedSAM-guided experiment. As demonstrated in [Fig. 5](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#fig-5) and Fig. S19, using the preliminary model prediction to create another set of random prompts produced noticeable enhancements in median DSC and NSD on challenging datasets such as MSD_Pancreas and KiTS_Kidney. More importantly, the “Conflictive Cases” analysis shows that this iterative procedure is able to restore a large fraction of failures where the single-point baseline fails (DSC <0.5). Indicatively, the automatic approach recovered approximately 32% and 31% of such cases in MSD_BrainTumor and KiTS_Kidney, respectively (see [Table 3](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#table-3)). This implies that with the original hint, the resulting region of interest can be sufficiently accurate to constrain the anatomy; by resampling N=14 points within this imperfect boundary, the aggregation procedure constructs a consensus that approaches the real object (as shown in [Fig. 6](https://www.sciencedirect.com/org/science/article/pii/S1546221826002882#fig-6)). Also, visual comparison in these cases reveals that alternative interactive models, like SAM and Scribble Prompt, often cannot break down such structures correctly. This indicates that while these specific medical boundaries are difficult for generalist models, the proposed aggregation strategy is capable of screening the instability of the original inference to recover the object.
+
+## 6. Conclusions
+
+To overcome the crucial problem of variability in interactive segmentation of medical images, this work presented a Multi-Point Aggregation framework for MedSAM. The proposed approach eliminates the unpredictability of inconsistent user prompts by replacing individual and deterministic prompts with a stochastic aggregate of _N_ random points. We concluded that Mean Aggregation with N=14 points is the most effective trade-off in terms of segmentation accuracy and computational speed, and this value constitutes a consistent test-time augmentation protocol.
+
+After parameter optimization on the multi-organ FLARE2022 dataset, all eight diverse CT and MRI benchmarks were experimentally validated, demonstrating that this approach consistently outperforms the standard MedSAM baseline, particularly in experiments involving complex anatomical structures. Boundary precision and overlap were significantly enhanced in semi-automatic tests, with a Mean DSC increase of about 4.5% on liver segmentation, while being much faster than other tools, such as Scribble Prompt. Besides, the fully automatic pipeline was shown to have a strong self-correction ability; it recovered more than 30% of the cases that the baseline initially failed on (DSC <0.5) in brain and kidney tumor data, and it also recovered anatomical details that generalist models such as SAM and Scribble Prompt often cannot. The findings provide evidence that aggregating multiple point prompts is an effective method for accelerating the speed of point-based interaction while maintaining the reliability required for use in the medical field, thereby justifying the technique as a simple yet effective approach to segmenting medical images with a high degree of robustness.
+
+Nevertheless, this enhanced strength comes at the cost of higher computational demand, because the inference procedure is repeated several times on each slice. Although the latency of the current system is acceptable for interactive applications, future efforts will be made to optimize the aggregation algorithm to further reduce the inference time. Also, as the existing system is based on 2D slices, 3D extensions of this stochastic prompting approach may utilize volumetric spatial context more effectively, potentially improving organ-specific 3D geometry performance.
+
+## Supplementary Materials
+
+## Funding Statement
+
+This work is partially supported by the Autonomous Government of Andalusia (Spain) under project UMA20-FEDERJA-108, and also by the Ministry of Science and Innovation of Spain, grant number PID2022-136764OA-I00. It includes funds from the European Regional Development Fund (ERDF). It is also partially supported by the Fundación Unicaja (PUNI-003_2023), and the Instituto de Investigación Biomédica de Málaga y Plataforma en Nanomedicina-IBIMA Plataforma BIONAND (ATECH-25-02).
+
+## Author Contributions
+
+Conceptualization, Karl Thurnhofer-Hemsi; methodology, Ezequiel López-Rubio; software, Wasfieh Nazzal; validation, Wasfieh Nazzal and Karl Thurnhofer-Hemsi; formal analysis, Karl Thurnhofer-Hemsi and Miguel A. Molina-Cabello; investigation, Wasfieh Nazzal; resources, Wasfieh Nazzal and Miguel A. Molina-Cabello; data curation, Wasfieh Nazzal; writing—original draft preparation, Wasfieh Nazzal; writing—review and editing, Karl Thurnhofer-Hemsi, Miguel A. Molina-Cabello and Ezequiel López-Rubio; visualization, Wasfieh Nazzal; supervision, Ezequiel López-Rubio and Karl Thurnhofer-Hemsi; project administration, Ezequiel López-Rubio; funding acquisition, Miguel A. Molina-Cabello. All authors reviewed and approved the final version of the manuscript.
+
+## Availability of Data and Materials
+
+## Ethics Approval
+
+Not applicable.
+
+## Conflicts of Interest
+
+The authors declare no conflicts of interest.
+
+## Supplementary Materials
+
+The supplementary material is available online at [https://www.techscience.com/doi/10.32604/cmc.2026.077561/s1](https://www.techscience.com/doi/10.32604/cmc.2026.077561/s1). Additional experimental results are provided as Supplementary Material, including experiments showing the evolution of the performance on each dataset varying the number of points, as well as other quantitative and qualitative results, including inference time.
