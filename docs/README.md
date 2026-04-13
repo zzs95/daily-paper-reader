@@ -6,59 +6,63 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：📧 2026-04-11
-- 运行时间：2026-04-13 19:40:32 UTC
+- 最新运行日期：📧 2026-04-13
+- 运行时间：2026-04-13 19:59:54 UTC
 - 运行状态：成功
-- 本次总论文数：20
-- 精读区：20
+- 本次总论文数：22
+- 精读区：22
 - 速读区：0
 
 ### 今日简报（AI）
-今日精读 20 篇前沿论文，深度聚焦影像组学与深度学习在肺炎分类及肿瘤预后中的融合应用。
-重点关注利用半监督学习提升肺炎亚型诊断精度，以及多模态 MRI 结合机器学习对肿瘤增殖与预后的精准预测。
-建议关注“影像组学引导”的混合模型，这是提升医疗 AI 临床解释力与小样本学习效率的关键路径。
-- 详情：[/202604/11/README](/202604/11/README)
+今日深度研读 22 篇前沿论文，聚焦医疗影像的图对齐表征与扩散语言模型的推理增强。
+重点关注通过级联图对齐提升放射影像的临床理解力，以及利用伪似然训练优化扩散模型的逻辑推理性能。
+建议读者优先关注图结构如何赋能多模态医疗诊断，并追踪扩散模型在复杂文本生成中的范式演进。
+- 详情：[/202604/13/README](/202604/13/README)
 
 ### 精读区论文标签
-1. [RadGuide-S3P-Net: A Radiomics-Guided Self-training Semi-supervised Deep Learning Framework for Multi-Class Pneumonia Subtype Classification](/202604/11/radguide-s3p-net-a-radiomics-guided-self-training-semi-supervised-deep-learning-framework-for-multi-class-pneumonia-subtype-classification)  
+1. [Advancing Radiograph Representation Learning via Cascading Graph Alignment for Vision-Language Clinical Concepts](/202604/13/advancing-radiograph-representation-learning-via-cascading-graph-alignment-for-vision-language-clinical-concepts)  
    标签：无标签
-2. [Multiparametric MRI-Based Integrated Analysis of Clinical, Radiomics, Deep Learning, and Machine Learning for Predicting Tumor Proliferation and Prognosis in …](/202604/11/multiparametric-mri-based-integrated-analysis-of-clinical-radiomics-deep-learning-and-machine-learning-for-predicting-tumor-proliferation-and-prognosis-in-)  
+2. [Pseudo-Likelihood Training for Reasoning Diffusion Language Models](/202604/13/pseudo-likelihood-training-for-reasoning-diffusion-language-models)  
    标签：无标签
-3. [Integrated Radiomics Model Combining Diffusion Kurtosis Imaging and Dynamic Contrast‐Enhanced MRI for Predicting TERT Promoter Mutation Status in Gliomas](/202604/11/integrated-radiomics-model-combining-diffusion-kurtosis-imaging-and-dynamic-contrastenhanced-mri-for-predicting-tert-promoter-mutation-status-in-gliomas)  
+3. [A Regularized Backbone-Level Cross-Modal Interaction Framework for Stable Temporal Reasoning in Video-Language Models](/202604/13/a-regularized-backbone-level-cross-modal-interaction-framework-for-stable-temporal-reasoning-in-video-language-models)  
    标签：无标签
-4. [Efficient Deep Ladle-Net for fast universal 3D lesion segmentation on chest–abdomen–pelvis computed tomography](/202604/11/efficient-deep-ladle-net-for-fast-universal-3d-lesion-segmentation-on-chestabdomenpelvis-computed-tomography)  
+4. [Multimodal Learning with Privileged Report Supervision for Generalizable Tuberculosis Detection on Chest Radiographs](/202604/13/multimodal-learning-with-privileged-report-supervision-for-generalizable-tuberculosis-detection-on-chest-radiographs)  
    标签：无标签
-5. [Tumor morphology on CT radiomics is largely driven by the local anatomical environment, not the primary tumor type](/202604/11/tumor-morphology-on-ct-radiomics-is-largely-driven-by-the-local-anatomical-environment-not-the-primary-tumor-type)  
+5. [AXIS-Net: Asymmetric attention and Scale-Integrated fusion network for robust breast lesion segmentation in ultrasound images](/202604/13/axis-net-asymmetric-attention-and-scale-integrated-fusion-network-for-robust-breast-lesion-segmentation-in-ultrasound-images)  
    标签：无标签
-6. [Prognostic value of plaque burden on computed tomography angiography in patients with symptomatic carotid artery disease](/202604/11/prognostic-value-of-plaque-burden-on-computed-tomography-angiography-in-patients-with-symptomatic-carotid-artery-disease)  
+6. [Radiomics-derived classifier performance evaluation in lung nodule characterization compared with expert radiologists](/202604/13/radiomics-derived-classifier-performance-evaluation-in-lung-nodule-characterization-compared-with-expert-radiologists)  
    标签：无标签
-7. [Multimodal foundation model for 3D genito-pelvic structure segmentation in image-guided radiotherapy](/202604/11/multimodal-foundation-model-for-3d-genito-pelvic-structure-segmentation-in-image-guided-radiotherapy)  
+7. [Multimodal fusion of pathology and radiology foundation models for WHO 2021 glioma subtyping](/202604/13/multimodal-fusion-of-pathology-and-radiology-foundation-models-for-who-2021-glioma-subtyping)  
    标签：无标签
-8. [Cross-sample Consistency Learning for Semi-supervised Medical Image Segmentation](/202604/11/cross-sample-consistency-learning-for-semi-supervised-medical-image-segmentation)  
+8. [Deep Learning-Based Tumor Segmentation for Head and Neck Cancer in a Radiotherapy Planning System Supplementary Material](/202604/13/deep-learning-based-tumor-segmentation-for-head-and-neck-cancer-in-a-radiotherapy-planning-system-supplementary-material)  
    标签：无标签
-9. [MIMIC-CXR-Ext-ILS: Lesion Segmentation Masks and Instruction-Answer Pairs for Chest X-rays}}](/202604/11/mimic-cxr-ext-ils-lesion-segmentation-masks-and-instruction-answer-pairs-for-chest-x-rays)  
+9. [RadGuide-S3P-Net: A Radiomics-Guided Self-training Semi-supervised Deep Learning Framework for Multi-Class Pneumonia Subtype Classification](/202604/13/radguide-s3p-net-a-radiomics-guided-self-training-semi-supervised-deep-learning-framework-for-multi-class-pneumonia-subtype-classification)  
    标签：无标签
-10. [TumorCLIP: Lightweight Vision-Language Fusion for Explainable MRI-Based Brain Tumor Classification](/202604/11/tumorclip-lightweight-vision-language-fusion-for-explainable-mri-based-brain-tumor-classification)  
+10. [AI-Assisted Pneumonia Detection, Localisation and Report Generation from Chest X-rays](/202604/13/ai-assisted-pneumonia-detection-localisation-and-report-generation-from-chest-x-rays)  
    标签：无标签
-11. [Automatic Configuration of LLM Post-Training Pipelines](/202604/11/2603.18773-automatic-configuration-of-llm-post-training-pipelines)  
+11. [Hierarchical context modeling and prototype-mediated cross-modal alignment for histopathology report generation](/202604/13/hierarchical-context-modeling-and-prototype-mediated-cross-modal-alignment-for-histopathology-report-generation)  
    标签：无标签
-12. [ACPO: Counteracting Likelihood Displacement in Vision-Language Alignment with Asymmetric Constraints](/202604/11/2603.22165-acpo-counteracting-likelihood-displacement-in-vision-language-alignment-with-asymmetric-constraints)  
+12. [Adaptive, Privacy-Preserving Small Language Models for Multi-Task Clinical Assistance](/202604/13/adaptive-privacy-preserving-small-language-models-for-multi-task-clinical-assistance)  
    标签：无标签
-13. [ForestPrune: High-ratio Visual Token Compression for Video Multimodal Large Language Models via Spatial-Temporal Forest Modeling](/202604/11/2603.22911-forestprune-high-ratio-visual-token-compression-for-video-multimodal-large-language-models-via-spatial-temporal-forest-modeling)  
+13. [CAMD: Coverage-Aware Multimodal Decoding for Efficient Reasoning of Multimodal Large Language Models](/202604/13/2603.14745-camd-coverage-aware-multimodal-decoding-for-efficient-reasoning-of-multimodal-large-language-models)  
    标签：无标签
-14. [VISion On Request: Enhanced VLLM efficiency with sparse, dynamically selected, vision-language interactions](/202604/11/2603.23495-vision-on-request-enhanced-vllm-efficiency-with-sparse-dynamically-selected-vision-language-interactions)  
+14. [Cognitive Mismatch in Multimodal Large Language Models for Discrete Symbol Understanding](/202604/13/2603.18472-cognitive-mismatch-in-multimodal-large-language-models-for-discrete-symbol-understanding)  
    标签：无标签
-15. [Perturbation: A simple and efficient adversarial tracer for representation learning in language models](/202604/11/2603.23821-perturbation-a-simple-and-efficient-adversarial-tracer-for-representation-learning-in-language-models)  
+15. [Predictive Regularization Against Visual Representation Degradation in Multimodal Large Language Models](/202604/13/2603.20808-predictive-regularization-against-visual-representation-degradation-in-multimodal-large-language-models)  
    标签：无标签
-16. [Towards GUI Agents: Vision-Language Diffusion Models for GUI Grounding](/202604/11/2603.26211-towards-gui-agents-vision-language-diffusion-models-for-gui-grounding)  
+16. [Project Imaging-X: A Survey of 1000+ Open-Access Medical Imaging Datasets for Foundation Model Development](/202604/13/2603.27460-project-imaging-x-a-survey-of-1000-open-access-medical-imaging-datasets-for-foundation-model-development)  
    标签：无标签
-17. [Mitigating the Reasoning Tax in Vision-Language Fine-Tuning with Input-Adaptive Depth Aggregation](/202604/11/2603.26330-mitigating-the-reasoning-tax-in-vision-language-fine-tuning-with-input-adaptive-depth-aggregation)  
+17. [Learning the Signature of Memorization in Autoregressive Language Models](/202604/13/2604.03199-learning-the-signature-of-memorization-in-autoregressive-language-models)  
    标签：无标签
-18. [Learning to Predict Future-Aligned Research Proposals with Language Models](/202604/11/2603.27146-learning-to-predict-future-aligned-research-proposals-with-language-models)  
+18. [CoME-VL: Scaling Complementary Multi-Encoder Vision-Language Learning](/202604/13/2604.03231-come-vl-scaling-complementary-multi-encoder-vision-language-learning)  
    标签：无标签
-19. [Memory Dial: A Training Framework for Controllable Memorization in Language Models](/202604/11/2604.05074-memory-dial-a-training-framework-for-controllable-memorization-in-language-models)  
+19. [Saliency-R1: Enforcing Interpretable and Faithful Vision-language Reasoning via Saliency-map Alignment Reward](/202604/13/2604.04500-saliency-r1-enforcing-interpretable-and-faithful-vision-language-reasoning-via-saliency-map-alignment-reward)  
    标签：无标签
-20. [Thinking Diffusion: Penalize and Guide Visual-Grounded Reasoning in Diffusion Multimodal Language Models](/202604/11/2604.05497-thinking-diffusion-penalize-and-guide-visual-grounded-reasoning-in-diffusion-multimodal-language-models)  
+20. [The Illusion of Superposition? A Principled Analysis of Latent Thinking in Language Models](/202604/13/2604.06374-the-illusion-of-superposition-a-principled-analysis-of-latent-thinking-in-language-models)  
+   标签：无标签
+21. [Adaptive Differential Privacy for Federated Medical Image Segmentation Across Diverse Modalities](/202604/13/2604.06518-adaptive-differential-privacy-for-federated-medical-image-segmentation-across-diverse-modalities)  
+   标签：无标签
+22. [A Utility-preserving De-identification Pipeline for Cross-hospital Radiology Data Sharing](/202604/13/2604.07128-a-utility-preserving-de-identification-pipeline-for-cross-hospital-radiology-data-sharing)  
    标签：无标签
 
 ### 速读区论文标签
