@@ -6,63 +6,55 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：📧 2026-04-13
-- 运行时间：2026-04-13 19:59:54 UTC
+- 最新运行日期：📧 2026-04-14
+- 运行时间：2026-04-14 20:25:33 UTC
 - 运行状态：成功
-- 本次总论文数：22
-- 精读区：22
+- 本次总论文数：18
+- 精读区：18
 - 速读区：0
 
 ### 今日简报（AI）
-今日深度研读 22 篇前沿论文，聚焦医疗影像的图对齐表征与扩散语言模型的推理增强。
-重点关注通过级联图对齐提升放射影像的临床理解力，以及利用伪似然训练优化扩散模型的逻辑推理性能。
-建议读者优先关注图结构如何赋能多模态医疗诊断，并追踪扩散模型在复杂文本生成中的范式演进。
-- 详情：[/202604/13/README](/202604/13/README)
+今日深挖 18 篇影像组学前沿，重点攻克胶质母细胞瘤生存预测与颈动脉病变识别难题。
+元启发式算法显著优化了生存预测精度，同时 CT 影像组学在脑血管事件责任病变识别中展现出极高稳健性。
+建议关注特征筛选算法对临床预测模型可靠性的提升，探索 AI 在精准医疗中的实战潜力。
+- 详情：[/202604/14/README](/202604/14/README)
 
 ### 精读区论文标签
-1. [Advancing Radiograph Representation Learning via Cascading Graph Alignment for Vision-Language Clinical Concepts](/202604/13/advancing-radiograph-representation-learning-via-cascading-graph-alignment-for-vision-language-clinical-concepts)  
+1. [Metaheuristic-driven feature selection in radiomics: improving time-to-event survival prediction in glioblastoma](/202604/14/metaheuristic-driven-feature-selection-in-radiomics-improving-time-to-event-survival-prediction-in-glioblastoma)  
    标签：无标签
-2. [Pseudo-Likelihood Training for Reasoning Diffusion Language Models](/202604/13/pseudo-likelihood-training-for-reasoning-diffusion-language-models)  
+2. [Assessing Robustness of Carotid Artery CT Angiography Radiomics in the Identification of Culprit versus Non-culprit lesions in Cerebrovascular Events](/202604/14/assessing-robustness-of-carotid-artery-ct-angiography-radiomics-in-the-identification-of-culprit-versus-non-culprit-lesions-in-cerebrovascular-events)  
    标签：无标签
-3. [A Regularized Backbone-Level Cross-Modal Interaction Framework for Stable Temporal Reasoning in Video-Language Models](/202604/13/a-regularized-backbone-level-cross-modal-interaction-framework-for-stable-temporal-reasoning-in-video-language-models)  
+3. [MGK-RAG: Multi-Granularity Knowledge Guided Retrieval-Augmented Generation for Radiology Report](/202604/14/mgk-rag-multi-granularity-knowledge-guided-retrieval-augmented-generation-for-radiology-report)  
    标签：无标签
-4. [Multimodal Learning with Privileged Report Supervision for Generalizable Tuberculosis Detection on Chest Radiographs](/202604/13/multimodal-learning-with-privileged-report-supervision-for-generalizable-tuberculosis-detection-on-chest-radiographs)  
+4. [Semantic-Aware Data Imputation in Dynamic Relational Databases via Pre-trained Language Models](/202604/14/semantic-aware-data-imputation-in-dynamic-relational-databases-via-pre-trained-language-models)  
    标签：无标签
-5. [AXIS-Net: Asymmetric attention and Scale-Integrated fusion network for robust breast lesion segmentation in ultrasound images](/202604/13/axis-net-asymmetric-attention-and-scale-integrated-fusion-network-for-robust-breast-lesion-segmentation-in-ultrasound-images)  
+5. [Multimodal Deep Learning for Pulmonary Nodule Detection on Chest Radiography in High‐Risk Adults, With Secondary Validation for All‐Cause and Cause‐Specific …](/202604/14/multimodal-deep-learning-for-pulmonary-nodule-detection-on-chest-radiography-in-highrisk-adults-with-secondary-validation-for-allcause-and-causespecific-)  
    标签：无标签
-6. [Radiomics-derived classifier performance evaluation in lung nodule characterization compared with expert radiologists](/202604/13/radiomics-derived-classifier-performance-evaluation-in-lung-nodule-characterization-compared-with-expert-radiologists)  
+6. [Preoperative Prediction of Persistent Type II Endoleaks After Endovascular Aortic Repair Using Multiregional Perianeurysmal Computed Tomography Angiography …](/202604/14/preoperative-prediction-of-persistent-type-ii-endoleaks-after-endovascular-aortic-repair-using-multiregional-perianeurysmal-computed-tomography-angiography-)  
    标签：无标签
-7. [Multimodal fusion of pathology and radiology foundation models for WHO 2021 glioma subtyping](/202604/13/multimodal-fusion-of-pathology-and-radiology-foundation-models-for-who-2021-glioma-subtyping)  
+7. [A multimodal radiomics model to predict disease-free survival in resected non-small cell lung cancer: integrating clinicopathology, dual-energy CT, and deep learning …](/202604/14/a-multimodal-radiomics-model-to-predict-disease-free-survival-in-resected-non-small-cell-lung-cancer-integrating-clinicopathology-dual-energy-ct-and-deep-learning-)  
    标签：无标签
-8. [Deep Learning-Based Tumor Segmentation for Head and Neck Cancer in a Radiotherapy Planning System Supplementary Material](/202604/13/deep-learning-based-tumor-segmentation-for-head-and-neck-cancer-in-a-radiotherapy-planning-system-supplementary-material)  
+8. [Is deep learning ready for abdominal organ-at-risk segmentation in the foundation model era: A comprehensive study of challenging clinical cases](/202604/14/is-deep-learning-ready-for-abdominal-organ-at-risk-segmentation-in-the-foundation-model-era-a-comprehensive-study-of-challenging-clinical-cases)  
    标签：无标签
-9. [RadGuide-S3P-Net: A Radiomics-Guided Self-training Semi-supervised Deep Learning Framework for Multi-Class Pneumonia Subtype Classification](/202604/13/radguide-s3p-net-a-radiomics-guided-self-training-semi-supervised-deep-learning-framework-for-multi-class-pneumonia-subtype-classification)  
+9. [Exploiting Test-Time Augmentation in Federated Learning for Brain Tumor MRI Classification](/202604/14/2601.12671v1-exploiting-test-time-augmentation-in-federated-learning-for-brain-tumor-mri-classification)  
    标签：无标签
-10. [AI-Assisted Pneumonia Detection, Localisation and Report Generation from Chest X-rays](/202604/13/ai-assisted-pneumonia-detection-localisation-and-report-generation-from-chest-x-rays)  
+10. [Grounded Chess Reasoning in Language Models via Master Distillation](/202604/14/2603.20510-grounded-chess-reasoning-in-language-models-via-master-distillation)  
    标签：无标签
-11. [Hierarchical context modeling and prototype-mediated cross-modal alignment for histopathology report generation](/202604/13/hierarchical-context-modeling-and-prototype-mediated-cross-modal-alignment-for-histopathology-report-generation)  
+11. [ACPO: Counteracting Likelihood Displacement in Vision-Language Alignment with Asymmetric Constraints](/202604/14/2603.22165-acpo-counteracting-likelihood-displacement-in-vision-language-alignment-with-asymmetric-constraints)  
    标签：无标签
-12. [Adaptive, Privacy-Preserving Small Language Models for Multi-Task Clinical Assistance](/202604/13/adaptive-privacy-preserving-small-language-models-for-multi-task-clinical-assistance)  
+12. [Perturbation: A simple and efficient adversarial tracer for representation learning in language models](/202604/14/2603.23821-perturbation-a-simple-and-efficient-adversarial-tracer-for-representation-learning-in-language-models)  
    标签：无标签
-13. [CAMD: Coverage-Aware Multimodal Decoding for Efficient Reasoning of Multimodal Large Language Models](/202604/13/2603.14745-camd-coverage-aware-multimodal-decoding-for-efficient-reasoning-of-multimodal-large-language-models)  
+13. [Towards GUI Agents: Vision-Language Diffusion Models for GUI Grounding](/202604/14/2603.26211-towards-gui-agents-vision-language-diffusion-models-for-gui-grounding)  
    标签：无标签
-14. [Cognitive Mismatch in Multimodal Large Language Models for Discrete Symbol Understanding](/202604/13/2603.18472-cognitive-mismatch-in-multimodal-large-language-models-for-discrete-symbol-understanding)  
+14. [Mitigating the Reasoning Tax in Vision-Language Fine-Tuning with Input-Adaptive Depth Aggregation](/202604/14/2603.26330-mitigating-the-reasoning-tax-in-vision-language-fine-tuning-with-input-adaptive-depth-aggregation)  
    标签：无标签
-15. [Predictive Regularization Against Visual Representation Degradation in Multimodal Large Language Models](/202604/13/2603.20808-predictive-regularization-against-visual-representation-degradation-in-multimodal-large-language-models)  
+15. [Learning to Predict Future-Aligned Research Proposals with Language Models](/202604/14/2603.27146-learning-to-predict-future-aligned-research-proposals-with-language-models)  
    标签：无标签
-16. [Project Imaging-X: A Survey of 1000+ Open-Access Medical Imaging Datasets for Foundation Model Development](/202604/13/2603.27460-project-imaging-x-a-survey-of-1000-open-access-medical-imaging-datasets-for-foundation-model-development)  
+16. [Memory Dial: A Training Framework for Controllable Memorization in Language Models](/202604/14/2604.05074-memory-dial-a-training-framework-for-controllable-memorization-in-language-models)  
    标签：无标签
-17. [Learning the Signature of Memorization in Autoregressive Language Models](/202604/13/2604.03199-learning-the-signature-of-memorization-in-autoregressive-language-models)  
+17. [Thinking Diffusion: Penalize and Guide Visual-Grounded Reasoning in Diffusion Multimodal Language Models](/202604/14/2604.05497-thinking-diffusion-penalize-and-guide-visual-grounded-reasoning-in-diffusion-multimodal-language-models)  
    标签：无标签
-18. [CoME-VL: Scaling Complementary Multi-Encoder Vision-Language Learning](/202604/13/2604.03231-come-vl-scaling-complementary-multi-encoder-vision-language-learning)  
-   标签：无标签
-19. [Saliency-R1: Enforcing Interpretable and Faithful Vision-language Reasoning via Saliency-map Alignment Reward](/202604/13/2604.04500-saliency-r1-enforcing-interpretable-and-faithful-vision-language-reasoning-via-saliency-map-alignment-reward)  
-   标签：无标签
-20. [The Illusion of Superposition? A Principled Analysis of Latent Thinking in Language Models](/202604/13/2604.06374-the-illusion-of-superposition-a-principled-analysis-of-latent-thinking-in-language-models)  
-   标签：无标签
-21. [Adaptive Differential Privacy for Federated Medical Image Segmentation Across Diverse Modalities](/202604/13/2604.06518-adaptive-differential-privacy-for-federated-medical-image-segmentation-across-diverse-modalities)  
-   标签：无标签
-22. [A Utility-preserving De-identification Pipeline for Cross-hospital Radiology Data Sharing](/202604/13/2604.07128-a-utility-preserving-de-identification-pipeline-for-cross-hospital-radiology-data-sharing)  
+18. [Faithful GRPO: Improving Visual Spatial Reasoning in Multimodal Language Models via Constrained Policy Optimization](/202604/14/2604.08476-faithful-grpo-improving-visual-spatial-reasoning-in-multimodal-language-models-via-constrained-policy-optimization)  
    标签：无标签
 
 ### 速读区论文标签
