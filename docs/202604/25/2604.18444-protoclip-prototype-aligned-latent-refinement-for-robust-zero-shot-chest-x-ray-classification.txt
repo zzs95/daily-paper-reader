@@ -1,0 +1,150 @@
+Title: ProtoCLIP: Prototype-Aligned Latent Refinement for Robust Zero-Shot Chest X-Ray Classification
+
+URL Source: https://arxiv.org/pdf/2604.18444
+
+Published Time: Tue, 21 Apr 2026 02:46:01 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# ProtoCLIP: Prototype-Aligned Latent Refinement for Robust Zero-Shot Chest X-Ray Classification 
+
+Florian Kittler, Sheethal Bhat, Andreas Maier 
+
+Friedrich-Alexander University Erlangen-Nuremberg, Erlangen 91054, Germany 
+
+{florian.flo.kittler, sheethal.bhat, andreas.maier}@fau.de 
+
+Abstract. Zero-shot vision–language models (VLMs) have shown prom-ise for chest radiograph classification, but their performance is often limited by confounding label co-occurrence, long-tail class imbalance, and transfer instability under domain shift. We propose ProtoCLIP, a refinement strategy for CLIP-style VLMs that improves zero-shot dis-crimination through targeted data curation and distilled anchor align-ment. Specifically, we construct pathology-focused training subsets with curated negative samples to reduce co-occurrence bias. We also intro-duce a representation-preserving distillation objective to stabilize adap-tation while maintaining semantic structure and improving discrimina-tion of clinically relevant co-occuring pathologies. Evaluated on an un-seen dataset VinDr-CXR, ProtoCLIP improves AUC by 2-10 percentage points over a strong CLIP-based baseline across multiple findings. For pneumothorax specifically, ProtoCLIP achieves a state-of-the-art AUC of 0.94. These results demonstrate that anchor-guided refinement, cou-pled with curated supervision and controlled adaptation, can mitigate common zero-shot transfer failures in medical VLMs without requiring large-scale retraining. 
+
+Keywords: Weakly supervised Learning · Vision-Language Models ·
+
+Zero-shot classification. 
+
+# 1 Introduction 
+
+Chest radiography (CXR) is among the most frequently acquired medical imag-ing studies and remains a first-line modality for diagnosing and monitoring in a wide range of cardiopulmonary conditions [1]. With rising imaging volumes and increasing clinical workload [2], scalable decision support tools are becom-ing essential. In time-critical scenarios such as suspected pneumothorax, where delayed recognition can lead to rapid deterioration, highly sensitive and reliable automated assistance is particularly important [3]. Recent advances in vision–language models (VLMs), supported by large-scale CXR datasets such as MIMIC-CXR [4], have accelerated data-driven radiograph interpretation [5, 7]. These methods implement contrastive image–text learning  
+
+> arXiv:2604.18444v1 [cs.LG] 20 Apr 2026 2Anonymized Author et al.
+
+that aligns radiographs with associated reports. This enables transferable repre-sentations that support zero-shot and prompt-based classification with minimal task-specific annotation [9]. Radiology-specific adaptations, including CheXZero [5], GLORIA [10], BioViL(T) [11], CXR-CLIP [15], and MedKLIP [7], leverage report-derived text embeddings to reduce reliance on curated labels and improve generalization. Beyond pre-training, refinement strategies such as prompt tun-ing, adapter-based updates, and concept-level alignment have been proposed to better match downstream clinical targets without full retraining [12, 13]. How-ever, these approaches primarily adjust decision boundaries rather than explicitly restructuring the embedding space to improve pathology separability. Despite these advances, performance remains inconsistent for less prevalent and time-critical findings such as pneumothorax [14, 21]. A key challenge is label co-occurrence and long-tailed prevalence in large-scale datasets, which can en-tangle pathology representations in the shared embedding space. When multiple findings frequently appear together, their visual–semantic features may cluster closely, reducing class separability and limiting zero-shot discrimination for un-derrepresented conditions. This lack of structured separation may hinder reliable deployment in high-sensitivity clinical scenarios. To address this limitation, we propose ProtoCLIP, a pre-training refine-ment framework designed to improve pathology separability in the joint im-age–text embedding space. Our method performs a second-stage refinement of a CheXZero-initialized VL backbone, explicitly restructuring the joint embedding space through prototype anchoring and distillation. We optimize a dual-objective loss combining binary cross-entropy (BCE) alignment to these anchors with a feature distillation term that preserves the pretrained representation geometry. By anchoring image embeddings to stable semantic prototypes while constrain-ing destructive drift, ProtoCLIP promotes more discriminative and transferable representations under distribution shift. We assess generalization on the external VinDr-CXR dataset using zero-shot AUC scores. 
+
+Main Contributions: (1) We introduce ProtoCLIP, a prototype-based refine-ment method that improves pathology separation in the joint embedding space of pre-trained CXR VL models. (2) We curate a focused training subset to en-hance label reliability and optimize a dual-objective learning scheme combining anchor-based alignment with teacher–student feature distillation. (3) We per-form out-of-distribution evaluations on VinDr-CXR, where ProtoCLIP achieves state-of-the-art (SOTA) zero-shot performance for pneumothorax and other se-lected pathologies. ProtoCLIP yields consistent gains across additional patholo-gies, including findings not explicitly prioritized during training. 
+
+# 2 Materials 
+
+Dataset description: MIMIC-CXR [4] is a large-scale chest radiograph dataset containing over 370,000 images from more than 65,000 patients, paired with free-text radiology reports and report-derived labels. We use frontal chest radiographs ProtoCLIP: Prototype-Aligned Zero-Shot Classification 3
+
+and curate a subset to improve label purity and control class imbalance for re-finement training. MIMIC-CXR labels are derived from CheXpert-style report annotations generated by the CheXpert labeler, which assigns study-level bi-nary findings from radiology reports [4]. VinDr-CXR [18] is an external chest radiograph dataset comprising 15,000 training and 3,000 test studies collected from two hospitals. It provides 28 annotated findings, with test labels established by multi-radiologist consensus. We use the VinDr-CXR test set exclusively for out-of-distribution evaluation. 
+
+Data preparation: To improve embedding separability for the target finding (e.g. pneumothorax), we curate a refined training subset from MIMIC-CXR [4] using the NLP generated labels [22]. The dataset is divided into a (i) target co-hort Dt containing all pneumothorax-positive images (with multiple findings per image) and a (ii) background cohort Db constructed from single-pathology exam-ples, where exactly one non-target finding is present. These are mathematically depicted below as, 
+
+Dt = {x ∈ D : yt(x) = 1 }, (1) indicating all images labeled with the target finding t, irrespective of additional co-occuring pathologies. Let B be the set of all findings other than target, then for each b ∈ B , we construct single-pathology background subset as, 
+
+Db = {x ∈ D : yb(x) = 1 , y t(x) = 0 , y c(x) = 0 ∀c ∈ B , c ̸ = b}. (2) To mitigate class imbalance, each Db is capped at randomly sampled K = 4000 
+
+samples. The final curated dataset is, 
+
+Dfinal = Dt ∪ [
+
+> b∈B
+
+Db. (3) 
+
+# 3 Method 
+
+We adopt CheXZero as the underlying VL backbone and refine its joint embed-ding space using the curated training subset described above. ProtoCLIP intro-duces a dual-objective optimization scheme consisting of (i) a teacher–student feature distillation loss that preserves the pretrained representation structure and (ii) alignment to frozen text-defined pathology anchors via a BCE objective as depicted in Figure 1. 
+
+Feature Distillation: To stabilize refinement, we incorporate feature-level knowledge distillation from a frozen CheXZero teacher [17]. This regularizes the student encoder, ensures the representation geometry is retained, and limits destructive drift in the embedding space. For each image x in a batch B, let 
+
+ˆv = fθ (x) and ˆv(T ) = fθ(T ) (x) be ℓ2-normalized student and teacher embed-dings. We use the mean cosine distance to compute the distillation loss as, 
+
+Ldist = 1
+
+B
+
+> B
+
+X
+
+> i=1
+
+
+
+1 − cos(ˆ vi, ˆvi(T ))
+
+
+
+. (4) 4 Anonymized Author et al. 
+
+Fig. 1. Overview of the ProtoCLIP method. a , Data curation from MIMIC-CXR includes a set of pneumothorax-positive images Dt, and single-pathology background examples Db. b, ProtoCLIP training schema depicts a trainable student visual encoder, refined using a dual-objective loss. Ldist performs feature distillation from a frozen CheXZero teacher and LBCE aligns student image embeddings with frozen text-defined pathology anchors tc, using one-hot targets from the Dfinal .( c) At inference, the student visual encoder processes test image xtest to generate image embeddings ˆv. The final classification score is determined by calculating the cosine similarity between ˆv and positive tpos vs. negative tneg text anchors. 
+
+Anchor-Based Prototype Alignment: We align image embeddings to fixed pathology prototypes using a standard BCE objective. During refinement, only the final two layers of the student visual encoder are updated, while earlier visual layers and the text encoder remain frozen. The frozen text encoder produces a fixed set of C anchor embeddings {tc | c ∈ { 1, . . . , C }} in the shared embedding space. For a batch of B images, the student generates image embeddings whose similarity to each anchor forms a logit matrix Z ∈ RB×C where Zc = τ ·cos(ˆ vi, tc)
+
+and τ is a temperature scaling parameter. Since each curated image belongs to exactly one bucket, supervision is represented by one-hot targets Y ∈ { 0, 1}B×C .The standard BCE loss is computed using Z and Y. We use BCE (rather than softmax CE) to keep compatibility with multi-label settings and to avoid forcing relative competition across anchors. The final loss is a weighted sum of both denoted as, 
+
+L = LBCE + λ Ldist , (5) where λ controls the trade-off between new signals for improved clustering and old representations to prevent catastrophic forgetting. ProtoCLIP: Prototype-Aligned Zero-Shot Classification 5
+
+Table 1. Zero-shot classification comparison of ProtoCLIP with current SOTA meth-ods for pneumothorax (18/3000) on VinDR-CXR dataset [18]. Sensitivity fixed at 95% to minimize False Negatives in a clinical setting [19]. ProtoCLIP threshold 
+
+γ = 0 .03 & CheXZero γ = −0.002 . ProtoCLIP AUC achieves ±0.0028 (SD), 95% CI: [0 .9368 , 0.9438] . Sensitivity, specificity, precision and F1 only compared to base-line. 
+
+Model AUC Sensitivity Specificity Precision F1-score 
+
+Gloria [10] 0.68 - - - -BioVil-T [11] 0.90 - - - -CXR-CML [6] 0.51 - - - -MedKLIP [7] 0.93 - - - -CheXZero [5] 0.85 0.94 0.71 0.02 0.04 ProtoCLIP (Ours) 0.94 0.94 0.84 0.03 0.07 Table 2. AUC comparison for the two most (Pleural Effusion & Atelectasis) and the two least co-occuring (Pneumonia & Consolidation) background classes when pneu-mothorax is the target class. 
+
+Pathology CheXZero [5] ProtoCLIP (Ours) 
+
+Pleural Effusion 0.9550 0.9601 
+
+Atelectasis 0.6884 0.7658 
+
+Pneumonia 0.8922 0.8906 Consolidation 0.9235 0.9214 
+
+# 4 Results 
+
+4.1 Experimental Setup: 
+
+We use the ViT-B/32 backbone from CheXZero [5] and train on a single NVIDIA Tesla V100 (32GB). Images are resized to 224 × 224 . The model is implemented in PyTorch 2.4.1 with a learning rate of 1 × 10 −4 and batch size 128. We adopt the standard CLIP temperature τ = 0 .07 [9] and set the distillation weight 
+
+λ = 1 .0. Main results for pneumothorax are reported as the mean over five independent runs using random seeds and other pathologies are evaluated using a single checkpoint. Fixed text anchors use the templates "{pathology}" and “indicating {pathology}”. 
+
+4.2 Comparison to SOTA: 
+
+Table 1 compares zero-shot pneumothorax classification performance of Proto-CLIP vs. various VL methods. ProtoCLIP achieves the highest AUC ( 0.94 ), outperforming CheXZero (0.85) and slightly surpassing MedKLIP (0.93). Per-formance is stable across runs ( ±0.0028 SD; 95% CI [0.9368, 0.9438]) when compared to CheXZero with SD ±0.09 [21]. At a clinically relevant operating 6 Anonymized Author et al.                          
+
+> Table 3. Zero-shot AUC comparison of different target pathologies between current SOTA and ProtoCLIP.
+> Pathology Gloria [10] BioVil-T [11] CheXZero [5] MedKLIP [7] ProtoCLIP
+> Lung opacity 0.63 0.79 0.79 0.83 0.84
+> Atelectasis 0.61 0.67 0.72 0.87 0.82 Pleural effusion 0.67 0.95 0.95 0.96 0.96
+
+point [19], ProtoCLIP achieves substantially higher specificity than CheXZero (0.8390 vs. 0.7123 ), corresponding to fewer false positives at the same sensi-tivity. This also leads to improved precision and F1-score (0.0342/0.0660 vs. 0.0194/0.0381), indicating more reliable positive predictions in a clinically rele-vant high-sensitivity setting. Table 2 reports AUC scores for selected background findings under pneu-mothorax targeted training. Compared to CheXZero, ProtoCLIP improves per-formance on pleural effusion and atelectasis (common co-occurring confounders) suggesting better disentanglement of overlapping visual patterns. The gain for atelectasis is particularly notable (+0.08 AUC). In contrast, AUC for pneumo-nia and consolidation changes only marginally, indicating that the refinement mainly benefits frequent co-occurring findings while preserving performance on less related classes. Table 3 depicts the AUC comparison across different pathologies as target class, where ProtoCLIP attains the best performance for Lung Opacity (0.84) and matches the top result for Pleural Effusion (0.96), demonstrating that the proposed refinement generalizes beyond pneumothorax. For Atelectasis, Proto-CLIP substantially improves over CheXZero (0.82 vs. 0.72) but remains below MedKLIP (0.87), indicating pathology-dependent gains potentially influenced by label prevalence and co-occurrence structure. Overall, anchor-guided refinement consistently enhances zero-shot discrimination across several findings, though it does not uniformly surpass specialized baselines. Although ProtoCLIP performs well, its main limitation is that it is currently optimized for a single target pathology rather than serving as a general-purpose refinement method. Nevertheless, we find that improvements extend to several background classes for a given target class suggesting potential broader appli-cability. Additionally, further validation on independent and out-of-distribution cohorts is necessary to establish generalizability. CheXpert [20] was excluded because pneumothorax is not in the official Competition 5 benchmark and its very low prevalence precludes statistically reliable evaluation. 
+
+Visualization: To qualitatively assess the effect of the proposed refinement, we analyze embedding distributions and attention maps for the target pneumotho-rax. 
+
+TSNE: Due to the large class imbalance for pneumothorax, the tsne visualiza-tion for the entire dataset was inconclusive. However, Fig. 2 depicts a qualitative ProtoCLIP: Prototype-Aligned Zero-Shot Classification 7 
+
+> Fig. 2. Comparison of TSNE clustering of pneumothorax (n=18) vs. healthy (n=18) samples between CheXZero [5] and ProtoCLIP.
+
+analysis over equal number of True Positives (TP) for pneumothorax cases and healthy findings. This shows a modest improvement in inter and intra-class clus-tering.  
+
+> Fig. 3. Attention map comparison of TP pneumothorax from VinDR with bounding box annotation.
+
+Attention maps: Zero-shot pneumothorax classification with VLMs does not inherently guarantee anatomically meaningful attention maps. As illustrated in Fig. 3, ProtoCLIP yields attention that is more consistently concentrated within the lung fields compared to the CheXZero baseline, with partial alignment to the ground-truth bounding box. This qualitative improvement is consistent with the observed gains in classification performance over the baseline. 
+
+Ablation studies: We perform ablation studies over multiple hyper-parameters and settings. As shown in Table 4, a batch size of 128 achieves the best per-8 Anonymized Author et al.                                 
+
+> Table 4. AUC comparison of different hyperparameter settings, when pneumothorax is the target class, across different batch size bs and distillation weights λ, as well as increased number and variety of text anchors.
+> Hyperparameter setting AUC Score
+> Distill λ= 0, bs = 128 ( Ldist = 0 )0.9237 Distill λ= 1, bs = 128 0.9426
+> Distill λ= 10, bs = 128 0.9378 Distill λ= 1, bs = 64 0.9331 Distill λ= 1, bs = 128 0.9426 Distill λ= 1, bs = 256 0.9352 Distill λ= 1, bs = 128, multiple complex text anchors 0.9397 Best performing model, bs = 128, λ= 1, single text anchors 0.9426
+
+formance, while smaller (64) and larger (256) batches slightly degrade results. Increasing the distillation weight to λ = 10 provides no benefit, indicating over-regularization, whereas removing distillation ( λ = 0 ) yields the worst perfor-mance, particularly for low co-occurrence classes, highlighting its importance for representation stability. Increasing the number and diversity of text anchor templates does not lead to consistent gains. The optimal configuration therefore uses batch size 128, λ = 1 , and simple text templates. 
+
+# 5 Conclusion 
+
+We introduced ProtoCLIP, a refinement strategy for CLIP-style VLMs that im-proves zero-shot performance in chest radiography through targeted data cu-ration and distilled anchor alignment. Evaluation on VinDr-CXR shows that anchor-guided refinement combined with representation-preserving regulariza-tion mitigates common transfer limitations and enhances robustness under do-main shift. Future work will focus on automating data curation, validating the framework on additional datasets, and extending the approach toward a unified model covering multiple pathologies. ProtoCLIP: Prototype-Aligned Zero-Shot Classification 9
+
+# References 
+
+1. Jones, C.M., Buchlak, Q.D., Oakden-Rayner, L., Milne, M., Seah, J., Esmaili, N., Hachey, B.: Chest radiographs and machine learning – Past, present and fu-ture. Journal of Medical Imaging and Radiation Oncology 65 (5), 538–544 (2021). https://doi.org/10.1111/1754-9485.13274 2. Alexander, R., Waite, S., Bruno, M.A., Krupinski, E.A., Berlin, L., Macknik, S., Martinez-Conde, S.: Mandating limits on workload, duty, and speed in radiology. Radiology 304 (2), 274–282 (2022). https://doi.org/10.1148/radiol.212631 3. Roberts, D.J., Leigh-Smith, S., Faris, P.D., et al.: Clinical manifestations of tension pneumothorax: protocol for a systematic review and meta-analysis. Systematic Reviews 3, 3 (2014). https://doi.org/10.1186/2046-4053-3-3 4. Johnson, A.E.W., Pollard, T.J., Berkowitz, S.J., Greenbaum, N.R., Lungren, M.P., Deng, C.Y., Mark, R.G., Horng, S.: MIMIC-CXR, a de-identified publicly avail-able database of chest radiographs with free-text reports. Scientific Data 6(1), 317 (2019). https://doi.org/10.1038/s41597-019-0322-0 5. Tiu, E., Talius, E., Patel, P., Langlotz, C.P., Ng, A.Y., Rajpurkar, P.: Expert-level detection of pathologies from unannotated chest X-ray images via self-supervised learning. Nature Biomedical Engineering 6(12), 1399–1406 (2022). https://doi.org/10.1038/s41551-022-00936-9 6. Madhipati, R., Maier, A.: CXR-CML: Improved zero-shot classification of long-tailed multi-label diseases in Chest X-Rays. In: International Conference on Med-ical Image Computing and Computer-Assisted Intervention (pp. 119-129). Cham: Springer Nature Switzerland 2025. 7. Wu, C., Zhang, X., Zhang, Y., Wang, Y., et al.: MedKLIP: Medical Knowledge Enhanced Language-Image Pre-Training for X-ray Diagnosis. In: Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV), pp. 1–12 (2023). https://doi.org/10.1109/ICCV51070.2023.01954 8. Du, Y., Liu, Z., Li, J., Zhao, W.X.: A Survey of Vision-Language Pre-Trained Models. In: Proceedings of the Thirty-First International Joint Conference on Artificial Intelligence (IJCAI), pp. 5436–5443 (2022). https://doi.org/10.24963/ijcai.2022/762 9. Radford, A., Kim, J.W., Hallacy, C., Ramesh, A., Goh, G., Agarwal, S., Sastry, G., Askell, A., Mishkin, P., Clark, J., Krueger, G., Sutskever, I.: Learning Transferable Visual Models From Natural Language Supervision. In: Proceedings of the 38th International Conference on Machine Learning (ICML), PMLR, vol. 139, pp. 8748– 8763 (2021). https://doi.org/10.48550/arXiv.2103.00020 10. Huang, S.-C., Shen, L., Lungren, M.P., Yeung, S.: GLoRIA: A Multimodal Global-Local Representation Learning Framework for Label-Efficient Medical Im-age Recognition. In: Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV), pp. 3942–3951 (2021) 11. Bannur, S., Hyland, S., Liu, Q., Pérez-García, F., Ilse, M., Castro, D.C., Boeck-ing, B., Sharma, H., Bouzid, K., Thieme, A., Schwaighofer, A., Wetscherek, M., Lungren, M.P., Nori, A., Alvarez-Valle, J., Oktay, O.: Learning To Exploit Tem-poral Structure for Biomedical Vision-Language Processing. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), pp. 15016–15027 (2023) 12. Zhou, K., Yang, J., Loy, C.C., Liu, Z.: Learning to Prompt for Vision-Language Models. arXiv preprint arXiv:2109.01134 (2021). https://doi.org/10.48550/arXiv.2109.01134 10 Anonymized Author et al. 13. Zhang, R., Wei, Z., Fang, R., Gao, P., Li, K., Dai, J., Qiao, Y., Li, H.: Tip-Adapter: Training-Free Adaption of CLIP for Few-shot Classification. In: European Conference on Computer Vision (ECCV), pp. 1–17 (2022). 14. Thian, Y.L., et al.: Deep Learning Systems for Pneumothorax Detection on Chest Radiographs: A Multicenter External Validation Study. Radiology: Artificial Intel-ligence 3(4), e200190 (2021). https://doi.org/10.1148/ryai.2021200190 15. You, K., Gu, J., Ham, J., Park, B., Kim, J., Hong, E.K., Baek, W., Roh, B.: CXR-CLIP: Toward Large Scale Chest X-ray Language-Image Pre-training. In: Greenspan, H. et al. (eds.) MICCAI 2023, LNCS, vol. 14221, pp. 101–111. Springer, Cham (2023). https://doi.org/10.1007/978-3-031-43895-0_10 16. Bishop, C.M.: Pattern Recognition and Machine Learning. Springer, New York (2006) 17. Hinton, G., Vinyals, O., Dean, J.: Distilling the Knowledge in a Neural Network. arXiv preprint arXiv:1503.02531 (2015). https://doi.org/10.48550/arXiv.1503.02531 18. Nguyen, H.Q., Lam, K., Le, L.T., et al.: VinDr-CXR: An open dataset of chest X-rays with radiologist’s annotations. Scientific Data 9, 429 (2022). https://doi.org/10.1038/s41597-022-01498-w 19. Bhat, S., Maier, A.: AUCReshaping: improved sensitiv-ity at high-specificity. In: Scientific Report (2023). Springer, https://doi.org/https://doi.org/10.1038/s41598-023-48482-x 20. Irvin, J., Rajpurkar, P., Ko, M., Yu, Y., Ciurea-Ilcus, S., Chute, C., Marklund, H., Haghgoo, B., Ball, R., Shpanskaya, K., Seekins, J., Mong, D.A., Halabi, S.S., Sand-berg, J.K., Jones, R., Larson, D.B., Langlotz, C.P., Patel, B.N., Lungren, M.P., Ng, A.Y.: CheXpert: A Large Chest Radiograph Dataset with Uncertainty Labels and Expert Comparison. In: Proceedings of the AAAI Conference on Artificial Intelligence, 33 (01), 590–597 (2019). https://doi.org/10.1609/aaai.v33i01.3301590 21. Bhat, S., Maier, A.: Towards robust zero-shot chest x-ray classification: exploring data distribution bias in chest x-ray datasets. In: BVM Workshop (2025) (pp. 191-196). Wiesbaden: Springer Fachmedien Wiesbaden. 22. Lin, M., Peng, Y.: CXR-LT 2024: A MICCAI challenge on long-tailed, multi-label, and zero-shot disease classification from chest X-ray. Medical Image Analysis. In: Medical Image Analysis, 2025, 103739.
