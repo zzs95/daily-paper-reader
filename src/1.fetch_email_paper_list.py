@@ -164,7 +164,12 @@ def get_related_research_emails_by_day(target_date: str, subject_text: str = "ne
         sender = next((h["value"] for h in headers_list if h.get("name", "").lower() == "from"), "")
         date_header = next((h["value"] for h in headers_list if h.get("name", "").lower() == "date"), "")
         html_content = extract_html_from_payload(payload)
+        
+        internal_ms = int(msg_detail.get("internalDate", "0"))
+        internal_dt_utc = datetime.fromtimestamp(internal_ms / 1000, tz=timezone.utc)
 
+        print(f"[INFO] {len(results)+1}/{len(all_message_ids)} Subject: ", subject, "Date header:", date_header, "InternalDate UTC:", internal_dt_utc.isoformat())
+        
         results.append(
             {
                 "message_id": msg_id,
