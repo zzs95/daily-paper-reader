@@ -6,63 +6,51 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：📧 2026-05-09
-- 运行时间：2026-05-11 04:51:36 UTC
+- 最新运行日期：📧 2026-05-11
+- 运行时间：2026-05-11 22:00:43 UTC
 - 运行状态：成功
-- 本次总论文数：22
-- 精读区：22
+- 本次总论文数：16
+- 精读区：16
 - 速读区：0
 
 ### 今日简报（AI）
-今日深度解析 22 篇 AI 前沿论文，聚焦计算病理学突破与多模态大模型推理优化。
-重点关注 QPath 框架对病理图像的多分辨率解析，以及 SVCF 实现的多模态零样本推理纠错技术。
-建议留意多模态大模型如何从简单的视觉感知，进化到具备专业医疗诊断与逻辑自省能力。
-- 详情：[/202605/09/README](/202605/09/README)
+今日深度解析 16 篇前沿文献，聚焦 AI 在慢性腰痛诊断与 PET/CT 肿瘤精准分割中的最新突破。
+重点关注多 PLD ASL 影像组学对脑血流变化的分类能力，以及 IMH-Net 结合 Mamba 架构在跨模态肿瘤分割中的卓越表现。
+建议关注 Mamba 架构与超图建模在提升临床影像诊断精度方面的实战价值。
+- 详情：[/202605/11/README](/202605/11/README)
 
 ### 精读区论文标签
-1. [QPath: A Question-Aware Multi-Resolution Vision Language Framework for Computational Pathology](/202605/09/qpath-a-question-aware-multi-resolution-vision-language-framework-for-computational-pathology)  
+1. [Cerebral blood flow alterations and machine learning classification in chronic low back pain using multi-PLD ASL radiomics](/202605/11/cerebral-blood-flow-alterations-and-machine-learning-classification-in-chronic-low-back-pain-using-multi-pld-asl-radiomics)  
    标签：无标签
-2. [SVCF: Enabling Zero-Shot Correction of Reasoning Steps in Multi-Modal Large Language Models](/202605/09/svcf-enabling-zero-shot-correction-of-reasoning-steps-in-multi-modal-large-language-models)  
+2. [IMH-Net: Importance-aware Mamba and Cross-modal Hypergraph Modeling for Precise PET/CT Tumor Segmentation](/202605/11/imh-net-importance-aware-mamba-and-cross-modal-hypergraph-modeling-for-precise-petct-tumor-segmentation)  
    标签：无标签
-3. [DIRA: Deep High-Rank Adaptation of Pre-Trained Language Models](/202605/09/dira-deep-high-rank-adaptation-of-pre-trained-language-models)  
+3. [Advancing reliable radiomics: harmonization, foundation models, and robustness in cancer imaging](/202605/11/advancing-reliable-radiomics-harmonization-foundation-models-and-robustness-in-cancer-imaging)  
    标签：无标签
-4. [Game-Theoretic Insights into Multi-Agent LLM Debate for Enhanced Clinical Question Answering](/202605/09/game-theoretic-insights-into-multi-agent-llm-debate-for-enhanced-clinical-question-answering)  
+4. [Medical Multimodal Large Language Models: A Survey](/202605/11/medical-multimodal-large-language-models-a-survey)  
    标签：无标签
-5. [Glioblastoma radiomics can delineate systemic immune activity states like blood abundance of T cell populations or transcription factors](/202605/09/glioblastoma-radiomics-can-delineate-systemic-immune-activity-states-like-blood-abundance-of-t-cell-populations-or-transcription-factors)  
+5. [PeFoMed: Parameter efficient fine-tuning of multimodal large language models for medical CXR](/202605/11/pefomed-parameter-efficient-fine-tuning-of-multimodal-large-language-models-for-medical-cxr)  
    标签：无标签
-6. [Advancing In-Context Learning for Efficient and Stable Medical Report Generation](/202605/09/advancing-in-context-learning-for-efficient-and-stable-medical-report-generation)  
+6. [Magic: Masked Anatomical Group Intra Contrastive Learning Framework for 3D Medical Image Segmentation](/202605/11/magic-masked-anatomical-group-intra-contrastive-learning-framework-for-3d-medical-image-segmentation)  
    标签：无标签
-7. [Medical report generation via knowledge distill and medical keywords](/202605/09/medical-report-generation-via-knowledge-distill-and-medical-keywords)  
+7. [A fusion model of deep learning and conventional features based on computed tomography angiography of carotid plaque for predicting the risk of acute ischemic …](/202605/11/a-fusion-model-of-deep-learning-and-conventional-features-based-on-computed-tomography-angiography-of-carotid-plaque-for-predicting-the-risk-of-acute-ischemic-)  
    标签：无标签
-8. [Automated Lesion Segmentation in Medical Imaging via Integration of nnU-Net Optimization and SAM Approach](/202605/09/automated-lesion-segmentation-in-medical-imaging-via-integration-of-nnu-net-optimization-and-sam-approach)  
+8. [Does RL Expand the Capability Boundary of LLM Agents? A PASS@(k, T) Analysis](/202605/11/2604.14877-does-rl-expand-the-capability-boundary-of-llm-agents-a-passk-t-analysis)  
    标签：无标签
-9. [TACL: Tissue-aware contrastive learning for cross-domain information fusion between histopathology and MRI in knee pathology classification](/202605/09/tacl-tissue-aware-contrastive-learning-for-cross-domain-information-fusion-between-histopathology-and-mri-in-knee-pathology-classification)  
+9. [WebCompass: Towards Multimodal Web Coding Evaluation for Code Language Models](/202605/11/2604.18224-webcompass-towards-multimodal-web-coding-evaluation-for-code-language-models)  
    标签：无标签
-10. [A Brainstem Radiomics Framework to Distinguish Progressive Supranuclear Palsy from Parkinson's Disease](/202605/09/a-brainstem-radiomics-framework-to-distinguish-progressive-supranuclear-palsy-from-parkinsons-disease)  
+10. [Pause or Fabricate? Training Language Models for Grounded Reasoning](/202605/11/2604.19656-pause-or-fabricate-training-language-models-for-grounded-reasoning)  
    标签：无标签
-11. [A clinical-radiomics integrated nomogram for predicting 5-year survival in rheumatoid arthritis-associated interstitial lung disease](/202605/09/a-clinical-radiomics-integrated-nomogram-for-predicting-5-year-survival-in-rheumatoid-arthritis-associated-interstitial-lung-disease)  
+11. [Thinking Like a Botanist: Challenging Multimodal Language Models with Intent-Driven Chain-of-Inquiry](/202605/11/2604.20983-thinking-like-a-botanist-challenging-multimodal-language-models-with-intent-driven-chain-of-inquiry)  
    标签：无标签
-12. [SSL-R1: Self-Supervised Visual Reinforcement Post-Training for Multimodal Large Language Models](/202605/09/2604.20705-ssl-r1-self-supervised-visual-reinforcement-post-training-for-multimodal-large-language-models)  
+12. [Fine-Grained Analysis of Shared Syntactic Mechanisms in Language Models](/202605/11/2604.22166-fine-grained-analysis-of-shared-syntactic-mechanisms-in-language-models)  
    标签：无标签
-13. [SycoPhantasy: Quantifying Sycophancy and Hallucination in Small Open Weight VLMs for Vision-Language Scoring of Fantasy Characters](/202605/09/2604.24346-sycophantasy-quantifying-sycophancy-and-hallucination-in-small-open-weight-vlms-for-vision-language-scoring-of-fantasy-characters)  
+13. [BrainDINO: A Brain MRI Foundation Model for Generalizable Clinical Representation Learning](/202605/11/2604.27277-braindino-a-brain-mri-foundation-model-for-generalizable-clinical-representation-learning)  
    标签：无标签
-14. [Marco-MoE: Open Multilingual Mixture-of-Expert Language Models with Efficient Upcycling](/202605/09/2604.25578-marco-moe-open-multilingual-mixture-of-expert-language-models-with-efficient-upcycling)  
+14. [How Language Models Process Negation](/202605/11/2605.03052-how-language-models-process-negation)  
    标签：无标签
-15. [BrainDINO: A Brain MRI Foundation Model for Generalizable Clinical Representation Learning](/202605/09/2604.27277-braindino-a-brain-mri-foundation-model-for-generalizable-clinical-representation-learning)  
+15. [LLM-XTM: Enhancing Cross-Lingual Topic Models with Large Language Models](/202605/11/2605.03299-llm-xtm-enhancing-cross-lingual-topic-models-with-large-language-models)  
    标签：无标签
-16. [RadLite: Multi-Task LoRA Fine-Tuning of Small Language Models for CPU-Deployable Radiology AI](/202605/09/2605.00421-radlite-multi-task-lora-fine-tuning-of-small-language-models-for-cpu-deployable-radiology-ai)  
-   标签：无标签
-17. [Learning from Compressed CT: Feature Attention Style Transfer and Structured Factorized Projections for Resource-Efficient Medical Image Analysis](/202605/09/2605.00448-learning-from-compressed-ct-feature-attention-style-transfer-and-structured-factorized-projections-for-resource-efficient-medical-image-analysis)  
-   标签：无标签
-18. [GIFT: Guided Fine-Tuning and Transfer for Enhancing Instruction-Tuned Language Models](/202605/09/2605.01256-gift-guided-fine-tuning-and-transfer-for-enhancing-instruction-tuned-language-models)  
-   标签：无标签
-19. [Exploring Prompt Alignment with Clinical Factors in Zero-Shot Segmentation VLMs for NSCLC Tumor Segmentation](/202605/09/2605.01266-exploring-prompt-alignment-with-clinical-factors-in-zero-shot-segmentation-vlms-for-nsclc-tumor-segmentation)  
-   标签：无标签
-20. [MedScribe: Clinically Grounded CT Reporting through Agentic Workflows](/202605/09/2605.01779-medscribe-clinically-grounded-ct-reporting-through-agentic-workflows)  
-   标签：无标签
-21. [InfoLaw: Information Scaling Laws for Large Language Models with Quality-Weighted Mixture Data and Repetition](/202605/09/2605.02364-infolaw-information-scaling-laws-for-large-language-models-with-quality-weighted-mixture-data-and-repetition)  
-   标签：无标签
-22. [Foundation Models to Unlock Real-World Evidence from Nationwide Medical Claims](/202605/09/2605.02740-foundation-models-to-unlock-real-world-evidence-from-nationwide-medical-claims)  
+16. [Safety and accuracy follow different scaling laws in clinical large language models](/202605/11/2605.04039-safety-and-accuracy-follow-different-scaling-laws-in-clinical-large-language-models)  
    标签：无标签
 
 ### 速读区论文标签

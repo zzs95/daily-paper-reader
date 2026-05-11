@@ -1,14 +1,14 @@
 # 日报 · 📧 2026-05-11
 
-- 生成时间：2026-05-11 03:53:00 UTC
+- 生成时间：2026-05-11 22:00:43 UTC
 - 当次推荐总数：16
 - 精读区：16
 - 速读区：0
 
 ## 今日简报（AI）
-今日深挖 16 篇医学 AI 前沿，重点解析多模态影像在慢性病诊断与肿瘤分割中的技术跃迁。
-亮点在于通过 ASL 影像组学精准识别腰痛脑血流变化，以及利用 Mamba 架构与超图建模刷新 PET/CT 分割精度。
-推荐关注新型深度学习架构在复杂临床场景下的跨模态融合潜力。
+今日深度解析 16 篇前沿论文，聚焦 AI 在慢性病诊断与肿瘤精准分割中的突破。
+重点关注多 PLD ASL 影像组学对腰痛的分类能力，以及 Mamba 架构在 PET/CT 跨模态建模中的卓越表现。
+建议关注新型深度学习架构如何提升复杂临床场景下的影像分析精度。
 
 ## 精读区
 1. [Cerebral blood flow alterations and machine learning classification in chronic low back pain using multi-PLD ASL radiomics](/202605/11/cerebral-blood-flow-alterations-and-machine-learning-classification-in-chronic-low-back-pain-using-multi-pld-asl-radiomics) 
