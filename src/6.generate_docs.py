@@ -14,7 +14,6 @@ import time
 import xml.etree.ElementTree as ET
 from urllib.parse import quote_plus
 from datetime import datetime, timezone
-from zoneinfo import ZoneInfo
 from typing import Any, Dict, List, Tuple
 
 import fitz  # PyMuPDF
@@ -31,11 +30,8 @@ try:
 except Exception:  # pragma: no cover
     from src.paper_figures import ensure_paper_figures
 
-CONFIG_FILE = os.path.join(ROOT_DIR, "config.yaml")
-
-EASTERN_TZ = ZoneInfo("America/New_York")
-TODAY_STR = str(os.getenv("DPR_RUN_DATE") or "").strip() or datetime.now(EASTERN_TZ).strftime("%Y%m%d")
-
+CONFIG_FILE = os.path.join(ROOT_DIR, "config.yaml") 
+TODAY_STR = str(os.getenv("DPR_RUN_DATE") or "").strip() or datetime.now(timezone.utc).strftime("%Y%m%d") 
 RANGE_DATE_RE = re.compile(r"^(\d{8})-(\d{8})$")
 
 # LLM 配置（使用 llm.py 内的 BLT 客户端）
