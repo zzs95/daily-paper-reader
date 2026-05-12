@@ -6,51 +6,49 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：📧 2026-05-11
-- 运行时间：2026-05-11 22:00:43 UTC
+- 最新运行日期：📧 2026-05-12
+- 运行时间：2026-05-12 22:12:58 UTC
 - 运行状态：成功
-- 本次总论文数：16
-- 精读区：16
+- 本次总论文数：15
+- 精读区：15
 - 速读区：0
 
 ### 今日简报（AI）
-今日深度解析 16 篇前沿文献，聚焦 AI 在慢性腰痛诊断与 PET/CT 肿瘤精准分割中的最新突破。
-重点关注多 PLD ASL 影像组学对脑血流变化的分类能力，以及 IMH-Net 结合 Mamba 架构在跨模态肿瘤分割中的卓越表现。
-建议关注 Mamba 架构与超图建模在提升临床影像诊断精度方面的实战价值。
-- 详情：[/202605/11/README](/202605/11/README)
+今日深度研读 15 篇论文，聚焦 AI 在 MRI 影像临床预测与自动化质控中的前沿突破。
+重点推荐利用可解释性放射组学预测脊柱关节炎疗效，以及通过弱监督学习提升房颤 MRI 质控精度。
+建议关注“可解释 AI”如何将复杂的医学影像转化为更精准、透明的临床决策支持。
+- 详情：[/202605/12/README](/202605/12/README)
 
 ### 精读区论文标签
-1. [Cerebral blood flow alterations and machine learning classification in chronic low back pain using multi-PLD ASL radiomics](/202605/11/cerebral-blood-flow-alterations-and-machine-learning-classification-in-chronic-low-back-pain-using-multi-pld-asl-radiomics)  
+1. [MRI-based interpretable deep learning radiomics for predicting treatment response in axial spondyloarthritis](/202605/12/mri-based-interpretable-deep-learning-radiomics-for-predicting-treatment-response-in-axial-spondyloarthritis)  
    标签：无标签
-2. [IMH-Net: Importance-aware Mamba and Cross-modal Hypergraph Modeling for Precise PET/CT Tumor Segmentation](/202605/11/imh-net-importance-aware-mamba-and-cross-modal-hypergraph-modeling-for-precise-petct-tumor-segmentation)  
+2. [AC-MIL: Weakly Supervised Atrial LGE-MRI Quality Assessment via Adversarial Concept Disentanglement](/202605/12/ac-mil-weakly-supervised-atrial-lge-mri-quality-assessment-via-adversarial-concept-disentanglement)  
    标签：无标签
-3. [Advancing reliable radiomics: harmonization, foundation models, and robustness in cancer imaging](/202605/11/advancing-reliable-radiomics-harmonization-foundation-models-and-robustness-in-cancer-imaging)  
+3. [Support vector machine‐based MRI radiomics predict response to neoadjuvant therapy and progression‐free‐survival of Colorectal Liver Metastases patients](/202605/12/support-vector-machinebased-mri-radiomics-predict-response-to-neoadjuvant-therapy-and-progressionfreesurvival-of-colorectal-liver-metastases-patients)  
    标签：无标签
-4. [Medical Multimodal Large Language Models: A Survey](/202605/11/medical-multimodal-large-language-models-a-survey)  
+4. [Adaptive Personalized Federated Learning for left atrium segmentation from LGE CMR images](/202605/12/adaptive-personalized-federated-learning-for-left-atrium-segmentation-from-lge-cmr-images)  
    标签：无标签
-5. [PeFoMed: Parameter efficient fine-tuning of multimodal large language models for medical CXR](/202605/11/pefomed-parameter-efficient-fine-tuning-of-multimodal-large-language-models-for-medical-cxr)  
+5. [SycoPhantasy: Quantifying Sycophancy and Hallucination in Small Open Weight VLMs for Vision-Language Scoring of Fantasy Characters](/202605/12/2604.24346-sycophantasy-quantifying-sycophancy-and-hallucination-in-small-open-weight-vlms-for-vision-language-scoring-of-fantasy-characters)  
    标签：无标签
-6. [Magic: Masked Anatomical Group Intra Contrastive Learning Framework for 3D Medical Image Segmentation](/202605/11/magic-masked-anatomical-group-intra-contrastive-learning-framework-for-3d-medical-image-segmentation)  
+6. [Marco-MoE: Open Multilingual Mixture-of-Expert Language Models with Efficient Upcycling](/202605/12/2604.25578-marco-moe-open-multilingual-mixture-of-expert-language-models-with-efficient-upcycling)  
    标签：无标签
-7. [A fusion model of deep learning and conventional features based on computed tomography angiography of carotid plaque for predicting the risk of acute ischemic …](/202605/11/a-fusion-model-of-deep-learning-and-conventional-features-based-on-computed-tomography-angiography-of-carotid-plaque-for-predicting-the-risk-of-acute-ischemic-)  
+7. [HealthBench Professional: Evaluating Large Language Models on Real Clinician Chats](/202605/12/2604.27470-healthbench-professional-evaluating-large-language-models-on-real-clinician-chats)  
    标签：无标签
-8. [Does RL Expand the Capability Boundary of LLM Agents? A PASS@(k, T) Analysis](/202605/11/2604.14877-does-rl-expand-the-capability-boundary-of-llm-agents-a-passk-t-analysis)  
+8. [GIFT: Guided Fine-Tuning and Transfer for Enhancing Instruction-Tuned Language Models](/202605/12/2605.01256-gift-guided-fine-tuning-and-transfer-for-enhancing-instruction-tuned-language-models)  
    标签：无标签
-9. [WebCompass: Towards Multimodal Web Coding Evaluation for Code Language Models](/202605/11/2604.18224-webcompass-towards-multimodal-web-coding-evaluation-for-code-language-models)  
+9. [InfoLaw: Information Scaling Laws for Large Language Models with Quality-Weighted Mixture Data and Repetition](/202605/12/2605.02364-infolaw-information-scaling-laws-for-large-language-models-with-quality-weighted-mixture-data-and-repetition)  
    标签：无标签
-10. [Pause or Fabricate? Training Language Models for Grounded Reasoning](/202605/11/2604.19656-pause-or-fabricate-training-language-models-for-grounded-reasoning)  
+10. [RLearner-LLM: Balancing Logical Grounding and Fluency in Large Language Models via Hybrid Direct Preference Optimization](/202605/12/2605.04539-rlearner-llm-balancing-logical-grounding-and-fluency-in-large-language-models-via-hybrid-direct-preference-optimization)  
    标签：无标签
-11. [Thinking Like a Botanist: Challenging Multimodal Language Models with Intent-Driven Chain-of-Inquiry](/202605/11/2604.20983-thinking-like-a-botanist-challenging-multimodal-language-models-with-intent-driven-chain-of-inquiry)  
+11. [Implicit Representations of Grammaticality in Language Models](/202605/12/2605.05197-implicit-representations-of-grammaticality-in-language-models)  
    标签：无标签
-12. [Fine-Grained Analysis of Shared Syntactic Mechanisms in Language Models](/202605/11/2604.22166-fine-grained-analysis-of-shared-syntactic-mechanisms-in-language-models)  
+12. [The autoPET3 Challenge--Automated Lesion Segmentation in Whole-Body PET/CT-Multitracer Multicenter Generalization](/202605/12/2605.05775-the-autopet3-challenge--automated-lesion-segmentation-in-whole-body-petct-multitracer-multicenter-generalization)  
    标签：无标签
-13. [BrainDINO: A Brain MRI Foundation Model for Generalizable Clinical Representation Learning](/202605/11/2604.27277-braindino-a-brain-mri-foundation-model-for-generalizable-clinical-representation-learning)  
+13. [CXR-ContraBench: Benchmarking Negated-Option Attraction in Medical VLMs](/202605/12/2605.05810-cxr-contrabench-benchmarking-negated-option-attraction-in-medical-vlms)  
    标签：无标签
-14. [How Language Models Process Negation](/202605/11/2605.03052-how-language-models-process-negation)  
+14. [The Granularity Axis: A Micro-to-Macro Latent Direction for Social Roles in Language Models](/202605/12/2605.06196-the-granularity-axis-a-micro-to-macro-latent-direction-for-social-roles-in-language-models)  
    标签：无标签
-15. [LLM-XTM: Enhancing Cross-Lingual Topic Models with Large Language Models](/202605/11/2605.03299-llm-xtm-enhancing-cross-lingual-topic-models-with-large-language-models)  
-   标签：无标签
-16. [Safety and accuracy follow different scaling laws in clinical large language models](/202605/11/2605.04039-safety-and-accuracy-follow-different-scaling-laws-in-clinical-large-language-models)  
+15. [Beyond Fixed Benchmarks and Worst-Case Attacks: Dynamic Boundary Evaluation for Language Models](/202605/12/2605.06213-beyond-fixed-benchmarks-and-worst-case-attacks-dynamic-boundary-evaluation-for-language-models)  
    标签：无标签
 
 ### 速读区论文标签
