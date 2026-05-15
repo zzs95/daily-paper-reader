@@ -6,45 +6,53 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：📧 2026-05-14
-- 运行时间：2026-05-14 21:58:35 UTC
+- 最新运行日期：📧 2026-05-15
+- 运行时间：2026-05-15 22:04:42 UTC
 - 运行状态：成功
-- 本次总论文数：13
-- 精读区：13
+- 本次总论文数：17
+- 精读区：17
 - 速读区：0
 
 ### 今日简报（AI）
-今日深度研读 13 篇 AI 医疗论文，聚焦深度学习与影像组学在胰腺疾病精准诊疗中的前沿应用。
-核心结论显示，融合影像组学与计算病理能显著提升急性胰腺炎预后及胰腺癌早期复发的预测精度。
-建议关注“影像+病理”多模态融合趋势，这是未来复杂疾病风险评估与生物学机制探索的关键。
-- 详情：[/202605/14/README](/202605/14/README)
+今日精读 17 篇前沿文献，聚焦影像组学在肺部重大疾病预后预测中的突破性应用。
+重点关注利用术前 CT 亚区域特征预测肺癌复发，以及结合临床指标评估类风湿性肺病 5 年生存率的新模型。
+建议关注“影像组学+临床特征”的集成化趋势，以提升复杂肺病的精准诊疗与风险分层水平。
+- 详情：[/202605/15/README](/202605/15/README)
 
 ### 精读区论文标签
-1. [Mo1844 ACUTE PANCREATITIS OUTCOME PREDICTION WITH DEEP LEARNING AND RADIOMICS](/202605/14/mo1844-acute-pancreatitis-outcome-prediction-with-deep-learning-and-radiomics)  
+1. [Preoperative CT-Based Habitat Radiomics Classifiers Predict Recurrence in Non-Small Cell Lung Cancer](/202605/15/preoperative-ct-based-habitat-radiomics-classifiers-predict-recurrence-in-non-small-cell-lung-cancer)  
    标签：无标签
-2. [Integrating Radiomics and Computational Pathology to Predict Early Recurrence of Pancreatic Ductal Adenocarcinoma and Uncover Its Biological Basis in Tumor …](/202605/14/integrating-radiomics-and-computational-pathology-to-predict-early-recurrence-of-pancreatic-ductal-adenocarcinoma-and-uncover-its-biological-basis-in-tumor-)  
+2. [A clinical-radiomics integrated nomogram for predicting 5-year survival in RA-associated interstitial lung disease](/202605/15/a-clinical-radiomics-integrated-nomogram-for-predicting-5-year-survival-in-ra-associated-interstitial-lung-disease)  
    标签：无标签
-3. [Interpretable Semantic Medical Image Segmentation with Style and Confidence](/202605/14/interpretable-semantic-medical-image-segmentation-with-style-and-confidence)  
+3. [BioMamba: Domain-Adaptive Biomedical Language Models](/202605/15/biomamba-domain-adaptive-biomedical-language-models)  
    标签：无标签
-4. [QPath: A Question-Aware Multi-Resolution Vision Language Framework for Computational Pathology](/202605/14/qpath-a-question-aware-multi-resolution-vision-language-framework-for-computational-pathology)  
+4. [Pilot Evaluation of Rapid 2D Brain MR Elastography in Idiopathic Normal Pressure Hydrocephalus](/202605/15/pilot-evaluation-of-rapid-2d-brain-mr-elastography-in-idiopathic-normal-pressure-hydrocephalus)  
    标签：无标签
-5. [PeFoMed: Parameter efficient fine-tuning of multimodal large language models for medical CXR](/202605/14/pefomed-parameter-efficient-fine-tuning-of-multimodal-large-language-models-for-medical-cxr)  
+5. [Intravenous extravasation report generation using deep learning, generative artificial intelligence, and visual question answering techniques](/202605/15/intravenous-extravasation-report-generation-using-deep-learning-generative-artificial-intelligence-and-visual-question-answering-techniques)  
    标签：无标签
-6. [SVCF: Enabling Zero-Shot Correction of Reasoning Steps in Multi-Modal Large Language Models](/202605/14/svcf-enabling-zero-shot-correction-of-reasoning-steps-in-multi-modal-large-language-models)  
+6. [GIFT: Guided Fine-Tuning and Transfer for Enhancing Instruction-Tuned Language Models](/202605/15/2605.01256-gift-guided-fine-tuning-and-transfer-for-enhancing-instruction-tuned-language-models)  
    标签：无标签
-7. [DIRA: Deep High-Rank Adaptation of Pre-Trained Language Models](/202605/14/dira-deep-high-rank-adaptation-of-pre-trained-language-models)  
+7. [Beyond Fixed Benchmarks and Worst-Case Attacks: Dynamic Boundary Evaluation for Language Models](/202605/15/2605.06213-beyond-fixed-benchmarks-and-worst-case-attacks-dynamic-boundary-evaluation-for-language-models)  
    标签：无标签
-8. [Game-Theoretic Insights into Multi-Agent LLM Debate for Enhanced Clinical Question Answering](/202605/14/game-theoretic-insights-into-multi-agent-llm-debate-for-enhanced-clinical-question-answering)  
+8. [Experience Sharing in Mutual Reinforcement Learning for Heterogeneous Language Models](/202605/15/2605.07244-experience-sharing-in-mutual-reinforcement-learning-for-heterogeneous-language-models)  
    标签：无标签
-9. [WebCompass: Towards Multimodal Web Coding Evaluation for Code Language Models](/202605/14/2604.18224-webcompass-towards-multimodal-web-coding-evaluation-for-code-language-models)  
+9. [STARFlow2: Bridging Language Models and Normalizing Flows for Unified Multimodal Generation](/202605/15/2605.08029-starflow2-bridging-language-models-and-normalizing-flows-for-unified-multimodal-generation)  
    标签：无标签
-10. [Pause or Fabricate? Training Language Models for Grounded Reasoning](/202605/14/2604.19656-pause-or-fabricate-training-language-models-for-grounded-reasoning)  
+10. [Beyond ViT Tokens: Masked-Diffusion Pretrained Convolutional Pathology Foundation Model for Cell-Level Dense Prediction](/202605/15/2605.08276-beyond-vit-tokens-masked-diffusion-pretrained-convolutional-pathology-foundation-model-for-cell-level-dense-prediction)  
    标签：无标签
-11. [SSL-R1: Self-Supervised Visual Reinforcement Post-Training for Multimodal Large Language Models](/202605/14/2604.20705-ssl-r1-self-supervised-visual-reinforcement-post-training-for-multimodal-large-language-models)  
+11. [Mid-Training with Self-Generated Data Improves Reinforcement Learning in Language Models](/202605/15/2605.08472-mid-training-with-self-generated-data-improves-reinforcement-learning-in-language-models)  
    标签：无标签
-12. [Thinking Like a Botanist: Challenging Multimodal Language Models with Intent-Driven Chain-of-Inquiry](/202605/14/2604.20983-thinking-like-a-botanist-challenging-multimodal-language-models-with-intent-driven-chain-of-inquiry)  
+12. [Lost in Volume: The CT-SpatialVQA Benchmark for Evaluating Semantic-Spatial Understanding of 3D Medical Vision-Language Models](/202605/15/2605.08787-lost-in-volume-the-ct-spatialvqa-benchmark-for-evaluating-semantic-spatial-understanding-of-3d-medical-vision-language-models)  
    标签：无标签
-13. [Fine-Grained Analysis of Shared Syntactic Mechanisms in Language Models](/202605/14/2604.22166-fine-grained-analysis-of-shared-syntactic-mechanisms-in-language-models)  
+13. [Sparse Layers are Critical to Scaling Looped Language Models](/202605/15/2605.09165-sparse-layers-are-critical-to-scaling-looped-language-models)  
+   标签：无标签
+14. [Edit-Based Refinement for Parallel Masked Diffusion Language Models](/202605/15/2605.09603-edit-based-refinement-for-parallel-masked-diffusion-language-models)  
+   标签：无标签
+15. [Scratchpad Patching: Decoupling Compute from Patch Size in Byte-Level Language Models](/202605/15/2605.09630-scratchpad-patching-decoupling-compute-from-patch-size-in-byte-level-language-models)  
+   标签：无标签
+16. [DeepTumorVQA: A Hierarchical 3D CT Benchmark for Stage-Wise Evaluation of Medical VLMs and Tool-Augmented Agents](/202605/15/2605.09679-deeptumorvqa-a-hierarchical-3d-ct-benchmark-for-stage-wise-evaluation-of-medical-vlms-and-tool-augmented-agents)  
+   标签：无标签
+17. [RadThinking: A Dataset for Longitudinal Clinical Reasoning in Radiology](/202605/15/2605.10761-radthinking-a-dataset-for-longitudinal-clinical-reasoning-in-radiology)  
    标签：无标签
 
 ### 速读区论文标签
