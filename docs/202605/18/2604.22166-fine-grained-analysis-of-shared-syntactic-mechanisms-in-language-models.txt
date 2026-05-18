@@ -1,0 +1,3915 @@
+Title: Fine-Grained Analysis of Shared Syntactic Mechanisms in Language Models
+
+URL Source: https://arxiv.org/pdf/2604.22166
+
+Published Time: Mon, 27 Apr 2026 00:17:38 GMT
+
+Number of Pages: 26
+
+Markdown Content:
+## Fine-Grained Analysis of Shared Syntactic Mechanisms in Language Models 
+
+Ryoma Kumon 1,2 Hitomi Yanaka 1,2,3 
+
+> 1
+
+The University of Tokyo 2RIKEN 3Tohoku University 
+
+{kumoryo9, hyanaka}@is.s.u-tokyo.ac.jp 
+
+Abstract 
+
+While language models demonstrate sophisti-cated syntactic capabilities, the extent to which their internal mechanisms align with cross-constructional principles studied in linguistics remains poorly understood. This study inves-tigates whether models employ shared neural mechanisms across different syntactic construc-tions by applying causal interpretability meth-ods at a granular level. Focusing on filler-gap dependencies and negative polarity item (NPI) licensing, we utilize activation patching to iden-tify the functional roles of specific attention heads and MLP blocks. Our results reveal a highly localized and shared mechanism for filler-gap dependencies located in the early to middle layers, whereas NPI processing exhibits no such unified mechanism. Furthermore, we find that these mechanisms identified by activa-tion patching generalize to out-of-distribution, while distributed alignment search, a super-vised interpretability method, is susceptible to overfitting on narrow linguistic distributions. Finally, we validate our findings by demon-strating that the manipulation of the identified components improves model performance on acceptability judgment benchmarks. 1
+
+1 Introduction 
+
+Recent advancements in language models (LMs) have demonstrated their ability to process linguis-tic expressions with complex syntactic structures. However, it remains unclear to what extent their internal mechanisms align with linguistic theory or resemble human processing mechanisms. While linguistics has long studied underlying elements shared across constructions, clarifying whether LMs employ shared syntactic mechanisms across different constructions will lead to a deeper under-standing of both linguistic structure and language modeling (Futrell and Mahowald, 2025).  
+
+> 1All code and datasets are avilable at https://github. com/ynklab/shared_syntactic_mechanism .
+
+To investigate the internal processes, causal ab-straction methods (Vig et al., 2020; Geiger et al., 2021, 2024) have emerged for identifying the causal impact of internal components on model behavior. Previous studies have utilized these meth-ods to analyze syntactic mechanisms (Arora et al., 2024; Elazar et al., 2021), specifically investigating the commonality of mechanisms in subject-verb agreement (Finlayson et al., 2021) and filler-gap dependencies (Boguraev et al., 2025). However, several challenges remain. First, ex-isting analyses primarily focus on examining rep-resentations in the residual stream and comparing their scores across tokens, without identifying the components that impact the residual stream, leav-ing the underlying mechanisms at the level of lay-ers and attention heads largely unexplored. As a result, it remains unclear at what level of granu-larity shared mechanisms operate. For example, Boguraev et al. (2025) analyzes representations in the residual stream, but this approach may fail to distinguish between mechanisms that rely on dif-ferent sets of attention heads or MLP blocks while producing similar residual representations. Second, causal analysis methods that require training are susceptible to overfitting, which makes verifying out-of-distribution (OOD) generalization essential (Wu et al., 2024b). Nevertheless, prior research applying these methods to the analysis of syntactic mechanisms (Arora et al., 2024; Bogu-raev et al., 2025) has not sufficiently validated the OOD generalization of the identified mechanisms. Thus, their faithfulness, which concerns whether the identified components truly reflect the model’s internal mechanisms rather than artifacts of specific datasets or lexical distributions, remains unestab-lished. To address these issues, this study employs ac-tivation patching (Vig et al., 2020; Geiger et al., 2021), which is a causal analysis method with-out any additional training, and investigates the 1
+
+> arXiv:2604.22166v1 [cs.CL] 24 Apr 2026
+
+commonality of mechanisms across different con-structions at the granularity of layers and attention heads. We focus on two well-studied phenomena, filler-gap dependencies (FGDs) and negative polar-ity item (NPI) licensing. Both phenomena appear across diverse surface constructions while posing distinct linguistic challenges. FGDs require long-range structural processing, whereas NPI licensing involves integrating syntactic structure with seman-tic properties of licensors, which may give rise to different or construction-specific mechanisms. We analyze whether LMs employ any shared mecha-nisms across constructions for each of these phe-nomena and, if so, how the mechanisms work. Fur-thermore, to validate the identified mechanisms, we evaluate changes in model accuracy on accept-ability judgment benchmarks by manipulating the identified components. Additionally, we assess the OOD generalization of these mechanisms by com-paring our results with distributed alignment search (DAS; Geiger et al., 2024), a training-based causal interpretability method. Our analysis reveals that, while LMs have a shared mechanism in FGDs, such commonality was not observed in NPI licensing. Specifically, we found that the mechanisms contributing to FGDs are localized within a small number of attention heads situated in the early to middle layers. Fur-thermore, amplifying the activation values of these identified components led to improved accuracy on acceptability judgment tasks. Additionally, while DAS results fluctuated significantly in OOD set-tings, suggesting a potential overfitting to specific lexical or syntactic distributions, activation patch-ing yielded consistent results across different dis-tributions. These findings demonstrate the validity and faithfulness of our analytical approach. 
+
+2 Related Work 
+
+2.1 Analysis of Syntactic Mechanisms 
+
+Analysis of syntactic mechanisms in LMs is broadly categorized into probing, which examines the extent to which models encode syntactic knowl-edge (Hewitt and Manning, 2019; Clark et al., 2019), and causal analysis, which investigates the mechanisms that causally influence model behav-ior during syntactic processing (Elazar et al., 2021; Lasri et al., 2022; Arora et al., 2024). To elucidate the mechanisms directly governing model behavior, this study adopts the latter causal approach. Shared mechanisms across different construc-tions have been explored through both causal meth-ods (e.g., subject-verb agreement (Finlayson et al., 2021) and FGDs (Boguraev et al., 2025)) and prob-ing (Kryvosheieva et al., 2025). However, studies using causal methods mainly focus on token-level analysis, leaving the degree of commonality at finer granularities, such as attention heads, largely un-explored. Moreover, learning-based causal meth-ods face the risks of overfitting, which requires verification of OOD generalization (Wu et al., 2024b), and yet existing studies (Arora et al., 2024; Boguraev et al., 2025) have not sufficiently vali-dated this aspect. Conversely, probing-based anal-yses (Kryvosheieva et al., 2025) fail to verify the direct causal impact of identified components on actual behavior. In this work, we primarily uti-lize training-free causal analysis to investigate both OOD generalization and the functional impact of internal components on model behavior. 
+
+2.2 Filler-Gap Dependencies and Negative Polarity Items 
+
+FGDs refer to relationships between a filler and a gap, where the filler is typically a wh-word or phrase, and the gap is an empty position corre-sponding to the filler. These dependencies underlie various constructions. For example, in the EW HKconstruction in Table 1, the filler “who” is inter-preted as the direct object of “liked” and creates the gap before “.”, making the pronoun “her” un-grammatical. Several studies (Wilcox et al., 2018; Ozaki et al., 2022; Wilcox et al., 2024; Lan et al., 2024) have conducted surprisal-based analyses us-ing FGDs to investigate the syntactic capabilities of LMs and have shown the sensitivity of LMs to structural constraints. Generalizations across constructions of FGDs have also been analyzed. It has been reported that long short-term mem-ory (LSTM) networks struggle to generalize to filler-gap constructions beyond those seen in train-ing (Howitt et al., 2024) and that LMs trained on child-language data struggle to generalize across constructions (Chang et al., 2025). NPIs are expressions that must be licensed by certain contexts, such as negation and questions. For instance, in the DN EG construction in Table 1, the NPI “any” is licensed by the licensor “No”. Early formal accounts attempted to uniformly ex-plain that NPIs are licensed by downward entailing environments (Ladusaw, 1979). However, Zwarts (1998) and Giannakidou (1998) proposed a more nuanced hierarchy of NPIs based on the strength 2Filler-Gap Dependencies                                                                                                                  
+
+> Construction Abbr. Prefix Filler NC Article Noun Verb Output Emb. Wh-q. (know) EW HKThe man knows [who /that ]the teacher liked [./her ]Emb. Wh-q. (wonder) EW HWThe boy wondered [ who /if ]the doctor admired [./him ]Matrix wh-q MW HThen, [who /ϕ]did the girl choose [?/them ]Restr. Rel. Clause REL CLThe customer [who /and ]the lady sounded like [./me ]Cleft CLEFT It was [the man /clear ]that the boss scared [./him ]Pseudo-cleft PC LEFT [Who /That ]the dancer is listening to [ is /you ]Topicalization TOPIC Actually, [the kid /ϕ]the guest hated [./them ]
+> Negative Polarity Item Licensing
+> Construction Abbr. Prefix Licensor NC Last Output Conditionals COND The host will sleep [ if /while ]the guest eats [any /some ]Determiner Negation DN EG [No /The ]patient have liked [any /some ]Scope of Only SO NLY [Only /Even ]the boys have [any /some ]Quantifers QNT These are [all /some ]of the students who showed [any /some ]Embedded Questions EMB QThe senators [wonder whether the man has found [any /some ]/know that ]Simple Questions SMP Q[Has /ϕ]the actor sold [any /some ]Superlatives SUP This is the [fastest /fast ]kid that had liked [any /some ]Only ONLY They are the [only /upset ]teachers that makes [any /some ]
+> Control
+> Construction Abbr. Prefix Filler/Licensor NC Article Noun Verb/Last Output Capital Knowledge CTRL [Paris /Rome ]is the captital of [France /Italy ]
+
+Table 1: Examples of minimal pairs of the constructions in the dataset. NC stands for “No comparison", and is not used for analysis. 
+
+of their licensing requirements. This was moti-vated by the observation that different NPIs re-quire different licensing contexts and many are licensed by non-downward entailing environments, such as questions. Regarding LMs, Warstadt et al. (2019) showed that masked LMs can handle NPIs. Jumelet et al. (2021) argued that a two-layer LSTM language model processes NPI constructions uni-formly through a monotonicity-based mechanism based on probing the internal representation. Under this mechanism, the model evaluates NPI licensing by determining whether the items occur within a downward entailing environment. DeCarlo et al. (2023) showed that LMs handle NPI licensing in a more complex and non-uniform way, based on analysis of output probabilities. In contrast, we study the internal workings of LMs in processing FGDs and NPI licensing by employing causal inter-pretability methods rather than probing or behavior analysis focused on model output. 
+
+3 Experimental Settings 
+
+3.1 Dataset 
+
+We construct the dataset for analysis, which con-sists of minimal pairs of constructions for FGDs and NPI licensing. Table 1 shows examples of minimal pairs of each construction in FGDs and NPI licensing, seven and eight each. We determine the construction coverage based on the previous studies for FGDs (Boguraev et al., 2025) and for NPI licensing (Warstadt et al., 2019; DeCarlo et al., 2023). These constructions have lexical variations, which makes it hard for interpretability methods to capture shallow lexical patterns. For example, the constructions in FGDs have several words for filler, which prevents us from identifying a mechanism sensitive to a single lexical item such as “who”. To distinguish mechanisms associated with syn-tactic structures from those impacted by unrelated factors such as linear distance, we incorporate a control construction that involves the retrieval of world knowledge. Specifically, we use sentences that require the model to associate a capital city with its country name. The sentences are designed so that the linear distance between the dependent tokens is similar to that in FGDs and NPI construc-tions. We generate the dataset by extending the data generation scripts 2 by Warstadt et al. (2020). The generation scripts use pre-defined structural tem-plates, with lexical items sampled from an exten-
+
+> 2https://github.com/alexwarstadt/data_ generation
+
+3sive vocabulary. This approach enables the cre-ation of sentences that span a wider distribution of vocabulary and constructions than previous stud-ies (Arora et al., 2024; Boguraev et al., 2025). No-tably, using only one output word per construction pattern may lead to the identification of a mech-anism specific to that lexical item and cause su-pervised interpretability methods to overfit to the output token. To mitigate these issues, we use mul-tiple words for output tokens. Note that, for the NPI constructions, we only use “ever” and “any” for output tokens because these are the only items that are licensed across all eight selected licensing contexts. For the training and evaluation of DAS, we also split the dataset into the training, in-distribution (ID), and OOD test sets. The training and ID test sets are generated from the same vocabulary set, and the OOD test set is generated from an entirely disjoint vocabulary to evaluate the robustness 3. We ensure that no sentences overlap between the train-ing and ID test sets. Unless otherwise specified, we report the results averaged across the ID and OOD test sets. The examples in Table 1 are all drawn from the ID test set. 
+
+3.2 Models 
+
+We use Pythia 1B, 2.8B, 6.9B (Biderman et al., 2023) and Gemma 3 1B, 12B (Gemma Team, 2025). Using different model sizes and model fam-ilies allows for analyses of their effect on the devel-opment of syntactic mechanisms. Furthermore, we use multiple checkpoints at different training steps for Pythia models at 1k, 2k, 3k, 4k, 10k, and 143k (final checkpoint) to compare how the mechanism is acquired throughout the pre-training. The Pythia family is particularly suited for this comparison because all models are trained on the same training data in the same order. Unless otherwise specified, we report the results of Pythia 1B. 
+
+4 Analysis of Shared Mechanisms 
+
+4.1 Activation Patching 
+
+To analyze mechanisms employed in the task de-scribed in the previous section, we use activation patching (Vig et al., 2020; Geiger et al., 2021). Activation patching is a method to identify which 
+
+> 3Boguraev et al. (2025) examine the impact of animacy differences in the inputs. However, in their setting, some of the output tokens overlap, and therefore their evaluation is not strictly out-of-distribution.
+
+component is responsible for the model behavior and is defined by the following: 
+
+finterv (b, s) = f (s)
+
+It replaces the activation f (b) of a component f
+
+during an inference of a base input b with cached activations f (s) from another inference with a source input s, and observes how this affects the model’s output. A source input is designed to be minimally different from a base input, the only dif-ference being the concept of interest, to isolate the causal role regarding the concept. 
+
+4.2 Evaluation Metric 
+
+To quantify causal effect, we employ a modified version of log-odds ratio (O DDS ), originally intro-duced by Arora et al. (2024). It is defined as: ODDS (p, p finterv , T ) = 1
+
+|T |
+
+X
+
+> (b,s,y b,y s)∈T
+
+log 
+
+ p(yb|b)
+
+p(yb|s)
+
+pfinterv (yb|s, b)
+
+pfinterv (yb|b, s)
+
+
+
+,
+
+where yb and ys are the output tokens of the in-puts b and s, respectively, and T denotes the test set. While the original metric compares the rela-tive probabilities of two tokens yb and ys given a single input, we modify it to measure the shift in probability for a specific token yb for two inputs 
+
+b and s before and after the targeted intervention. This adjustment is critical because the grammatical licensing of an NPI is largely independent of the choice of alternative, non-NPI lexical items. We use only minimal pairs that have NPIs as yb and non-NPIs as ys for analysis, which leads to mea-suring the shift in probability of NPIs across two inputs. Note that these restrictions do not apply to the minimal pairs in FGDs, and the O DDS score in FGDs is equivalent to the one originally defined by Arora et al. (2024) (see details in Appendix C). This metric captures the extent to which a spe-cific model component contributes to the next token prediction. A higher O DDS score indicates that the intervened component is more causally efficacious. Thus, we expect higher scores in components that propagate information from critical tokens, such as fillers or licensors, to the final layers at the last to-ken. If mechanisms are shared across constructions, score distributions will be similar across construc-tions at each component level. In contrast, distinct mechanisms should yield different score distribu-tions. 40 4 8 12                     
+
+> filler
+> verb
+> EWhK
+> 04812
+> Cleft
+> 04812
+> MWh
+> 04812
+> licen.
+> last
+> Cond
+> 04812
+> DNeg
+> 04812
+> Sup
+> 04812
+> filler
+> verb
+> Ctrl
+> 0
+> 5
+> FGD NPI Control
+> Layer
+> Token
+
+(a) Residual stream 0 4 8 12                     
+
+> filler
+> verb
+> EWhK
+> 04812
+> Cleft
+> 04812
+> MWh
+> 04812
+> licen.
+> last
+> Cond
+> 04812
+> DNeg
+> 04812
+> Sup
+> 04812
+> filler
+> verb
+> Ctrl
+> 0
+> 2
+> FGD NPI Control
+> Layer
+> Token
+
+(b) Attention 0 4 8 12                     
+
+> filler
+> verb
+> EWhK
+> 04812
+> Cleft
+> 04812
+> MWh
+> 04812
+> licen.
+> last
+> Cond
+> 04812
+> DNeg
+> 04812
+> Sup
+> 04812
+> filler
+> verb
+> Ctrl
+> 0
+> 2
+> FGD NPI Control
+> Layer
+> Token
+
+(c) MLP 0 4 8 12                     
+
+> 7
+> 6
+> 5
+> 4
+> 3
+> 2
+> 1
+> 0
+> EWhK
+> 04812
+> Cleft
+> 04812
+> MWh
+> 04812
+> 7
+> 6
+> 5
+> 4
+> 3
+> 2
+> 1
+> 0
+> Cond
+> 04812
+> DNeg
+> 04812
+> Sup
+> 04812
+> 7
+> 6
+> 5
+> 4
+> 3
+> 2
+> 1
+> 0
+> Ctrl
+> 0
+> 2
+> FGD NPI Control
+> Layer
+> Head
+
+(d) Attention head 
+
+Figure 1: O DDS scores with activation patching in Pythia 1B. Note that layer numbers are zero-indexed and token names correspond to those in Table 1. The full results including other constructions and tokens are presented in Appendix D. 
+
+4.3 Results 
+
+Figure 1 illustrates the results of the activation patching for each component. The distribution of ODDS scores across components is largely consis-tent across different FGD constructions, whereas the control pattern exhibits a distinct trend. Specifi-cally, we observe that attention heads contributing to the prediction at the final token are sparsely lo-cated in the middle layers, particularly heads 7.5, 7.6, and 9.2, and this localization is shared across constructions. Furthermore, the O DDS scores of the residual stream at the final token show a sharp increase around the seventh layer, aligning with the depth of these heads. We also observe the same trend in naturally occurring sentences (see details in Appendix D.6). This pattern reflects a consistent information flow across FGD constructions. The filler token is processed in the early layers, with MLP blocks encoding its syntactic role, and this information is then transferred to the final (verb) token via at-tention in the middle layers, where the residual stream scores increase. In the later layers, MLP blocks further process this information to produce the final output. The sparsity and localization of contributing attention heads, together with this flow from filler to final token, are consistently observed across constructions. In contrast, a slightly different trend was ob-served in the constructions regarding NPI. The distribution of O DDS scores varies across con-structions, indicating differences in the underlying mechanisms. For example, in DN EG , some con-tributing attention output are located in earlier lay-ers, leading to earlier propagation of information and a corresponding increase in residual stream scores at earlier layers. In C OND and S UP , the highest-scoring attention and MLP blocks at the final token differ across constructions. These varia-tions suggest that, although similar types of com-ponents are involved, their functional roles differ across NPI constructions. A possible explanation is that NPI licensing requires integrating both syntac-tic and semantic information, which varies across constructions, and thus does not exhibit a single shared mechanism such as a monotonicity-based 50 4 8 12          
+
+> filler
+> verb
+> Step 1000
+> 04812
+> Step 4000
+> 04812
+> Step 10000
+> 04812
+> Step 143000
+> 0
+> 2
+> 4
+> 6
+> 8
+> Layer
+> Token
+
+(a) EW HK, Residual stream 0 4 8 12          
+
+> filler
+> verb
+> Step 1000
+> 04812
+> Step 4000
+> 04812
+> Step 10000
+> 04812
+> Step 143000
+> 0
+> 2
+> 4
+> 6
+> 8
+> Layer
+> Token
+
+(b) PC LEFT , Residual stream 0 4 8 12          
+
+> 7
+> 6
+> 5
+> 4
+> 3
+> 2
+> 1
+> 0
+> Step 1000
+> 04812
+> Step 4000
+> 04812
+> Step 10000
+> 04812
+> Step 143000
+> 0
+> 1
+> 2
+> Layer
+> Head
+
+(c) EW HK, Attention head 0 4 8 12          
+
+> 7
+> 6
+> 5
+> 4
+> 3
+> 2
+> 1
+> 0
+> Step 1000
+> 04812
+> Step 4000
+> 04812
+> Step 10000
+> 04812
+> Step 143000
+> 0
+> 1
+> 2
+> Layer
+> Head
+
+(d) PC LEFT , Attention head 
+
+Figure 2: O DDS scores with activation patching of the residual stream in Pythia 1B with various training steps in filler-gap dependencies. 
+
+account (Jumelet et al., 2021) in decoder-based LMs. 
+
+4.4 Comparison with Different Training Steps 
+
+We next analyze the emergence of the mechanisms in FGDs during training, specifically focusing on the activation patching of the residual stream and attention heads in the context of embedded wh-questions EW HK and pseudo-clefts PC LEFT . Ac-cording to Boguraev et al. (2025), embedded wh-questions occur approximately 15 times more fre-quently than pseudo-clefts in the English-EWT Universal Dependencies dataset (de Marneffe et al., 2021; Nivre et al., 2020; Silveira et al., 2014). We investigate whether this discrepancy in frequency impacts the training dynamics. The results are illustrated in Figure 2. The O DDS 
+
+scores in both constructions increase monotonically with the training steps. In particular, scores in the earlier layers improve more rapidly than those in the later layers, suggesting that the mechanism is established hierarchically, beginning with lower-level representations. However, the two construc-tions differ in their convergence. In the residual stream, the scores in EW HK reach levels compara-ble to the final training step by step 4,000, while the scores in PC LEFT at step 10,000 remain lower than their final values. A similar trend was observed in attention heads, although the improvement of the scores was quicker in both constructions compared to that in the residual stream. These findings suggest that high-frequency con-structions are learned during the initial stages of training, whereas less frequent constructions are acquired more gradually. Although both construc-tions eventually converge upon a shared mech-anism, the development toward that mechanism depends on their frequency. This trend was con-sistently observed across other constructions and MLP components (see Appendix D.3 for details). 60 4 8 12               
+
+> filler
+> verb
+> Pythia 1b
+> 04812 16 20 24 28
+> Pythia 2.8b
+> 04812 16 20 24 28
+> Pythia 6.9b
+> 0
+> 2
+> 4
+> 6
+> 8
+> Layer
+> Token
+
+(a) EW HK, Residual stream 0 4 8 12                
+
+> filler
+> verb
+> Pythia 1b
+> 04812 16 20 24 28
+> Pythia 2.8b
+> 04812 16 20 24 28
+> Pythia 6.9b
+> 0
+> 2
+> 4
+> 6
+> 8
+> Layer
+> Token
+
+(b) PC LEFT , Residual stream 0 4 8 12               
+
+> 7
+> 6
+> 5
+> 4
+> 3
+> 2
+> 1
+> 0
+> Pythia 1b
+> 04812 16 20 24 28
+> Pythia 2.8b
+> 04812 16 20 24 28
+> Pythia 6.9b
+> 0
+> 1
+> 2
+> Layer
+> Head
+
+(c) EW HK, Attention head 0 4 8 12                
+
+> 7
+> 6
+> 5
+> 4
+> 3
+> 2
+> 1
+> 0
+> Pythia 1b
+> 04812 16 20 24 28
+> Pythia 2.8b
+> 04812 16 20 24 28
+> Pythia 6.9b
+> 0
+> 1
+> 2
+> Layer
+> Head
+
+(d) PC LEFT , Attention head 
+
+Figure 3: O DDS scores with activation patching of residual stream in Pythia models with various sizes in filler-gap dependencies. 
+
+4.5 Comparison with Different Parameter Sizes and Model Family 
+
+Next, we analyze how the mechanism varies with respect to the parameter size of the models. Fig-ure 3 shows the results. It can be seen that the models with more layers process FGDs in earlier layers, while the mechanism is still shared and localized in each parameter size. Also, the distribu-tion of the scores was similar between Pythia 2.8B and 6.9B. It indicates that the hidden dimension of the model, which is the only architectural differ-ence between 2.8B and 6.9B, does not impact the processing mechanism of FGDs. We also saw similar trends in Gemma 3 1B and 12B, which have 10 and 32 more layers than Pythia 1B respectively, where contributing attention heads are located in earlier layers, and the O DDS scores increase in earlier layers than Pythia 1B, while there is a shared mechanism across FGD construc-tions (see full results in Appendix D.4). 
+
+5 Steering Based on the Mechanism 
+
+5.1 Method 
+
+The previous sections revealed a shared mecha-nism underlying FGDs. However, it is possible that the analysis failed to distinguish heuristic patterns from the core syntactic phenomena if the dataset or methods were insufficiently robust. To address this, we investigate whether model behavior changes in an existing targeted syntactic evaluation bench-mark when we manipulate only the specific compo-nents identified as contributors to the found mecha-nism. Specifically, we scale the activation values of the attention heads 7.5, 7.6, and 9.2 by a fac-tor α and evaluate the resulting performance in BLiMP (Warstadt et al., 2020). BLiMP assesses the extent to which an LM as-signs a higher probability to a grammatical sen-tence compared to its ungrammatical counterpart within a minimal pair. The BLiMP task setting, which calculates probability over an entire sen-tence, allows us to verify that the identified mecha-nisms are not merely localized heuristics specific to individual tokens. It should be noted that we restrict our analysis to minimal pairs with identi-cal tokenized lengths. This is necessary because different token lengths have been shown to skew the probability assignments, thereby hindering an accurate evaluation of the model’s capability (Ueda et al., 2024). 
+
+5.2 Results 
+
+First, we focus on how the model performance changed in the categories involving FGDs. As il-lustrated in Figure 4a, amplifying the activation of the three attention heads with α > 1 improved or maintained performance, the latter occurring in cases of score saturation. Moreover, for most unsat-urated patterns, performance improved monotoni-cally with increasing α from 0.8 to 1.5, although there was one exception pattern, where the score was higher with α = 0 .8 than with α = 1 .0. This result shows that the manipulated attention heads indeed contribute to assigning higher probabilities to grammatical sentences involving FGDs, not only in those with an object gap that we use for analysis, but also those with a subject gap, a prepositional object gap, or long-distance dependencies. We next examine the model performance in other categories, as shown in Figure 4b. There were no-7wh_questions_object_gap 
+
+> wh_questions_subject_gap
+> wh_questions_subject_gap_long_distance
+> wh_vs_that_no_gap
+> wh_vs_that_no_gap_long_distance
+> wh_vs_that_with_gap
+> wh_vs_that_with_gap_long_distance
+> Pattern
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Accuracy
+> =0.8
+> =1.0
+> =1.5
+> =2.0
+
+(a) F ILLER GAP category Anaphor agr.  
+
+> Filler gap
+> Subject-verb agr.
+> Binding
+> Arg. structure
+> Control raising
+> Det-noun agr.
+> Ellipsis
+> Irregular forms
+> Quantifiers
+> NPI
+> Island effects
+> Category
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Accuracy
+> =0.8
+> =1.0
+> =1.5
+> =2.0
+
+(b) All categories 
+
+Figure 4: Accuracy in the category involving filler-gap dependencies (left) and in all categories (right) in BLiMP after multiplying activations of several attention heads in Pythia 1B by α.
+
+ticeable improvements in categories such as island effects, binding, NPI, quantifiers, and center em-bedding. Also, the improvements in subject-verb agreement in BLiMP all came from the patterns involving agreement beyond the distractors with prepositional phrases or relative clauses. The re-sults thus indicate that the attention heads manipu-lated here might serve a more general function in capturing hierarchical structural dependency rather than being specialized solely for FGDs. We also tested with SyntaxGym (Hu et al., 2020), and the overall trends were similar (see the full re-sults in Appendix E). In addition, to investigate per-formance gains in downstream tasks that require syntactic dependency processing, we conducted a steering experiment on HANS (McCoy et al., 2019), an NLI benchmark designed for analyzing syntactic heuristics. The results show that ampli-fying the activation values of the same attention heads leads to improved model performance (see details in Appendix F). 
+
+6 Comparison Between DAS and Activation Patching 
+
+6.1 Distributed Alignment Search 
+
+To assess the robustness of our findings, we com-pare activation patching with DAS, which is used by previous studies (Arora et al., 2024; Boguraev et al., 2025) for identifying causally efficacious components in syntactic tasks. DAS (Geiger et al., 2024) is a supervised causal localization method designed to identify subspaces that mediate spe-cific task behavior. Following Arora et al. (2024) and Boguraev et al. (2025), we employ the one-dimensional variant of DAS, which learns a direc-tion that causally impacts the output distribution. The intervention with DAS is defined by the fol-lowing transformation: 
+
+finterv (b, s) = f (b) + ( f (s)a − f (b)a)aT ,
+
+where a is the vector to be learned. During the training, the objective is to optimize 
+
+a such that the intervention shifts the model’s out-put toward the correct token associated with the source input. The loss function is defined as: 
+
+min 
+
+a
+
+− X
+
+(b,s,y b,y s)∈D
+
+log pfinterv (ys|b, s)
+
+ ,
+
+where D denotes the training set. Following Boguraev et al. (2025), we apply DAS to analyze shared mechanisms through a leave-one-out training paradigm. In this setup, the direction is trained using a subset of the constructions {cj |
+
+j̸ = i, 0 ≤ i, j ≤ n} and then evaluated on the remaining held-out construction ci. This approach allows us to assess whether the learned direction for one set of constructions generalizes to another, thereby measuring the similarity of the mechanism across constructions. 
+
+6.2 Results 
+
+Figure 5 presents the comparative results between DAS and activation patching. First, we observe that DAS fails to generalize to the OOD test set, whereas training-free activation patching revealed a consistent distribution of scores between the ID and OOD test sets. This discrepancy suggests that the direction learned in DAS is likely overfit to the training set, capturing features specific to the dataset rather than the structural dependencies. Sec-ond, the scores obtained when learning a direction in attention output with DAS were lower than those 8filler                       
+
+> verb
+> Token
+> AP ID
+> 04812
+> Layer
+> filler
+> verb
+> Token
+> AP OOD
+> DAS ID
+> 04812
+> Layer
+> DAS OOD
+> 0
+> 2
+> 4
+> 6
+> 8(a) Residual stream filler
+> verb
+> Token
+> AP ID
+> 04812
+> Layer
+> filler
+> verb
+> Token
+> AP OOD
+> DAS ID
+> 04812
+> Layer
+> DAS OOD
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> 2.0 (b) Attention 7
+> 6
+> 5
+> 4
+> 3
+> 2
+> 1
+> 0Head
+> AP ID
+> 04812
+> Layer
+> 7
+> 6
+> 5
+> 4
+> 3
+> 2
+> 1
+> 0Head
+> AP OOD
+> DAS ID
+> 04812
+> Layer
+> DAS OOD
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> 2.0 (c) Attention head
+
+Figure 5: Comparison of the O DDS scores of Pythia 1B between activation patching (AP) and DAS, evaluated on the EW HK ID and OOD test sets. 
+
+with activation patching, even in the ID test set. This trend was more salient in the early to middle layers compared to the late ones. It significantly changes the interpretation of the mechanism, as otherwise, we would see more active contribution in the components of later layers in DAS. Inter-estingly, applying DAS to attention heads yields results more closely aligned with activation patch-ing, despite lower O DDS scores in the OOD test set and a slight overestimation of causal efficacy in the later layers. This indicates that DAS may be more suitable for learning a direction in the representa-tion space of individual attention heads. These results suggest that interpretability meth-ods requiring supervision necessitate rigorous OOD evaluation to ensure that the identified mecha-nism is functionally relevant to the task. Moreover, using DAS in datasets with relatively limited di-versity may not always detect the most relevant mechanisms. The full comparison with DAS is pro-vided in Appendix D.5, and the above trend was consistent in other constructions. 
+
+7 Conclusion 
+
+This paper investigated the internal mechanisms of LMs to determine whether they utilize shared mech-anisms across different syntactic constructions. We identified the existence of a shared mechanism for FGDs, primarily mediated by a small number of attention heads located in the early to middle layers. In contrast, NPI licensing appears to rely on construction-specific mechanisms, reflecting its complex syntactic and semantic requirements. We also validated the causal efficacy of the identified components through steering experiments, where activation scaling consistently improved model per-formance on BLiMP. Furthermore, we compared activation patching and DAS, which revealed poor OOD generalization with DAS. These insights not only advance our understanding of how LMs pro-cess language but also can provide a basis for devel-oping methods to improve the syntactic capability of LMs. 
+
+Limitations 
+
+First, our study is restricted to English, a limitation shared by much of the current work on mechanis-tic interpretability. It remains unclear whether our findings generalize to other languages with differ-ent linguistic features. For example, factors such as word order may require different processing strate-gies. Moreover, as the frequency of each language in the pretraining corpus likely impacts the inter-nal mechanisms of language models, models may employ different mechanisms for low-resource lan-guages compared to English. We leave these ques-tions to future work. Second, our dataset used for our main analysis is synthetically generated rather than sampled from natural corpora, following previous studies (Arora et al., 2024; Boguraev et al., 2025). Although this approach allows for the precise control of minimal pairs, it limits the diversity of language expressions observed in the wild. However, we made efforts to diversify the dataset compared to the previous studies (Arora et al., 2024; Boguraev et al., 2025), and conducted experiments by using a small set of naturally occurring sentences. 
+
+Ethical Considerations 
+
+Our study investigates the internal workings of lan-guage models for a deeper understanding of their language processing and ultimately utilizes these insights to improve model capabilities and reliabil-ity. However, we acknowledge that such insights could potentially be misused to modify the behav-9ior of models in unsafe or harmful ways. We warn model developers and users against the malicious application of these techniques. The dataset does not contain any information that names or uniquely identifies individual people or offensive content, as it is generated with our templates. 
+
+Acknowledgments 
+
+We appreciate the anonymous reviewers on ACL Rolling Review, who helped refine this paper from various perspectives. We also thank Adam Nohejl, Taisei Yamamoto, Amane Watahiki, Tomoki Doi, Daiki Matsuoka, Gaëtan Margueritte, and Koki Ryu for their helpful comments on this paper. This work was supported by JST CREST Grant Num-ber JPMJCR2565 and JST BOOST Program Grant Number JPMJBY24H5, Japan. 
+
+References 
+
+Aryaman Arora, Dan Jurafsky, and Christopher Potts. 2024. CausalGym: Benchmarking causal inter-pretability methods on linguistic tasks. In Proceed-ings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Pa-pers) , pages 14638–14663, Bangkok, Thailand. As-sociation for Computational Linguistics. Stella Biderman, Hailey Schoelkopf, Quentin Gregory Anthony, Herbie Bradley, Kyle O’Brien, Eric Hal-lahan, Mohammad Aflah Khan, Shivanshu Purohit, USVSN Sai Prashanth, Edward Raff, and 1 others. 2023. Pythia: A suite for analyzing large language models across training and scaling. In International Conference on Machine Learning , pages 2397–2430. PMLR. Sasha Boguraev, Christopher Potts, and Kyle Mahowald. 2025. Causal interventions reveal shared structure across English filler–gap constructions. In Proceed-ings of the 2025 Conference on Empirical Methods in Natural Language Processing , pages 25032–25053, Suzhou, China. Association for Computational Lin-guistics. Chi-Yun Chang, Xueyang Huang, Humaira Nasir, Shane Storks, Olawale Akingbade, and Huteng Dai. 2025. Mind the gap: How BabyLMs learn filler-gap depen-dencies. In Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing ,pages 15060–15076, Suzhou, China. Association for Computational Linguistics. Kevin Clark, Urvashi Khandelwal, Omer Levy, and Christopher D. Manning. 2019. What does BERT look at? an analysis of BERT’s attention. In Pro-ceedings of the 2019 ACL Workshop BlackboxNLP: Analyzing and Interpreting Neural Networks for NLP ,pages 276–286, Florence, Italy. Association for Com-putational Linguistics. Marie-Catherine de Marneffe, Christopher D. Man-ning, Joakim Nivre, and Daniel Zeman. 2021. Uni-versal Dependencies. Computational Linguistics ,47(2):255–308. Deanna DeCarlo, William Palmer, Michael Wilson, and Bob Frank. 2023. NPIs aren’t exactly easy: Varia-tion in licensing across large language models. In 
+
+Proceedings of the 6th BlackboxNLP Workshop: An-alyzing and Interpreting Neural Networks for NLP ,pages 332–341, Singapore. Association for Compu-tational Linguistics. Yanai Elazar, Shauli Ravfogel, Alon Jacovi, and Yoav Goldberg. 2021. Amnesic probing: Behavioral expla-nation with amnesic counterfactuals. Transactions of the Association for Computational Linguistics , 9:160– 175. Matthew Finlayson, Aaron Mueller, Sebastian Gehrmann, Stuart Shieber, Tal Linzen, and Yonatan Belinkov. 2021. Causal analysis of syntactic agreement mechanisms in neural language models. In Proceedings of the 59th Annual Meeting of the Association for Computational Linguistics and the 11th International Joint Conference on Natural Language Processing (Volume 1: Long Papers) , pages 1828–1843, Online. Association for Computational Linguistics. Jaden Fiotto-Kaufman, Alexander R Loftus, Eric Todd, Jannik Brinkmann, Caden Juang, Koyena Pal, Can Rager, Aaron Mueller, Samuel Marks, Arnab Sen Sharma, Francesca Lucchetti, Michael Ripa, Adam Belfki, Nikhil Prakash, Sumeet Multani, Carla Brod-ley, Arjun Guha, Jonathan Bell, Byron Wallace, and David Bau. 2024. Nnsight and ndif: Democratizing access to foundation model internals. Richard Futrell and Kyle Mahowald. 2025. How linguis-tics learned to stop worrying and love the language models. Behavioral and Brain Sciences , page 1–98. Atticus Geiger, Hanson Lu, Thomas F Icard, and Christopher Potts. 2021. Causal abstractions of neu-ral networks. In Advances in Neural Information Processing Systems .Atticus Geiger, Zhengxuan Wu, Christopher Potts, Thomas Icard, and Noah Goodman. 2024. Finding alignments between interpretable causal variables and distributed neural representations. In Proceed-ings of the Third Conference on Causal Learning and Reasoning , volume 236 of Proceedings of Machine Learning Research , pages 160–187. PMLR. Gemma Team. 2025. Gemma 3. Anastasia Giannakidou. 1998. Polarity sensitivity as (non) veridical dependency. 
+
+10 John Hewitt and Christopher D. Manning. 2019. Astructural probe for finding syntax in word represen-tations. In Proceedings of the 2019 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Tech-nologies, Volume 1 (Long and Short Papers) , pages 4129–4138, Minneapolis, Minnesota. Association for Computational Linguistics. Katherine Howitt, Sathvik Nair, Allison Dods, and Robert Melvin Hopkins. 2024. Generalizations across filler-gap dependencies in neural language models. In Proceedings of the 28th Conference on Computational Natural Language Learning , pages 269–279, Miami, FL, USA. Association for Compu-tational Linguistics. Jennifer Hu, Jon Gauthier, Peng Qian, Ethan Wilcox, and Roger Levy. 2020. A systematic assessment of syntactic generalization in neural language mod-els. In Proceedings of the 58th Annual Meeting of the Association for Computational Linguistics , pages 1725–1744, Online. Association for Computational Linguistics. Jaap Jumelet, Milica Denic, Jakub Szymanik, Dieuwke Hupkes, and Shane Steinert-Threlkeld. 2021. Lan-guage models use monotonicity to assess NPI licens-ing. In Findings of the Association for Computa-tional Linguistics: ACL-IJCNLP 2021 , pages 4958– 4969, Online. Association for Computational Lin-guistics. Daria Kryvosheieva, Andrea de Varda, Evelina Fe-dorenko, and Greta Tuckute. 2025. Different types of syntactic agreement recruit the same units within large language models. Preprint , arXiv:2512.03676. William Allen Ladusaw. 1979. Polarity sensitivity as inherent scope relations. The University of Texas at Austin. Nur Lan, Emmanuel Chemla, and Roni Katzir. 2024. Large language models and the argument from the poverty of the stimulus. Linguistic Inquiry , pages 1–28. Karim Lasri, Tiago Pimentel, Alessandro Lenci, Thierry Poibeau, and Ryan Cotterell. 2022. Probing for the usage of grammatical number. In Proceedings of the 60th Annual Meeting of the Association for Compu-tational Linguistics (Volume 1: Long Papers) , pages 8818–8831, Dublin, Ireland. Association for Compu-tational Linguistics. Lovish Madaan, David Esiobu, Pontus Stenetorp, Bar-bara Plank, and Dieuwke Hupkes. 2025. Lost in inference: Rediscovering the role of natural language inference for large language models. In Proceedings of the 2025 Conference of the Nations of the Americas Chapter of the Association for Computational Lin-guistics: Human Language Technologies (Volume 1: Long Papers) , pages 9229–9242, Albuquerque, New Mexico. Association for Computational Linguistics. R. Thomas McCoy, Ellie Pavlick, and Tal Linzen. 2019. Right for the wrong reasons: Diagnosing syntactic heuristics in natural language inference. In Proceed-ings of the 57th Annual Meeting of the Association for Computational Linguistics , pages 3428–3448, Flo-rence, Italy. Association for Computational Linguis-tics. Joakim Nivre, Marie-Catherine de Marneffe, Filip Gin-ter, Jan Hajiˇ c, Christopher D. Manning, Sampo Pyysalo, Sebastian Schuster, Francis Tyers, and Daniel Zeman. 2020. Universal Dependencies v2: An evergrowing multilingual treebank collection. In 
+
+Proceedings of the Twelfth Language Resources and Evaluation Conference , pages 4034–4043, Marseille, France. European Language Resources Association. Satoru Ozaki, Dan Yurovsky, and Lori Levin. 2022. How well do LSTM language models learn filler-gap dependencies? In Proceedings of the Society for Computation in Linguistics 2022 , pages 76–88, online. Association for Computational Linguistics. Natalia Silveira, Timothy Dozat, Marie-Catherine de Marneffe, Samuel Bowman, Miriam Connor, John Bauer, and Chris Manning. 2014. A gold standard dependency corpus for English. In Proceedings of the Ninth International Conference on Language Resources and Evaluation (LREC’14) , pages 2897– 2904, Reykjavik, Iceland. European Language Re-sources Association (ELRA). Naoya Ueda, Masato Mita, Teruaki Oka, and Mamoru Komachi. 2024. Token-length bias in minimal-pair paradigm datasets. In Proceedings of the 2024 Joint International Conference on Computational Linguis-tics, Language Resources and Evaluation (LREC-COLING 2024) , pages 16224–16236, Torino, Italia. ELRA and ICCL. Jesse Vig, Sebastian Gehrmann, Yonatan Belinkov, Sharon Qian, Daniel Nevo, Yaron Singer, and Stu-art Shieber. 2020. Investigating gender bias in lan-guage models using causal mediation analysis. In 
+
+Advances in Neural Information Processing Systems ,volume 33, pages 12388–12401. Curran Associates, Inc. Alex Warstadt, Yu Cao, Ioana Grosu, Wei Peng, Ha-gen Blix, Yining Nie, Anna Alsop, Shikha Bordia, Haokun Liu, Alicia Parrish, Sheng-Fu Wang, Jason Phang, Anhad Mohananey, Phu Mon Htut, Paloma Jeretic, and Samuel R. Bowman. 2019. Investigating BERT’s knowledge of language: Five analysis meth-ods with NPIs. In Proceedings of the 2019 Confer-ence on Empirical Methods in Natural Language Pro-cessing and the 9th International Joint Conference on Natural Language Processing (EMNLP-IJCNLP) ,pages 2877–2887, Hong Kong, China. Association for Computational Linguistics. Alex Warstadt, Alicia Parrish, Haokun Liu, Anhad Mo-hananey, Wei Peng, Sheng-Fu Wang, and Samuel R. Bowman. 2020. BLiMP: The benchmark of linguis-tic minimal pairs for English. Transactions of the 
+
+11 Association for Computational Linguistics , 8:377– 392. Ethan Wilcox, Roger Levy, Takashi Morita, and Richard Futrell. 2018. What do RNN language models learn about filler–gap dependencies? In Proceedings of the 2018 EMNLP Workshop BlackboxNLP: Analyz-ing and Interpreting Neural Networks for NLP , pages 211–221, Brussels, Belgium. Association for Com-putational Linguistics. Ethan Gotlieb Wilcox, Richard Futrell, and Roger Levy. 2024. Using computational models to test syntactic learnability. Linguistic Inquiry , 55(4):805–848. Zhengxuan Wu, Atticus Geiger, Aryaman Arora, Jing Huang, Zheng Wang, Noah Goodman, Christopher Manning, and Christopher Potts. 2024a. pyvene: A library for understanding and improving PyTorch models via interventions. In Proceedings of the 2024 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies (Volume 3: System Demon-strations) , pages 158–165, Mexico City, Mexico. As-sociation for Computational Linguistics. Zhengxuan Wu, Atticus Geiger, Jing Huang, Arya-man Arora, Thomas Icard, Christopher Potts, and Noah D. Goodman. 2024b. A reply to makelov et al. (2023)’s "interpretability illusion" arguments. 
+
+Preprint , arXiv:2401.12631. Frans Zwarts. 1998. Three types of polarity. In Plurality and quantification , pages 177–238. Springer. 
+
+A Details of the Dataset 
+
+We adopt the dataset sizes from the setting used by Arora et al. (2024). For each construction pattern, the training set consists of 200 examples, and each of the ID and OOD tests contains 50 examples. To maintain a strict balance between labels, we swap the base and source inputs and labels to double the size. Thus, our combined analysis across the ID and OOD test sets utilizes 200 examples in total, which is a larger sample size than the test sets used in related work (Arora et al., 2024; Boguraev et al., 2025). The sentences are generated using a vocabulary set of 4,275 words, which was originally created by Warstadt et al. (2020). To properly test generaliza-tion, we create two templates for each construction, one for the training and ID test sets and another for the OOD test set. This ensures that the model is evaluated on a wide range of lexical and structural variations. 
+
+B Hyperparameters 
+
+In the training of DAS, we use the hyperparameters that Arora et al. (2024) used based on tuning. We set learning rate as 5×10 −3 with linear warmup un-til 10% of the training steps. We set the batch size to 4 and train for 100 steps. We also experimented with other learning rates ( 5 × 10 −2, 5 × 10 −4) and training steps ( 50 , 200 ) and observed largely con-sistent trends across settings. 
+
+C Details of the O DDS score 
+
+In this section, we demonstrate that for FGDs, our ODDS score is mathematically equivalent to the one used by related work (Arora et al., 2024; Boguraev et al., 2025), which is defined as follows: ODDS ∗(p, p finterv , ⟨b, s, y b, y s⟩)= log 
+
+ p(yb|b)
+
+p(ys|b)
+
+pfinterv (ys|b, s)
+
+pfinterv (yb|b, s)
+
+
+
+As described in Appendix A, our dataset in-cludes both the original minimal pair (b, s, y b, y s)
+
+and its flipped counterpart (b, s, y b, y s) and (s, b, y s, y b). Summing the O DDS scores for these two samples yields the following derivation: ODDS (p, p finterv , ⟨b, s, y b, y s⟩)+ ODDS (p, p finterv , ⟨s, b, y s, y b⟩)= log 
+
+ p(yb|b)
+
+p(yb|s)
+
+pfinterv (yb|s, b)
+
+pfinterv (yb|b, s)
+
+
+
++ log 
+
+ p(ys|s)
+
+p(ys|b)
+
+pfinterv (ys|b, s)
+
+pfinterv (ys|s, b)
+
+
+
+= log 
+
+ p(yb|b)
+
+p(ys|b)
+
+pfinterv (ys|b, s)
+
+pfinterv (yb|b, s)
+
+
+
++ log 
+
+ p(ys|s)
+
+p(yb|s)
+
+pfinterv (yb|s, b)
+
+pfinterv (ys|s, b)
+
+
+
+= ODDS ∗(p, p finterv , ⟨b, s, y b, y s⟩)+ ODDS ∗(p, p finterv , ⟨s, b, y s, y b⟩).
+
+Therefore, our O DDS score is equivalent to the one defined in previous studies when we use sym-metric pairs. It should be noted that because we use only one of the two for NPI licensing, as mentioned in Section 3.1, the O DDS score in NPI licensing differs from the previous one. 
+
+D Detailed Activation Patching Results 
+
+D.1 All Constructions in FGDs 
+
+The results are shown in Figure 6. 
+
+D.2 All Constructions in NPI Licensing 
+
+The results are shown in Figure 7. 12 0 4 8 12 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+EWhK 
+
+0 4 8 12 
+
+EWhW 
+
+0 4 8 12 
+
+MWh 
+
+0 4 8 12 
+
+RelCl 
+
+0 4 8 12 
+
+Cleft 
+
+0 4 8 12 
+
+PCleft 
+
+0 4 8 12 
+
+Topic 
+
+0
+
+5
+
+FGD 
+
+Layer 
+
+> Token
+
+(a) Residual stream 0 4 8 12 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+EWhK 
+
+0 4 8 12 
+
+EWhW 
+
+0 4 8 12 
+
+MWh 
+
+0 4 8 12 
+
+RelCl 
+
+0 4 8 12 
+
+Cleft 
+
+0 4 8 12 
+
+PCleft 
+
+0 4 8 12 
+
+Topic 
+
+0
+
+2
+
+FGD 
+
+Layer 
+
+> Token
+
+(b) Attention 0 4 8 12 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+EWhK 
+
+0 4 8 12 
+
+EWhW 
+
+0 4 8 12 
+
+MWh 
+
+0 4 8 12 
+
+RelCl 
+
+0 4 8 12 
+
+Cleft 
+
+0 4 8 12 
+
+PCleft 
+
+0 4 8 12 
+
+Topic 
+
+0
+
+2
+
+FGD 
+
+Layer 
+
+> Token
+
+(c) MLP 0 4 8 12 
+
+> 7
+> 6
+> 5
+> 4
+> 3
+> 2
+> 1
+> 0
+
+EWhK    
+
+> 04812
+
+EWhW    
+
+> 04812
+
+MWh    
+
+> 04812
+
+RelCl    
+
+> 04812
+
+Cleft    
+
+> 04812
+
+PCleft    
+
+> 04812
+
+Topic 
+
+0
+
+2
+
+FGD 
+
+Layer 
+
+> Head
+
+(d) Attention head 
+
+Figure 6: O DDS scores with activation patching of Pythia 1B in all the constructions in FGDs. 0 4 8 12 
+
+licen. 
+
+last 
+
+Cond 
+
+0 4 8 12 
+
+DNeg 
+
+0 4 8 12 
+
+SOnly 
+
+0 4 8 12 
+
+Qnt 
+
+0 4 8 12 
+
+EmbQ 
+
+0 4 8 12 
+
+SmpQ 
+
+0 4 8 12 
+
+Sup 
+
+0 4 8 12 
+
+Only 
+
+0
+
+5
+
+NPI 
+
+Layer 
+
+> Token
+
+(a) Residual Stream 0 4 8 12 
+
+licen. 
+
+last 
+
+Cond 
+
+0 4 8 12 
+
+DNeg 
+
+0 4 8 12 
+
+SOnly 
+
+0 4 8 12 
+
+Qnt 
+
+0 4 8 12 
+
+EmbQ 
+
+0 4 8 12 
+
+SmpQ 
+
+0 4 8 12 
+
+Sup 
+
+0 4 8 12 
+
+Only 
+
+0
+
+2
+
+NPI 
+
+Layer 
+
+> Token
+
+(b) Attention 0 4 8 12 
+
+licen. 
+
+last 
+
+Cond 
+
+0 4 8 12 
+
+DNeg 
+
+0 4 8 12 
+
+SOnly 
+
+0 4 8 12 
+
+Qnt 
+
+0 4 8 12 
+
+EmbQ 
+
+0 4 8 12 
+
+SmpQ 
+
+0 4 8 12 
+
+Sup 
+
+0 4 8 12 
+
+Only 
+
+0
+
+2
+
+NPI 
+
+Layer 
+
+> Token
+
+(c) MLP 0 4 8 12 
+
+> 7
+> 6
+> 5
+> 4
+> 3
+> 2
+> 1
+> 0
+
+Cond 
+
+0 4 8 12 
+
+DNeg 
+
+0 4 8 12 
+
+SOnly 
+
+0 4 8 12 
+
+Qnt 
+
+0 4 8 12 
+
+EmbQ 
+
+0 4 8 12 
+
+SmpQ 
+
+0 4 8 12 
+
+Sup 
+
+0 4 8 12 
+
+Only 
+
+0
+
+2
+
+NPI 
+
+Layer 
+
+> Head
+
+(d) Attention Heads 
+
+Figure 7: O DDS scores with activation patching of Pythia 1B in all the constructions of NPI licensing. 
+
+13 0 4 8 12 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+EWhK 
+
+0 4 8 12 
+
+EWhW 
+
+0 4 8 12 
+
+MWh 
+
+0 4 8 12 
+
+RelCl 
+
+0 4 8 12 
+
+Cleft 
+
+0 4 8 12 
+
+PCleft 
+
+0 4 8 12 
+
+Topic 
+
+0
+
+5
+
+FGD 
+
+Layer 
+
+> Token
+
+(a) Training Steps: 1000 0 4 8 12 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+EWhK 
+
+0 4 8 12 
+
+EWhW 
+
+0 4 8 12 
+
+MWh 
+
+0 4 8 12 
+
+RelCl 
+
+0 4 8 12 
+
+Cleft 
+
+0 4 8 12 
+
+PCleft 
+
+0 4 8 12 
+
+Topic 
+
+0
+
+5
+
+FGD 
+
+Layer 
+
+> Token
+
+(b) Training Steps: 2000 0 4 8 12 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+EWhK 
+
+0 4 8 12 
+
+EWhW 
+
+0 4 8 12 
+
+MWh 
+
+0 4 8 12 
+
+RelCl 
+
+0 4 8 12 
+
+Cleft 
+
+0 4 8 12 
+
+PCleft 
+
+0 4 8 12 
+
+Topic 
+
+0
+
+5
+
+FGD 
+
+Layer 
+
+> Token
+
+(c) Training Steps: 3000 0 4 8 12 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+EWhK 
+
+0 4 8 12 
+
+EWhW 
+
+0 4 8 12 
+
+MWh 
+
+0 4 8 12 
+
+RelCl 
+
+0 4 8 12 
+
+Cleft 
+
+0 4 8 12 
+
+PCleft 
+
+0 4 8 12 
+
+Topic 
+
+0
+
+5
+
+FGD 
+
+Layer 
+
+> Token
+
+(d) Training Steps: 4000 0 4 8 12 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+EWhK 
+
+0 4 8 12 
+
+EWhW 
+
+0 4 8 12 
+
+MWh 
+
+0 4 8 12 
+
+RelCl 
+
+0 4 8 12 
+
+Cleft 
+
+0 4 8 12 
+
+PCleft 
+
+0 4 8 12 
+
+Topic 
+
+0
+
+5
+
+FGD 
+
+Layer 
+
+> Token
+
+(e) Training Steps: 10000 0 4 8 12 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+EWhK 
+
+0 4 8 12 
+
+EWhW 
+
+0 4 8 12 
+
+MWh 
+
+0 4 8 12 
+
+RelCl 
+
+0 4 8 12 
+
+Cleft 
+
+0 4 8 12 
+
+PCleft 
+
+0 4 8 12 
+
+Topic 
+
+0
+
+5
+
+FGD 
+
+Layer 
+
+> Token
+
+(f) Training Steps: 143000 (Final) 
+
+Figure 8: O DDS scores with activation patching of residual stream of models with various training steps in filler-gap dependencies. 
+
+14 0 4 8 12 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+EWhK 
+
+0 4 8 12 
+
+EWhW 
+
+0 4 8 12 
+
+MWh 
+
+0 4 8 12 
+
+RelCl 
+
+0 4 8 12 
+
+Cleft 
+
+0 4 8 12 
+
+PCleft 
+
+0 4 8 12 
+
+Topic 
+
+0
+
+2
+
+FGD 
+
+Layer 
+
+> Token
+
+(a) Training Steps: 1000 0 4 8 12 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+EWhK 
+
+0 4 8 12 
+
+EWhW 
+
+0 4 8 12 
+
+MWh 
+
+0 4 8 12 
+
+RelCl 
+
+0 4 8 12 
+
+Cleft 
+
+0 4 8 12 
+
+PCleft 
+
+0 4 8 12 
+
+Topic 
+
+0
+
+2
+
+FGD 
+
+Layer 
+
+> Token
+
+(b) Training Steps: 2000 0 4 8 12 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+EWhK 
+
+0 4 8 12 
+
+EWhW 
+
+0 4 8 12 
+
+MWh 
+
+0 4 8 12 
+
+RelCl 
+
+0 4 8 12 
+
+Cleft 
+
+0 4 8 12 
+
+PCleft 
+
+0 4 8 12 
+
+Topic 
+
+0
+
+2
+
+FGD 
+
+Layer 
+
+> Token
+
+(c) Training Steps: 3000 0 4 8 12 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+EWhK 
+
+0 4 8 12 
+
+EWhW 
+
+0 4 8 12 
+
+MWh 
+
+0 4 8 12 
+
+RelCl 
+
+0 4 8 12 
+
+Cleft 
+
+0 4 8 12 
+
+PCleft 
+
+0 4 8 12 
+
+Topic 
+
+0
+
+2
+
+FGD 
+
+Layer 
+
+> Token
+
+(d) Training Steps: 4000 0 4 8 12 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+EWhK 
+
+0 4 8 12 
+
+EWhW 
+
+0 4 8 12 
+
+MWh 
+
+0 4 8 12 
+
+RelCl 
+
+0 4 8 12 
+
+Cleft 
+
+0 4 8 12 
+
+PCleft 
+
+0 4 8 12 
+
+Topic 
+
+0
+
+2
+
+FGD 
+
+Layer 
+
+> Token
+
+(e) Training Steps: 10000 0 4 8 12 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+EWhK 
+
+0 4 8 12 
+
+EWhW 
+
+0 4 8 12 
+
+MWh 
+
+0 4 8 12 
+
+RelCl 
+
+0 4 8 12 
+
+Cleft 
+
+0 4 8 12 
+
+PCleft 
+
+0 4 8 12 
+
+Topic 
+
+0
+
+2
+
+FGD 
+
+Layer 
+
+> Token
+
+(f) Training Steps: 143000 (Final) 
+
+Figure 9: O DDS scores with activation patching of attention output of models with various training steps in filler-gap dependencies. 
+
+15 0 4 8 12 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+EWhK 
+
+0 4 8 12 
+
+EWhW 
+
+0 4 8 12 
+
+MWh 
+
+0 4 8 12 
+
+RelCl 
+
+0 4 8 12 
+
+Cleft 
+
+0 4 8 12 
+
+PCleft 
+
+0 4 8 12 
+
+Topic 
+
+0
+
+2
+
+FGD 
+
+Layer 
+
+> Token
+
+(a) Training Steps: 1000 0 4 8 12 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+EWhK 
+
+0 4 8 12 
+
+EWhW 
+
+0 4 8 12 
+
+MWh 
+
+0 4 8 12 
+
+RelCl 
+
+0 4 8 12 
+
+Cleft 
+
+0 4 8 12 
+
+PCleft 
+
+0 4 8 12 
+
+Topic 
+
+0
+
+2
+
+FGD 
+
+Layer 
+
+> Token
+
+(b) Training Steps: 2000 0 4 8 12 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+EWhK 
+
+0 4 8 12 
+
+EWhW 
+
+0 4 8 12 
+
+MWh 
+
+0 4 8 12 
+
+RelCl 
+
+0 4 8 12 
+
+Cleft 
+
+0 4 8 12 
+
+PCleft 
+
+0 4 8 12 
+
+Topic 
+
+0
+
+2
+
+FGD 
+
+Layer 
+
+> Token
+
+(c) Training Steps: 3000 0 4 8 12 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+EWhK 
+
+0 4 8 12 
+
+EWhW 
+
+0 4 8 12 
+
+MWh 
+
+0 4 8 12 
+
+RelCl 
+
+0 4 8 12 
+
+Cleft 
+
+0 4 8 12 
+
+PCleft 
+
+0 4 8 12 
+
+Topic 
+
+0
+
+2
+
+FGD 
+
+Layer 
+
+> Token
+
+(d) Training Steps: 4000 0 4 8 12 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+EWhK 
+
+0 4 8 12 
+
+EWhW 
+
+0 4 8 12 
+
+MWh 
+
+0 4 8 12 
+
+RelCl 
+
+0 4 8 12 
+
+Cleft 
+
+0 4 8 12 
+
+PCleft 
+
+0 4 8 12 
+
+Topic 
+
+0
+
+2
+
+FGD 
+
+Layer 
+
+> Token
+
+(e) Training Steps: 10000 0 4 8 12 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+EWhK 
+
+0 4 8 12 
+
+EWhW 
+
+0 4 8 12 
+
+MWh 
+
+0 4 8 12 
+
+RelCl 
+
+0 4 8 12 
+
+Cleft 
+
+0 4 8 12 
+
+PCleft 
+
+0 4 8 12 
+
+Topic 
+
+0
+
+2
+
+FGD 
+
+Layer 
+
+> Token
+
+(f) Training Steps: 143000 (Final) 
+
+Figure 10: O DDS scores with activation patching of MLP output of models with various training steps in filler-gap dependencies. 
+
+16 0 4 8 12 
+
+> 7
+> 6
+> 5
+> 4
+> 3
+> 2
+> 1
+> 0
+
+EWhK    
+
+> 04812
+
+EWhW    
+
+> 04812
+
+MWh    
+
+> 04812
+
+RelCl    
+
+> 04812
+
+Cleft    
+
+> 04812
+
+PCleft    
+
+> 04812
+
+Topic 
+
+0
+
+2
+
+FGD 
+
+Layer 
+
+> Head
+
+(a) Training Steps: 1000 0 4 8 12 
+
+> 7
+> 6
+> 5
+> 4
+> 3
+> 2
+> 1
+> 0
+
+EWhK    
+
+> 04812
+
+EWhW    
+
+> 04812
+
+MWh    
+
+> 04812
+
+RelCl    
+
+> 04812
+
+Cleft    
+
+> 04812
+
+PCleft    
+
+> 04812
+
+Topic 
+
+0
+
+2
+
+FGD 
+
+Layer 
+
+> Head
+
+(b) Training Steps: 2000 0 4 8 12 
+
+> 7
+> 6
+> 5
+> 4
+> 3
+> 2
+> 1
+> 0
+
+EWhK    
+
+> 04812
+
+EWhW    
+
+> 04812
+
+MWh    
+
+> 04812
+
+RelCl    
+
+> 04812
+
+Cleft    
+
+> 04812
+
+PCleft    
+
+> 04812
+
+Topic 
+
+0
+
+2
+
+FGD 
+
+Layer 
+
+> Head
+
+(c) Training Steps: 3000 0 4 8 12 
+
+> 7
+> 6
+> 5
+> 4
+> 3
+> 2
+> 1
+> 0
+
+EWhK    
+
+> 04812
+
+EWhW    
+
+> 04812
+
+MWh    
+
+> 04812
+
+RelCl    
+
+> 04812
+
+Cleft    
+
+> 04812
+
+PCleft    
+
+> 04812
+
+Topic 
+
+0
+
+2
+
+FGD 
+
+Layer 
+
+> Head
+
+(d) Training Steps: 4000 0 4 8 12 
+
+> 7
+> 6
+> 5
+> 4
+> 3
+> 2
+> 1
+> 0
+
+EWhK    
+
+> 04812
+
+EWhW    
+
+> 04812
+
+MWh    
+
+> 04812
+
+RelCl    
+
+> 04812
+
+Cleft    
+
+> 04812
+
+PCleft    
+
+> 04812
+
+Topic 
+
+0
+
+2
+
+FGD 
+
+Layer 
+
+> Head
+
+(e) Training Steps: 10000 0 4 8 12 
+
+> 7
+> 6
+> 5
+> 4
+> 3
+> 2
+> 1
+> 0
+
+EWhK    
+
+> 04812
+
+EWhW    
+
+> 04812
+
+MWh    
+
+> 04812
+
+RelCl    
+
+> 04812
+
+Cleft    
+
+> 04812
+
+PCleft    
+
+> 04812
+
+Topic 
+
+0
+
+2
+
+FGD 
+
+Layer 
+
+> Head
+
+(f) Training Steps: 143000 (Final) 
+
+Figure 11: O DDS scores with activation patching of attention output of models with various training steps in filler-gap dependencies. 
+
+17 D.3 Training Dynamics of All Constructions in FGDs 
+
+We present the results of activation patching ap-plied to each component of Pythia 1B across sev-eral training steps. Figure 8 through 11 show the results of residual stream, attention output, MLP output, and attention heads. 
+
+D.4 Gemma 3 
+
+We apply activation patching to Gemma 3 1B and 12B. The results are shown in Figure 12 and 13. Similar to Pythia models, a shared mechanism can be seen among FGD constructions in Gemma 3, although the scores were higher in R EL CL than in other constructions. 
+
+D.5 Comparison of Activation Patching and DAS in All Constructions in FGDs 
+
+We present the results of comparisons between ac-tivation patching and DAS applied to Pythia 1B. Figure 14 through 17 show the results of residual stream, attention output, MLP output, and attention heads. 
+
+D.6 Naturally Ocurring Data 
+
+To investigate the mechanism of language mod-els in processing natural sentences, we extract 20 naturally occurring sentences containing wh-embedding structures from the English-EWT Uni-versal Dependencies dataset (de Marneffe et al., 2021; Nivre et al., 2020; Silveira et al., 2014) and performed activation patching on Pythia-1B. The results, shown in Figure 18, demonstrate the exact same trends observed with our artificially constructed filler-gap structures, such as EW HKand EW HW. Specifically, attention heads 7.5, 7.6, and 9.2 exhibited high scores, and the distribu-tion across the residual stream remained identical. These findings confirm that our analysis general-izes to naturally occurring sentences. 18 0 12 24 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+EWhK 
+
+0 12 24 
+
+EWhW 
+
+0 12 24 
+
+MWh 
+
+0 12 24 
+
+RelCl 
+
+0 12 24 
+
+Cleft 
+
+0 12 24 
+
+PCleft 
+
+0 12 24 
+
+Topic 
+
+0
+
+5
+
+FGD 
+
+Layer 
+
+> Token
+
+(a) Residual stream 0 12 24 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+EWhK 
+
+0 12 24 
+
+EWhW 
+
+0 12 24 
+
+MWh 
+
+0 12 24 
+
+RelCl 
+
+0 12 24 
+
+Cleft 
+
+0 12 24 
+
+PCleft 
+
+0 12 24 
+
+Topic 
+
+0
+
+2
+
+FGD 
+
+Layer 
+
+> Token
+
+(b) Attention 0 12 24 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+EWhK 
+
+0 12 24 
+
+EWhW 
+
+0 12 24 
+
+MWh 
+
+0 12 24 
+
+RelCl 
+
+0 12 24 
+
+Cleft 
+
+0 12 24 
+
+PCleft 
+
+0 12 24 
+
+Topic 
+
+0
+
+2
+
+FGD 
+
+Layer 
+
+> Token
+
+(c) MLP 0 4 8 12 16 20 24 
+
+> 3
+> 2
+> 1
+> 0
+
+EWhK       
+
+> 04812 16 20 24
+
+EWhW       
+
+> 04812 16 20 24
+
+MWh       
+
+> 04812 16 20 24
+
+RelCl       
+
+> 04812 16 20 24
+
+Cleft       
+
+> 04812 16 20 24
+
+PCleft       
+
+> 04812 16 20 24
+
+Topic 
+
+0
+
+2
+
+FGD 
+
+Layer 
+
+> Head
+
+(d) Attention head 
+
+Figure 12: O DDS scores with activation patching in Gemma 3 1B in FGDs. 0 12 24 36 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+EWhK 
+
+0 12 24 36 
+
+EWhW 
+
+0 12 24 36 
+
+MWh 
+
+0 12 24 36 
+
+RelCl 
+
+0 12 24 36 
+
+Cleft 
+
+0 12 24 36 
+
+PCleft 
+
+0 12 24 36 
+
+Topic 
+
+0
+
+5
+
+FGD 
+
+Layer 
+
+> Token
+
+(a) Residual stream 0 4 8 12 16 20  
+
+> 0
+> 4
+> 8
+> 12
+> 15
+
+EWhK      
+
+> 04812 16 20
+
+EWhW      
+
+> 04812 16 20
+
+MWh      
+
+> 04812 16 20
+
+RelCl      
+
+> 04812 16 20
+
+Cleft      
+
+> 04812 16 20
+
+PCleft      
+
+> 04812 16 20
+
+Topic 
+
+0
+
+1
+
+FGD 
+
+Layer 
+
+> Head
+
+(b) Attention head 
+
+Figure 13: O DDS scores with activation patching in Gemma 3 12B in FGDs. The results of attention head are limited to layers 0-24 for clarity. 
+
+19 filler 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP ID 
+
+0 4 8 12 
+
+Layer 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP OOD 
+
+DAS ID 
+
+0 4 8 12 
+
+Layer 
+
+DAS OOD 
+
+0
+
+2
+
+4
+
+6
+
+8(a) EW HKfiller 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP ID 
+
+0 4 8 12 
+
+Layer 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP OOD 
+
+DAS ID 
+
+0 4 8 12 
+
+Layer 
+
+DAS OOD 
+
+0
+
+2
+
+4
+
+6
+
+8 (b) EW HWfiller 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP ID 
+
+0 4 8 12 
+
+Layer 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP OOD 
+
+DAS ID 
+
+0 4 8 12 
+
+Layer 
+
+DAS OOD 
+
+0
+
+2
+
+4
+
+6
+
+8 (c) MW Hfiller 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP ID 
+
+0 4 8 12 
+
+Layer 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP OOD 
+
+DAS ID 
+
+0 4 8 12 
+
+Layer 
+
+DAS OOD 
+
+0
+
+2
+
+4
+
+6
+
+8
+
+(d) R EL CLfiller 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP ID 
+
+0 4 8 12 
+
+Layer 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP OOD 
+
+DAS ID 
+
+0 4 8 12 
+
+Layer 
+
+DAS OOD 
+
+0
+
+2
+
+4
+
+6
+
+8 (e) C LEFT filler 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP ID 
+
+0 4 8 12 
+
+Layer 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP OOD 
+
+DAS ID 
+
+0 4 8 12 
+
+Layer 
+
+DAS OOD 
+
+0
+
+2
+
+4
+
+6
+
+8 (f) PC LEFT filler 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP ID 
+
+0 4 8 12 
+
+Layer 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP OOD 
+
+DAS ID 
+
+0 4 8 12 
+
+Layer 
+
+DAS OOD 
+
+0
+
+2
+
+4
+
+6
+
+8
+
+(g) T OPIC 
+
+Figure 14: Comparison of O DDS scores between activation patching (AP) and DAS of residual stream in Pythia 1B, evaluated on all the constructions in FGDs. 
+
+20 filler 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP ID 
+
+0 4 8 12 
+
+Layer 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP OOD 
+
+DAS ID 
+
+0 4 8 12 
+
+Layer 
+
+DAS OOD 
+
+0.0 
+
+0.5 
+
+1.0 
+
+1.5 
+
+2.0 (a) EW HKfiller 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP ID 
+
+0 4 8 12 
+
+Layer 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP OOD 
+
+DAS ID 
+
+0 4 8 12 
+
+Layer 
+
+DAS OOD 
+
+0.0 
+
+0.5 
+
+1.0 
+
+1.5 
+
+2.0 (b) EW HWfiller 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP ID 
+
+0 4 8 12 
+
+Layer 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP OOD 
+
+DAS ID 
+
+0 4 8 12 
+
+Layer 
+
+DAS OOD 
+
+0.0 
+
+0.5 
+
+1.0 
+
+1.5 
+
+2.0 (c) MW Hfiller 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP ID 
+
+0 4 8 12 
+
+Layer 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP OOD 
+
+DAS ID 
+
+0 4 8 12 
+
+Layer 
+
+DAS OOD 
+
+0.0 
+
+0.5 
+
+1.0 
+
+1.5 
+
+2.0 
+
+(d) R EL CLfiller 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP ID 
+
+0 4 8 12 
+
+Layer 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP OOD 
+
+DAS ID 
+
+0 4 8 12 
+
+Layer 
+
+DAS OOD 
+
+0.0 
+
+0.5 
+
+1.0 
+
+1.5 
+
+2.0 (e) C LEFT filler 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP ID 
+
+0 4 8 12 
+
+Layer 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP OOD 
+
+DAS ID 
+
+0 4 8 12 
+
+Layer 
+
+DAS OOD 
+
+0.0 
+
+0.5 
+
+1.0 
+
+1.5 
+
+2.0 (f) PC LEFT filler 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP ID 
+
+0 4 8 12 
+
+Layer 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP OOD 
+
+DAS ID 
+
+0 4 8 12 
+
+Layer 
+
+DAS OOD 
+
+0.0 
+
+0.5 
+
+1.0 
+
+1.5 
+
+2.0 
+
+(g) T OPIC 
+
+Figure 15: Comparison of O DDS scores between activation patching (AP) and DAS of attention output in Pythia 1B, evaluated on all the constructions in FGDs. 
+
+21 filler 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP ID 
+
+0 4 8 12 
+
+Layer 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP OOD 
+
+DAS ID 
+
+0 4 8 12 
+
+Layer 
+
+DAS OOD 
+
+0.0 
+
+0.5 
+
+1.0 
+
+1.5 
+
+2.0 (a) EW HKfiller 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP ID 
+
+0 4 8 12 
+
+Layer 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP OOD 
+
+DAS ID 
+
+0 4 8 12 
+
+Layer 
+
+DAS OOD 
+
+0.0 
+
+0.5 
+
+1.0 
+
+1.5 
+
+2.0 (b) EW HWfiller 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP ID 
+
+0 4 8 12 
+
+Layer 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP OOD 
+
+DAS ID 
+
+0 4 8 12 
+
+Layer 
+
+DAS OOD 
+
+0.0 
+
+0.5 
+
+1.0 
+
+1.5 
+
+2.0 (c) MW Hfiller 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP ID 
+
+0 4 8 12 
+
+Layer 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP OOD 
+
+DAS ID 
+
+0 4 8 12 
+
+Layer 
+
+DAS OOD 
+
+0.0 
+
+0.5 
+
+1.0 
+
+1.5 
+
+2.0 
+
+(d) R EL CLfiller 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP ID 
+
+0 4 8 12 
+
+Layer 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP OOD 
+
+DAS ID 
+
+0 4 8 12 
+
+Layer 
+
+DAS OOD 
+
+0.0 
+
+0.5 
+
+1.0 
+
+1.5 
+
+2.0 (e) C LEFT filler 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP ID 
+
+0 4 8 12 
+
+Layer 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP OOD 
+
+DAS ID 
+
+0 4 8 12 
+
+Layer 
+
+DAS OOD 
+
+0.0 
+
+0.5 
+
+1.0 
+
+1.5 
+
+2.0 (f) PC LEFT filler 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP ID 
+
+0 4 8 12 
+
+Layer 
+
+filler 
+
+the 
+
+noun 
+
+verb 
+
+> Token
+
+AP OOD 
+
+DAS ID 
+
+0 4 8 12 
+
+Layer 
+
+DAS OOD 
+
+0.0 
+
+0.5 
+
+1.0 
+
+1.5 
+
+2.0 
+
+(g) T OPIC 
+
+Figure 16: Comparison of O DDS scores between activation patching (AP) and DAS of MLP output in Pythia 1B, evaluated on all the constructions in FGDs. 
+
+22 7
+
+> 6
+> 5
+> 4
+> 3
+> 2
+> 1
+> 0
+> Head
+
+AP ID 
+
+0 4 8 12 
+
+Layer 
+
+> 7
+> 6
+> 5
+> 4
+> 3
+> 2
+> 1
+> 0
+> Head
+
+AP OOD 
+
+DAS ID 
+
+0 4 8 12 
+
+Layer 
+
+DAS OOD 
+
+0.0 
+
+0.5 
+
+1.0 
+
+1.5 
+
+2.0 (a) EW HK7
+
+> 6
+> 5
+> 4
+> 3
+> 2
+> 1
+> 0
+> Head
+
+AP ID 
+
+0 4 8 12 
+
+Layer 
+
+> 7
+> 6
+> 5
+> 4
+> 3
+> 2
+> 1
+> 0
+> Head
+
+AP OOD 
+
+DAS ID 
+
+0 4 8 12 
+
+Layer 
+
+DAS OOD 
+
+0.0 
+
+0.5 
+
+1.0 
+
+1.5 
+
+2.0 (b) EW HW7
+
+> 6
+> 5
+> 4
+> 3
+> 2
+> 1
+> 0
+> Head
+
+AP ID 
+
+0 4 8 12 
+
+Layer 
+
+> 7
+> 6
+> 5
+> 4
+> 3
+> 2
+> 1
+> 0
+> Head
+
+AP OOD 
+
+DAS ID 
+
+0 4 8 12 
+
+Layer 
+
+DAS OOD 
+
+0.0 
+
+0.5 
+
+1.0 
+
+1.5 
+
+2.0 (c) MW H7
+
+> 6
+> 5
+> 4
+> 3
+> 2
+> 1
+> 0
+> Head
+
+AP ID 
+
+0 4 8 12 
+
+Layer 
+
+> 7
+> 6
+> 5
+> 4
+> 3
+> 2
+> 1
+> 0
+> Head
+
+AP OOD 
+
+DAS ID 
+
+0 4 8 12 
+
+Layer 
+
+DAS OOD 
+
+0.0 
+
+0.5 
+
+1.0 
+
+1.5 
+
+2.0 
+
+(d) R EL CL7
+
+> 6
+> 5
+> 4
+> 3
+> 2
+> 1
+> 0
+> Head
+
+AP ID 
+
+0 4 8 12 
+
+Layer 
+
+> 7
+> 6
+> 5
+> 4
+> 3
+> 2
+> 1
+> 0
+> Head
+
+AP OOD 
+
+DAS ID 
+
+0 4 8 12 
+
+Layer 
+
+DAS OOD 
+
+0.0 
+
+0.5 
+
+1.0 
+
+1.5 
+
+2.0 (e) C LEFT 7
+
+> 6
+> 5
+> 4
+> 3
+> 2
+> 1
+> 0
+> Head
+
+AP ID 
+
+0 4 8 12 
+
+Layer 
+
+> 7
+> 6
+> 5
+> 4
+> 3
+> 2
+> 1
+> 0
+> Head
+
+AP OOD 
+
+DAS ID 
+
+0 4 8 12 
+
+Layer 
+
+DAS OOD 
+
+0.0 
+
+0.5 
+
+1.0 
+
+1.5 
+
+2.0 (f) PC LEFT 7
+
+> 6
+> 5
+> 4
+> 3
+> 2
+> 1
+> 0
+> Head
+
+AP ID 
+
+0 4 8 12 
+
+Layer 
+
+> 7
+> 6
+> 5
+> 4
+> 3
+> 2
+> 1
+> 0
+> Head
+
+AP OOD 
+
+DAS ID 
+
+0 4 8 12 
+
+Layer 
+
+DAS OOD 
+
+0.0 
+
+0.5 
+
+1.0 
+
+1.5 
+
+2.0 
+
+(g) T OPIC 
+
+Figure 17: Comparison of O DDS scores between activation patching (AP) and DAS of attention heads in Pythia 1B, evaluated on all the constructions in FGDs. 
+
+23 0 4 8 12 
+
+> filler
+> the
+> noun
+> verb
+
+NaturalEwhK 
+
+> 0
+> 2
+> 4
+> 6
+> 8
+
+Layer 
+
+> Token
+
+(a) Residual Stream 0 4 8 12 
+
+> 7
+> 6
+> 5
+> 4
+> 3
+> 2
+> 1
+> 0
+
+NaturalEwhK 
+
+> 0
+> 1
+> 2
+
+Layer 
+
+> Head
+
+(b) Attention head 
+
+Figure 18: O DDS scores with activation patching in filler-gap dependencies in naturally occuring sentences. 
+
+24 E Steering Results on SyntaxGym 
+
+We extend the steering experiments described in Section 5 to SyntaxGym (Hu et al., 2020). Syn-taxGym differs from BLiMP in that it calculates the probability of only regions that differ among sentences in comparison, instead of using the prob-ability of the entire sentence. For example, in a subject-verb agreement pattern where the distrac-tor is a prepositional phrase: (1) The author next to the senators is Vsg good. (2) * The author next to the senators are Vpl 
+
+good. (3) The authors next to the senator are Vpl good. (4) * The authors next to the senator is Vsg 
+
+good. The evaluation criteria are defined by the raw out-put probabilities P (·) at the verb position: 
+
+P1(Vsg ) > P 2(Vpl ) ∧ P3(Vpl ) > P 4(Vsg )
+
+However, we argue that certain SyntaxGym pat-terns for FGDs are unsuitable for evaluating the syntactic competence of causal language models. Consider the subject extraction pattern: (5) You remember that 
+
+> α
+
+z }| {
+
+the businessman showed the presentation to the visitors after lunch. (6) * You remember who 
+
+> α
+
+z }| {
+
+the businessman showed the presentation to the visitors after lunch. (7) You remember who 
+
+> β
+
+z }| {
+
+showed the presenta-tion to the visitors after lunch. (8) * You remember that 
+
+> β
+
+z }| {
+
+showed the presen-tation to the visitors after lunch. SyntaxGym use surprisals S(·) for evaluation: 
+
+S6(α) > S 5(α) ∧ S8(β) > S 7(β)
+
+Because causal language models process text in-crementally, none of the strings above leading up to 
+
+α or β are ungrammatical, and their grammaticality depends on the following tokens. Thus, compar-ing surprisals at these positions may not faithfully reflect the model’s grammatical judgment. Moreover, SyntaxGym has a considerably smaller sample size, around 20 to 40 per pat-tern, compared to the 1,000 samples per pattern in BLiMP. This limits the sensitivity to capture sub-tle improvements in language models’ syntactic capability. Despite these caveats, we report results on Syn-taxGym when the attention heads 7.5, 7.6, and 9.2 are manipulated. The results are shown in Fig-ure 19. The overall trends were similar to those of BLiMP, as α > 1 led to improvement of the scores in many of the patterns and categories. In the patterns where the scores did not improve, such as the “fgd_subject” pattern, the results may have reflected the limitations of the evaluation criteria mentioned above rather than a failure of the manip-ulated mechanism. 
+
+F Steering Results on HANS 
+
+α Accuracy (%) 0.8 51.6 1.0 52.3 1.2 53.5 1.5 54.9 
+
+> Table 2: Accuracy in HANS after multiplying activa-tions of several attention heads in Gemma 3 1B IT by
+> α.
+
+Our findings suggest potential performance gains in downstream tasks that rely on syntactic dependency processing. To investigate this, we conducted additional steering experiments using HANS (McCoy et al., 2019), an NLI benchmark. We multiply the activation values of the attention heads that contribute to the processing of filler-gap dependencies by a factor of α and observe the re-sulting changes in NLI performance. We follow Madaan et al. (2025) for prompt and few-shot ex-amples for the evaluation with HANS, and we use Gemma 3 1B IT as the model. The results of the performance are shown in Ta-ble 2. The results show that amplifying the activa-tion values of identified attention heads leads to a better performance in NLI, and the findings in the paper are applicable to application tasks. 
+
+G Details of Computational Experiments 
+
+We used nnsight (Fiotto-Kaufman et al., 2024) and pyvene (Wu et al., 2024a) for the implementation 25 cleft 
+
+> cleft_modifier
+> fgd-embed3
+> fgd-embed4
+> fgd_hierarchy
+> fgd_object
+> fgd_pp
+> fgd_subject
+
+Pattern 
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Score
+> =0.8
+> =1.0
+> =1.5
+> =2.0
+
+(a) L ONG -DISTANCE DEPENDENCIES category Agreement 
+
+> Center Embedding
+> Garden Path Effects
+> Gross Syntactic Expectation
+> Licensing
+> Long-distance Dependencies
+
+Category  
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Score
+> =0.8
+> =1.0
+> =1.5
+> =2.0
+
+(b) All categories 
+
+Figure 19: Scores in the category involving filler-gap dependencies (left) and in all categories (right) in SyntaxGym after multiplying activations of several attention heads in Pythia 1B by α.
+
+of the experiments. We ran each experiment one time. We used A100 GPUs for around 300 hours for the experiments. 26
