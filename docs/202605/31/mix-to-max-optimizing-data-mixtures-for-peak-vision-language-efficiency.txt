@@ -1,0 +1,288 @@
+Title: Mix-to-Max: Optimizing Data Mixtures for Peak Vision-Language Efficiency
+
+URL Source: https://openaccess.thecvf.com/content/CVPR2026F/papers/Zhao_Mix-to-Max_Optimizing_Data_Mixtures_for_Peak_Vision-Language_Efficiency_CVPRF_2026_paper.pdf
+
+Published Time: Sat, 16 May 2026 17:06:37 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# Mix-to-Max: Optimizing Data Mixtures for Peak Vision-Language Efficiency 
+
+# Erwei Zhao 1,2, Haijin Zeng 1, Weiwei Xiao 1,2, Shijie Cao 3,Qiben Shan 2, Shaocong Wu 2*, Jingyong Su 1,2*, Jie Liu 11Harbin Institute of Technology, Shenzhen 2Peng Cheng Laboratory 3UCAS   
+
+> 24B951082@stu.hit.edu.cn, wushc@pcl.ac.cn, sujingyong@hit.edu.cn
+
+# Abstract 
+
+Visual Instruction Tuning (VIT) endows Large Vision-Language Models (LVLMs) with powerful generalization capabilities across diverse visual tasks. However, the re-dundancy present in VIT data leads to substantial computa-tional overhead, making data pruning critical for achieving efficient VIT. Existing pruning methods struggle to achieve a favorable balance between performance and efficiency. Sample influence-based methods rely on external validation data, causing the selected data to be biased toward samples that match the format of external data. Moreover, the com-putational overhead of calculating sample level influence function even exceeds the cost of training on the full dataset. To overcome these limitations, this paper casts data pruning as an optimization problem over subset mixing proportions and proposes the Mix-to-Max method. This method requires no external data and computes influence across data subsets to build an Influence Transfer Matrix (ITM). The ITM cap-tures the directional knowledge flow, which allows for a pre-cise estimation of synergy and redundancy among subsets to significantly improve data efficiency. Experimental results on the LLaVA-665K and Vision-Flan-186K datasets demon-strate that with just 20% of the data, Mix-to-Max achieves 98.82% and 98.45% of the full-dataset performance respec-tively, and reduces the total wall-clock time by over 70%. Our code is publicly available at: https://github.com/ew-zhao/Mix-to-Max.git. 
+
+# 1. Introduction 
+
+Large Vision-Language Models (LVLMs) [2, 3, 21, 22], by integrating visual and textual information, can handle di-verse tasks such as image-text understanding, visual ques-tion answering, and visual reasoning. Visual instruction tuning (VIT) [22, 23] for LVLMs has been shown to sig-nificantly enhance the model’s ability to understand and ex-ecute complex visual instructions, effectively activate its la-      
+
+> *Corresponding authors.
+> Figure 1. Comparison between sample level and subset level influence. (a) Sample level influence . Requires external data, is computationally inefficient, and is prone to severe selection bias, such as the over-selection of MCQ formats. (b) Subset level in-fluence .Eliminates the need for external data and significantly mitigates selection bias. It demonstrates superior computational efficiency and relative performance. The relative performance and time cost are measured relative to training on the full dataset.
+
+tent knowledge, and improve generalization capabilities in open environments. Recent studies indicate that the qual-ity and diversity of data used in the supervised fine-tuning (SFT) phase are decisive for model capabilities [41]. In contrast, merely scaling the data volume does not consis-tently yield anticipated performance gains [9, 25], but rather incurs substantial computational costs. Consequently, effi-ciently selecting and allocating diverse data resources from large pools has become a central challenge for developing data-efficient SFT methods [4, 6]. To address this challenge, ICONS [38] leverages sample level influence functions [13, 31, 33] to identify valuable training samples for downstream tasks, achieving promis-ing pruning results. However, ICONS is highly dependent on external data, and our study finds that influence scores This CVPR Findings paper is the Open Access version, provided by the Computer Vision Foundation. Except for this watermark, it is identical to the accepted version; the final published version of the proceedings is available on IEEE Xplore. 2937 exhibit a bias towards the superficial features of the external data, as shown in Fig. 1(a). Specifically, these methods tend to prioritize samples that share surface-level formats with the external data, such as multiple-choice question (MCQ) and visual question answering (VQA) formats, rather than samples with deeper semantic alignment. We refer to this behavior as superficial preference, which results in severe over-selection of format-matched data. For example, MCQ samples account for up to 85.9% of the selected subset, as shown in Fig. 1(a), drastically reducing data diversity and ultimately degrading generalization and robustness. This limitation arises because sample level evaluation lacks the ability to capture dataset-level structural relations. By assessing samples individually, this approach inherently struggles to manage the dataset’s macroscopic distributional properties. To overcome this limitation, we advocate a paradigm shift from sample level pruning to subset level mixing. Instead of determining which individual samples to keep, our work focuses on identifying the optimal mix-ture proportions across different data subsets. Furthermore, the computational burden of sample level evaluation is a significant concern. The resources con-sumed during this data selection phase may even exceed those required for training on the full dataset. Consequently, the practical cost-effectiveness of such approaches for data-efficient learning is highly questionable. To address both the selection bias and the efficiency bot-tleneck, we propose Mix-to-Max, a simple yet efficient VIT data re-mixing framework. Mix-to-Max operates at the sub-set level influence as depicted in Fig. 1(b). It employs subset influence functions to quantify the bidirectional knowledge transfer relationships among data subsets, thereby identify-ing key knowledge sources and redundant links. This en-ables us to directly and efficiently optimize the data mix-ture proportions for enhanced VIT data efficiency. Our main contributions are summarized as follows: • Mix-to-Max Data Mixture Framework. We propose a data-efficient VIT framework that reformulates data prun-ing as a subset mixture optimization problem. It enables principled data re-mixing by adjusting proportions based on quantified subset relationships, without external task data or complex filtering mechanisms. • Subset Influence Transferability Perception. To im-plement this framework, we introduce a subset influ-ence method to estimate learning dependencies. Through a Focused Influence Scores (FIS) strategy, our approach constructs an Influence Transfer Matrix (ITM) to effi-ciently quantify bidirectional knowledge transfer and re-dundancy across data subsets. Crucially, operating with-out external target-task data avoids the influence bias in-herent in prior influence-based methods. • State-of-the-Art Performance-Efficiency Balance. We demonstrate that Mix-to-Max achieves a new state-of-the-art balance between performance and efficiency. On the LLaVA-665K and Vision-Flan-186K, our method retains 98.82% and 98.45% of full-data performance using 20% of the data, while achieving a 70% reduction in wall-clock time and an 8.2 × speedup over ICONS, the primary influence-based competitor. 
+
+# 2. Related Work 
+
+Data Selection. Current research in VIT primarily fo-cuses on data selection techniques to address the data effi-ciency challenge. These methods aim to optimize data effi-ciency and maintain model performance by selecting high-quality and informative coresets from large-scale datasets. Given the significant parallels in SFT data selection for both Large Language Models (LLMs) and LVLMs, we dis-cuss these domains concurrently. Existing work has primar-ily developed along two main technical approaches. The first leverages external model scoring to optimize dataset quality and diversity, exemplified by InsTag [27] and Alpa-Gasus. The second utilizes model-internal information to measure candidate data value, including IFD [19], Super-Filtering [18], and Self-Filter [7]. However, some single-score methods often introduce significant biases, substan-tially compromising data diversity [37]. 
+
+Data Mixture. The composition of data during VIT is a critical yet underexplored factor that dictates model perfor-mance. While leading open-source models like LLaVA se-ries [17, 23], Qwen-VL series [5] and InternVL [8] achieve state-of-the-art results by training on carefully curated data mixtures, the methodology for determining these optimal proportions remains a black box. This lack of a principled framework creates a significant barrier, forcing researchers into costly, ad-hoc experimentation and highlighting the need for an efficient method to optimize VIT data mixtures. Early empirical studies, such as the work by Dong et al. [9], were foundational in identifying the complexities of data mixing. They systematically revealed that naive data mixing leads to performance conflicts and that mix-ture ratios significantly impact model capabilities. How-ever, this work was purely observational, lacking a prescrip-tive method to proactively optimize these proportions. More recent data selection studies aim to reduce the bias introduced by single-score filtering by selecting represen-tative samples from multiple subsets, which is conceptu-ally similar to forming a data mixture. A prime example is COINCIDE [16], which introduces the valuable concept of transferability to create an effective coreset. However, COINCIDE operates at the fine-grained sample level, mak-ing binary keep/discard decisions based on inter-sample dis-tances in the representation space. This sample-centric ap-proach focuses on representativeness in the feature space but does not consider from a holistic dataset perspective 2938 Figure 2. Illustration of the Mix-to-Max framework. (1) Compute Proxy Gradients: A LoRA Proxy Model is first trained on a small random sample of the training data. Then, projected gradients Gi are extracted for each data subset Di by processing m sampled instances through the proxy model. (2) Compute Subset Influence: The projected gradients from different subsets are used to compute the pairwise influence (e.g., M(i→j)), which are then aggregated to construct the Influence Transfer Matrix (ITM). (3) Optimize Mixture Proportions:   
+
+> Finally, a Knowledge Transfer Potential ( T) and an Information Redundancy Index ( R) are derived from the ITM for each subset. These metrics are then used to compute the final subset scores S, which reweight the original data proportions and yield the optimized mixture.
+
+how to balance redundancy reduction and knowledge cov-erage. Consequently, it does not directly address the macro-level problem of optimizing mixture weights across data sources, which is the core objective of our work. 
+
+# 3. Methodology 
+
+3.1. Preliminaries: Influence Function 
+
+Influence functions [15, 31, 33] quantify how a training sample affects model predictions and have become a fun-damental tool for understanding data contributions in deep learning. Based on first-order gradient approximations [33], the influence of a training point z on a reference validation point z′ can be expressed as: Inf (z, z ′) = X
+
+> i
+
+¯ηi⟨∇ ℓ(z′; θi), ∇ℓ(z; θi)⟩, (1) where θi and ¯ηi denote model parameters and average learn-ing rate at epoch i, respectively. Higher influence scores im-ply z benefits learning on z′, highlighting its task relevance. Recent studies have leveraged this theoretical framework for data pruning. Although influence functions are effective for selecting data relevant to specific target tasks, such as in LESS [39], they are less suitable for achieving broad gener-alization across diverse tasks. ICONS [38] attempts to mit-igate this by defining multiple, diverse target tasks. How-ever, the requirement for corresponding external datasets substantially increases implementation complexity. Fur-thermore, due to the influence bias illustrated in Fig. 1, the selection of external data exerts a significant impact on the final pruning outcomes. To address these challenges, we first aim to eliminate the dependency on external data. One potential solution is to perform data pruning by computing influence functions among samples within the training dataset itself, thereby simplifying the implementation pipeline. However, since the training data also contains diverse formats, this internal-only approach remains susceptible to influence bias. To fur-ther refine the method, we treat data from different sources as distinct subsets, since samples originating from the same source tend to exhibit higher similarity. By computing in-fluence functions only between these subsets, we hypothe-size that the bias can be effectively mitigated. Building on this insight, we propose Mix-to-Max, a simple yet efficient SFT data re-mixing framework that directly optimizes data mixture proportions through subset influence functions. 
+
+3.2. Proposed Method 
+
+The Mix-to-Max framework is illustrated in Fig. 2. In the following sections, we describe its three core stages: (1) computing proxy gradients for each data subset (Sec. 3.3), (2) estimating subset influence using FIS (Sec. 3.4), and (3) optimizing mixture proportions and performing data re-mixing based on the computed subset influence (Sec. 3.5). 
+
+3.3. Compute Proxy Gradients 
+
+Following Equation 1, computing influence function values requires gradient information for each data point. How-ever, the massive parameter scale of LVLMs makes direct gradient computation and storage extremely costly. LoRA-based approximation and random projection can compress gradients into a lower-dimensional space and substantially reduce memory usage [38, 39]. Nevertheless, processing gradients for every sample in large scale VIT datasets re-mains computationally intensive. As a result, the pruning process itself may demand more resources than training the model on the full dataset. In Mix-to-Max, we only require influence estimation 2939 between data subsets, rather than across individual sam-ples. This enables a more efficient proxy strategy. Specif-ically, given a dataset D partitioned into N subsets 
+
+{D1, D2, . . . , DN }, we first train a lightweight LoRA adapter on a small (5%) random portion of the training cor-pus as a proxy model, following [39]. Then, from each sub-set Di, we sample m proxy examples to form ˜Di and com-pute their gradients using the proxy model. Finally, each gradient is compressed via random projection to obtain a compact set of proxy gradients Gi = {gx | x ∈ ˜Di}.
+
+3.4. Subset Influence Transferability Perception 
+
+The computation of subset influence is a pivotal stage in the Mix-to-Max framework, forming the foundation for evalu-ating each subset’s contribution to the final pruned dataset. A natural strategy is to aggregate sample level influence values between two subsets by averaging them. However, this approach essentially measures only the average proxim-ity of their gradients in the representation space, capturing similarity rather than true knowledge transfer, as illustrated in Fig. 3(b). Consequently, it fails to uncover the directional and asymmetric dependency structures among data subsets. Moreover, simple averaging introduces an over-smoothing effect that may obscure the crucial transfer relationships be-tween subsets. To better elucidate the knowledge transfer dynamics between different data subsets, we propose the focused influence method. This approach captures the bidi-rectional learning dependencies between subsets by empha-sizing their most significant transfer connections. 
+
+Focused Influence. Our goal is to quantify the transfer facilitation from subset Di to subset Dj . To this end, we compute influence scores between samples within the can-didate subsets and aggregate the top-p% values that exhibit the strongest transfer relationships. Here, the parameter p
+
+is referred to as the focus depth, representing the fraction of highest-impact samples for aggregation. Following Eq. (1), the learning dependency strength be-tween any two candidate samples x ∈ ˜Di and y ∈ ˜Dj is measured by the proxy influence function Inf proxy (x, y ) ≜
+
+⟨gx, g y ⟩. For each target sample x, we collect its scores 
+
+{Inf proxy (x, y )|y ∈ ˜Dj } and retain only the top-p% frac-tion to emphasize the strongest transfer links. Averaging these top-p% values yields the FIS: 
+
+FIS( x | ˜Dj ) = 1
+
+m × p%
+
+X  
+
+> y∈TOP p%(x|˜Dj)
+
+Inf proxy (x, y ),
+
+(2) where TOP p%(x | ˜Dj ) denotes the set of p% samples with the highest influence scores relative to sample x. The FIS preserves the most significant transfer relationships while mitigating the over-smoothing effect typically caused             
+
+> Figure 3. Subset influence computation and results on six LLaVA-665K subsets. (a) Detailed Method for Subset Influence Calculation. For each pair of subsets (D1,D2), average top-
+> p%proxy influence scores to obtain the subset level contribution
+> Mi→jto form ITM . (b) ITM from Sample Influence Averag-ing, showing a symmetric structure with limited differentiation. (c) ITM from Focused Influence Score, yielding an asymmetric structure with directional differentiation.
+
+by full averaging, which would otherwise blur distinctive transfer patterns across subsets. 
+
+Subset Influence Transfer Matrix. Based on the trans-fer influence FIS between samples and subsets, we define 
+
+Mi→j as the overall transferability measure from Di to Dj :
+
+Mi→j = 1
+
+m
+
+X 
+
+> x∈˜Di
+
+FIS( x | ˜Dj ). (3) By computing the transferability measure for all sub-set pairs, we construct the subset influence transfer matrix, 
+
+ITM ∈ RN ×N , where each matrix element ITM i,j ≜
+
+Mi→j quantifies the knowledge transfer capability from subset i to subset j. The elements of the ITM directly capture the strength of knowledge transfer and exhibit clear asymmetry, indicating that transfer effects differ depending on the direction between source and target domains. As illustrated in Fig. 3, this FIS-based ITM reveals distinct and asymmetric transfer patterns among subsets, which are largely obscured in the naive averaging baseline. 
+
+3.5. Optimize Mixture Proportions 
+
+Given the quantified ITM , the key challenge is how to ef-fectively leverage this information to optimize the mixture proportions of the data subsets. Intuitively, the optimization 2940 should prioritize subsets with high knowledge contribution by increasing their weights, while reducing the weights of those exhibiting high information redundancy. Following this principle, we design the following optimization strat-egy for determining the optimal mixture proportions. 
+
+Subset Value Scoring. According to the directionality of 
+
+ITM , cross-subset transfer capability can be decomposed into two directions: outgoing transferability and incoming transferability. If ITM ij denotes the transfer strength from subset i to subset j, this value simultaneously represents the outgoing transferability of subset i (toward j) and the incom-ing transferability of subset j (from i). Outgoing transfer-ability measures the average contribution of a data subset to improving the performance of models trained on other sub-sets, reflecting its role as a knowledge provider. Conversely, incoming transferability measures the extent to which a sub-set can be explained or represented by others, indicating its degree of informational redundancy within the overall dataset. Building on this analytical framework, we define two key indicators: • Knowledge Transfer Potential (KTP) : This metric quantifies the total outgoing transferability of a subset. It is calculated as the i-th row sum of the ITM : Ti =P 
+
+> j
+
+ITM i,j . A high KTP indicates that a subset serves as a powerful knowledge source, whose contents broadly enhance the performance of models trained on other data. • Information Redundancy Index (IRI) : This metric quantifies the total incoming transferability of a subset, calculated as the column sum: Ri = P 
+
+> j
+
+ITM j,i . A high IRI signifies that a subset’s information can be largely ’explained’ or ’represented’ by other subsets, indicating a high degree of information redundancy. 
+
+Proportion Optimization. To guide the optimization of mixture proportions, we first formulate a subset value scor-ing mechanism that balances the KTP and IRI. The objec-tive is to assign higher proportions to subsets with strong knowledge contribution and low redundancy. Accordingly, we define the initial value score Si for each subsets as the difference between its KTP and IRI: Si = Ti − Ri. This score Si reflects a subset’s relative value as a knowledge provider versus its tendency to be a knowledge receiver. To utilize these scores as effective weighting coefficients in data re-mixing, we normalize them to [0 , 1] interval via a sigmoid function. In practice, the empirical range of the ini-tial scores Si (theoretically bounded within [−1, 1] ) is often concentrated in a very narrow sub-interval. A naive appli-cation of the sigmoid function to such clustered scores fails to produce weights with sufficient differentiation. To overcome this limitation, we introduce Dynamic Range Mapping (DRM). This procedure centers the initial scores Si relative to their mean and dynamically scales them to fit the sigmoid function’s effective input range. The final normalized score S∗ 
+
+> i
+
+for each subset is computed as: 
+
+S∗ 
+
+> i
+
+= σ  Gate · (Si − ¯S) , (4) where σ(·) is the standard sigmoid function, ¯S is the mean of all initial scores, and Gate is a dynamic scaling factor defined as Gate = K/ (max( S) − min( S)) , with K being a scaling hyperparameter. In our experiments, we set K = 10 . The scaling factor Gate, controlled by K, enlarges the effective gap between the maximum and minimum scores, which helps preserve sufficient separation among subsets. Combined with mean-centering, this adjustment places the inputs in the sigmoid’s sensitive region, so that small differences in Si are trans-lated into well-differentiated weights. An ablation analysis of the DRM mechanism is provided in Sec. 4.3. 
+
+Data Re-Mixing. Combining each subset’s original mix-ture proportion πi with its normalized value score 
+
+S∗ 
+
+> i
+
+, we compute updated mixture proportions π∗ 
+
+> i
+
+=(S∗ 
+
+> i
+
+πi)/(PNj=1 S∗ 
+
+> j
+
+πj ). This formulation preserves the nor-malization constraint PNi=1 π∗ 
+
+> i
+
+= 1 while reweighting sub-sets according to their relative value. By adaptively cap-turing differences in transferability and redundancy across subsets, the sigmoid-normalized scores yield a more stable and principled reweighting process, enabling efficient data re-mixing and improving both generalization and data uti-lization efficiency. We then construct the pruned dataset using the updated proportions π∗ 
+
+> i
+
+and a global selection rate γ (e.g., γ = 0 .2
+
+for selecting 20% of the data). Guided by π∗ 
+
+> i
+
+and γ, we randomly sample the corresponding number of instances from each subset to form the final pruned mixture. The Optimize Mixture Proportions panel in Fig. 2 vividly il-lustrates this final step. The Before pie chart shows the original data mixture, while the After pie chart reflects the pruned and optimized mixture generated by applying the Optimized Proportions. This visual comparison highlights the significant shift in data composition driven by our Mix-to-Max framework. Although Mix-to-Max employs ran-dom sampling to construct the final pruned mixture, the framework itself is compatible with additional score-based filtering method. However, in our experiments, neither the model-agnostic CLIP-Score [34] nor the model-dependent EL2N [32] provided meaningful performance gains over random sampling, while introducing additional computa-tional overhead. 
+
+# 4. Experiments 
+
+4.1. Setup Details 
+
+Datasets and Models. We validate the effectiveness of Mix-to-Max on the LLaVA-665K dataset [23] using the 2941 Table 1. Baseline comparisons on LLaVA-1.5-7B with 20% LLaVA-665K data. Rel. (%) denotes the average relative performance compared to the full-dataset model. The best and second-best scores for each metric are marked in bold and underlined, respectively. Mix-to-Max demonstrates the most balanced performance across all ten benchmarks, achieving the highest average relative performance.                                                                                                                                                           
+
+> Method LLaVA-W VQAv2 GQA VizWiz SQA-I TextVQA POPE MME MMB en MMB cn Rel. (%) Full 67.9 79.1 63.0 47.8 68.4 58.2 86.4 1476.9 66.1 58.9 100.00 Random 65.0 75.7 58.9 44.3 68.5 55.3 84.7 1483.0 62.2 54.8 95.83 CLIP-Score [34] 66.2 73.4 51.4 43.0 65.0 54.7 85.3 1331.6 55.2 52.0 91.15 EL2N [32] 64.9 76.2 58.7 43.7 65.5 53.0 84.3 1439.5 53.2 47.4 91.93 Perplexity [30] 68.3 75.8 57.0 47.8 65.1 52.8 82.6 1341.4 52.0 45.8 91.56 Self-Sup [36] 63.3 74.9 59.5 46.0 67.8 49.3 83.5 1335.9 61.4 53.8 93.38 SemDeDup [1] 70.0 74.2 54.5 46.9 65.8 55.5 84.7 1376.9 52.2 48.5 92.57 Self-Filter [7] 64.9 73.7 58.3 53.2 61.4 52.9 83.8 1306.2 48.8 45.3 90.94 ICONS [38] 66.1 76.3 60.7 50.1 70.8 55.6 87.5 1485.7 63.1 55.8 98.61 COINCIDE [16] 67.3 76.5 59.8 46.8 69.2 55.6 86.1 1495.6 63.1 54.5 97.43 D2-Pruning [29] 63.9 73.0 58.4 41.9 69.3 51.8 85.7 1391.2 65.7 57.6 94.76 TIVE [26] 66.0 74.2 57.0 48.1 70.2 55.7 85.0 1463.6 64.1 56.4 97.08 Mix-to-Max 66.7 76.3 60.2 50.3 68.9 55.2 85.8 1467.6 65.4 58.6 98.82
+
+LLaVA-v1.5-7B model, and on the Vision-Flan-186k [40] dataset using the Qwen2-VL-2B model. LLaVA-665K is a comprehensive vision instruction tuning collection that in-tegrates 10 subsets, while Vision-Flan-186k is a VIT dataset encompassing 191 distinct tasks across 25 high-level cate-gories. In our experiments, we utilized both the LLaVA-v1.5-7B and Qwen2-VL-2B models without any prior VIT. We strictly adhered to the officially recommended finetun-ing hyperparameters for all procedures to ensure the relia-bility and comparability of our results. 
+
+Baseline Methods. To comprehensively evaluate the ef-fectiveness of our approach, we compare it against a di-verse set of advanced methods. These include ICONS [38], TIVE [26] (based on sample influence functions), COIN-CIDE [16] (based on transferability), and seven established coreset selection methods: CLIP-Score [34], EL2N [32], Perplexity [30], SemDeDup [1], D2-Pruning [29], Self-Sup [36], and Self-Filter [7]. Our experimental setup fol-lows the original designs of ICONS and COINCIDE to ensure fair comparison. Additionally, we establish two reference models: one fine-tuned on randomly sampled data (Random) and another fine-tuned on the complete VIT dataset (Full). This setting enables objective assessment of our method’s strengths and applicable scenarios. 
+
+Evaluation Metrics. We employ diverse evaluation benchmarks to comprehensively assess model generaliza-tion across vision-language tasks. Our evaluation frame-work encompasses six capability categories: (1) Visual un-derstanding and reasoning, evaluated through VQAv2 [11], GQA [14], and VizWiz [12] benchmarks; (2) Text-vision in-tegration, using TextVQA [35] to test the model’s ability to recognize and comprehend text within images; (3) Knowl-edge application, assessed via ScienceQA [28] to evalu-ate how well the model combines visual inputs with prior knowledge to answer scientific questions; (4) Hallucina-tion detection, using POPE [20] to measure factual consis-tency in model-generated content; (5) Multiple-choice per-formance, tested through MME [10] and MMBench [24] to evaluate the model’s accuracy in selecting from struc-tured options; and (6) Open-ended generation quality, using LLaVA-W Bench [22] to assess the model’s ability to pro-duce relevant responses. All evaluations follow the standard protocols established in LLaVA-v1.5. 
+
+4.2. Main results 
+
+Performance Comparison. First, we compare the perfor-mance on the LLaVA-665K and Vision-Flan-186K datasets under a 20% sampling ratio. As shown in Tab. 1, we compare the performance on LLaVA-665K with 11 base-line results on 10 evaluation benchmarks. On the LLaVA-665K dataset, Mix-to-Max surpasses all baseline meth-ods, achieving the highest average relative performance. Particularly on core tasks such as VQAv2 (76.3), GQA (60.2), Mix-to-Max demonstrates highly competitive per-formance, while also maintaining excellent results on gen-eralization benchmarks, including MMBench-en (65.4) and MMBench-cn (58.6). To evaluate the generalization ability of Mix-to-Max across different model architectures and datasets, we further conducted experiments on the Vision-Flan-186K dataset us-ing the Qwen2-VL-2B model and compared the results with the strongest baselines: Random, ICONS, and COINCIDE. As shown in Tab. 2, Mix-to-Max raises the relative perfor-mance to 98.45%, significantly outperforming all baseline methods. This demonstrates that the advantages of optimiz-ing mixture proportions effectively transfer across hetero-geneous models and dataset compositions. 2942 Table 2. Baseline comparisons on Qwen2-VL-2B with 20% Vision-Flan-186K data. Rel. (%) denotes the average relative performance compared to the full-dataset model. The best and second-best scores for each metric are marked in bold and underlined, respectively. Mix-to-Max achieves the highest average relative performance, demonstrating strong generalization across different models and datasets.                                                                   
+
+> Method LLaVA-W VQAv2 GQA VizWiz SQA-I TextVQA POPE MME MMB en MMB cn Rel. (%) Full 43.5 73.9 51.7 30.5 75.6 72.9 86.1 1421.3 55.3 49.1 100.00 Random 45.6 56.5 47.8 35.3 74.6 63.8 58.9 1392.9 54.0 50.2 94.20 ICONS [38] 45.9 68.9 49.3 34.4 75.0 67.0 64.1 1393.7 54.2 49.7 97.01 COINCIDE [16] 43.5 59.0 49.0 34.6 75.0 60.0 67.7 1404.0 54.3 49.2 97.51 Mix-to-Max 47.6 68.3 47.5 35.2 75.4 62.2 77.9 1412.1 54.0 50.4 98.45
+
+Different Selection Ratio. To evaluate Mix-to-Max across different data reduction settings, we compare its per-formance with several baselines under four key sampling ratios: 5%, 10%, 20%, and 40%, as shown in Figure 4. The results demonstrate that Mix-to-Max consistently achieves competitive performance across all sampling rates. All methods achieve their largest performance gains within the 5–20% sampling range, where both the increase in data scale and quality contribute to model improvement. At higher sampling ratios, the performance gains of the baselines slow down, whereas Mix-to-Max continues to deliver relatively strong improvements and even surpasses full-dataset performance at the 40% sampling ratio. This demonstrates that the data mixture optimized by Mix-to-Max retains sufficient informative content even at a re-duced data scale, enabling it to match or even surpass the performance achieved using the full dataset. Furthermore, the performance curve of Mix-to-Max is nearly parallel to that of Random. This observation may be attributed to the use of a random sampling strategy in Mix-to-Max, which helps maintain a more balanced distribution of the sampled data. Overall, Mix-to-Max demonstrates superior sample efficiency and stability under varying data budgets, validat-ing its practical effectiveness for VIT. 
+
+4.3. Further Analysis and Ablation 
+
+Ablation on Computing Subset Influence. In Sec. 3.4, we employed the FIS method to compute subset influ-ence, which aggregates the top-p% of samples exhibiting the strongest transfer performance. We compare this FIS method against the baseline approach of using the simple average of sample level influence between subsets (denoted as No FIS). We also conducted an ablation study on the fo-cus depth p, setting p to 10%, 30%, and 50%. Tab. 3 reports their relative performance. The results demonstrate that in-troducing the FIS method yields a prominent performance advantage. Conversely, increasing p leads to a slight degra-dation in relative performance. This occurs because as p
+
+increases, the difference between KTP and IRI diminishes (becoming equivalent when p = 100% ), which weakens the adjustment strength applied to the final mixture proportions. 86    
+
+> 88
+> 90
+> 92
+> 94
+> 96
+> 98
+> 100
+> 102
+> Full
+> Random
+> CLIP-Score
+> EL2N
+> Perplexity
+> SemDeDup
+> D2-Pruning
+> Self-Sup
+> Self-Filter
+> COINCIDE
+> ICONS
+> Mix-to-Max
+> 510 20 40
+> Sampling ratio (%)
+> 70
+> 80
+> Relative Performance (%)
+
+Figure 4. Performance comparison at different sampling ra-tios. Mix-to-Max demonstrates superior sample efficiency, achiev-ing approximately 98.8% of full-data performance at 20% sam-pling rate and surpassing it at 40%. 
+
+Ablation on Dynamic Range Mapping. In Sec. 3.5, we employed the DRM strategy to map the S scores into the ef-fective input range of the sigmoid function. DRM involves a mean-centering operation and a dynamic scaling opera-tion controlled by a coefficient K. In this section, we per-form an ablation study to examine the contribution of each component. We evaluate three centering methods—no cen-tering, mean-centering, and median-centering—and assess the impact of dynamic scaling using K = 10 , K = 20 , and a no-scaling baseline. The results are reported in Tab. 3. As the results indicate, removing the DRM procedure en-tirely results in a relative performance of only 96.86%. In contrast, the combination of mean-centering and a scaling coefficient of K = 10 yields the highest performance. 
+
+Ablation on Resampling Strategy. Tab. 4 reports the relative performance of two score-based data selection methods, CLIP-Score and EL2N, when used as sampling strategies within the Mix-to-Max framework. Although both methods yield lower Rel. (%) than random sampling (97.43% and 96.27% vs. 98.82%), this gap likely arises 2943 Table 3. Ablation results . (a) Applying FIS improves subset influ-ence estimation, with p = 10% achieving the best balance between focus and stability. (b) The DRM study shows that mean-centering with K = 10 yields optimal normalization and overall performance.                        
+
+> (a) Ablation on FIS. Method Rel. (%) No FIS 94.84 FIS (P=10) 98.82
+> FIS (P=30) 98.18 FIS (P=50) 98.00 (b) Ablation on DRM. Centering Scaling Factor Rel. (%) --96.86 -K= 10 98.03 Mean -96.60 Mean K= 10 98.82
+> Mean K= 20 98.72 Median K= 10 97.51
+
+Table 4. Relative performance at different sampling methods.              
+
+> Method Rel. (%) Method Rel. (%) Full 100.00 Random 95.83 Mix-to-Max + Random 98.82
+> CLIP-Score 91.15 Mix-to-Max + CLIP-Score 97.43 EL2N 91.93 Mix-to-Max + EL2N 96.27
+
+from intrinsic biases in their scoring that reduce the diver-sity of the resulting mixtures. Notably, when compared with applying CLIP-Score or EL2N directly to the full mixed dataset (91.15% and 91.93%), integrating these methods into Mix-to-Max produces substantial performance gains, indicating that Mix-to-Max effectively mitigates the limita-tions of score-based selection. 
+
+4.4. Efficiency Analysis 
+
+Within the Mix-to-Max framework, the Compute Proxy Gradients phase consumes the majority of the processing time. In practice, using A100 GPU computation time mea-sured in hours, training a LoRA proxy model requires 3.9 hours, gradient calculation requires about 0.2 hours, and the other steps take only a few minutes. Final fine-tuning on the sampled 20% subset takes approximately 14.7 hours. Over-all, Mix-to-Max achieves 98.8% of full fine-tuning perfor-mance in only 18.9 hours, reducing training time by 74.4% compared to the 73.7 hours required for full fine-tuning. We have compiled the efficiency results for all baseline methods and Mix-to-Max, including two competitive base-lines, ICONS and COINCIDE. Fig. 5 presents a scatter plot comparing Mix-to-Max with baseline methods in terms of relative performance and wall-clock time, both normalized against full-dataset fine-tuning. The shaded regions are de-marcated based on the performance of Random selection and the time cost of Full fine-tune, designed to highlight areas of different performance-efficiency trade-offs. The results indicate that Mix-to-Max’s time efficiency (approximately 25.6% of full fine-tuning time) surpasses all baselines except for CLIP-Score (21.4%), while simultane-ously providing superior relative performance. Compared 20% 25% 30% 35% 100% 150% 200% 
+
+> Relative Time Cost (%)
+> 90%
+> 92%
+> 94%
+> 96%
+> 98%
+> 100%
+> 102%
+> Relative Performance (%)
+> Mix-to-Max
+> Full
+> ICONS
+> COINCIDE
+> Random
+> Self-Filter CLIP-Score
+> Full
+> Random
+> CLIP-Score
+> EL2N
+> Perplexity
+> SemDeDup
+> D2-Pruning
+> Self-Sup
+> Self-Filter
+> COINCIDE
+> ICONS
+> Mix-to-Max
+
+Figure 5. Comparison of various data pruning methods trained using 20% of the full dataset. The plot shows their performance and wall-clock time percentages relative to full dataset fine-tuning. 
+
+to ICONS, which also utilizes influence-based analysis but requires significantly more time (approximately 210% of full fine-tuning time), Mix-to-Max demonstrates substan-tially lower resource consumption while maintaining com-parable performance. Leveraging an efficient data mixture strategy, Mix-to-Max strikes a strong balance between per-formance and computational cost, delivering excellent gen-eralization ability in complex multi-task scenarios. 
+
+# 5. Conclusion and Limitations 
+
+In this paper, we introduced Mix-to-Max, a simple yet pow-erful framework that boosts data efficiency simply by re-allocating mixture proportions across pre-defined subsets. Mix-to-Max demonstrates that, even without complex fil-tering pipelines, judiciously remixing data alone can re-cover full-data performance using only a fraction of sam-ples, achieving 98.82% of full-data accuracy with just 20% of the dataset and reducing training time by over 74.4%. The framework is also compatible with any score-based sampler. While random sampling performs surprisingly well, Mix-to-Max can readily incorporate stronger scoring methods, offering potential for further improvement. 
+
+Limitations. Mix-to-Max faces two main constraints. First, it operates on subsets within a mixed dataset, requir-ing the dataset to be partitioned into subsets in advance. While large-scale datasets typically comprise multiple nat-urally occurring subsets, this requirement may still limit the method’s applicability. Second, the current implementation learns static optimal mixing ratios, which may not fully cap-ture evolving data utility during fine-tuning. Future work could address these limitations by exploring automatic sub-set partitioning strategies and developing adaptive mixing approaches that adjust dynamically throughout training, fur-ther enhancing the method’s flexibility and effectiveness. 2944 Acknowledgments 
+
+This work was supported by the project of Peng Cheng Laboratory (PCL2025A12), by National Natural Science Foundation of China (grant No. 62350710797), by Guangdong Basic and Applied Ba-sic Research Foundation (grant No. 2023B1515120065). 
+
+# References 
+
+[1] Amro Kamal Mohamed Abbas, Kushal Tirumala, Daniel Simig, Surya Ganguli, and Ari S Morcos. Semdedup: Data-efficient learning at web-scale through semantic deduplica-tion. In ICLR 2023 Workshop on Multimodal Representation Learning: Perks and Pitfalls , 2023. 6 [2] Josh Achiam, Steven Adler, Sandhini Agarwal, Lama Ah-mad, Ilge Akkaya, Florencia Leoni Aleman, Diogo Almeida, Janko Altenschmidt, Sam Altman, Shyamal Anadkat, et al. Gpt-4 technical report. arXiv preprint arXiv:2303.08774 ,2023. 1 [3] Jean-Baptiste Alayrac, Jeff Donahue, Pauline Luc, Antoine Miech, Iain Barr, Yana Hasson, Karel Lenc, Arthur Men-sch, Katherine Millican, Malcolm Reynolds, et al. Flamingo: a visual language model for few-shot learning. Advances in neural information processing systems , 35:23716–23736, 2022. 1 [4] Alon Albalak, Yanai Elazar, Sang Michael Xie, Shayne Longpre, Nathan Lambert, Xinyi Wang, Niklas Muen-nighoff, Bairu Hou, Liangming Pan, Haewon Jeong, et al. A survey on data selection for language models. arXiv preprint arXiv:2402.16827 , 2024. 1 [5] Shuai Bai, Keqin Chen, Xuejing Liu, Jialin Wang, Wenbin Ge, Sibo Song, Kai Dang, Peng Wang, Shijie Wang, Jun Tang, et al. Qwen2. 5-vl technical report. arXiv preprint arXiv:2502.13923 , 2025. 2 [6] Tianyi Bai, Hao Liang, Binwang Wan, Yanran Xu, Xi Li, Shiyu Li, Ling Yang, Bozhou Li, Yifan Wang, Bin Cui, et al. A survey of multimodal large language model from a data-centric perspective. arXiv preprint arXiv:2405.16640 , 2024. 1[7] Ruibo Chen, Yihan Wu, Lichang Chen, Guodong Liu, Qi He, Tianyi Xiong, Chenxi Liu, Junfeng Guo, and Heng Huang. Your vision-language model itself is a strong filter: Towards high-quality instruction tuning with data selection. In Find-ings of the Association for Computational Linguistics ACL 2024 , pages 4156–4172, 2024. 2, 6 [8] Zhe Chen, Weiyun Wang, Yue Cao, Yangzhou Liu, Zhang-wei Gao, Erfei Cui, Jinguo Zhu, Shenglong Ye, Hao Tian, Zhaoyang Liu, et al. Expanding performance boundaries of open-source multimodal models with model, data, and test-time scaling. arXiv preprint arXiv:2412.05271 , 2024. 2 [9] Guanting Dong, Hongyi Yuan, Keming Lu, Chengpeng Li, Mingfeng Xue, Dayiheng Liu, Wei Wang, Zheng Yuan, Chang Zhou, and Jingren Zhou. How abilities in large lan-guage models are affected by supervised fine-tuning data composition. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 177–198, 2024. 1, 2 [10] Chaoyou Fu, Peixian Chen, Yunhang Shen, Yulei Qin, Mengdan Zhang, Xu Lin, Jinrui Yang, Xiawu Zheng, Ke Li, Xing Sun, et al. Mme: A comprehensive evaluation bench-mark for multimodal large language models. In The Thirty-ninth Annual Conference on Neural Information Processing Systems Datasets and Benchmarks Track , 2025. 6 [11] Yash Goyal, Tejas Khot, Douglas Summers-Stay, Dhruv Ba-tra, and Devi Parikh. Making the v in vqa matter: Elevating the role of image understanding in visual question answer-ing. In Proceedings of the IEEE conference on computer vision and pattern recognition , pages 6904–6913, 2017. 6 [12] Danna Gurari, Qing Li, Abigale J Stangl, Anhong Guo, Chi Lin, Kristen Grauman, Jiebo Luo, and Jeffrey P Bigham. Vizwiz grand challenge: Answering visual questions from blind people. In Proceedings of the IEEE conference on computer vision and pattern recognition , pages 3608–3617, 2018. 6 [13] Zayd Hammoudeh and Daniel Lowd. Training data influence analysis and estimation: A survey. Machine Learning , 113 (5):2351–2403, 2024. 1 [14] Drew A Hudson and Christopher D Manning. Gqa: A new dataset for real-world visual reasoning and compositional question answering. In Proceedings of the IEEE/CVF con-ference on computer vision and pattern recognition , pages 6700–6709, 2019. 6 [15] Pang Wei Koh and Percy Liang. Understanding black-box predictions via influence functions. In International confer-ence on machine learning , pages 1885–1894. PMLR, 2017. 3[16] Jaewoo Lee, Boyang Li, and Sung Ju Hwang. Concept-skill transferability-based data selection for large vision-language models. In Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing , pages 5060–5080, 2024. 2, 6, 7 [17] Bo Li, Yuanhan Zhang, Dong Guo, Renrui Zhang, Feng Li, Hao Zhang, Kaichen Zhang, Peiyuan Zhang, Yanwei Li, Zi-wei Liu, et al. Llava-onevision: Easy visual task transfer. 
+
+arXiv preprint arXiv:2408.03326 , 2024. 2 [18] Ming Li, Yong Zhang, Shwai He, Zhitao Li, Hongyu Zhao, Jianzong Wang, Ning Cheng, and Tianyi Zhou. Superfilter-ing: Weak-to-strong data filtering for fast instruction-tuning. In Proceedings of the 62nd Annual Meeting of the Associa-tion for Computational Linguistics (Volume 1: Long Papers) ,pages 14255–14273, 2024. 2 [19] Ming Li, Yong Zhang, Zhitao Li, Jiuhai Chen, Lichang Chen, Ning Cheng, Jianzong Wang, Tianyi Zhou, and Jing Xiao. From quantity to quality: Boosting llm performance with self-guided data selection for instruction tuning. In Proceed-ings of the 2024 Conference of the North American Chap-ter of the Association for Computational Linguistics: Hu-man Language Technologies (Volume 1: Long Papers) , pages 7602–7635, 2024. 2 [20] Yifan Li, Yifan Du, Kun Zhou, Jinpeng Wang, Wayne Xin Zhao, and Ji-Rong Wen. Evaluating object hallucination in large vision-language models. In Proceedings of the 2023 Conference on Empirical Methods in Natural Language Pro-cessing , pages 292–305, 2023. 6 2945 [21] Zijing Liang, Yanjie Xu, Yifan Hong, Penghui Shang, Qi Wang, Qiang Fu, and Ke Liu. A survey of multimodel large language models. In Proceedings of the 3rd International Conference on Computer, Artificial Intelligence and Control Engineering , pages 405–409, 2024. 1 [22] Haotian Liu, Chunyuan Li, Qingyang Wu, and Yong Jae Lee. Visual instruction tuning. Advances in neural information processing systems , 36:34892–34916, 2023. 1, 6 [23] Haotian Liu, Chunyuan Li, Yuheng Li, and Yong Jae Lee. Improved baselines with visual instruction tuning. In Pro-ceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 26296–26306, 2024. 1, 2, 5 [24] Yuan Liu, Haodong Duan, Yuanhan Zhang, Bo Li, Songyang Zhang, Wangbo Zhao, Yike Yuan, Jiaqi Wang, Conghui He, Ziwei Liu, et al. Mmbench: Is your multi-modal model an all-around player? In European conference on computer vi-sion , pages 216–233. Springer, 2024. 6 [25] Yuan Liu, Le Tian, Xiao Zhou, and Jie Zhou. Rethink-ing overlooked aspects in vision-language models. arXiv preprint arXiv:2405.11850 , 2024. 1 [26] Zikang Liu, Kun Zhou, Wayne Xin Zhao, Dawei Gao, Yaliang Li, and Ji-Rong Wen. Less is more: High-value data selection for visual instruction tuning. In Proceedings of the 33rd ACM International Conference on Multimedia , pages 3712–3721, 2025. 6 [27] Keming Lu, Hongyi Yuan, Zheng Yuan, Runji Lin, Junyang Lin, Chuanqi Tan, Chang Zhou, and Jingren Zhou. #instag: Instruction tagging for analyzing supervised fine-tuning of large language models. In NeurIPS 2023 Workshop on In-struction Tuning and Instruction Following , 2023. 2 [28] Pan Lu, Swaroop Mishra, Tanglin Xia, Liang Qiu, Kai-Wei Chang, Song-Chun Zhu, Oyvind Tafjord, Peter Clark, and Ashwin Kalyan. Learn to explain: Multimodal reasoning via thought chains for science question answering. Advances in Neural Information Processing Systems , 35:2507–2521, 2022. 6 [29] Adyasha Maharana, Prateek Yadav, and Mohit Bansal. D2 pruning: Message passing for balancing diversity and dif-ficulty in data pruning. arXiv preprint arXiv:2310.07931 ,2023. 6 [30] Max Marion, Ahmet ¨ Ust¨ un, Luiza Pozzobon, Alex Wang, Marzieh Fadaee, and Sara Hooker. When less is more: In-vestigating data pruning for pretraining llms at scale. arXiv preprint arXiv:2309.04564 , 2023. 6 [31] Sung Min Park, Kristian Georgiev, Andrew Ilyas, Guillaume Leclerc, and Aleksander Madry. Trak: Attributing model behavior at scale. In International Conference on Machine Learning , pages 27074–27113. PMLR, 2023. 1, 3 [32] Mansheej Paul, Surya Ganguli, and Gintare Karolina Dziu-gaite. Deep learning on a data diet: Finding important ex-amples early in training. Advances in neural information processing systems , 34:20596–20607, 2021. 5, 6 [33] Garima Pruthi, Frederick Liu, Satyen Kale, and Mukund Sundararajan. Estimating training data influence by tracing gradient descent. Advances in Neural Information Process-ing Systems , 33:19920–19930, 2020. 1, 3 [34] Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya Ramesh, Gabriel Goh, Sandhini Agarwal, Girish Sastry, Amanda Askell, Pamela Mishkin, Jack Clark, et al. Learning transferable visual models from natural language supervi-sion. In International conference on machine learning , pages 8748–8763. PmLR, 2021. 5, 6 [35] Amanpreet Singh, Vivek Natarajan, Meet Shah, Yu Jiang, Xinlei Chen, Dhruv Batra, Devi Parikh, and Marcus Rohrbach. Towards vqa models that can read. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pages 8317–8326, 2019. 6 [36] Ben Sorscher, Robert Geirhos, Shashank Shekhar, Surya Ganguli, and Ari Morcos. Beyond neural scaling laws: beat-ing power law scaling via data pruning. Advances in Neural Information Processing Systems , 35:19523–19536, 2022. 6 [37] Jiachen Tianhao Wang, Tong Wu, Dawn Song, Prateek Mit-tal, and Ruoxi Jia. Greats: Online selection of high-quality data for llm training in every iteration. Advances in Neural Information Processing Systems , 37:131197–131223, 2024. 2[38] Xindi Wu, Mengzhou Xia, Rulin Shao, Zhiwei Deng, Pang Wei Koh, and Olga Russakovsky. Icons: Influence consensus for vision-language data selection. arXiv preprint arXiv:2501.00654 , 2024. 1, 3, 6, 7 [39] Mengzhou Xia, Sadhika Malladi, Suchin Gururangan, San-jeev Arora, and Danqi Chen. Less: selecting influential data for targeted instruction tuning. In Proceedings of the 41st In-ternational Conference on Machine Learning , pages 54104– 54132, 2024. 3, 4 [40] Zhiyang Xu, Chao Feng, Rulin Shao, Trevor Ashby, Ying Shen, Di Jin, Yu Cheng, Qifan Wang, and Lifu Huang. Vision-flan: Scaling human-labeled tasks in visual instruc-tion tuning. In Findings of the Association for Computational Linguistics ACL 2024 , pages 15271–15342, 2024. 6 [41] Chunting Zhou, Pengfei Liu, Puxin Xu, Srinivasan Iyer, Jiao Sun, Yuning Mao, Xuezhe Ma, Avia Efrat, Ping Yu, Lili Yu, et al. Lima: Less is more for alignment. Advances in Neural Information Processing Systems , 36:55006–55021, 2023. 1 2946
