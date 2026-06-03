@@ -1,0 +1,2273 @@
+Title: Strong Teacher Not Needed? On Distillation in LLM Pretraining
+
+URL Source: https://arxiv.org/pdf/2605.23857
+
+Published Time: Mon, 25 May 2026 01:19:15 GMT
+
+Number of Pages: 30
+
+Markdown Content:
+# Strong Teacher Not Needed? On Distillation in LLM Pretraining 
+
+Taiming Lu Zhuang Liu 
+
+Princeton University 0.7B  0.7B  1.7B 1.7B  1.7B 3.8B  1.7B 8.0B 
+
+## weak-to-small  same-level  strong-to-weak  very-strong-to-weak 
+
+## +0.7%  +1.5%  +3.4%  +3.2% 
+
+(a) A smaller teacher can still guide a larger student. 
+
+(b) A teacher can help a same-level student. 
+
+(c) A compatible strong teacher helps the most. 
+
+(d) An overly strong teacher can overwhelm the student. 
+
+Figure 1. Effective distillation in LLM pretraining depends on teacher–student compatibility, not strong teacher. 
+
+Useful supervision can come from a smaller, same-level, stronger, or even much stronger teacher, but the resulting gains depend on how the teacher fits the student. This paper systematically studies this and shows that weak-to-strong and same-level distillation can improve pretraining, while stronger teachers can saturate and underperform. 
+
+## Abstract 
+
+Knowledge distillation generally assumes a strong-to-weak relationship where stronger teachers yield better students. In this work, we examine this assumption about distillation in large language model pretraining. By varying architecture sizes and training token budgets, we create strong-to-weak, same-level, and weak-to-strong teacher-student relationships, and study distillation’s effectiveness under each. We find that the teacher need not be strong: with proper mixing of the language modeling and knowledge distillation losses, even small and undertrained teachers improve larger students. At the same time, a stronger teacher is not always better: pushing the teacher further, through more parameters or more training tokens, can saturate or even reverse the distillation gains. We further observe that distillation improves generalization (out-of-distribution and downstream performance) more readily than in-domain fitting. Together, these results challenge the common belief that distillation pretraining always requires a strong teacher. Our code is avaliable here. 
+
+1
+
+> arXiv:2605.23857v1 [cs.LG] 22 May 2026
+
+# 1 Introduction 
+
+A long-standing assumption governs knowledge distillation: a stronger teacher yields a better student (Hinton et al., 2015; Buciluundefined et al., 2006). When a large model is compressed into a smaller one, the more capable the teacher, the more knowledge there is available to transfer (Cho and Hariharan, 2019; Cha and Cho, 2025). Across a decade of work spanning both vision (Romero et al., 2015; Zagoruyko and Komodakis, 2017; Park et al., 2019) and language modeling (Sanh et al., 2020; Jiao et al., 2020; Sun et al., 2019; Wang et al., 2020; Kim and Rush, 2016), this strong-to-weak framing has shaped teacher selection (Busbridge et al., 2025), loss design (He et al., 2025; Peng and Zhang, 2025; Xie et al., 2026), and the broader premise that distillation serves primarily as a compression technique (Muralidharan et al., 2024; Zhang et al., 2024). Our experiments suggest this account is incomplete. In large language model (LLM) pretraining, we find that weaker teachers can in fact improve stronger students, and that continuing to strengthen a teacher, through additional parameters or additional training tokens, can degrade rather than improve the resulting student. The stakes extend well beyond theoretical interest. As LLMs continue to scale, two practical scenarios make the teacher-student relationship increasingly consequential. First, when training frontier models (AI@Meta, 2024; Qwen, 2025; DeepSeek-AI, 2025), the best available teacher is often drawn from the previous generation, trained with a smaller architecture or less compute than the target student (Burns et al., 2024). Second, alongside the push toward larger models, demand persists for small, efficient systems (Phi3@Microsoft, 2024; Liu et al., 2024) capable of serving lightweight tasks at low latency (Leviathan et al., 2023). Under the conventional strong-to-weak view, the former scenario forecloses distillation entirely, while the latter (Mehta et al., 2024; Zhang et al., 2024) reduces teacher selection to a single rule: the larger and more trained, the better (Muralidharan et al., 2024). Whether these assumptions hold determines both how broadly distillation can be applied in LLM development and how the teacher should be chosen in practice. Despite its centrality, the strong-to-weak view has remained largely unchallenged in the context of LLM pretraining (Buciluundefined et al., 2006): weaker teachers are presumed unable to meaningfully guide stronger students, and scaling up the teacher is presumed to monotonically improve the student. Prior work on LLM distillation (Kim and Rush, 2016; Sun et al., 2019; Wang et al., 2020, 2023; Sanh et al., 2020; Jiao et al., 2020) has not systematically examined these assumptions across the full range of teacher configurations. 1.7B-50B                     
+
+> Student
+> arch. size
+> 10B
+> 30B
+> 50B
+> 80B
+> 100B
+> 300B
+> 0.7B 1.7B 3.8B 8.0B
+> tokens
+> 20
+> 16
+> 12
+> 8
+> ppl
+> Teachers
+> We vary sizes and tokens to create
+> diverse teacher-student relationships.
+> a) Weak-to-strong distill
+> can be beneficial.
+> 0.7B-50B student config:
+> 0.7B -50B +0.7%
+> 0.7B -80B +0.9%
+> 1.7B-30B +1.4%
+> 1.7B-50B +1.5%
+> 3.8B-30B +2.6%
+> 8.0B-10B +0.9%
+> teacher config accuracy
+> 8.0B-30B +4.3%
+> 8.0B-80B +3.9%
+> 8.0B-300B +2.8%
+> 1.7B -300B +4.3%
+> 3.8B-300B +3.5%
+> 8.0B-300B +2.8%
+> b) Stronger teachers is
+> not always better.
+> 0.7B-50B student config:
+> teacher config accuracy
+> c) Domain pattern varies. 0-15 -30
+> improvement 30-3 15 10
+> teacher train perplexity downstream in-domain
+
+Figure 2. A strong teacher is not always needed in distillation pretraining. We vary architecture size and training tokens to create diverse teacher-student relationships. We have three key findings. a) Weak-to-strong and same-level distillation can be beneficial: teachers with smaller architecture or fewer tokens (marked red in figure) than the student still yield improvement. b) Stronger teachers do not always yield better students: at high token budgets, same-size teachers outperform larger ones; at large sizes, teachers trained with fewer tokens outperform those trained with more. 
+
+c) Different evaluation domains show different patterns: in-domain improvement follows a universal trend and is hardest to improve, while out-of-distribution and downstream exhibit architecture-specific or noisy patterns and are easier to improve, suggesting distillation pretraining transfers useful knowledge for generalization instead of fitting. 
+
+2We confront them directly by asking two central questions: 
+
+Can weak-to-strong distillation be helpful? Does a stronger teacher always yield a better student? 
+
+To address these questions, we conduct a systematic study of teacher-student relationships (see Figure 2). We vary teacher and student architecture sizes, teacher training token budgets, and the loss mixing coefficient, spanning strong-to-weak, same-level, and weak-to-strong configurations. Our findings are threefold: 
+
+• Weak teachers can improve strong students. With appropriate loss mixing, teachers smaller and less trained than the student still yield measurable gains. 
+
+• Stronger teachers do not always produce better students. Architecture mismatch and teacher overtraining can degrade transfer even when the teacher attains a lower training loss. 
+
+• Generalization improves more readily than in-domain fit. Out-of-distribution perplexity and downstream accuracy exhibit larger and more consistent gains than in-domain perplexity. Collectively, these findings unsettle the prevailing account of distillation in LLM pretraining and offer concrete implications for which teacher to select and which loss-mixing to use under realistic compute constraints. 
+
+# 2 Background 
+
+We review the standard autoregressive language modeling and knowledge distillation (KD) objectives. Given a token sequence 𝑥 = ( 𝑥 1, . . . , 𝑥 𝑇 ) drawn from a pretraining corpus 𝒟 , a student model with parameters 𝜃 𝑆 
+
+defines a next-token distribution 𝑝 𝜃 𝑆 (· | 𝑥 <𝑡 ), and a teacher model with parameters 𝜃 𝑇 defines 𝑝 𝜃 𝑇 (· | 𝑥 <𝑡 ).We formalize the student’s training objectives in standard and distillation pretraining below. 
+
+Autoregressive language modeling. Standard pretraining learns 𝜃 𝑆 by maximizing the likelihood of the observed next token given a preceding context, as in Equation 1. We refer to this as the language modeling loss (LM loss), the cross-entropy between the student distribution and a one-hot target (the ground-truth next token). This objective trains the student to model the distribution of the training corpus. 
+
+ℒlm (𝜃 𝑆 ) = E𝑥 ∼𝒟 [︃ 1
+
+𝑇 
+
+> 𝑇
+
+∑︁ 
+
+> 𝑡 =1
+
+− log 𝑝 𝜃 𝑆 (𝑥 𝑡 | 𝑥 <𝑡 )]︃ (1) 
+
+Knowledge distillation for language modeling. In distillation pretraining (Hinton et al., 2015), the target is no longer a one-hot vector but the teacher’s relative preferences among all tokens. The teacher provides a full distribution over the vocabulary for the same context 𝑥 <𝑡 . Let 𝑞 𝑡 (·) := 𝑝 𝜃 𝑇 (· | 𝑥 <𝑡 ) and 𝑝 𝑡 (·) := 𝑝 𝜃 𝑆 (· | 𝑥 <𝑡 ).
+
+Student distribution 𝑝 𝑡 will try to match the teacher distribution 𝑞 𝑡 by minimizing the forward KL divergence, as in Equation 2. We refer to this as the knowledge distillation loss (KD loss). Intuitively, KD trains the student to imitate not only the teacher’s top prediction, but also relative preferences among alternative tokens. 
+
+ℒkd (𝜃 𝑆 ; 𝜃 𝑇 ) = E𝑥 ∼𝒟 [︃ 1
+
+𝑇 
+
+> 𝑇
+
+∑︁ 
+
+> 𝑡 =1
+
+KL( 𝑞 𝑡 ‖ 𝑝 𝑡 )]︃ (2) 
+
+Mixing ground-truth and teacher supervision. Distillation typically combines the standard language modeling loss with the distillation loss (Hinton et al., 2015), as in Equation 3. The loss mixing coefficient 𝛼 controls the trade-off: 𝛼 = 0 recovers standard pretraining, while larger 𝛼 places more weight on matching the teacher distribution. In practice, 𝛼 determines how much the student follows the teacher compared to the ground-truth data signal. We refer to this as the mixed loss and use it for all distillation pretraining in this work. 
+
+ℒ(𝜃 𝑆 ; 𝜃 𝑇 ) = (1 − 𝛼 ) ℒlm (𝜃 𝑆 ) + 𝛼 ℒkd (𝜃 𝑆 ; 𝜃 𝑇 ), 𝛼 ∈ [0 , 1] (3) 3in-domain ppl ( ↓) out-of-distribution ppl avg. ( ↓) downstream acc avg. ( ↑)0.7B 1.7B 3.8B 8.0B 0.7B 1.7B 3.8B 8.0B 0.7B 1.7B 3.8B 8.0B                                                                                        
+
+> →standard pretrained teachers
+> 10B 21.2 16.8 14.4 12.8 39.8 26.3 22.0 18.5 34.9% 37.0% 38.5% 39.4% 30B 16.3 13.1 11.2 10.0 23.6 17.5 14.4 12.8 37.8% 39.4% 41.5% 42.7% 50B 14.9 12.1 10.3 9.1 20.6 15.6 13.0 11.7 38.1% 39.9% 42.9% 43.7% 80B 14.0 11.5 9.6 8.4 18.4 14.5 11.9 11.0 38.5% 41.9% 43.6% 44.9% 100B 13.7 11.2 9.4 8.1 17.8 13.9 11.6 10.6 38.8% 41.9% 43.7% 45.2% 300B 12.5 10.2 8.3 6.8 16.1 12.8 10.9 10.1 40.1% 43.2% 45.4% 46.6%
+> →standard pretrained student baseline
+> 50B 14.9 12.2 10.3 9.0 20.6 15.7 13.0 11.7 38.1% 40.1% 42.2% 43.5%
+> Table 1. Performance of standard pretrained teacher models and student baselines. Rows indicate training token budget; columns indicate architecture size. In our main experiments, student distillation pretraining (and thus the baselines) is fixed to 50B tokens. We report in-domain perplexity (ppl) on held-out FineWeb-Edu (lower is better), average out-of-distribution perplexity across 11 corpora (lower is better), and average downstream accuracy (acc) across 15 benchmarks (higher is better). Teacher performance consistently improves with both architecture size and training tokens, with minor variance in downstream accuracy. View full results at §H.
+
+# 3 Experimental Design 
+
+3.1 Teacher-Student Configurations 
+
+Architecture sizes. We use the Llama3 (AI@Meta, 2024) architectures. To enable systematic comparison across sizes, we create four architecture variants (see §B), resulting in four model sizes: 0.7B, 1.7B, 3.8B, and 8.0B parameters. Given a student of a particular size, the teacher can be larger, the same size, or smaller. 
+
+Training token budgets. Teachers are pretrained on varying amounts of data: 10B, 30B, 50B, 80B, 100B, or 300B tokens. Students are trained on all 50B tokens for distillation pretraining. This creates another dimension of variation: the teacher sees more, the same number, or fewer tokens than the student. 
+
+Teacher-student relationships. Together, size and tokens create a spectrum of teacher-student relationships: 
+
+• Architecture: large-to-small, same-size, or small-to-large, 
+
+• Tokens: more-to-less, same-number, or less-to-more, 
+
+• Train loss : lower-to-higher or higher-to-lower, defined by teacher train loss compared to student baseline. These dimensions do not always align. A smaller architecture trained on more tokens may achieve lower train loss than a larger one trained on fewer tokens. A same-size teacher trained longer may outperform a larger one trained briefly. This allows us to disentangle the effects of architecture capacity from training compute in knowledge transfer. More broadly, we refer to a teacher-student relationship as strong-to-weak when a teacher is stronger than the student (by any dimensions above), same-level if identical, and weak-to-strong for the opposite. A single relationship may be strong-to-weak in one dimension and weak-to-strong in another. 
+
+3.2 Training Details 
+
+Data and tokenization. All models are trained on FineWeb-Edu (Penedo et al., 2024). Teacher pretraining and student distillation pretraining draw from the same data pool with different random seeds, so the sequences seen may overlap but are not identical. For each run, no data is repeated during training per run. 
+
+Hyperparameters. We use an 8192-token context length and a 256-sequence batch size. We train with AdamW using 𝛽 1 = 0 .9, 𝛽 2 = 0 .95 , and weight decay 0.1. The peak learning rate is 3 × 10 −4 with a cosine decay to 10% of the peak, linear warm-up for the first 5% of steps, gradient clipping of 1.0, and bf16 precision. 
+
+Distillation pretraining. During distillation, the teacher model is kept frozen and provides logits only. We use a temperature of 𝜏 = 1 for the knowledge distillation loss to apply no scaling to the logits. For each teacher-student configuration, we search over the loss mixing coefficient 𝛼 ∈ { 0.2, 0.4, 0.5, 0.6, 0.8, 1.0}.
+
+Baseline. The standard pretraining baseline for each student corresponds to training with 𝛼 = 0 (language modeling loss only) under the same data ordering and random seed as distillation pretraining. This ensures that any improvement from distillation is attributable to the teacher signal rather than confounding factors. 43.3 Evaluations 
+
+We evaluate distillation effectiveness along three dimensions: in-domain perplexity, out-of-distribution perplexity, and downstream accuracy for a broad range of performance (see §C for full evaluation metrics). 
+
+In-domain perplexity. We measure in-domain perplexity (id ppl) on a held-out test split from training dataset FineWeb-Edu, which was not seen during training. Lower perplexity indicates better fit to the training distribution. This evaluates how well the student models the same distribution as the training data. 
+
+Out-of-domain perplexity. We also measure out-of-distribution perplexity (ood ppl) on 11 high-quality corpora: Wikitext-103 (Merity et al., 2017), C4 (Raffel et al., 2020), GSM8K (Cobbe et al., 2021), DM Mathematics (Saxton et al., 2019), HumanEval (Chen et al., 2021), CodeSearchNet (Husain et al., 2019), arXiv (Cohan et al., 2018), CNN-DailyMail (Hermann et al., 2015), ECHR (Chalkidis et al., 2019), Pub-MedQA (Jin et al., 2019), XQuAD (Artetxe et al., 2020). These corpora span diverse domains, including web, news, scientific, math, code, biomedical, legal, and multilingual documents and QA, providing broad coverage of distribution shifts. This evaluates how well the model generalizes beyond the training corpus. 
+
+Downstream accuracy. We evaluate on 15 downstream accuracy-based benchmarks (downstream acc): MMLU (Hendrycks et al., 2021), ARC-Easy (Clark et al., 2018), SciQ (Welbl et al., 2017), OpenBookQA (Mi-haylov et al., 2018), MathQA (Amini et al., 2019), TruthfulQA (Lin et al., 2022), ANLI-R1 (Nie et al., 2020), CommonsenseQA (Talmor et al., 2019), HellaSwag (Zellers et al., 2019), PIQA (Bisk et al., 2020), WinoGrande (Sakaguchi et al., 2020), Social IQa (Sap et al., 2019), LogiQA 2.0 (Liu et al., 2023), MedM-CQA (Pal et al., 2022), and RACE (Lai et al., 2017). These benchmarks cover broad knowledge, science, math, and medical QA, commonsense and logical reasoning, and reading comprehension to offer a diverse view of downstream transfer, evaluating transfer for tasks beyond next-token prediction. 
+
+Measuring improvement. For each evaluation type, we compute improvement as the percentage change relative to the standard pretraining baseline. Due to the high number of benchmarks within each evaluation type, we report the average for brevity, where we average the percentage improvements across benchmarks rather than averaging raw scores, as different benchmarks have different scales. 
+
+# 4 Distillation Under Different Teacher-Student Relationships 
+
+Before studying distillation, we validate that our teacher models are properly trained and exhibit expected scaling behavior. We train teachers across four architecture sizes (0.7B, 1.7B, 3.8B, 8.0B) and six token budgets (10B, 30B, 50B, 80B, 100B, 300B), yielding 24 teacher models. Table 1 reports teacher performance across all configurations. As expected, performance improves with both architecture size and training tokens. This confirms that our teachers span a meaningful range of capabilities, from undertrained small models (0.7B at 10B tokens) to well-trained large models (8.0B at 300B tokens). We also report the student baselines trained on 50B tokens as references for measuring distillation improvement in subsequent experiments. To study distillation’s maximum strength, we analyze distillation pretraining when selecting the optimal loss mixing coefficient 𝛼 for each teacher-student configuration. We fix the student to 1.7B trained on 50B tokens and pair it with all 24 teachers. Training curves are detailed in §F. We report the best 𝛼 per evaluation type to capture differing trends. Using a single best 𝛼 conditioned on all evaluation types matches the same findings (see §E). Given the high number of evaluations, we report the average improvement. Per-benchmark results follow the trend of the aggregated one (see §H). Another common practice is pure distillation ( 𝛼 = 1 .0), training only on teacher’s output distribution. Generally, we find it worse than mixed loss (see §D). With the best 𝛼 , Table 2 shows the percentage improvement over the standard pretraining baseline, and Figure 3 visualizes the trends. Table 2 shows that most teacher configurations yield positive improvement across all three evaluation types, with only the weakest teachers (0.7B and 1.7B architecture with 10B tokens) degrading all performance (expected given their limited capacity). Figure 3 reveals that improvement generally increases with teacher architecture size (left column) and training tokens (middle column). Teacher’s in-domain perplexity (right column), as a proxy for capability, correlates with improvement. From these, several notable deviations from the general expectation emerge. 5%Δ in-domain ppl ( ↑) avg. %Δ out-of-distribution ppl ( ↑) avg. %Δ downstream acc ( ↑)0.7B 1.7B 3.8B 8.0B 0.7B 1.7B 3.8B 8.0B 0.7B 1.7B 3.8B 8.0B 10B -2.9% 
+
+> (0.2)
+
+-1.4% 
+
+> (0.2)
+
+-0.4% 
+
+> (0.2)
+
+0.3% 
+
+> (0.2)
+
+-3.2% 
+
+> (0.2)
+
+-1.1% 
+
+> (0.2)
+
+1.2% 
+
+> (0.2)
+
+1.6% 
+
+> (0.4)
+
+-0.5% 
+
+> (0.2)
+
+-0.4% 
+
+> (0.2)
+
+-0.8% 
+
+> (0.5)
+
+0.9% 
+
+> (0.4)
+
+30B -1.2% 
+
+> (0.2)
+
+0.5% 
+
+> (0.2)
+
+1.9% 
+
+> (0.5)
+
+3.2% 
+
+> (0.6)
+
+-0.5% 
+
+> (0.2)
+
+1.5% 
+
+> (0.2)
+
+4.4% 
+
+> (0.5)
+
+5.4% 
+
+> (0.5)
+
+1.3% 
+
+> (0.2)
+
+1.4% 
+
+> (0.2)
+
+2.6% 
+
+> (0.5)
+
+4.3% 
+
+> (0.6)
+
+50B -0.3% 
+
+> (0.2)
+
+1.0% 
+
+> (0.4)
+
+3.0% 
+
+> (0.6)
+
+3.9% 
+
+> (0.8)
+
+1.6% 
+
+> (0.2)
+
+3.5% 
+
+> (0.4)
+
+6.1% 
+
+> (0.5)
+
+7.3% 
+
+> (0.8)
+
+0.7% 
+
+> (0.2)
+
+1.5% 
+
+> (0.2)
+
+3.4% 
+
+> (0.6)
+
+3.2% 
+
+> (0.8)
+
+80B 0.1% 
+
+> (0.2)
+
+2.0% 
+
+> (0.4)
+
+3.6% 
+
+> (0.6)
+
+4.3% 
+
+> (0.8)
+
+2.6% 
+
+> (0.4)
+
+5.3% 
+
+> (0.6)
+
+7.7% 
+
+> (0.8)
+
+7.6% 
+
+> (0.6)
+
+0.9% 
+
+> (0.4)
+
+1.8% 
+
+> (0.2)
+
+3.6% 
+
+> (0.8)
+
+3.9% 
+
+> (1.0)
+
+100B 0.4% 
+
+> (0.2)
+
+2.3% 
+
+> (0.5)
+
+3.9% 
+
+> (0.8)
+
+4.2% 
+
+> (0.8)
+
+3.1% 
+
+> (0.2)
+
+6.0% 
+
+> (0.6)
+
+7.6% 
+
+> (0.8)
+
+8.9% 
+
+> (0.8)
+
+0.7% 
+
+> (0.4)
+
+1.9% 
+
+> (0.5)
+
+3.3% 
+
+> (0.6)
+
+3.2% 
+
+> (1.0)
+
+300B 0.9% 
+
+> (0.2)
+
+3.3% 
+
+> (0.6)
+
+4.3% 
+
+> (0.8)
+
+4.0% 
+
+> (0.8)
+
+4.4% 
+
+> (0.6)
+
+7.6% 
+
+> (0.6)
+
+7.4% 
+
+> (0.8)
+
+7.2% 
+
+> (0.6)
+
+1.5% 
+
+> (0.6)
+
+4.3% 
+
+> (0.8)
+
+3.5% 
+
+> (0.5)
+
+2.8% 
+
+> (0.8)
+
+Table 2. Distillation improvement over standard pretraining baseline under the best loss mixing coefficient 𝛼 . The student is 1.7B trained on 50B tokens. Rows indicate teacher token budget; columns indicate teacher architecture size. Each cell shows percentage improvement (positive is better) with the corresponding best 𝛼 in parentheses. Bold indicates best within row (same tokens, different architectures); underline indicates best within column (same architecture, different tokens). Even weak teachers (smaller architecture or fewer tokens than the student) can improve distillation with proper 𝛼 selection. However, the strongest teachers do not always yield the best results: at 300B tokens, smaller teacher architectures can outperform larger ones. Complete per-benchmark results are listed in §H. 
+
+4.1 Weak-to-Strong and Same-Level Distillation 
+
+Finding 1: With proper language modeling and distillation loss mixing, even weak-to-strong and same-level distillation improves over standard pretraining. 
+
+Even teachers weaker than the student can improve distillation. In Figure 3, configurations to the left of the vertical dashed lines represent weak-to-strong distillation in that dimension. Across all three weak-to-strong scenarios (smaller architecture, fewer tokens, or higher train loss), most configurations yield positive improvement. Most strikingly, even teachers weaker in both architecture and tokens (thus weaker in in-domain ppl as well) can help: the 0.7B teacher at 30B tokens still achieves 1.3% downstream accuracy improvement. This challenges the assumption that distillation requires a strictly stronger teacher. The key is using a lower loss mixing coefficient, which balances the weaker teacher’s signal with ground-truth supervision. An interesting special case is when teacher and student share the same architecture and token budget (1.7B at 50B in our setup), differing only in random seed. This configuration still improves the student across all metrics (+1.0% in-domain ppl, +3.5% out-of-distribution ppl, +1.5% downstream acc), suggesting that distillation transfers knowledge beyond what architecture and data alone capture. This aligns with Born-Again Networks (Furlanello et al., 2018) in vision, where same-level distillation helps despite no capacity advantage. 
+
+4.2 Strong-to-Weak Distillation 
+
+Finding 2: Stronger teachers do not guarantee better distillation and can degrade transfer. 
+
+Surprisingly, the highest downstream accuracy improvement comes from the same-size teacher with more training tokens, instead of a stronger teacher that is both larger and trained on more tokens. In strong-to-weak scenarios, contrary to expectation, we observe saturation and reversal at high teacher strength. First, at high token budgets, larger architectures can underperform smaller ones. In Table 2, at 300B tokens, downstream improvement follows the trend of a smaller teacher distilling a better student: 1.7B (+4.3%) 
+
+> 3.8B (+3.5%) > 8.0B (+2.8%), with the same-architecture teacher outperforming larger ones. A similar pattern holds for out-of-distribution: 1.7B (+7.6%) > 3.8B (+7.4%) > 8.0B (+7.2%). 63                       
+
+> 0
+> 3
+> tokens (B): 10 30 50 80 100 300 arch. (B): 0.7 1.7 3.8 8.0 arch. (B): 0.7 1.7 3.8 8.0
+> 5
+> 0
+> 5
+> 10
+> 0.7 1.7 3.8 8.0
+> teacher architecture size (B)
+> 0
+> 2
+> 4
+> 10 30 50 80 100 300
+> teacher training tokens (B)
+> 510 15 20 25
+> teacher in-domain ppl
+
+Trend by architecture Trend by training tokens Trend by teacher capability 
+
+> %
+> in-domain ppl
+> avg.  %
+> ood ppl
+> avg.  %
+> downstream acc
+
+Figure 3. Distillation improvement under best loss mixing coefficient 𝛼 . Rows show evaluation types; columns show improvement along teacher architecture (left), training tokens (middle), and in-domain perplexity (right). Vertical dashed lines indicate the student’s configuration (1.7B arch., 50B tokens, 12.2 ppl). Left of the dashed line represents weak-to-strong distillation in that dimension; right represents strong-to-weak. Improvement generally increases with teacher strength but saturates or reverses for strong teachers. 
+
+Second, at fixed architecture, training longer can hurt for large teachers. For the 8.0B teacher, downstream accuracy peaks at 30B tokens (+4.3%) and declines with further training: +3.9% at 80B, +3.2% at 100B, and +2.8% at 300B. The 3.8B teacher shows a similar pattern, peaking at 80B tokens (+3.6%) before declining. Out-of-domain perplexity follows the same trend: 8.0B teacher peaks at 100B tokens (+8.9%) and drops to +7.2% at 300B, and 3.8B teacher peaks at 80B. This suggests saturation at high teacher training budgets. In contrast, when the teacher is same-architecture or smaller, more teacher training tokens monotonically lead to better distillation. These observations demonstrate that architecture mismatch between teacher and student can limit knowledge transfer, and that overtraining large teachers reduces the usefulness of their output distributions for smaller students. Thus, compatibility matters more than absolute teacher scale. 
+
+4.3 Performance by Domains 
+
+Finding 3: Distillation improves generalization (out-of-distribution, downstream) more easily than in-domain fitting. 
+
+We observe different trends across evaluation types. Out-of-domain perplexity and downstream accuracy are easier to improve than in-domain perplexity. In Table 2, several configurations that fail to improve in-domain perplexity still yield gains on the other two metrics. For example, the 0.7B teacher at 50B tokens degrades in-domain perplexity (-0.3%) but improves out-of-distribution perplexity (+1.6%) and downstream accuracy (+0.7%). The magnitude of improvement also differs: out-of-distribution perplexity shows the largest gains, reaching up to +8.9%, compared to +4.3% for both in-domain perplexity and downstream accuracy. Notably, in-domain and out-of-distribution evaluations are both perplexity tasks, yet distillation yields substantially better improvement on the curated out-of-distribution high-quality corpora. This pattern suggests that improvement on one evaluation type does not guarantee improvement on another. More broadly, distillation can transfer useful knowledge for generalization, even when it cannot improve fit to the training distribution. 710B 
+
+> 30B
+> 50B
+> 80B
+> 100B
+> 300B
+> 10B
+> 30B
+> 50B
+> 80B
+> 100B
+> 300B
+> 10B
+> 30B
+> 50B
+> 80B
+> 100B
+> 300B
+> 10B
+> 30B
+> 50B
+> 80B
+> 100B
+> 300B
+
+teacher arch. and tokens    
+
+> in-domain
+> ppl
+> ood
+> ppl
+> downstream
+> acc
+> 0.7B arch. 1.7B arch. 3.8B arch. 8.0B arch.
+
+By teacher config 
+
+> 21.2
+> 16.8
+> 16.3
+> 14.9
+> 14.4
+> 14.0
+> 13.7
+> 13.1
+> 12.8
+> 12.5
+> 12.1
+> 11.5
+> 11.2
+> 11.2
+> 10.3
+> 10.2
+> 10.0
+> 9.6
+> 9.4
+> 9.1
+> 8.4
+> 8.3
+> 8.1
+> 6.8
+
+teacher in-domain ppl 
+
+> 0.2
+> 0.4
+> 0.5
+> 0.6
+> 0.8
+> 1.0
+> 0.2
+> 0.4
+> 0.5
+> 0.6
+> 0.8
+> 1.0
+> 0.2
+> 0.4
+> 0.5
+> 0.6
+> 0.8
+> 1.0
+> loss mixing coefficient
+
+By teacher capability 
+
+> worst
+> best
+
+Figure 4. Relative performance of 𝛼 across teacher configurations. Column-wise, each cell shows the normalized performance within each teacher’s runs, where darker colors indicate better 𝛼 for that teacher. Left panel groups teachers by architecture and training tokens; right panel orders all teachers by in-domain perplexity. All three evaluation types follow the same pattern, with downstream accuracy being noisier: for each teacher, performance increases gradually toward an optimal 𝛼 then decreases, and stronger teachers favor higher 𝛼 .
+
+# 5 The Role of Loss Mixing 
+
+5.1 Selecting the Optimal Mixing Coefficient 
+
+Each teacher has an optimal 𝛼 . Figure 4 (left) visualizes the relative performance of each 𝛼 value across teacher configurations. For each teacher-evaluation pair, we apply min-max normalization across the six 𝛼 
+
+values on evaluation improvements, where normalized = ( value − min )/( max − min ), so the best 𝛼 maps to 100% (darkest) and the worst to 0% (lightest) for within-teacher comparisons. This normalization allows us to compare 𝛼 ’s optimality patterns within each teacher regardless of absolute improvement magnitudes. Across all three evaluation types, the heatmap reveals a consistent pattern: moving from 𝛼 = 0 .2 to 𝛼 = 1 .0,performance rises toward an optimal value then falls. For perplexity evaluations, the trend is smooth and consistent, while downstream accuracy shows more variance. This smoothness suggests that optimal 𝛼 reflects a true optimum rather than noise. 
+
+Optimal 𝛼 correlates with teacher strength. Fig-ure 4 (right) reorders teachers by their in-domain perplexity, revealing a clear trend: weaker teach-ers favor lower 𝛼 , while stronger teachers favor higher 𝛼 . Figure 6 directly confirms this pattern. For weaker teachers, low-𝛼 points cluster at the top (better improvement), whereas for stronger teachers, high-𝛼 points dominate. Intuitively, weaker teachers provide less reliable output dis-tributions, so the student benefits from retaining more ground-truth supervision via lower 𝛼 .10 20       
+
+> teacher in-domain ppl
+> 50
+> 0
+> avg.  %
+> ood ppl
+> 10 20
+> teacher in-domain ppl
+> 5
+> 0
+> 5
+> avg.  %
+> downstream acc
+> :0.2 0.4 0.5 0.6 0.8 1.0
+
+Figure 6. Distillation improvement versus teacher capability by 𝛼 . Each point represents one teacher-alpha combination. For weaker teachers (higher perplexity, left), lower 𝛼 values yield better improvement. For stronger teachers (lower perplexity, right), higher 𝛼 values perform better. 
+
+Stronger teacher falls short: a loss mixing perspective. Interestingly, for 3.8B and 8.0B teachers, we observe the optimal 𝛼 rising then falling along the token dimension. In downstream accuracy, for example, the 8.0B teacher’s optimal 𝛼 across token budgets (10B, 30B, 50B, 80B, 100B, 300B) is 0.4, 0.6, 0.8, 1.0, 1.0, 0.8; for the 3.8B teacher, it is 0.5, 0.6, 0.6, 0.8, 0.6, 0.5. As these large teachers train longer, optimal 𝛼 first increases, but eventually decreases at the high token budgets. This pattern does not appear for same-architecture (1.7B) 81          
+
+> 0
+> 1
+> 2
+> 6
+> 3
+> 0
+> 3
+> 8
+> 4
+> 0
+> 4
+> 12
+> 6
+> 0
+> 6
+> 20
+> 10
+> 0
+> 30
+> 15
+> 0
+> 0
+> 2
+> 4
+> 4
+> 0
+> 4
+> 5
+> 0
+> 5
+> 8
+> 0
+> 8
+> 15
+> 0
+> 40
+> 20
+> 0
+> 10 15
+> 0
+> 1
+> 2
+> 3
+> 10 15
+> 2
+> 0
+> 2
+> 10 15
+> 2
+> 0
+> 2
+> 4
+> 10 15
+> 3
+> 0
+> 3
+> 10 15
+> 3
+> 0
+> 3
+> 10 15
+> 3
+> 0
+> 3
+> =0.2 =0.4 =0.5 =0.6 =0.8 =1.0
+> %
+> in-domain ppl
+> avg.  %
+> ood ppl
+> avg.  %
+> downstream acc
+> teacher in-domain ppl arch (B): 0.7 1.7 3.8 8.0
+
+Figure 5. Distillation improvement versus teacher in-domain perplexity under different loss mixing coefficient 𝛼 .
+
+Rows show evaluation types; columns show the trend for increasing 𝛼 . Each line represents a teacher architecture, with points corresponding to different token budgets (10B-token teachers excluded for suboptimal and thus noisier performance). As 𝛼 increases, trends become more obvious. For in-domain perplexity (top row), all architectures converge to a single trend: teacher loss alone predicts improvement regardless of architecture. For out-of-distribution perplexity (middle row), each architecture follows a separate trend, with smaller teachers outperforming larger ones even at higher loss levels. For downstream (bottom row), the upward general trend emerges but with more variance. 
+
+or smaller (0.7B) teachers, where optimal 𝛼 increases monotonically with training tokens. This provides additional evidence for the counterintuitive strong-to-weak observation in §4: when large teachers become overtrained and too strong, the student needs to reduce reliance on their signal for better performance. From a practical standpoint, the decreasing optimal 𝛼 trend signals that investing in an even stronger teacher may yield diminishing returns or, in some cases, even hurt. 
+
+5.2 Trends when Increasing Distillation Loss Weight 
+
+Previous sections tuned 𝛼 per teacher configuration. We now examine how distillation behavior changes as 𝛼 
+
+increases. For each 𝛼 value, Figure 5 shows each evaluation type’s improvement against teacher’s in-domain perplexity to see whether any consistent trend emerges and how it evolves. 
+
+Different evaluation types show different trends. Figure 5 shows improvement versus teacher in-domain perplexity across 𝛼 . As 𝛼 increases, trends become more pronounced across all evaluation types. For in-domain perplexity, all architectures converge to a single trend: improvement correlates with teacher loss regardless of architecture size. This pattern strengthens as 𝛼 grows, with the four architecture lines nearly overlapping at high 𝛼 . This shows that given a teacher’s loss, the student’s improvement is directly predictable. For out-of-distribution perplexity, each architecture follows a separate trend, with lines more horizontally separated than in the in-domain case, indicating that teacher loss and out-of-distribution improvement do not share the same relationship across architectures. For downstream accuracy, a general upward trend emerges but with considerable variance. These observations demonstrate that in-domain transfer closely follows teacher loss as we focus more on distillation, but out-of-distribution generalization and downstream performance depend on factors beyond teacher loss, such as tokens and architecture match. 
+
+Teacher train loss alone is a misleading metric for teacher quality. The findings suggest that using teacher train loss as the sole indicator of teacher quality is misleading. While teacher train loss reliably indicates in-domain transfer, it fails to capture out-of-distribution and downstream performance. In Figure 5 (middle and bottom row), smaller teachers with higher train loss yield better improvement than larger teachers with lower train loss. This arises from the additional tokens the smaller teacher has seen during pretraining, which provides broader coverage of the data distribution despite a higher loss for a subset. Practitioners selecting teachers based on train loss therefore miss configurations that transfer better for generalization. 9teacher student 
+
+%Δ in-domain ppl ( ↑) avg. %Δ out-of-distribution ppl ( ↑) avg. %Δ downstream acc ( ↑)0.7B 1.7B 3.8B 8.0B 0.7B 1.7B 3.8B 8.0B 0.7B 1.7B 3.8B 8.0B 0.7B 0.1% 
+
+> (0.2)
+
+1.8% 
+
+> (0.6)
+
+2.6% 
+
+> (0.8)
+
+2.8% 
+
+> (0.8)
+
+0.5% 
+
+> (0.2)
+
+3.2% 
+
+> (0.6)
+
+5.4% 
+
+> (0.6)
+
+5.3% 
+
+> (0.6)
+
+1.3% 
+
+> (0.6)
+
+2.1% 
+
+> (0.4)
+
+2.7% 
+
+> (1.0)
+
+1.9% 
+
+> (1.0)
+
+1.7B -0.3% 
+
+> (0.2)
+
+1.0% 
+
+> (0.4)
+
+3.0% 
+
+> (0.6)
+
+3.9% 
+
+> (0.8)
+
+1.6% 
+
+> (0.2)
+
+3.5% 
+
+> (0.4)
+
+6.1% 
+
+> (0.5)
+
+7.3% 
+
+> (0.8)
+
+0.7% 
+
+> (0.2)
+
+1.5% 
+
+> (0.2)
+
+3.4% 
+
+> (0.6)
+
+3.2% 
+
+> (0.8)
+
+3.8B -1.8% 
+
+> (0.2)
+
+-0.3% 
+
+> (0.2)
+
+1.2% 
+
+> (0.4)
+
+2.8% 
+
+> (0.5)
+
+0.3% 
+
+> (0.2)
+
+2.7% 
+
+> (0.2)
+
+4.7% 
+
+> (0.4)
+
+6.2% 
+
+> (0.5)
+
+0.3% 
+
+> (0.2)
+
+0.1% 
+
+> (0.5)
+
+2.8% 
+
+> (0.4)
+
+3.0% 
+
+> (0.5)
+
+8.0B -3.2% 
+
+> (0.2)
+
+-1.9% 
+
+> (0.2)
+
+-0.6% 
+
+> (0.2)
+
+0.8% 
+
+> (0.4)
+
+1.4% 
+
+> (0.2)
+
+3.4% 
+
+> (0.2)
+
+4.8% 
+
+> (0.4)
+
+7.1% 
+
+> (0.5)
+
+-0.3% 
+
+> (0.2)
+
+0.6% 
+
+> (0.2)
+
+1.8% 
+
+> (0.2)
+
+3.1% 
+
+> (0.4)
+
+Table 3. Distillation improvement with fixed 50B training tokens for both teacher and student. Rows indicate student architecture; columns indicate teacher architecture. Diagonal cells represent same-level distillation; above-diagonal represent strong-to-weak; below-diagonal represent weak-to-strong. Strong-to-weak consistently improves all metrics. Weak-to-strong is effective out-of-distribution and downstream but struggles in-domain, especially with larger students. 
+
+# 6 Ablation: Generalization Across Student Sizes 
+
+We conduct additional experiments with varying student sizes. Our main experiments fix the student to 1.7B. We now vary both teacher and student architecture sizes while keeping training tokens fixed at 50B for both. This creates a symmetric setting where the only difference between teacher and student is the architecture size. Table 3 shows the results. The findings from our main experiments generalize across student sizes. Strong-to-weak distillation (above-diagonal) consistently improves all metrics across all student sizes, but the greatest improvement does not necessarily come with the maximum teacher-student size gap. Weak-to-strong distillation (below-diagonal) remains effective for out-of-distribution perplexity and downstream accuracy, but struggles for in-domain perplexity, particularly for larger students; the 8.0B student shows negative in-domain improvement with all smaller teachers. Same-level distillation (diagonal) yields positive improvement across all metrics and student sizes, confirming distillation transfers useful knowledge even without a teacher advantage. Experiments in §G ablate distillation tokens and architecture families to further support the conclusions. 
+
+# 7 Related Work 
+
+Knowledge distillation for language models. Knowledge distillation (KD) (Hinton et al., 2015) transfers knowledge from a teacher to a student by training the student to match the teacher’s output distribution. The teacher’s soft predictions contain dark knowledge to guide the student, or relative similarities between classes absent in hard labels (Neyshabur et al., 2020; Tang et al., 2021). Originally proposed for model compression in vision (Buciluundefined et al., 2006), KD has been widely adopted in LLMs, from masked LMs (Sun et al., 2019; Sanh et al., 2020; Jiao et al., 2020) to autoregressive LMs (Wang et al., 2020). While recent industrial models primarily use teacher-generated synthetic data (AI@Meta, 2024; Qwen, 2024, 2025; DeepSeek-AI, 2025), we revisit logit-level distillation in pretraining. Unlike prior work that focuses on compression with a fixed strong teacher, we systematically study how teacher size and compute affect distillation outcomes. 
+
+Factors governing distillation success. Distillation outcomes depend on design choices beyond teacher strength, including loss design (He et al., 2025; Peng and Zhang, 2025), logits processing (Xie et al., 2026), target generation (Gu et al., 2025; Peng et al., 2025), and intermediate signal matching (Romero et al., 2015; Sun et al., 2019). In this work, we focus on the regime of teacher-student relations. In practice, industrial models increasingly rely on both weaker and stronger prior-generation or cross-family models as teachers (Qwen, 2024, 2025; DeepSeek-AI, 2025), yet systematic studies on their relations in LLM pretraining remain limited. This work fills this gap and challenges common assumptions about strong-to-weak distillation. 
+
+# 8 Conclusion 
+
+We systematically study knowledge distillation in LLM pretraining across a range of teacher-student rela-tionships. Our findings challenge common assumptions by showing weak-to-strong distillation can help and stronger teachers do not always yield better students. Different evaluation types also show different patterns. Together, these results challenge the common belief that distillation pretraining requires a strong teacher. 10 Acknowledgments 
+
+This work is supported by the computational resources generously provided by Google’s TPU Research Cloud program. This work was also performed using Princeton Research Computing resources, a consortium led by the Princeton Institute for Computational Science and Engineering (PICSciE) and Research Computing at Princeton University. We also gratefully acknowledge the use of the Neuronic GPU computing cluster maintained by the Department of Computer Science at Princeton University. We thank Sachin Konan, Yida Yin, and Boya Zeng for helpful discussions. 
+
+# References 
+
+AI@Meta. The llama 3 herd of models. arXiv:2407.21783 , 2024. Aida Amini, Saadia Gabriel, Peter Lin, Rik Koncel-Kedziorski, Yejin Choi, and Hannaneh Hajishirzi. Mathqa: Towards interpretable math word problem solving with operation-based formalisms. In NAACL , 2019. Mikel Artetxe, Sebastian Ruder, and Dani Yogatama. On the cross-lingual transferability of monolingual representations. In ACL , 2020. Lucas Beyer, Xiaohua Zhai, Amélie Royer, Larisa Markeeva, Rohan Anil, and Alexander Kolesnikov. Knowledge distillation: A good teacher is patient and consistent. In CVPR , 2022. Yonatan Bisk, Rowan Zellers, Ronan Le Bras, Jianfeng Gao, and Yejin Choi. Piqa: Reasoning about physical commonsense in natural language. In AAAI , 2020. Cristian Buciluundefined, Rich Caruana, and Alexandru Niculescu-Mizil. Model compression. In KDD , 2006. Collin Burns, Pavel Izmailov, Jan Hendrik Kirchner, Bowen Baker, Leo Gao, Leopold Aschenbrenner, Yining Chen, Adrien Ecoffet, Manas Joglekar, Jan Leike, Ilya Sutskever, and Jeff Wu. Weak-to-strong generalization: Eliciting strong capabilities with weak supervision. In ICML , 2024. Dan Busbridge, Amitis Shidani, Floris Weers, Jason Ramapuram, Etai Littwin, and Russ Webb. Distillation scaling laws. In ICML , 2025. Sungmin Cha and Kyunghyun Cho. Why knowledge distillation works in generative models: A minimal working explanation. In NeurIPS , 2025. Ilias Chalkidis, Ion Androutsopoulos, and Nikolaos Aletras. Neural legal judgment prediction in english. In 
+
+ACL , 2019. Mark Chen, Jerry Tworek, Heewoo Jun, Qiming Yuan, Henrique Ponde de Oliveira Pinto, Jared Kaplan, Harri Edwards, Yuri Burda, Nicholas Joseph, Greg Brockman, Alex Ray, Raul Puri, Gretchen Krueger, Michael Petrov, Heidy Khlaaf, Girish Sastry, Pamela Mishkin, Brooke Chan, Scott Gray, Nick Ryder, Mikhail Pavlov, Alethea Power, Lukasz Kaiser, Mohammad Bavarian, Clemens Winter, Philippe Tillet, Felipe Petroski Such, Dave Cummings, Matthias Plappert, Fotios Chantzis, Elizabeth Barnes, Ariel Herbert-Voss, William Hebgen Guss, Alex Nichol, Alex Paino, Nikolas Tezak, Jie Tang, Igor Babuschkin, Suchir Balaji, Shantanu Jain, William Saunders, Christopher Hesse, Andrew N. Carr, Jan Leike, Josh Achiam, Vedant Misra, Evan Morikawa, Alec Radford, Matthew Knight, Miles Brundage, Mira Murati, Katie Mayer, Peter Welinder, Bob McGrew, Dario Amodei, Sam McCandlish, Ilya Sutskever, and Wojciech Zaremba. Evaluating large language models trained on code. arXiv:2107.03374 , 2021. Jang Hyun Cho and Bharath Hariharan. On the efficacy of knowledge distillation. In ICCV , 2019. Peter Clark, Isaac Cowhey, Oren Etzioni, Tushar Khot, Ashish Sabharwal, Carissa Schoenick, and Oyvind Tafjord. Think you have solved question answering? try arc, the ai2 reasoning challenge. arXiv:1803.05457 ,2018. Karl Cobbe, Vineet Kosaraju, Mohammad Bavarian, Mark Chen, Heewoo Jun, Lukasz Kaiser, Matthias Plappert, Jerry Tworek, Jacob Hilton, Reiichiro Nakano, Christopher Hesse, and John Schulman. Training verifiers to solve math word problems. arXiv:2110.14168 , 2021. 11 Arman Cohan, Franck Dernoncourt, Doo Soon Kim, Trung Bui, Seokhwan Kim, Walter Chang, and Nazli Goharian. A discourse-aware attention model for abstractive summarization of long documents. In NAACL ,2018. DeepSeek-AI. Deepseek-r1: Incentivizing reasoning capability in llms via reinforcement learning. 
+
+arXiv:2501.12948 , 2025. Tommaso Furlanello, Zachary C. Lipton, Michael Tschannen, Laurent Itti, and Anima Anandkumar. Born again neural networks. In ICML , 2018. Yuxian Gu, Hao Zhou, Fandong Meng, Jie Zhou, and Minlie Huang. Miniplm: Knowledge distillation for pre-training language models. In ICLR , 2025. Changyi He, Yifu Ding, Jinyang Guo, Ruihao Gong, Haotong Qin, and Xianglong Liu. Da-kd: Difficulty-aware knowledge distillation for efficient large language models. In ICML , 2025. Dan Hendrycks, Collin Burns, Steven Basart, Andy Zou, Mantas Mazeika, Dawn Song, and Jacob Steinhardt. Measuring massive multitask language understanding. In ICLR , 2021. Karl Moritz Hermann, Tomáš Kočiský, Edward Grefenstette, Lasse Espeholt, Will Kay, Mustafa Suleyman, and Phil Blunsom. Teaching machines to read and comprehend. In NeurIPS , 2015. Geoffrey Hinton, Oriol Vinyals, and Jeff Dean. Distilling the knowledge in a neural network. arXiv:1503.02531 ,2015. Hamel Husain, Hongqiu Wu, Tiferet Gazit, Miltiadis Allamanis, and Marc Brockschmidt. Codesearchnet challenge: Evaluating the state of semantic code search. arXiv:1909.09436 , 2019. Xiaoqi Jiao, Yichun Yin, Lifeng Shang, Xin Jiang, Xiao Chen, Linlin Li, Fang Wang, and Qun Liu. Tinybert: Distilling bert for natural language understanding. In EMNLP , 2020. Qiao Jin, Bhuwan Dhingra, Zhengping Liu, William W. Cohen, and Xinghua Lu. Pubmedqa: A dataset for biomedical research question answering. In EMNLP , 2019. Yoon Kim and Alexander M. Rush. Sequence-level knowledge distillation. In EMNLP , 2016. Guokun Lai, Qizhe Xie, Hanxiao Liu, Yiming Yang, and Eduard Hovy. Race: Large-scale reading comprehen-sion dataset from examinations. In EMNLP , 2017. Yaniv Leviathan, Matan Kalman, and Yossi Matias. Fast inference from transformers via speculative decoding. In ICML , 2023. Stephanie Lin, Jacob Hilton, and Owain Evans. Truthfulqa: Measuring how models mimic human falsehoods. In ACL , 2022. Hanmeng Liu, Jian Liu, Leyang Cui, Zhiyang Teng, Nan Duan, Ming Zhou, and Yue Zhang. Logiqa 2.0—an improved dataset for logical reasoning in natural language understanding. IEEE/ACM TASLP , 2023. Zechun Liu, Changsheng Zhao, Forrest Iandola, Chen Lai, Yuandong Tian, Igor Fedorov, Yunyang Xiong, Ernie Chang, Yangyang Shi, Raghuraman Krishnamoorthi, Liangzhen Lai, and Vikas Chandra. Mobilellm: Optimizing sub-billion parameter language models for on-device use cases. In ICML , 2024. Sachin Mehta, Mohammad Hossein Sekhavat, Qingqing Cao, Maxwell Horton, Yanzi Jin, Chenfan Sun, Iman Mirzadeh, Mahyar Najibi, Dmitry Belenko, Peter Zatloukal, and Mohammad Rastegari. Openelm: An efficient language model family with open training and inference framework. arXiv:2404.14619 , 2024. Stephen Merity, Caiming Xiong, James Bradbury, and Richard Socher. Pointer sentinel mixture models. In 
+
+ICLR , 2017. Todor Mihaylov, Peter Clark, Tushar Khot, and Ashish Sabharwal. Can a suit of armor conduct electricity? a new dataset for open book question answering. In EMNLP , 2018. 12 Hossein Mobahi, Mehrdad Farajtabar, and Peter L. Bartlett. Self-distillation amplifies regularization in hilbert space. In NeurIPS , 2020. Saurav Muralidharan, Sharath Turuvekere Sreenivas, Raviraj Joshi, Marcin Chochowski, Mostofa Patwary, Mohammad Shoeybi, Bryan Catanzaro, Jan Kautz, and Pavlo Molchanov. Compact language models via pruning and knowledge distillation. In NeurIPS , 2024. Rafael Müller, Simon Kornblith, and Geoffrey Hinton. When does label smoothing help? In NeurIPS , 2019. Behnam Neyshabur, Hanie Sedghi, and Chiyuan Zhang. What is being transferred in transfer learning? In 
+
+NeurIPS , 2020. Yixin Nie, Adina Williams, Emily Dinan, Mohit Bansal, Jason Weston, and Douwe Kiela. Adversarial nli: A new benchmark for natural language understanding. In ACL , 2020. Ankit Pal, Logesh Kumar Umapathi, and Malaikannan Sankarasubbu. Medmcqa: A large-scale multi-subject multi-choice dataset for medical domain question answering. In CHIL , 2022. Wonpyo Park, Dongju Kim, Yan Lu, and Minsu Cho. Relational knowledge distillation. In CVPR , 2019. Guilherme Penedo, Hynek Kydlíček, Loubna Ben allal, Anton Lozhkov, Margaret Mitchell, Colin Raffel, Leandro Von Werra, and Thomas Wolf. The fineweb datasets: Decanting the web for the finest text data at scale. In NeurIPS , 2024. Hao Peng, Xin Lv, Yushi Bai, Zijun Yao, Jiajie Zhang, Lei Hou, and Juanzi Li. Pre-training distillation for large language models: A design space exploration. In ACL , 2025. Tianyu Peng and Jiajun Zhang. Enhancing knowledge distillation of large language models through efficient multi-modal distribution alignment. In COLING , 2025. Phi3@Microsoft. Phi-3 technical report: A highly capable language model locally on your phone. 
+
+arXiv:2404.14219 , 2024. Mary Phuong and Christoph H. Lampert. Towards understanding knowledge distillation. In ICML , 2019. Qwen. Qwen2.5 technical report. arXiv:2412.15115 , 2024. Qwen. Qwen3 technical report. arXiv:2505.09388 , 2025. Colin Raffel, Noam Shazeer, Adam Roberts, Katherine Lee, Sharan Narang, Michael Matena, Yanqi Zhou, Wei Li, and Peter J. Liu. Exploring the limits of transfer learning with a unified text-to-text transformer. 
+
+JMLR , 2020. Suhas Kamasetty Ramesh, Ayan Sengupta, and Tanmoy Chakraborty. On the generalization vs fidelity paradox in knowledge distillation. In ACL (Findings) , 2025. Adriana Romero, Nicolas Ballas, Samira Ebrahimi Kahou, Antoine Chassang, Carlo Gatta, and Yoshua Bengio. Fitnets: Hints for thin deep nets. In ICLR , 2015. Keisuke Sakaguchi, Ronan Le Bras, Chandra Bhagavatula, and Yejin Choi. Winogrande: An adversarial winograd schema challenge at scale. In AAAI , 2020. Victor Sanh, Lysandre Debut, Julien Chaumond, and Thomas Wolf. Distilbert, a distilled version of bert: smaller, faster, cheaper and lighter. arXiv:1910.01108 , 2020. Maarten Sap, Hannah Rashkin, Derek Chen, Ronan LeBras, and Yejin Choi. Socialiqa: Commonsense reasoning about social interactions. In EMNLP , 2019. David Saxton, Edward Grefenstette, Felix Hill, and Pushmeet Kohli. Analysing mathematical reasoning abilities of neural models. In ICLR , 2019. 13 Siqi Sun, Yu Cheng, Zhe Gan, and Jingjing Liu. Patient knowledge distillation for bert model compression. In EMNLP , 2019. Alon Talmor, Jonathan Herzig, Nicholas Lourie, and Jonathan Berant. Commonsenseqa: A question answering challenge targeting commonsense knowledge. In NAACL , 2019. Jiaxi Tang, Rakesh Shivanna, Zhe Zhao, Dong Lin, Anima Singh, Ed H. Chi, and Sagar Jain. Understanding and improving knowledge distillation. arXiv:2002.03532 , 2021. Wenhui Wang, Furu Wei, Li Dong, Hangbo Bao, Nan Yang, and Ming Zhou. Minilm: Deep self-attention distillation for task-agnostic compression of pre-trained transformers. In NeurIPS , 2020. Yizhong Wang, Yeganeh Kordi, Swaroop Mishra, Alisa Liu, Noah A. Smith, Daniel Khashabi, and Hannaneh Hajishirzi. Self-instruct: Aligning language models with self-generated instructions. In ACL , 2023. Johannes Welbl, Nelson F. Liu, and Matt Gardner. Crowdsourcing multiple choice science questions. In 3rd Workshop on Noisy User-generated Text , 2017. Minghao Wu, Abdul Waheed, Chiyu Zhang, Muhammad Abdul-Mageed, and Alham Fikri Aji. Lamini-lm: A diverse herd of distilled models from large-scale instructions. In EACL , 2024. Xurong Xie, Zhucun Xue, Jiafu Wu, Jian Li, Yabiao Wang, Xiaobin Hu, Yong Liu, and Jiangning Zhang. Llm-oriented token-adaptive knowledge distillation. In AAAI , 2026. Li Yuan, Francis E. H. Tay, Guilin Li, Tao Wang, and Jiashi Feng. Revisiting knowledge distillation via label smoothing regularization. In CVPR , 2020. Sukmin Yun, Jongjin Park, Kimin Lee, and Jinwoo Shin. Regularizing class-wise predictions via self-knowledge distillation. In CVPR , 2020. Sergey Zagoruyko and Nikos Komodakis. Paying more attention to attention: Improving the performance of convolutional neural networks via attention transfer. In ICLR , 2017. Rowan Zellers, Ari Holtzman, Yonatan Bisk, Ali Farhadi, and Yejin Choi. Hellaswag: Can a machine really finish your sentence? In ACL , 2019. Linfeng Zhang, Jiebo Song, Anni Gao, Jingwei Chen, Chenglong Bao, and Kaisheng Ma. Be your own teacher: Improve the performance of convolutional neural networks via self distillation. In ICCV , 2019. Peiyuan Zhang, Guangtao Zeng, Tianduo Wang, and Wei Lu. Tinyllama: An open-source small language model. arXiv:2401.02385 , 2024. Qihuang Zhong, Liang Ding, Li Shen, Juhua Liu, Bo Du, and Dacheng Tao. Revisiting knowledge distillation for autoregressive language models. In ACL , 2024. 14 Appendix 
+
+# A Detailed Related Works 
+
+Knowledge distillation. Knowledge distillation (KD) (Hinton et al., 2015) is a widely used technique to transfer knowledge from a teacher model to a student model by training the student to match the teacher’s predictive distribution. The key insight is that the teacher’s soft predictions contain “dark knowledge,” information about the relative similarities between classes that is not present in hard labels (Neyshabur et al., 2020; Tang et al., 2021). Originally proposed for model compression (Buciluundefined et al., 2006) in vision, KD has since been extended in many directions, including distilling intermediate representations (Romero et al., 2015), attention maps (Zagoruyko and Komodakis, 2017), and relational information between samples (Park et al., 2019). Various works have also studied the theoretical foundations of why distillation works, attributing its success to label smoothing effects (Müller et al., 2019; Yuan et al., 2020), regularization (Mobahi et al., 2020; Yun et al., 2020), and improved optimization landscapes (Cho and Hariharan, 2019; Phuong and Lampert, 2019; Beyer et al., 2022). In this work, we focus on logit-level distillation for language models, where the student directly matches the teacher’s output distribution. 
+
+Distillation in language models. While distillation was introduced in vision-based models, it already proves effective in large language models (LLMs). In language modeling, logit-level distillation is widely used to compress pretrained Transformers, from masked LMs (Sanh et al., 2020; Jiao et al., 2020), to autoregressive LMs where distillation can be sensitive to the teacher and token-level behaviors (Ramesh et al., 2025). Beyond matching output logits, prior work also distills intermediate signals to improve transfer (Sun et al., 2019; Wang et al., 2020). Distillation can further be realized through teacher-generated synthetic data, where the student is trained on sequences produced by the teacher (Kim and Rush, 2016; Wang et al., 2023; Wu et al., 2024). While logit-level distillation is a common technique, most recent LLM distillation proceeds via teacher-generated synthetic data (AI@Meta, 2024; Qwen, 2024, 2025; DeepSeek-AI, 2025); in this work, we revisit logit-level distillation in pretraining and study when it improves performance. 
+
+Design choices in LLM distillation. Recent LLM distillation studies suggest that distillation success is governed by a small set of controllable factors rather than teacher strength alone. In pretraining, choices such as logits processing (Xie et al., 2026), loss design (He et al., 2025; Peng and Zhang, 2025), and generating teacher targets offline versus online (Gu et al., 2025; Peng et al., 2025) can qualitatively change distillation outcomes. Moreover, KD is not monotonic in teacher strength: for autoregressive LMs, stronger teachers can sometimes degrade student performance (Zhong et al., 2024; Busbridge et al., 2025). Prior work has shown that stronger teachers can sometimes degrade performance, but has not systematically characterized when this occurs in large-scale pretraining, where multiple components vary across a wide range. In this work, we focus on design choices related to the teacher side and conduct large-scale experiments varying all key components, such as architecture, tokens, and loss selection. 
+
+Teacher-student relationships in distillation. While knowledge distillation has long been viewed as a compression technique (Buciluundefined et al., 2006; Hinton et al., 2015), a growing body of work shows that this strong-to-weak framing is not necessary. In vision, Born-Again Networks (Furlanello et al., 2018) first showed that same-architecture distillation can still improve the student, with subsequent work clarifying why this effect holds (Zhang et al., 2019; Cho and Hariharan, 2019; Mobahi et al., 2020). In LLMs, while distillation remains a standard compression approach, strict strong-to-weak supervision may be unrealistic in the long run (Burns et al., 2024). Consistent with this trend, industrial models could rely on prior-generation or cross-family models to supervise newer ones, exemplified in Qwen models (Qwen, 2024, 2025) and DeepSeek-R1 (DeepSeek-AI, 2025). Despite these developments, systematic studies of how the scale of different components governs logit-level distillation in LLM pretraining remain limited. Busbridge et al. (2025) studies distillation scaling laws, but constrains teachers to a fixed budget distribution, while Peng et al. (2025) studies how student size affects outcome but assumes access to a stronger pretrained teacher. To address these gaps, in this work we vary token budget and model size to study across diverse settings that result in all strong-to-weak, same-architecture, and weak-to-strong regimes. 15 B Architecture Details 
+
+We use four model sizes based on the Llama3 architecture family. All models share the same architectural design choices: Grouped Query Attention (GQA) with a 4:1 ratio (32 query heads, 8 KV heads), SwiGLU activation (silu + linear gating), RMSNorm with 𝜖 = 10 −5, RoPE positional encoding with max timescale 500,000, vocabulary size of 128,256, and no embedding tying. Table 4 details the configuration for each model size.                                              
+
+> 0.7B
+> Parameter Value Hidden dim 1024 Num layers 12 MLP dim 8192 Query heads 32 KV heads 8Head dim 128 Vocab size 128,256 RoPE base 500,000 Norm 𝜖 10 −5
+> 1.7B
+> Parameter Value Hidden dim 2048 Num layers 16 MLP dim 8192 Query heads 32 KV heads 8Head dim 128 Vocab size 128,256 RoPE base 500,000 Norm 𝜖 10 −5
+> 3.8B
+> Parameter Value Hidden dim 3072 Num layers 28 MLP dim 8192 Query heads 32 KV heads 8Head dim 128 Vocab size 128,256 RoPE base 500,000 Norm 𝜖 10 −5
+> 8.0B
+> Parameter Value Hidden dim 4096 Num layers 32 MLP dim 14336 Query heads 32 KV heads 8Head dim 128 Vocab size 128,256 RoPE base 500,000 Norm 𝜖 10 −5
+> Table 4. Architecture configurations for each model size. All models share the same design choices (GQA, SwiGLU, RMSNorm, RoPE) but differ in hidden dimension, number of layers, and MLP dimension.
+
+# C Evaluation Implementations 
+
+We evaluate models using three categories of metrics: in-domain perplexity, out-of-distribution perplexity, and downstream accuracy. This section details the implementation of each. 
+
+C.1 In-Domain Perplexity 
+
+In-domain perplexity measures how well the model predicts text from the same distribution as the training data. We compute perplexity on a held-out test split of FineWeb-Edu (Penedo et al., 2024) containing 1 billion tokens that are not seen during any model training (neither teacher pretraining nor student baseline or distillation). Perplexity is defined as the exponentiated average cross-entropy loss (see Equation 4), where 𝑁 is the total number of tokens and 𝑃 (𝑥 𝑖 | 𝑥 <𝑖 ) is the model’s predicted probability of token 𝑥 𝑖 given the preceding context. To compute perplexity, we tokenize the test set into a single long sequence, randomly split it into fixed-length chunks matching the model’s context length (8192 tokens), run a forward pass to obtain logits, compute the cross-entropy loss between predicted logits and target tokens (shifted by one position), and average the loss across all tokens before exponentiating. PPL = exp (︃ − 1
+
+𝑁 
+
+> 𝑁
+
+∑︁ 
+
+> 𝑖 =1
+
+log 𝑃 (𝑥 𝑖 | 𝑥 <𝑖 ))︃ (4) 
+
+C.2 Out-of-Domain Perplexity 
+
+Out-of-domain perplexity evaluates generalization to distributions beyond the training corpus. We measure perplexity on 11 curated corpora spanning diverse domains: 
+
+• Web and general text: Wikitext-103 (Merity et al., 2017) (Wikipedia articles), C4 (Raffel et al., 2020) (Common Crawl web text) 
+
+• Mathematics: GSM8K (Cobbe et al., 2021) (grade school math problems), DM Mathematics (Saxton et al., 2019) (mathematical text) 16 • Code: HumanEval (Chen et al., 2021) (code generation problems), CodeSearchNet (Husain et al., 2019) (code with documentation) 
+
+• Scientific: arXiv (Cohan et al., 2018) (scientific paper abstracts), PubMedQA (Jin et al., 2019) (biomedical question-answer pairs) 
+
+• News: CNN-DailyMail (Hermann et al., 2015) (news articles) 
+
+• Legal: ECHR (Chalkidis et al., 2019) (European Court of Human Rights cases) 
+
+• Multilingual: XQuAD (Artetxe et al., 2020) (multilingual question-answering across 11 languages) Each corpus is formatted according to its structure. For plain text corpora (Wikitext, arXiv), documents are joined with double newlines. For QA datasets (GSM8K, PubMedQA), question-answer pairs are concatenated. For code (HumanEval), prompts and canonical solutions are combined. Perplexity is computed using the same procedure as in-domain evaluation. 
+
+C.3 Downstream Accuracy 
+
+Downstream accuracy evaluates transfer to tasks requiring capabilities beyond next-token prediction. We use 15 multiple-choice benchmarks covering broad knowledge, reasoning, and comprehension. 
+
+Scoring mechanism. For multiple-choice tasks, the model does not generate text. Instead, we use log-likelihood scoring: for each question, we construct prompt-answer pairs for each possible choice, compute the log-likelihood log 𝑃 (answer | question ) for each choice, and select the answer with the highest log-likelihood as the prediction. For a context-continuation pair, we tokenize both, concatenate them, run a forward pass to obtain logits, apply log-softmax, and sum the log probabilities of the continuation tokens (see Equation 5). Some benchmarks use length-normalized accuracy to prevent bias toward shorter answers. In this case, the log-likelihood is divided by the number of characters in the continuation before comparison. 
+
+log 𝑃 (continuation | context ) = 
+
+> |cont |
+
+∑︁ 
+
+> 𝑗 =1
+
+log 𝑃 (𝑡 𝑗 | context , 𝑡 <𝑗 ) (5) 
+
+Benchmarks. We evaluate on 15 benchmarks with the following configurations: 
+
+• Broad knowledge: MMLU (Hendrycks et al., 2021) (57 academic subjects, 5-shot, 4 choices) 
+
+• Science and math: ARC-Easy (Clark et al., 2018) (elementary science, 0-shot, 3-5 choices), SciQ (Welbl et al., 2017) (science QA, 0-shot, 4 choices), OpenBookQA (Mihaylov et al., 2018) (science facts, 5-shot, 4 choices), MathQA (Amini et al., 2019) (math word problems, 5-shot, 5 choices) 
+
+• Commonsense reasoning: HellaSwag (Zellers et al., 2019) (sentence completion, 0-shot, 4 choices), PIQA (Bisk et al., 2020) (physical intuition, 0-shot, 2 choices), WinoGrande (Sakaguchi et al., 2020) (coreference, 5-shot, 2 choices), Social IQa (Sap et al., 2019) (social commonsense, 0-shot, 3 choices), CommonsenseQA (Talmor et al., 2019) (general commonsense, 10-shot, 5 choices) 
+
+• Reading comprehension: RACE (Lai et al., 2017) (English exams, 0-shot, 4 choices) 
+
+• Logical reasoning: LogiQA 2.0 (Liu et al., 2023) (logical reasoning, 10-shot, 4 choices) 
+
+• Truthfulness: TruthfulQA MC1 (Lin et al., 2022) (identifying truthful answers among misconceptions, 0-shot with 10 in-prompt examples, variable choices) 
+
+• Natural language inference: ANLI R1 (Nie et al., 2020) (adversarial entailment, 10-shot, 3 choices) 
+
+• Medical: MedMCQA (Pal et al., 2022) (medical entrance exams, 10-shot, 4 choices) 
+
+Length normalization and few-shot selection. Four benchmarks use length-normalized accuracy to prevent bias toward shorter answers: HellaSwag, ARC-Easy, PIQA, and OpenBookQA. These benchmarks score the full text of answer choices, which vary significantly in length. The remaining benchmarks use raw accuracy, as their answer choices are either single letters or similar-length phrases. For few-shot evaluation, we use deterministic selection: examples are drawn from the first 𝑁 samples of the training split (or dev split for MMLU). This ensures reproducibility across runs. 17 D Pure Distillation 
+
+%Δ in-domain ppl ( ↑) avg. %Δ out-of-distribution ppl ( ↑) avg. %Δ downstream acc ( ↑)0.7B 1.7B 3.8B 8.0B 0.7B 1.7B 3.8B 8.0B 0.7B 1.7B 3.8B 8.0B 10B -68.7% -36.1% -20.6% -11.2% -146.5% -65.1% -42.0% -24.6% -8.6% -4.9% -2.5% -0.4% 
+
+30B -31.6% -11.5% -2.2% 1.4% -44.3% -13.8% -3.0% 0.8% -4.5% -2.4% +1.1% +1.0% 50B -21.8% -5.9% 0.9% 3.0% -28.5% -5.6% 2.9% 5.7% -3.3% -0.9% +1.9% +1.4% 80B -15.8% -2.6% 2.4% 3.7% -16.1% 0.9% 5.8% 7.0% -1.8% +1.4% +1.4% +3.9% 
+
+100B -13.8% -1.5% 2.8% 3.8% -12.2% 1.6% 6.3% 7.3% -3.3% +1.1% +1.2% +3.2% 
+
+300B -7.0% 1.6% 3.6% 3.9% -5.2% 4.9% 6.9% 6.8% -0.3% +3.6% +2.1% +1.2% 
+
+Table 5. Distillation improvement under pure distillation ( 𝛼 = 1 .0). Rows indicate teacher token budget; columns indicate teacher architecture size. Pure distillation works for strong teachers (large architecture, high token budget) but degrades significantly for weak teachers, particularly smaller architectures with fewer training tokens. 
+
+%Δ in-domain ppl ( ↑) avg. %Δ out-of-distribution ppl ( ↑) avg. %Δ downstream acc ( ↑)0.7B 1.7B 3.8B 8.0B 0.7B 1.7B 3.8B 8.0B 0.7B 1.7B 3.8B 8.0B 10B -65.8% -34.7% -20.2% -11.5% -143.3% -64.0% -43.2% -26.2% -8.1% -4.5% -1.7% -1.3% 
+
+30B -30.4% -12.0% -4.1% -1.8% -43.8% -15.3% -7.4% -4.6% -5.8% -3.8% -1.5% -3.3% 50B -21.5% -6.9% -2.1% -0.9% -30.1% -9.1% -3.2% -1.6% -4.0% -2.4% -1.5% -1.8% 80B -15.9% -4.6% -1.2% -0.6% -18.7% -4.4% -1.9% -0.6% -2.7% -0.4% -2.2% 0.0% 
+
+100B -14.2% -3.8% -1.1% -0.4% -15.3% -4.4% -1.3% -1.6% -4.0% -0.8% -2.1% 0.0% 
+
+300B -7.9% -1.7% -0.7% -0.1% -9.6% -2.7% -0.5% -0.4% -1.8% -0.7% -1.4% -1.6% 
+
+Table 6. Difference of effectiveness between pure distillation and optimal 𝛼 distillation. Negative values indicate pure distillation underperforms optimal 𝛼 selection. The gap is largest for weak teachers, where pure distillation can be over 60% worse than optimal 𝛼 on in-domain perplexity. For strong teachers (8.0B at high token budgets), the gap narrows, but pure distillation is still generally worse, indicating that pure distillation approaches optimal performance when the teacher is sufficiently strong. 
+
+Pure distillation sets the loss mixing coefficient 𝛼 = 1 .0, using only the knowledge distillation loss without the language modeling loss. This is a common practice in many implementations, as it simplifies training by removing the need to tune 𝛼 .Table 5 shows distillation improvement under pure distillation. The results reveal a clear divide based on teacher strength. For strong teachers (large architecture with high token budgets), pure distillation yields substantial improvement across all evaluation types. For example, the 8.0B teacher at 80B tokens achieves +3.7% in-domain perplexity, +7.0% out-of-distribution perplexity, and +3.9% downstream accuracy. However, for weak teachers, pure distillation degrades performance significantly. The 0.7B teacher at 10B tokens yields -68.7% in-domain perplexity and -146.5% out-of-distribution perplexity (number can exceed 100% because 
+
+𝑝𝑝𝑙 ∈ [1 , ∞)), indicating that relying entirely on a weak teacher’s signal without ground-truth supervision is harmful. Additionally, we also observe the same trend from our mixed loss experiments: stronger teachers do not always yield better students. For downstream accuracy, the 8.0B teacher peaks at 80B tokens (+3.9%) and declines with further training (+3.2% at 100B, +1.2% at 300B). Table 6 compares pure distillation to optimal 𝛼 selection. In almost all configurations, there exists a better loss mixing than pure distillation. The gap is substantial for weak teachers: pure distillation underperforms optimal 𝛼 by over 60% on in-domain perplexity for small teachers with few training tokens. Even for strong teachers, pure distillation rarely matches optimal 𝛼 . Only a few configurations with the strongest teachers (8.0B at high token budgets) show near-zero difference, where pure distillation happens to be optimal. These findings suggest that tuning 𝛼 is worthwhile across most teacher configurations. 18 E Choosing Best 𝛼 Conditioning on All Evaluation Types 
+
+%Δ in-domain ppl ( ↑) avg. %Δ out-of-distribution ppl ( ↑) avg. %Δ downstream acc ( ↑)0.7B 1.7B 3.8B 8.0B 0.7B 1.7B 3.8B 8.0B 0.7B 1.7B 3.8B 8.0B 10B -2.9% 
+
+> (0.2)
+
+-1.4% 
+
+> (0.2)
+
+-0.4% 
+
+> (0.2)
+
+-0.5% 
+
+> (0.4)
+
+-3.2% 
+
+> (0.2)
+
+-1.1% 
+
+> (0.2)
+
+1.2% 
+
+> (0.2)
+
+1.6% 
+
+> (0.4)
+
+-0.5% 
+
+> (0.2)
+
+-0.4% 
+
+> (0.2)
+
+-1.0% 
+
+> (0.2)
+
+0.9% 
+
+> (0.4)
+
+30B -1.2% 
+
+> (0.2)
+
+0.5% 
+
+> (0.2)
+
+1.9% 
+
+> (0.5)
+
+3.2% 
+
+> (0.6)
+
+-0.5% 
+
+> (0.2)
+
+1.5% 
+
+> (0.2)
+
+4.4% 
+
+> (0.5)
+
+4.7% 
+
+> (0.6)
+
+1.3% 
+
+> (0.2)
+
+1.4% 
+
+> (0.2)
+
+2.6% 
+
+> (0.5)
+
+4.3% 
+
+> (0.6)
+
+50B -0.3% 
+
+> (0.2)
+
+1.0% 
+
+> (0.2)
+
+3.0% 
+
+> (0.6)
+
+3.9% 
+
+> (0.8)
+
+1.6% 
+
+> (0.2)
+
+3.0% 
+
+> (0.2)
+
+6.0% 
+
+> (0.6)
+
+7.3% 
+
+> (0.8)
+
+0.7% 
+
+> (0.2)
+
+1.5% 
+
+> (0.2)
+
+3.4% 
+
+> (0.6)
+
+3.2% 
+
+> (0.8)
+
+80B -1.3% 
+
+> (0.4)
+
+1.6% 
+
+> (0.6)
+
+3.5% 
+
+> (0.8)
+
+3.7% 
+
+> (1.0)
+
+2.6% 
+
+> (0.4)
+
+5.3% 
+
+> (0.6)
+
+7.7% 
+
+> (0.8)
+
+7.0% 
+
+> (1.0)
+
+0.9% 
+
+> (0.4)
+
+0.9% 
+
+> (0.6)
+
+3.6% 
+
+> (0.8)
+
+3.9% 
+
+> (1.0)
+
+100B 0.4% 
+
+> (0.2)
+
+2.3% 
+
+> (0.5)
+
+3.8% 
+
+> (0.6)
+
+3.8% 
+
+> (1.0)
+
+3.1% 
+
+> (0.2)
+
+5.1% 
+
+> (0.5)
+
+7.0% 
+
+> (0.6)
+
+7.3% 
+
+> (1.0)
+
+0.1% 
+
+> (0.2)
+
+1.9% 
+
+> (0.5)
+
+3.3% 
+
+> (0.6)
+
+3.2% 
+
+> (1.0)
+
+300B -0.3% 
+
+> (0.6)
+
+3.3% 
+
+> (0.6)
+
+4.3% 
+
+> (0.8)
+
+4.0% 
+
+> (0.8)
+
+4.4% 
+
+> (0.6)
+
+7.6% 
+
+> (0.6)
+
+7.4% 
+
+> (0.8)
+
+6.6% 
+
+> (0.8)
+
+1.5% 
+
+> (0.6)
+
+3.2% 
+
+> (0.6)
+
+2.8% 
+
+> (0.8)
+
+2.8% 
+
+> (0.8)
+
+Table 7. Distillation improvement under jointly optimized 𝛼 across all benchmarks. The student is 1.7B trained on 50B tokens. For each teacher configuration, a single 𝛼 is selected to maximize average improvement across all 27 benchmarks. Results closely match those from per-metric optimization (Table 2), confirming that our findings are robust to 𝛼 selection methodology. 
+
+In the main experiments (§4), we select the optimal loss mixing coefficient 𝛼 independently for each evaluation type, allowing different 𝛼 values for in-domain perplexity, out-of-distribution perplexity, and downstream accuracy. Here we present results using a single 𝛼 per teacher configuration, selected to maximize average improvement across all benchmarks. 
+
+Methodology. For each teacher configuration, we compute the average percentage improvement across all 27 benchmarks (1 in-domain perplexity + 11 out-of-distribution perplexity corpora + 15 downstream accuracy tasks), weighting each benchmark equally. We then select the 𝛼 that maximizes this average. This approach naturally weights toward out-of-distribution and downstream metrics, which comprise 26 of the 27 benchmarks. 
+
+Results. Table 7 shows the results under jointly optimized 𝛼 . The patterns closely match those from per-metric optimization in Table 2: weak-to-strong distillation remains effective, same-level distillation yields improvement, and stronger teachers do not always produce better students. The jointly optimal 𝛼 values follow the same trend as per-metric values, where weaker teachers favor lower 𝛼 , while stronger teachers favor higher 𝛼 . The slight differences in improvement magnitude (compared to Table 2) reflect the trade-off from using a single 𝛼 across metrics with potentially different optima. These results confirm that our findings are robust to the 𝛼 selection methodology. 
+
+# F Training Curves 
+
+Figure 7 shows training loss curves for distillation pretraining across all teacher configurations. Each subplot corresponds to a teacher configuration, with different colors indicating the loss mixing coefficient 𝛼 . The distillation training runs converge steadily. Across all configurations, higher 𝛼 leads to faster loss reduction in the initial training stage, as the student receives stronger supervision from the teacher’s distribution. However, this initial advantage does not always translate to lower final loss: for weak teachers, high 𝛼 eventually converges to higher loss than low 𝛼 , while for strong teachers, high 𝛼 maintains its advantage throughout. 19 2.7 
+
+3.0 
+
+3.3 
+
+0.7B arch., 10B tokens 
+
+2.6 
+
+2.8 
+
+3.0 
+
+1.7B arch., 10B tokens 
+
+2.6 
+
+2.8 
+
+3.0 
+
+3.8B arch., 10B tokens 
+
+2.6 
+
+2.8 
+
+3.0 
+
+8.0B arch., 10B tokens 
+
+2.6 
+
+2.8 
+
+3.0 
+
+0.7B arch., 30B tokens 
+
+2.6 
+
+2.8 
+
+3.0 
+
+1.7B arch., 30B tokens 
+
+2.6 
+
+2.8 
+
+3.0 
+
+3.8B arch., 30B tokens 
+
+2.6 
+
+2.8 
+
+3.0 
+
+8.0B arch., 30B tokens 
+
+2.6 
+
+2.8 
+
+3.0 
+
+0.7B arch., 50B tokens 
+
+2.6 
+
+2.8 
+
+3.0 
+
+1.7B arch., 50B tokens 
+
+2.6 
+
+2.8 
+
+3.0 
+
+3.8B arch., 50B tokens 
+
+2.4 
+
+2.6 
+
+2.8 
+
+3.0 8.0B arch., 50B tokens 
+
+2.6 
+
+2.8 
+
+3.0 
+
+0.7B arch., 80B tokens 
+
+2.6 
+
+2.8 
+
+3.0 
+
+1.7B arch., 80B tokens 
+
+2.4 
+
+2.6 
+
+2.8 
+
+3.0 3.8B arch., 80B tokens 
+
+2.4 
+
+2.6 
+
+2.8 
+
+3.0 8.0B arch., 80B tokens 
+
+2.6 
+
+2.8 
+
+3.0 
+
+0.7B arch., 100B tokens 
+
+2.6 
+
+2.8 
+
+3.0 
+
+1.7B arch., 100B tokens 
+
+2.4 
+
+2.6 
+
+2.8 
+
+3.0 3.8B arch., 100B tokens 
+
+2.4 
+
+2.6 
+
+2.8 
+
+3.0 8.0B arch., 100B tokens 
+
+0 10 20 30 40 50 
+
+2.6 
+
+2.8 
+
+3.0 
+
+0.7B arch., 300B tokens 
+
+0 10 20 30 40 50 
+
+2.6 
+
+2.8 
+
+3.0 1.7B arch., 300B tokens 
+
+0 10 20 30 40 50 
+
+2.4 
+
+2.6 
+
+2.8 
+
+3.0 3.8B arch., 300B tokens 
+
+0 10 20 30 40 50 
+
+2.4 
+
+2.6 
+
+2.8 
+
+3.0 8.0B arch., 300B tokens 
+
+50 
+
+0
+
+10 full range 
+
+50 
+
+0
+
+10 full range 
+
+50 
+
+0
+
+10 full range 
+
+50 
+
+0
+
+10 full range 
+
+50 
+
+0
+
+10 full range 
+
+50 
+
+0
+
+10 full range 
+
+50 
+
+0
+
+10 full range 
+
+50 
+
+0
+
+10 full range 
+
+50 
+
+0
+
+10 full range 
+
+50 
+
+0
+
+10 full range 
+
+50 
+
+0
+
+10 full range 
+
+50 
+
+0
+
+10 full range 
+
+50 
+
+0
+
+10 full range 
+
+50 
+
+0
+
+10 full range 
+
+50 
+
+0
+
+10 full range 
+
+50 
+
+0
+
+10 full range 
+
+50 
+
+0
+
+10 full range 
+
+50 
+
+0
+
+10 full range 
+
+50 
+
+0
+
+10 full range 
+
+50 
+
+0
+
+10 full range 
+
+50 
+
+0
+
+10 full range 
+
+50 
+
+0
+
+10 full range 
+
+50 
+
+0
+
+10 full range 
+
+50 
+
+0
+
+10 full range 
+
+> train loss
+
+tokens (B) seen in training : 0.2 0.4 0.5 0.6 0.8 1.0 Figure 7. Training loss curves for distillation pretraining across all teacher configurations. Columns are ordered by teacher architecture size and rows by teacher token budget. Each subplot shows training loss versus tokens seen by the 1.7B student, zoomed in for clarity, with different colors indicating loss mixing coefficient 𝛼 . Insets show the full y-axis range for reference. Across all configurations, higher 𝛼 leads to faster loss reduction in the initial training stage, regardless of whether it eventually converges to the lowest or highest final loss among the 𝛼 values. 
+
+20 G Additional Ablations                                    
+
+> 0.4B 0.5B 0.8B 1.2B in-domain ppl -2.5%
+> (𝛼 =0.2) -0.1%
+> (𝛼 =0.2) +2.1%
+> (𝛼 =0.5) +3.2%
+> (𝛼 =0.8)
+> ood ppl +0.2%
+> (𝛼 =0.2) +1.6%
+> (𝛼 =0.4) +6.5%
+> (𝛼 =0.5) +6.1%
+> (𝛼 =0.6)
+> downstream acc +0.1%
+> (𝛼 =0.2) +0.2%
+> (𝛼 =0.2) +1.0%
+> (𝛼 =0.2) +0.7%
+> (𝛼 =0.4)
+> Table 8. Distillation improvement with Qwen3 architec-ture. Student is 0.5B trained on 10B tokens. Results show percentage improvement over standard baseline. 0.7B 1.7B 3.8B 8.0B in-domain ppl -0.8% +0.2% +0.9% +0.9% ood ppl +2.4% +2.8% +2.4% +3.4% downstream acc +0.3% +1.0% +3.4% +3.1%
+> Table 9. Distillation improvement at 300B training to-kens with 𝛼 = 0 .2.Student is 1.7B trained on 300B tokens. Results show percentage improvement over stan-dard pretraining 300B baseline.
+
+G.1 Generalization to Different Architecture Families 
+
+Our main experiments use the Llama3 architecture family. We now test whether our findings transfer to a different architecture by using Qwen3 (Qwen, 2025), with variants of 0.4B, 0.5B, 0.8B, and 1.2B parameters. We use the 0.5B model as the student and train teachers, student, and baseline for 10B tokens, sweeping 𝛼 
+
+values. The results in Table 8 again confirm our main findings: weak-to-strong distillation works, and larger teachers do not always yield better distillation. 
+
+G.2 Generalization to More Training Tokens 
+
+Our main experiments train students on 50B tokens. We now test whether our findings hold at larger scale by training with 300B tokens for teacher, student, and baseline. We evaluate only 𝛼 = 0 .2 as it is easiest for improvement. The results in Table 9 confirm our main findings: weak-to-strong distillation remains effective, and at this 𝛼 , the 3.8B teacher outperforms the 8.0B teacher in downstream performance. 
+
+# H Full Evaluation Results 
+
+We report full per-benchmark evaluation results for all teacher-student configurations. Table 10 presents perplexity results across 12 benchmarks, including in-domain and out-of-distribution evaluations. Table 11 presents downstream accuracy results across 15 benchmarks. For each teacher configuration, we report the best-performing loss mixing coefficient 𝛼 along with the corresponding improvement over the baseline student. 
+
+# I Mechanism Study: Per-Token Analysis of Knowledge Distillation 
+
+To understand how distillation transfers knowledge, we conduct a per-token mechanism study. We collect per-token logit data ( ∼500K tokens per model) on three datasets: FineWeb-Edu (in-domain), C4 (out-of-distribution), and WikiText (out-of-distribution). We analyze 29 models: a 1.7B baseline (standard pretraining), 4 teachers (0.5B, 1.7B, 3.8B, 8.0B, all trained on 50B tokens), and 24 distilled 1.7B students (4 teachers × 6 alpha values: 0.2, 0.4, 0.5, 0.6, 0.8, 1.0). 
+
+I.1 Overview: PPL Improvement Across Alpha and Datasets 
+
+Figure 8 shows percentage PPL improvement over the baseline as alpha varies. Strong teachers (8.0B, 3.8B) consistently improve the student across all datasets, with 8.0B achieving up to ∼9% improvement on C4. The 1.7B same-size teacher provides modest improvement ( ∼2%), peaking around 𝛼 =0.4. The 0.5B teacher hurts at all 𝛼 > 0.2, with degradation increasing sharply at higher alpha (up to −18% on C4 at 𝛼 =1.0). Optimal alpha increases with teacher quality: ∼0.2 for 0.5B, ∼0.4 for 1.7B, and ∼0.6 for 3.8B/8.0B. These patterns are consistent across in-domain and out-of-distribution datasets. Figure 9 shows the corresponding raw perplexity. 21 0.2 0.4 0.6 0.8 1.0         
+
+> mixing coefficient
+> % ppl
+> 0.2 0.4 0.6 0.8 1.0
+> mixing coefficient
+> 0.2 0.4 0.6 0.8 1.0
+> mixing coefficient
+
+FineWeb-Edu (ID) C4 (OOD) WikiText (OOD)     
+
+> teacher (B): 0.5B 1.7B 3.8B 8B
+
+Figure 8. Percentage PPL improvement over baseline across alpha values and datasets. Each panel is a dataset (FineWeb-Edu in-domain, C4 and WikiText out-of-distribution). Lines represent teacher sizes; the dashed line at 𝑦 =0 is the baseline. Strong teachers improve the student across all alpha values; weak teachers degrade performance at high alpha. Optimal alpha increases with teacher strength. 0.2 0.4 0.6 0.8 1.0         
+
+> mixing coefficient
+> 11
+> 12
+> 13
+> 14
+> 15
+> perplexity
+> 0.2 0.4 0.6 0.8 1.0
+> mixing coefficient
+> 20
+> 22
+> 24
+> 26
+> 28
+> 0.2 0.4 0.6 0.8 1.0
+> mixing coefficient
+> 14
+> 16
+> 18
+> 20
+> 22
+
+FineWeb-Edu (ID) C4 (OOD) WikiText (OOD)     
+
+> teacher (B): 0.5B 1.7B 3.8B 8B
+
+Figure 9. Raw perplexity values across alpha values and datasets. The absolute perplexity instead of relative improvement. Dashed lines indicate the baseline. Lines below the dashed line indicate better-than-baseline performance. 
+
+I.2 Distillation Improves Hard Tokens 
+
+A central question is whether distillation acts as a form of regularization (benefiting tokens uniformly) or as genuine knowledge transfer (benefiting tokens where the baseline is most uncertain). We test this by binning tokens into four difficulty levels based on the baseline model’s entropy 𝐻 : easy ( 𝐻 < 2), moderate (2 ≤ 𝐻 < 5), hard ( 5 ≤ 𝐻 < 8), and difficult ( 𝐻 ≥ 8). Figure 10 shows PPL improvement by difficulty bin at each teacher’s best alpha. Improvement is monotonically concentrated on harder tokens for all teachers. Easy tokens see ∼0–1% improvement while difficult tokens see ∼4–12% improvement. This pattern directly refutes the regularization hypothesis: regularization such as label smoothing would produce uniform improvement across difficulty levels. Instead, distillation specifically helps where the baseline is most uncertain. Stronger teachers provide more improvement at every difficulty level, but the concentration on hard tokens is universal, even the 0.5B teacher at its best 𝛼 =0.2 shows the same pattern at smaller magnitude. Figure 11 provides the complete picture across all 24 students, not just best alpha. For the 0.5B teacher, low alpha yields mild improvement on hard tokens, but as alpha increases, easy and moderate tokens degrade first, followed by hard tokens. At 𝛼 =1.0, all bins are deeply negative ( −9.5% to −26.3%). For the 3.8B and 8.0B teachers, virtually all cells are positive, with the difficult-token column consistently showing the strongest improvement (up to +13.3% for 8.0B at 𝛼 =0.4–0.8). Figure 12 confirms statistical significance via bootstrap confidence intervals. We define hard-token concentra-tion as the improvement gap between hard and easy tokens. For all students with positive overall improvement, 100% show statistically significant hard-token concentration ( 𝑝 < 0.001 ). Non-significant cases are confined to edge cases where overall improvement is near zero or negative (0.5B at 𝛼 ≥ 0.5, 1.7B at 𝛼 =1.0). When distillation hurts (0.5B at 𝛼 =0.8, 1.0), the concentration goes strongly negative: hard tokens are damaged 
+
+more than easy tokens, consistent with a weak teacher actively misleading student’s most uncertain predictions. 22 easy     
+
+> (H<2)
+> moderate
+> (2 H<5)
+> challenging
+> (5 H<8)
+> difficult
+> (H 8)
+> 0
+> 4
+> 8
+> 12
+> % ppl
+> teacher (B): 0.5B 1.7B 3.8B 8B
+
+Figure 10. Improvement by token difficulty at each teacher’s best alpha. Token difficulty bins are defined by the baseline model’s entropy. Improvement is concentrated on harder tokens for all, refuting the regularization hypothesis. Stronger teachers show larger improvement at every level, but the monotonic concentration on hard tokens is universal. easy                   
+
+> moderate
+> challeng.
+> difficult
+> =0.2
+> =0.4
+> =0.5
+> =0.6
+> =0.8
+> =1.0
+> -0.1 +0.5 +1.8 +4.3
+> -1.1 -1.2 -0.5 +4.4
+> -1.8 -3.0 -2.5 +6.4
+> -2.9 -5.5 -5.7 +1.2
+> -5.7 -12.3 -14.8 -7.5
+> -9.5 -20.5 -26.3 -24.4
+
+0.5B                   
+
+> easy
+> moderate
+> challeng.
+> difficult
+> +0.4 +1.6 +2.9 +6.0
+> +0.6 +2.2 +4.3 +5.7
+> +0.6 +2.3 +3.8 +10.2
+> +0.5 +1.7 +3.2 +7.4
+> -0.4 -0.3 +0.5 +7.3
+> -1.9 -3.9 -4.3 -2.5
+
+1.7B                   
+
+> easy
+> moderate
+> challeng.
+> difficult
+> +0.6 +2.1 +3.7 +4.5
+> +1.1 +3.5 +5.4 +5.2
+> +1.2 +3.9 +6.5 +9.3
+> +1.5 +4.3 +6.9 +12.3
+> +1.4 +4.1 +6.6 +11.1
+> +0.8 +2.9 +4.6 +4.2
+
+3.8B                   
+
+> easy
+> moderate
+> challeng.
+> difficult
+> +0.5 +1.9 +3.6 +7.3
+> +1.1 +3.5 +5.4 +12.9
+> +1.3 +4.1 +6.1 +9.5
+> +1.3 +4.3 +7.0 +13.2
+> +1.5 +4.7 +7.6 +13.3
+> +1.1 +4.1 +6.2 +7.9
+
+8B 
+
+> 15
+> 10
+> 5
+> 0
+> 5
+> 10
+> 15
+> % ppl
+
+Figure 11. PPL improvement by token difficulty across all alpha values. Each panel corresponds to a teacher size. Rows are alpha values (0.2 to 1.0); columns are difficulty bins. Green indicates improvement; red indicates degradation. For weak teachers, degradation spreads from easy to hard tokens as alpha increases. For strong teachers, improvement is robust across all alpha values, with the strongest gains consistently on difficult tokens. 0.5B 
+
+> (0.2)
+> 0.5B
+> (0.4)
+> 0.5B
+> (0.5)
+> 0.5B
+> (0.6)
+> 0.5B
+> (0.8)
+> 0.5B
+> (1.0)
+> 1.7B
+> (0.2)
+> 1.7B
+> (0.4)
+> 1.7B
+> (0.5)
+> 1.7B
+> (0.6)
+> 1.7B
+> (0.8)
+> 1.7B
+> (1.0)
+> 3.8B
+> (0.2)
+> 3.8B
+> (0.4)
+> 3.8B
+> (0.5)
+> 3.8B
+> (0.6)
+> 3.8B
+> (0.8)
+> 3.8B
+> (1.0)
+> 8B
+> (0.2)
+> 8B
+> (0.4)
+> 8B
+> (0.5)
+> 8B
+> (0.6)
+> 8B
+> (0.8)
+> 8B
+> (1.0)
+> 10
+> 5
+> 0
+> 5
+> hard-token concentration (%)
+> significant (p<0.05)
+> not significant
+
+Figure 12. Statistical significance of hard-token concentration. Hard-token concentration is the improvement gap between hard and easy tokens. Filled circles indicate statistical significance ( 𝑝 < 0.05 , bootstrap with 1000 resamples); faded crosses indicate non-significance. Error bars show 95% confidence intervals. All students with positive overall improvement show significant hard-token concentration. When distillation hurts (0.5B at high alpha), concentration reverses, where hard tokens are damaged more than easy tokens. 
+
+I.3 Novel Information from the Teacher 
+
+To identify the causal mechanism behind distillation’s improvement, we classify each token into four categories based on whether the ground-truth token appears in the top-10 predictions of the baseline and teacher: (1) “both correct” ( ∼68% of tokens), (2) “teacher only (novel info)” ( ∼2–5%), (3) “baseline only (teacher wrong)” (∼2–4%), and (4) “neither correct” ( ∼23%). 23 both correct teacher only 
+
+> (novel info)
+> baseline only
+> (teacher wrong)
+> neither
+> correct
+> 0
+> 20
+> 40
+> 60
+> token fraction (%)
+
+(a) token classification  
+
+> both correct teacher only
+> (novel info)
+> baseline only
+> (teacher wrong)
+> neither
+> correct
+> 60
+> 30
+> 0
+> 30
+> % ppl
+
+(b) student improvement by category     
+
+> teacher (B): 0.5B 1.7B 3.8B 8B
+
+Figure 13. Causal analysis of distillation by token category. Tokens are classified by whether the ground-truth appears in the top-10 predictions of the baseline and/or teacher. Panel (a): fraction of tokens in each category. Panel (b): student PPL improvement per category. Improvement comes from “teacher only” tokens (+30–40%) where the teacher provides novel correct predictions. “Baseline only” tokens ( −55% to −65%) represent the cost of distillation. This explains why 𝛼 < 1 is optimal: it limits damage from tokens where the teacher is wrong but the baseline is right. 
+
+Figure 13 reveals the mechanism. On “both correct” tokens, the student shows ∼0% improvement — when both models already know the answer, the teacher adds nothing. On “teacher only” tokens, improvement is massive (+30–40%) — the teacher provides novel correct information that the baseline lacks, and the student absorbs it. On “baseline only” tokens, the teacher actively misleads the student ( −55% to −65%) — this is the cost of distillation. On “neither correct” tokens, the student still improves ( ∼+10%), suggesting the teacher’s soft distribution is informative even when neither model’s top predictions are correct. These results explain two key observations. First, stronger teachers help more because they have more “teacher only” tokens (8.0B: 4.9% vs. 0.5B: 2.3%). Second, 𝛼 < 1 is optimal because it limits the damage from the “baseline only” category where the teacher’s signal is harmful. 
+
+I.4 Distillation Is Not Label Smoothing 
+
+A common hypothesis is that distillation acts similarly to label smoothing, a uniform regularizer. Figure 14 directly tests this by comparing the token-level benefit profiles of label smoothing and distillation. Label smoothing’s benefit is analytically proportional to log 𝑉 − 𝐻 , where 𝑉 is the vocabulary size and 𝐻 is the token entropy, meaning it helps most on easy tokens where the model is overconfident. Distillation’s measured benefit shows the opposite pattern: it helps most on hard tokens. The two profiles cross: label smoothing benefit decreases with token difficulty while distillation benefit increases. This definitively refutes the hypothesis that distillation is merely a form of regularization similar to label smoothing, they operate on complementary parts of the token difficulty spectrum. easy   
+
+> (H<2)
+> moderate
+> (2 H<5)
+> challenging
+> (5 H<8)
+> difficult
+> (H 8)
+> 0
+> 4
+> 8
+> 12
+> improvement (%)
+> label smoothing (analytical) distillation (3.8B, =0.6)
+
+Figure 14. Distillation vs. label smoothing: opposite benefit profiles. Purple bars show the analytical label smoothing benefit profile (proportional to log 𝑉 − 𝐻 ); green bars show the measured distillation improvement (3.8B teacher, 
+
+𝛼 =0.6). Label smoothing helps most on easy tokens; distillation helps most on hard tokens. The crossing pattern refutes the hypothesis that distillation is a form of regularization. 
+
+24 I.5 Distribution Convergence: Weak Teachers Distort, Strong Teachers Transfer 
+
+We measure whether the distilled student’s output distribution moves toward the teacher or stays close to the baseline by computing a convergence ratio: the top-10 token overlap between student and teacher, divided by the overlap between the distillation pretraining student and standard pretraining baseline. A ratio of 1 means equidistant; ratio > 1 means the student is closer to the teacher. Figure 15 shows that the 0.5B teacher distorts the student distribution: the ratio rises from 0.96 to 1.12 as alpha increases, meaning the student’s predictions increasingly resemble the weaker teacher’s. In contrast, the 3.8B teacher ( ∼0.97–1.01) and 8.0B teacher ( ∼0.95–0.97) transfer knowledge without distorting the student’s distribution. This mechanistically explains why optimal alpha is lower for weak teachers: at high alpha, weak teachers pull the student away from its natural distribution, causing the performance degradation. 0.2 0.4 0.6 0.8 1.0     
+
+> mixing coefficient
+> 0.96
+> 1.02
+> 1.08
+> 1.14
+> convergence ratio  teacher (B): 0.5B 1.7B 3.8B 8B
+
+Figure 15. Distribution convergence ratio across alpha. The ratio measures top-10 token overlap (student–teacher) divided by overlap (student–baseline). Ratio > 1 means the student is closer to the teacher; ratio < 1 means closer to the baseline. The 0.5B teacher distorts the student distribution at high alpha (ratio up to 1.12), while the 3.8B and 8.0B teachers transfer knowledge without distortion (ratio ≤ 1.01). This explains why weak teachers require low alpha. 
+
+I.6 Probability Redistribution, Not Sharpening 
+
+A natural expectation is that distillation sharpens predictions (lowering entropy) to improve perplexity. Figure 16 tests this by plotting each student’s entropy change against its PPL improvement. Most successful students have positive entropy increase (less confident) yet positive PPL improvement (better predictions). This counterintuitive result indicates that distillation redistributes probability mass from wrong confident predictions to better-calibrated ones, rather than simply sharpening. Strong teachers (8.0B, 3.8B) cluster in the upper region, modest entropy change with strong PPL improvement, indicating efficient knowledge transfer. The 0.5B teacher at high alpha occupies the lower-right region, large entropy increase and PPL degradation, the weak teacher makes the student both less confident and accurate. 0.1 0.0 0.1 0.2 0.3     
+
+> entropy increase (nats)
+> 20
+> 10
+> 0
+> 10
+> % ppl
+> teacher (B): 0.5B 1.7B 3.8B 8B
+
+Figure 16. Entropy change vs. PPL improvement. Each point is one distilled student. Most successful students show increased entropy (less confident) yet improved PPL (more accurate), indicating distillation redistributes probability rather than sharpening predictions. Strong teachers achieve high improvement with modest entropy change; the 0.5B teacher at high alpha increases entropy substantially while degrading PPL. 
+
+25 I.7 Position Independence 
+
+Figure 17 tests whether distillation improvement varies with position in the context window. PPL improvement is computed in four position bins (0–128, 128–512, 512–1024, 1024–2048 tokens). All teachers show essentially flat improvement across positions, there is no early-token vs. late-token effect. This rules out the hypothesis that distillation primarily helps with “cold start” predictions (early tokens with little context) or with long-range dependencies (late tokens). The uniformity supports that distillation transfers token-level knowledge about what to predict given the context, rather than position-dependent structural knowledge. 0 128 128 512 512 1024 1024 2048     
+
+> context position (tokens)
+> 0.0
+> 1.5
+> 3.0
+> 4.5
+> % ppl
+> teacher (B): 0.5B 1.7B 3.8B 8B
+
+Figure 17. PPL improvement by context position. Each line represents a teacher at its best alpha, with improvement measured in four position bins across the context window. Improvement is uniform across positions for all teachers, ruling out position-dependent effects and supporting zthat distillation transfers token-level predictive knowledge. 
+
+26 Table 10. Full perplexity evaluation results. We include (1) in-domain perplexity evaluation on FineWeb-Edu (FW); (2) out-of-distribution perplexity evaluation on Wikitext-103 (Wiki), C4 (C4), GSM8K (GSM), DM Mathematics (DMM), HumanEval (HEval), CodeSearchNet (CSN), arXiv (AX), CNN-DailyMail (CNN), ECHR (ECHR), PubMedQA (PM), and XQuAD (XQA). 
+
+perplexity ( ↓) FW Wiki C4 GSM DMM HEval CSN AX CNN ECHR PM XQA 
+
+→ standard pretrained student baseline 
+
+12.17 16.01 21.53 6.61 9.33 13.54 20.79 24.48 14.27 9.24 24.77 12.13 
+
+→ 0.7B arch. 10B tokens teacher config ( 𝛼 =0.2) 
+
+pretrained teacher 21.21 32.96 36.50 16.94 14.44 44.51 79.14 47.53 25.72 15.10 50.07 74.66 distilled student 12.52 16.49 21.92 6.91 9.15 14.06 20.70 25.33 14.70 9.44 24.88 14.02 improvement (%) -2.9 -3.0 -1.8 -4.5 +1.9 -3.8 +0.4 -3.5 -3.1 -2.1 -0.5 -15.6 
+
+→ 0.7B arch. 30B tokens teacher config ( 𝛼 =0.2) 
+
+pretrained teacher 16.25 23.39 28.30 10.48 11.05 24.79 36.41 35.11 19.31 11.89 37.08 21.47 distilled student 12.32 16.03 21.55 6.74 9.10 14.06 20.91 24.23 14.35 9.30 24.83 12.29 improvement (%) -1.2 -0.1 -0.1 -1.9 +2.4 -3.8 -0.6 +1.0 -0.6 -0.6 -0.2 -1.3 
+
+→ 0.7B arch. 50B tokens teacher config ( 𝛼 =0.2) 
+
+pretrained teacher 14.91 20.62 26.06 8.65 10.54 19.86 30.64 31.23 17.66 10.98 32.49 17.37 distilled student 12.21 15.98 21.43 6.53 9.01 13.02 19.37 24.13 14.30 9.23 24.49 12.18 improvement (%) -0.3 +0.2 +0.5 +1.2 +3.3 +3.9 +6.8 +1.4 -0.3 +0.1 +1.1 -0.4 
+
+→ 0.7B arch. 80B tokens teacher config ( 𝛼 =0.4) 
+
+pretrained teacher 14.01 19.35 24.54 8.02 10.40 15.52 23.99 29.33 16.49 10.40 31.18 12.83 distilled student 12.33 16.15 21.47 6.49 8.88 12.74 18.40 24.60 14.36 9.27 24.48 11.52 improvement (%) -1.3 -0.9 +0.3 +1.8 +4.7 +5.9 +11.5 -0.5 -0.7 -0.3 +1.2 +5.0 
+
+→ 0.7B arch. 100B tokens teacher config ( 𝛼 =0.2) 
+
+pretrained teacher 13.67 18.87 23.98 7.95 10.10 15.30 22.76 28.56 16.03 10.19 30.77 11.44 distilled student 12.13 15.74 21.26 6.53 8.87 12.79 19.18 24.27 14.17 9.15 24.10 11.31 improvement (%) +0.4 +1.7 +1.3 +1.2 +4.9 +5.6 +7.8 +0.9 +0.7 +1.0 +2.7 +6.8 
+
+→ 0.7B arch. 300B tokens teacher config ( 𝛼 =0.6) 
+
+pretrained teacher 12.49 17.05 22.08 7.17 10.44 14.15 19.84 25.70 14.71 9.43 28.50 8.39 distilled student 12.21 15.94 21.28 6.46 8.77 12.76 18.65 24.09 14.22 9.16 24.04 10.15 improvement (%) -0.3 +0.5 +1.2 +2.4 +5.9 +5.8 +10.3 +1.6 +0.3 +0.9 +2.9 +16.3 
+
+→ 1.7B arch. 10B tokens teacher config ( 𝛼 =0.2) 
+
+pretrained teacher 16.77 23.56 29.12 11.10 11.43 26.62 43.59 35.87 19.87 12.18 35.05 41.09 distilled student 12.34 16.12 21.62 6.83 9.18 13.58 20.46 24.65 14.44 9.32 24.45 13.23 improvement (%) -1.4 -0.7 -0.4 -3.3 +1.6 -0.3 +1.6 -0.7 -1.2 -0.8 +1.3 -9.1 
+
+→ 1.7B arch. 30B tokens teacher config ( 𝛼 =0.2) 
+
+pretrained teacher 13.14 17.76 23.13 7.39 9.85 16.29 23.70 26.95 15.47 9.88 27.04 14.69 distilled student 12.11 15.79 21.28 6.48 9.08 13.53 20.51 24.27 14.16 9.16 23.95 11.92 improvement (%) +0.5 +1.4 +1.2 +2.1 +2.6 +0.1 +1.4 +0.9 +0.7 +0.9 +3.3 +1.7 
+
+→ 1.7B arch. 50B tokens teacher config ( 𝛼 =0.4) 
+
+pretrained teacher 12.13 16.08 21.50 6.92 9.45 13.60 19.64 24.21 14.25 9.27 25.08 11.74 distilled student 12.05 15.66 21.08 6.41 9.07 13.24 18.96 23.93 14.06 9.09 23.78 11.16 improvement (%) +1.0 +2.2 +2.1 +3.0 +2.7 +2.2 +8.8 +2.3 +1.5 +1.7 +4.0 +8.0 
+
+→ 1.7B arch. 80B tokens teacher config ( 𝛼 =0.6) 
+
+pretrained teacher 11.46 15.01 20.42 6.17 9.31 12.31 18.19 22.96 13.48 8.82 23.53 8.83 distilled student 11.98 15.54 20.91 6.41 8.89 12.50 18.36 23.74 13.93 9.04 23.91 10.34 improvement (%) +1.6 +2.9 +2.9 +3.0 +4.7 +7.7 +11.7 +3.0 +2.3 +2.2 +3.5 +14.8 
+
+→ 1.7B arch. 100B tokens teacher config ( 𝛼 =0.6) 
+
+pretrained teacher 11.19 14.64 19.97 6.03 9.65 11.49 15.44 22.55 13.20 8.65 23.27 8.18 distilled student 11.93 15.60 20.83 6.29 9.22 12.22 17.74 23.54 13.87 8.98 23.85 10.07 improvement (%) +2.0 +2.6 +3.3 +4.9 +1.1 +9.8 +14.7 +3.8 +2.8 +2.9 +3.7 +17.0 
+
+→ 1.7B arch. 300B tokens teacher config ( 𝛼 =0.6) 
+
+pretrained teacher 10.17 13.17 18.50 5.40 10.38 10.17 14.82 20.48 12.16 8.07 21.46 6.11 distilled student 11.77 15.34 20.65 6.25 9.19 11.89 17.40 23.32 13.71 8.91 23.56 9.44 
+
+Continued on next page 
+
+27 Table 10 continued from previous page 
+
+perplexity ( ↓) FW Wiki C4 GSM DMM HEval CSN AX CNN ECHR PM XQA improvement (%) +3.3 +4.2 +4.1 +5.5 +1.5 +12.2 +16.3 +4.8 +3.9 +3.7 +4.9 +22.2 
+
+→ 3.8B arch. 10B tokens teacher config ( 𝛼 =0.2) 
+
+pretrained teacher 14.43 19.48 25.18 8.70 10.31 22.34 34.10 29.85 16.99 10.67 29.79 34.46 distilled student 12.22 15.91 21.43 6.57 8.91 12.94 20.24 24.45 14.30 9.23 23.96 12.60 improvement (%) -0.4 +0.6 +0.5 +0.7 +4.5 +4.5 +2.6 +0.2 -0.2 +0.1 +3.3 -3.9 
+
+→ 3.8B arch. 30B tokens teacher config ( 𝛼 =0.5) 
+
+pretrained teacher 11.20 14.53 20.04 6.19 8.63 12.32 18.08 22.28 13.25 8.71 22.98 11.27 distilled student 11.94 15.59 20.90 6.33 8.85 12.59 18.94 23.80 13.89 9.03 23.72 11.43 improvement (%) +1.9 +2.6 +2.9 +4.2 +5.1 +7.1 +8.9 +2.8 +2.6 +2.3 +4.2 +5.8 
+
+→ 3.8B arch. 50B tokens teacher config ( 𝛼 =0.5) 
+
+pretrained teacher 10.30 13.22 18.71 5.64 9.03 11.08 15.08 20.33 12.28 8.16 20.90 8.38 distilled student 11.83 15.44 20.78 6.40 9.14 12.02 18.01 23.66 13.77 8.97 23.51 10.24 improvement (%) +2.8 +3.6 +3.5 +3.3 +2.0 +11.2 +13.4 +3.4 +3.5 +2.9 +5.1 +15.6 
+
+→ 3.8B arch. 80B tokens teacher config ( 𝛼 =0.8) 
+
+pretrained teacher 9.64 12.18 17.77 5.23 8.65 9.10 12.72 18.89 11.60 7.81 20.07 6.92 distilled student 11.75 15.36 20.58 6.21 8.80 12.03 17.32 23.84 13.64 8.89 23.54 9.55 improvement (%) +3.5 +4.0 +4.4 +6.0 +5.6 +11.2 +16.7 +2.6 +4.4 +3.9 +4.9 +21.2 
+
+→ 3.8B arch. 100B tokens teacher config ( 𝛼 =0.8) 
+
+pretrained teacher 9.36 11.86 17.39 5.06 8.79 9.05 12.07 18.33 11.35 7.66 19.93 6.52 distilled student 11.70 15.27 20.55 6.42 9.05 12.07 17.17 23.25 13.62 8.88 23.37 9.61 improvement (%) +3.9 +4.7 +4.6 +2.9 +2.9 +10.9 +17.4 +5.1 +4.5 +3.9 +5.6 +20.8 
+
+→ 3.8B arch. 300B tokens teacher config ( 𝛼 =0.8) 
+
+pretrained teacher 8.29 10.61 16.12 4.71 8.83 8.28 11.56 16.88 10.53 7.17 20.29 5.16 distilled student 11.65 15.24 20.54 6.24 9.08 12.25 17.88 23.47 13.60 8.89 23.45 9.48 improvement (%) +4.3 +4.8 +4.6 +5.6 +2.7 +9.6 +14.0 +4.2 +4.7 +3.9 +5.3 +21.9 
+
+→ 8.0B arch. 10B tokens teacher config ( 𝛼 =0.4) 
+
+pretrained teacher 12.81 16.80 22.57 7.17 9.69 17.80 27.11 25.91 15.04 9.68 25.21 26.55 distilled student 12.23 15.95 21.33 6.50 8.97 13.01 18.43 24.20 14.23 9.19 23.88 13.40 improvement (%) -0.5 +0.4 +0.9 +1.8 +3.8 +3.9 +11.3 +1.2 +0.3 +0.5 +3.6 -10.5 
+
+→ 8.0B arch. 30B tokens teacher config ( 𝛼 =0.5) 
+
+pretrained teacher 9.98 12.83 18.31 5.53 8.60 10.21 15.07 19.79 11.98 8.04 20.32 9.57 distilled student 11.82 15.46 20.77 6.29 8.99 12.50 18.50 23.87 13.80 8.98 23.24 10.83 improvement (%) +2.9 +3.5 +3.5 +4.8 +3.6 +7.7 +11.0 +2.5 +3.3 +2.8 +6.2 +10.7 
+
+→ 8.0B arch. 50B tokens teacher config ( 𝛼 =0.8) 
+
+pretrained teacher 9.08 11.48 17.18 5.25 9.71 8.99 13.26 17.90 11.19 7.60 19.15 7.42 distilled student 11.70 15.36 20.61 6.36 9.18 11.89 17.42 23.52 13.62 8.90 23.32 9.74 improvement (%) +3.9 +4.0 +4.3 +3.8 +1.6 +12.2 +16.2 +3.9 +4.5 +3.8 +5.8 +19.7 
+
+→ 8.0B arch. 80B tokens teacher config ( 𝛼 =0.6) 
+
+pretrained teacher 8.38 10.67 16.38 4.82 9.74 8.24 11.66 16.98 10.64 7.28 18.28 6.00 distilled student 11.70 15.30 20.66 6.28 8.87 11.77 17.93 23.36 13.64 8.90 23.72 9.58 improvement (%) +3.9 +4.4 +4.0 +5.1 +4.8 +13.1 +13.8 +4.6 +4.4 +3.7 +4.2 +21.0 
+
+→ 8.0B arch. 100B tokens teacher config ( 𝛼 =0.8) 
+
+pretrained teacher 8.08 10.31 15.99 4.71 9.34 7.95 10.58 16.38 10.42 7.15 17.84 5.67 distilled student 11.66 15.27 20.60 6.24 8.97 11.28 16.29 23.32 13.58 8.89 23.72 9.25 improvement (%) +4.2 +4.6 +4.3 +5.7 +3.8 +16.7 +21.7 +4.8 +4.8 +3.9 +4.2 +23.8 
+
+→ 8.0B arch. 300B tokens teacher config ( 𝛼 =0.6) 
+
+pretrained teacher 6.77 8.85 14.89 4.36 9.43 8.21 11.17 15.25 9.74 6.73 17.42 4.62 distilled student 11.72 15.28 20.69 6.27 9.12 11.90 16.94 23.45 13.68 8.92 24.18 9.91 improvement (%) +3.8 +4.5 +3.9 +5.1 +2.2 +12.2 +18.5 +4.2 +4.1 +3.5 +2.3 +18.3 
+
+28 Table 11. Full downstream accuracy evaluation results. We include MMLU (MMLU), ARC-Easy (ARC), SciQ (SQ), OpenBookQA (OBA), MathQA (MQA), TruthfulQA (TQA), ANLI-R1 (ANLI), CommonsenseQA (CSQA), HellaSwag (HS), PIQA (PIQA), WinoGrande (WG), Social IQa (SIQA), LogiQA 2.0 (LQ), MedMCQA (MCQA), and RACE (RACE). 
+
+accuracy ( ↑) MMLU ARC SQ OBA MQA TQA ANLI CSQA HS PIQA WG SIQA LQ MCQA RACE 
+
+→ random chance 
+
+25.0 25.0 25.0 25.0 20.0 – 33.3 20.0 25.0 50.0 50.0 33.3 25.0 25.0 25.0 
+
+→ standard pretrained student baseline 
+
+25.4 62.8 87.2 33.4 23.7 21.4 32.9 18.9 51.1 71.1 54.0 38.7 23.6 24.5 32.7 
+
+→ 0.7B arch. 10B tokens teacher config ( 𝛼 =0.2) 
+
+pretrained teacher 25.8 47.3 73.1 29.6 21.5 17.9 33.3 19.2 32.4 62.5 50.7 35.7 22.6 23.0 28.4 distilled student 25.8 60.3 86.1 32.2 22.7 20.6 33.7 19.5 47.5 70.6 53.7 40.1 22.2 27.8 32.4 improvement (%) +1.7 -4.0 -1.3 -3.6 -4.1 -4.0 +2.4 +3.0 -7.2 -0.7 -0.4 +3.6 -5.9 +13.2 -0.9 
+
+→ 0.7B arch. 30B tokens teacher config ( 𝛼 =0.2) 
+
+pretrained teacher 26.6 53.0 80.5 31.2 22.1 21.8 33.0 20.6 39.2 66.2 52.6 37.6 24.1 27.4 30.3 distilled student 26.5 60.7 87.1 34.2 23.6 21.9 34.9 20.6 49.2 70.9 54.2 40.3 22.8 24.8 32.9 improvement (%) +4.2 -3.4 -0.1 +2.4 -0.1 +2.3 +6.1 +9.1 -3.8 -0.2 +0.4 +4.1 -3.2 +1.1 +0.6 
+
+→ 0.7B arch. 50B tokens teacher config ( 𝛼 =0.2) 
+
+pretrained teacher 26.1 55.6 81.6 33.0 22.4 18.4 33.2 20.3 43.0 67.8 52.1 38.6 23.5 24.5 31.3 distilled student 25.7 60.7 86.5 32.6 23.1 19.1 34.4 20.2 49.9 71.2 55.6 40.8 23.2 27.7 32.7 improvement (%) +1.1 -3.3 -0.8 -2.4 -2.3 -10.9 +4.6 +6.9 -2.3 +0.2 +2.9 +5.4 -1.6 +12.8 0.0 
+
+→ 0.7B arch. 80B tokens teacher config ( 𝛼 =0.4) 
+
+pretrained teacher 26.5 58.8 84.4 29.8 22.7 18.1 33.9 19.2 45.5 70.1 51.1 37.0 23.7 25.3 31.8 distilled student 25.8 60.6 85.9 33.4 22.7 20.3 33.8 19.7 49.2 69.9 55.2 40.3 23.8 27.9 33.9 improvement (%) +1.4 -3.5 -1.5 0.0 -3.8 -5.1 +2.7 +3.9 -3.8 -1.7 +2.3 +4.2 +0.8 +13.6 +3.5 
+
+→ 0.7B arch. 100B tokens teacher config ( 𝛼 =0.4) 
+
+pretrained teacher 26.0 59.6 83.3 30.6 23.5 17.9 32.8 19.3 46.7 69.5 53.1 37.5 24.2 26.5 32.2 distilled student 27.1 61.2 85.9 32.4 23.8 21.8 33.7 19.8 49.6 70.7 53.7 40.2 24.2 24.0 32.8 improvement (%) +6.7 -2.5 -1.5 -3.0 +0.4 +1.7 +2.4 +4.8 -2.9 -0.5 -0.6 +3.8 +2.7 -1.9 +0.3 
+
+→ 0.7B arch. 300B tokens teacher config ( 𝛼 =0.6) 
+
+pretrained teacher 24.9 62.7 86.7 33.2 25.3 17.0 33.5 17.7 50.9 70.6 55.2 39.7 23.3 28.0 33.1 distilled student 26.3 61.1 85.5 34.4 23.7 21.8 33.9 20.1 50.1 70.9 57.1 40.2 24.7 23.4 33.2 improvement (%) +3.6 -2.7 -1.9 +3.0 +0.1 +1.7 +3.0 +6.1 -2.0 -0.2 +5.7 +3.8 +4.9 -4.5 +1.5 
+
+→ 1.7B arch. 10B tokens teacher config ( 𝛼 =0.2) 
+
+pretrained teacher 26.0 50.5 79.5 29.4 22.2 22.3 33.8 20.6 38.0 65.5 51.5 36.9 22.4 26.5 30.3 distilled student 26.6 59.8 85.0 31.8 23.9 21.4 31.3 19.2 48.8 70.9 52.7 39.9 23.0 27.0 32.3 improvement (%) +4.7 -4.8 -2.5 -4.8 +1.1 0.0 -4.9 +1.7 -4.4 -0.2 -2.3 +3.2 -2.4 +10.1 -1.2 
+
+→ 1.7B arch. 30B tokens teacher config ( 𝛼 =0.2) 
+
+pretrained teacher 25.0 60.0 85.5 34.2 23.8 20.6 32.7 20.1 47.4 70.0 52.8 39.8 23.4 23.7 32.0 distilled student 26.3 61.7 85.2 33.2 23.3 19.5 32.9 22.0 50.4 71.2 54.5 40.3 23.7 27.1 33.5 improvement (%) +3.8 -1.8 -2.3 -0.6 -1.4 -9.1 0.0 +16.5 -1.4 +0.2 +0.9 +4.1 +0.3 +10.3 +2.3 
+
+→ 1.7B arch. 50B tokens teacher config ( 𝛼 =0.2) 
+
+pretrained teacher 27.0 60.2 86.8 33.6 22.0 19.3 33.9 19.7 51.2 71.3 55.0 40.8 22.2 22.3 32.7 distilled student 26.8 62.3 86.9 34.8 23.2 19.7 34.6 19.3 51.1 70.9 55.5 41.1 24.7 25.4 32.3 improvement (%) +5.4 -0.8 -0.3 +4.2 -1.7 -8.0 +5.2 +2.2 +0.0 -0.2 +2.8 +6.2 +4.9 +3.4 -1.2 
+
+→ 1.7B arch. 80B tokens teacher config ( 𝛼 =0.2) 
+
+pretrained teacher 25.4 64.1 89.5 37.2 24.5 23.5 34.5 20.5 54.2 72.4 54.9 41.1 24.4 27.4 34.7 distilled student 26.3 63.3 87.5 35.8 24.1 22.5 34.8 19.2 51.5 71.9 55.7 41.4 22.1 22.7 33.4 improvement (%) +3.5 +0.8 +0.3 +7.2 +2.0 +5.1 +5.8 +1.3 +0.7 +1.1 +3.2 +7.0 -6.2 -7.4 +2.0 
+
+→ 1.7B arch. 100B tokens teacher config ( 𝛼 =0.5) 
+
+pretrained teacher 25.7 66.5 89.7 37.6 22.7 22.8 35.9 21.2 55.7 72.0 56.5 39.9 23.8 24.0 34.5 distilled student 25.5 62.5 87.7 36.4 23.4 19.0 33.6 20.5 51.6 72.4 54.9 40.5 23.7 26.8 33.8 improvement (%) +0.3 -0.4 +0.6 +9.0 -1.1 -11.4 +2.1 +8.2 +0.9 +1.8 +1.8 +4.6 +0.3 +9.2 +3.2 
+
+→ 1.7B arch. 300B tokens teacher config ( 𝛼 =0.8) 
+
+pretrained teacher 26.1 67.5 93.1 40.0 23.8 20.7 35.0 21.9 59.4 73.3 58.7 41.0 26.3 26.8 34.8 distilled student 26.6 64.7 88.3 36.8 25.0 21.8 35.9 19.2 52.6 71.7 57.8 39.6 24.2 26.3 34.3 
+
+Continued on next page 
+
+29 Table 11 continued from previous page 
+
+accuracy ( ↑) MMLU ARC SQ OBA MQA TQA ANLI CSQA HS PIQA WG SIQA LQ MCQA RACE improvement (%) +4.8 +3.1 +1.3 +10.2 +5.7 +1.7 +9.1 +1.3 +2.9 +0.8 +7.0 +2.2 +2.7 +7.4 +4.7 
+
+→ 3.8B arch. 10B tokens teacher config ( 𝛼 =0.5) 
+
+pretrained teacher 25.6 57.1 82.5 32.4 22.7 22.9 33.1 19.7 43.4 68.0 51.9 38.3 22.3 25.4 32.5 distilled student 26.5 59.5 85.9 31.2 23.5 23.1 34.4 18.7 47.1 70.7 52.3 39.7 23.0 24.2 32.5 improvement (%) +4.2 -5.2 -1.5 -6.6 -0.8 +8.0 +4.6 -1.3 -7.9 -0.5 -3.1 +2.5 -2.7 -1.4 -0.6 
+
+→ 3.8B arch. 30B tokens teacher config ( 𝛼 =0.5) 
+
+pretrained teacher 24.8 66.8 89.4 38.6 22.5 18.5 35.5 19.9 54.8 72.3 55.7 40.8 22.7 24.3 35.2 distilled student 26.7 63.0 88.0 35.4 22.7 21.9 34.0 19.9 51.5 71.8 55.7 41.6 23.5 26.8 32.1 improvement (%) +5.2 +0.3 +0.9 +6.0 -4.0 +2.3 +3.3 +5.2 +0.7 +1.1 +3.2 +7.5 -0.3 +9.5 -2.0 
+
+→ 3.8B arch. 50B tokens teacher config ( 𝛼 =0.6) 
+
+pretrained teacher 26.3 67.3 89.4 39.4 25.0 19.7 35.1 19.0 58.9 74.2 58.2 42.4 23.5 30.2 35.4 distilled student 25.9 65.5 88.9 35.6 23.7 22.4 34.9 18.9 52.6 72.4 55.9 41.2 23.5 26.8 33.6 improvement (%) +1.9 +4.4 +1.9 +6.6 +0.1 +4.6 +6.1 0.0 +3.0 +1.9 +3.5 +6.5 -0.5 +9.2 +2.6 
+
+→ 3.8B arch. 80B tokens teacher config ( 𝛼 =0.8) 
+
+pretrained teacher 25.3 70.3 92.1 41.4 25.4 21.8 33.2 20.1 61.9 74.6 59.9 42.0 23.9 26.3 35.8 distilled student 25.8 64.6 88.5 35.2 24.2 20.3 34.0 21.5 52.9 72.3 56.3 40.1 23.9 27.4 33.6 improvement (%) +1.5 +2.8 +1.5 +5.4 +2.3 -5.1 +3.3 +13.4 +3.5 +1.7 +4.2 +3.6 +1.1 +11.9 +2.6 
+
+→ 3.8B arch. 100B tokens teacher config ( 𝛼 =0.6) 
+
+pretrained teacher 25.6 70.3 92.4 40.0 25.2 21.3 33.9 17.9 63.2 75.2 62.4 42.7 23.2 26.4 36.4 distilled student 25.1 65.1 88.8 37.4 23.7 22.6 32.0 19.7 52.9 72.1 57.5 41.2 23.7 25.7 33.8 improvement (%) -1.3 +3.6 +1.8 +12.0 +0.3 +5.7 -2.7 +3.9 +3.5 +1.5 +6.6 +6.5 +0.3 +5.0 +3.2 
+
+→ 3.8B arch. 300B tokens teacher config ( 𝛼 =0.5) 
+
+pretrained teacher 25.6 72.1 94.1 42.8 26.9 25.3 34.0 19.5 66.8 76.9 66.1 42.8 23.0 29.0 36.4 distilled student 25.1 65.7 88.6 37.4 23.6 21.4 32.6 19.4 53.1 71.9 56.6 41.2 23.5 28.3 33.5 improvement (%) -1.0 +4.6 +1.6 +12.0 -0.4 0.0 -0.9 +2.6 +3.8 +1.2 +4.8 +6.5 -0.5 +15.5 +2.3 
+
+→ 8.0B arch. 10B tokens teacher config ( 𝛼 =0.4) 
+
+pretrained teacher 25.2 59.6 85.5 33.6 23.7 20.1 31.9 20.1 48.4 70.5 53.1 38.7 22.3 25.8 32.3 distilled student 26.7 60.9 85.9 34.4 23.4 22.5 33.4 18.4 49.8 70.8 53.4 40.8 22.3 26.7 33.3 improvement (%) +5.1 -3.1 -1.5 +3.0 -1.1 +5.1 +1.5 -2.6 -2.5 -0.4 -1.2 +5.4 -5.4 +9.0 +1.8 
+
+→ 8.0B arch. 30B tokens teacher config ( 𝛼 =0.6) 
+
+pretrained teacher 25.4 66.8 90.5 38.2 24.5 22.4 35.1 19.3 59.6 75.0 59.7 40.7 24.2 25.1 34.7 distilled student 26.0 64.1 87.1 33.2 24.5 23.6 34.4 22.3 52.7 72.0 56.0 40.7 24.0 26.4 33.4 improvement (%) +2.2 +2.1 -0.1 -0.6 +3.4 +10.3 +4.6 +17.7 +3.2 +1.3 +3.8 +5.2 +1.9 +7.7 +2.0 
+
+→ 8.0B arch. 50B tokens teacher config ( 𝛼 =0.8) 
+
+pretrained teacher 25.1 68.8 91.6 40.8 24.4 22.2 34.9 19.7 63.1 75.9 59.4 42.3 23.8 26.7 37.1 distilled student 26.6 63.2 87.1 34.8 23.2 20.8 34.0 20.3 53.2 72.4 57.2 42.6 24.0 26.0 33.5 improvement (%) +4.8 +0.6 -0.1 +4.2 -1.7 -2.9 +3.3 +7.4 +4.0 +1.9 +6.0 +10.1 +1.6 +6.0 +2.3 
+
+→ 8.0B arch. 80B tokens teacher config ( 𝛼 =1.0) 
+
+pretrained teacher 24.8 72.7 93.1 42.4 25.8 22.6 33.3 19.8 65.7 77.1 62.7 42.4 25.3 30.9 34.7 distilled student 26.2 64.2 88.6 37.2 23.9 20.4 34.4 20.9 53.2 71.9 54.6 40.9 23.6 28.0 33.7 improvement (%) +3.3 +2.2 +1.6 +11.4 +1.0 -4.6 +4.6 +10.4 +4.1 +1.1 +1.2 +5.7 0.0 +14.3 +2.9 
+
+→ 8.0B arch. 100B tokens teacher config ( 𝛼 =1.0) 
+
+pretrained teacher 26.8 73.5 94.4 42.6 25.9 22.2 33.7 20.6 67.0 76.6 64.9 43.5 23.9 26.6 35.9 distilled student 26.3 62.2 88.3 37.2 24.8 22.2 34.3 18.5 53.7 72.0 55.2 41.4 23.0 26.2 33.8 improvement (%) +3.5 -0.9 +1.3 +11.4 +4.8 +3.4 +4.3 -2.2 +5.2 +1.4 +2.3 +6.9 -2.7 +6.6 +3.2 
+
+→ 8.0B arch. 300B tokens teacher config ( 𝛼 =0.8) 
+
+pretrained teacher 27.2 76.5 95.1 43.8 27.5 27.3 33.9 20.8 70.6 77.4 65.4 43.8 24.2 28.1 37.9 distilled student 26.4 63.3 86.8 36.6 23.2 23.0 30.3 20.1 53.6 71.5 56.4 40.6 24.4 25.1 33.9 improvement (%) +3.8 +0.9 -0.5 +9.6 -1.8 +7.4 -7.9 +6.1 +4.9 +0.6 +4.4 +5.0 +3.5 +2.2 +3.5 
+
+30
