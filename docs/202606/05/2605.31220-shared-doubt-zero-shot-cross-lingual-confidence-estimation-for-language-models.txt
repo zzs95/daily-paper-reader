@@ -1,0 +1,664 @@
+Title: Shared Doubt: Zero-shot Cross-Lingual Confidence Estimation for Language Models
+
+URL Source: https://arxiv.org/pdf/2605.31220
+
+Published Time: Mon, 01 Jun 2026 01:41:09 GMT
+
+Number of Pages: 28
+
+Markdown Content:
+# Shared Doubt: Zero-shot Cross-Lingual Confidence Estimation for Language Models 
+
+Athina Kyriakou °, Dennis Ulmer M, Ivan Titov M, °M ILLC, University of Amsterdam  
+
+> °
+
+ILCC, University of Edinburgh 
+
+athina.skyriakou@gmail.com , dennis.ulmer@mailbox.org , ititov@inf.ed.ac.uk 
+
+Abstract 
+
+Confidence estimation (CE), i.e. quantifying the reliability of a model’s prediction, has at-tracted great interest in the context of large language models (LLMs). However, most stud-ies focus on English, ignoring the multilingual reality of LLM usage, while many CE methods degrade or require retraining across languages. To address this gap, we investigate whether multilingual LLMs encode shared, language-transferable confidence features. We use a lightweight linear probe that predicts answer correctness directly from intermediate repre-sentations. Trained monolingually, the probe generalizes zero-shot to unseen , typologically diverse languages without target-language su-pervision. Learned layer weights and multiple ablations reveal that confidence features con-centrate in middle layers across languages, sug-gesting a shared confidence subspace. While zero-shot cross-lingual performance depends on similarity to the source language, the probe provides a strong baseline without any retrain-ing and compares favorably to other popular confidence estimation methods. 
+
+1 Introduction 
+
+Large language models (LLMs) have seen unprece-dented adoption in recent years (Wang et al., 2024b; Humlum and Vestergaard, 2025), including in lan-guage communities besides English (Liu and Wang, 2026). Despite both public awareness and aca-demic research on their limitations, hallucination ,the generation of plausible but factually incorrect statements (see e.g. Huang et al., 2025 for an overview), still pose an ongoing problem that risks downstream harms and the loss of user trust. One potential solution to this problem is given by confi-dence estimation (CE), i.e. obtaining numerical val-ues that reflect the probability that a model output is correct. CE has long been studied in machine learn-ing (DeGroot and Fienberg, 1983; Naeini et al., 
+
+Figure 1: (Left) PCA scatter plots of (in-)correct sam-ples in the probe’s learned aggregation of the LLM latent space. (Right) Distribution of confidence scores. 
+
+2015; Guo et al., 2017; Ovadia et al., 2019; Min-derer et al., 2021) and has received increasing atten-tion for LLMs (Jiang et al., 2021; Kadavath et al., 2022; Tian et al., 2023; Zhu et al., 2023; Ulmer et al., 2024; Kapoor et al., 2024). However, the vast majority of works focus exclusively on En-glish, leaving other languages largely unexplored. This is particularly concerning because models may behave less reliably in languages with fewer train-ing data, making accurate confidence estimation even more important (Ahuja et al., 2022; Ulmer et al., 2022; Krause et al., 2023). In this work, we take a first step toward truly multilingual confidence estimation in LLMs. Our approach is motivated by a key observation: prior work on multilinguality has shown that LLM hid-den states capture cross-lingual features (Wang et al., 2024a; Wendler et al., 2024; Dumas et al., 2025; Schut et al., 2025), while e.g. Marks and Tegmark (2023a); Ji et al. (2025) have identified uncertainty-related features. We hypothesize that these properties jointly enable cross-lingual trans-fer of confidence estimates. To test this, we apply a lightweight linear probe that learns a weighted combination of hidden layers to predict answer 1
+
+> arXiv:2605.31220v1 [cs.CL] 29 May 2026
+
+correctness. We show that the probe, trained on an LLM’s latent representations in a single lan-guage, can predict confidence scores for unseen, typologically diverse languages without any target-language supervision (zero-shot): Figure 1 illus-trates how correct and incorrect responses are dis-tributed similarly in the learned aggregation of the target LLM’s latent space. The probe can exploit this fact as shown by its predictive distribution on the right, with some degradation as the zero-shot language becomes more dissimilar. Our contributions are as follows: To the best of our knowledge, we are the first to demonstrate zero-shot cross-lingual transfer of confidence estimation through probing of intermediate LLM representa-tions. We analyze how performance varies across unseen languages of the same and different lan-guage families and writing systems, and show that the probe outperforms baselines from several CE method families without retraining on the target language. Through ablations, we show that the most salient information for zero-shot confidence prediction is localized in the upper-middle layers, precisely where prior work has shown LLMs map inputs into a shared representational space. More broadly, our findings suggest a possible path to-ward multilingual calibration with little or no target-language supervision, where confidence signals learned in higher-resource languages transfer to lower-resource settings. All code is open-source. 1
+
+2 Related Work 
+
+We position our work at the intersection of studies examining the latent space of multilingual LLMs, the probing of model representations to identify whether specific properties are encoded, and the wider landscape of confidence estimation in LLMs. 
+
+Multilingual Latent Spaces. Several studies have examined the organization of LLMs’ latent space, finding that layers closest to the input and output are more language-specific. However, there is no consensus on whether multilingual process-ing involves mapping to a particular language or through shared, language-agnostic regions in the representation space. Some works support the lan-guage dominance hypothesis, according to which inputs are mapped into a representation space shaped by the most prevalent training language (usually English), perform computations in that  
+
+> 1The code repository can be found under https:// github.com/AthinaKyriakou/shared-doubt .
+
+space, and translate the result back into the orig-inal language (Zhang et al., 2023; Wendler et al., 2024; Schut et al., 2025; Zhao et al., 2024; Tezuka and Inoue, 2025). Zhao et al. (2024) show that in the middle layers reason in English while lever-aging multilingual knowledge, while Tezuka and Inoue (2025) identify two types of neurons, namely ones responsible mapping from a language-specific space to a shared semantic space in the early and middle layers, and those operating in reverse in the upper layers. Schut et al. (2025) find that semanti-cally meaningful words pass through an English-centric representation space, and Saji et al. (2025) extend these findings to writing systems, suggest-ing that middle layers represent tokens in Latin script. By contrast, Zhang et al. (2024); Wang et al. (2024c) indicate that multilinguality is facilitated by shared language-agnostic representations, iden-tifying parameters essential to cross-lingual perfor-mance. Bhattacharya and Bojar (2023); Tang et al. (2024); Kojima et al. (2024); Zeng et al. (2025) discover language-specific neurons primarily in the lower and upper layers, with a gap in the middle lay-ers. Dumas et al. (2025) further show that the out-put language is encoded in earlier layers, whereas the concept to be translated emerges in later lay-ers. Shani and Basirat (2025) find no consistently dominant language in the middle layers. 
+
+Probing Latent Representations. Probes are lightweight models that map a model’s internal representations to a property of interest (Alain and Bengio, 2017; Belinkov, 2022), and are widely used in mechanistic interpretability to test whether a property is encoded in LLM representations (Bereska and Gavves, 2024; Ferrando et al., 2024). In multilingual LLM research, probes have been used to study morphosyntax (Brinkmann et al., 2025; Wang et al., 2024a), factual knowledge (Li et al., 2024), semantics (Li et al., 2024; Wang et al., 2024a), and context (Ju et al., 2024), with shared features typically emerging in the middle layers. Relevant to our work, probes have been trained on LLM representations in English to detect truthful-ness (Li et al., 2023; Marks and Tegmark, 2023a; He et al., 2024; Azaria and Mitchell, 2023a), with Li et al. (2024) finding stronger signals in high-resource than in low-resource languages. While Li et al. (2023); Marks and Tegmark (2023a) find that truthfulness signals peak in the middle layers, Jin et al. (2025) show that more complex properties require deeper layers. 2Confidence Estimation in LLMs. As mentioned in the introduction, confidence estimation (CE), i.e. obtaining a score that reflects the probability of a model’s answer to be correct, has recently pro-duced a flurry of new works (see e.g. Baan et al., 2023; Huang et al., 2024; Ulmer, 2024; Liu et al., 2025; Geng et al., 2024; Shorinwa et al., 2025). Since some methods are based on the generation process, e.g. through token logits or additional re-sponses, they are immediately applicable to any arbitrary language (although without performance guarantees). Other methods however are trained on a specific language, with unseen languages result-ing in a zero-shot prediction problem; this is the setting in which probing approaches fall, which have also been applied to CE (Kadavath et al., 2022; Marks and Tegmark, 2023a; Burns et al., 2023; Liu et al., 2024a; Xiong et al., 2024b; Liu et al., 2024b; Fathullah et al., 2024; Shelmanov et al., 2025). Importantly however, few works ex-plicitly test performance on non-English and es-pecially lower-resourced languages: Krause et al. (2023) show how the calibration of verbalized con-fidence scores can vary greatly between differ-ent languages, with Yang et al. (2023) showing the same for confidence based on sequence likeli-hood. Xue et al. (2025) create a multilingual CE benchmark, consisting of questions that are both language-agnostic and specific to languages (and cultures), again demonstrating stark performance differences between methods. More related to our approach, Zhou et al. (2025) find that the most salient features for multilingual CE lie in the mid-dle layers. However, they restrict themselves to multiple choice question-answering, and do not consider zero-shot prediction. 
+
+3 Methodology 
+
+Based on the insights from the literature, we now discuss which representations to consider, verify our assumptions, and define the probe. 
+
+3.1 Selected Intermediate Representations 
+
+Our work focuses on decoder-only transformer-based LLMs (Vaswani et al., 2017; Radford et al., 2019). Given an input token sequence, the model embeds the token at every time step t into a high-dimensional space xt ∈ RD and produces a hidden state h(ℓ) 
+
+> t
+
+by running sequentially through each block of transformer block at layer ℓ, before finally generating sequence y1, y 2, ..., y T . Each block up-dates the previous hidden states in a residual way: 
+
+h(ℓ) 
+
+> t
+
+= h(ℓ−1)  
+
+> t
+
++ gℓ
+
+
+
+h(ℓ−1) 1 , . . . , h(ℓ−1) 
+
+> t−1
+
+
+
+, (1) where gℓ is the model-specific transformation of the ℓ-th block applied to the prefix and current to-ken. This also referred to as the residual stream, serving as a central pathway that carries and incre-mentally refines each token’s representation. Due to the insights from e.g. Zhou et al. (2025), we exploit signals from all layers, but focus on two specific time steps: The prompt’s last token ( last input token ), and the generated answer’s last to-ken ( last answer token ) hidden states. The former serves as a proxy for the entire input, integrating information from all preceding tokens and captur-ing the model’s state at the start of generation, and has been widely used in multilingual interpretabil-ity and uncertainty studies (Wendler et al., 2024; Dumas et al., 2025; Wang et al., 2024c; Brinkmann et al., 2025; Li et al., 2024; He et al., 2024; Duan et al., 2024; Ji et al., 2024). The latter represent the model’s final state after generation and may additionally encode the LLM’s confidence in its completed response, and has been shown in other contexts to encode knowledge (Burns et al., 2022) or truthfulness (Azaria and Mitchell, 2023b). 
+
+3.2 A Cross-lingual Confidence Probe 
+
+Prior work has identified considerable overlap of latent representations for different language rep-resentations in the middle layers (Wendler et al., 2024; Wang et al., 2024a; Zhou et al., 2025; Zhang et al., 2024). We confirm this in our case as well, showing a selection of PCA plots in Figure 2. Since that implies that some layers will carry more gener-alizable information, we define a probe that learns a weighted average of layer hidden representations 
+
+h(ℓ) 
+
+> t
+
+by introducing a learnable parameter w ∈ RL,using it to compute layer weights αl and pooled representation ¯ht ∈ RD:
+
+αℓ = softmax( w)ℓ = exp( wℓ)
+
+PLk=1 exp( wk) , (2) 
+
+¯ht =
+
+> L
+
+X
+
+> ℓ=1
+
+αℓ h(ℓ) 
+
+> t
+
+. (3) This representation allows the probe to select the most informative layers for confidence estima-tion during training, assuming approximate per-dimension consistency as a side effect of Equa-tion (1) as information propagates through layers. 3Figure 2: Organization of latent representations in Qwen 3 8B on Global-MMLU, using the last input token. 
+
+Finally, we use a linear layer with learnable param-eters v ∈ RD, b ∈ R and the sigmoid function σ(·)
+
+to obtain a confidence score ˆpt:
+
+ˆpt = σ v⊤ ¯ht + b. (4) While non-linear designs of the probe are possi-ble, evidence from the linear representation hypoth-esis (Bereska and Gavves, 2024) and other studies (Park et al., 2023; Jiang et al., 2024; Ji et al., 2025; Merullo et al., 2025), suggests that features are often represented linearly in latent space. 
+
+4 Experiments 
+
+4.1 Setup Datasets. We base our experiments on two popu-lar question-answering datasets, aiming for parallel data for comparability. Firstly, we use MKQA (Longpre et al., 2021), consisting of open-ended questions across 26 languages, with the original English questions extracted from Natural Ques-tions (Kwiatkowski et al., 2019). We consider short-phrase, entity, numeric, numeric-with-unit, and date question types and exclude questions that are time-sensitive. We considered at most 5237 questions per language, with further details of the selection process in Section B.1.1. Secondly, we consider Global-MMLU (Singh et al., 2024), a par-allel multilingual multiple-choice dataset covering 42 languages, derived from the English MMLU dataset (Hendrycks et al., 2021). Since multiple-choice evaluation is discriminative and not repre-sentative of real-world generative use cases (Chan-dak et al., 2025), we retain only questions that can be asked in an open-ended manner, using a process we describe in detail in Section B.1.2. This results in a final set of 4215 questions per language. 
+
+Selected Languages. To capture cross-lingual variation, we select the six languages shown in Ta-ble 1: English (en) is included as it dominates most                            
+
+> Language Genus Script MKQA translation Global-MMLU translation
+> English Germanic Latin N/A N/A French Romance Latin Human Human Spanish Romance Latin Human Human Polish Slavic Latin Human Google Translate Russian Slavic Cyrillic Human Human & Google Translate Japanese Japanese Japanese Human Human
+
+Table 1: Languages and translation types by dataset. 
+
+LLMs’ training data. We further include French (fr) and Spanish (es), two closely related languages that belong to the Romance language genus (Dryer and Haspelmath, 2013) and also use the Latin script. Polish (pl) and Russian (ru) are chosen to represent the more dissimilar Slavic languages (Dryer and Haspelmath, 2013), with Russian additionally in-troducing the Cyrillic script. Finally, Japanese (ja) is different in both linguistic family and script. For our experiments, we choose French over English as a source language: This enables us to test on Spanish as near out-of-distribution and English as a typologically more dissimilar language. 2
+
+Models. We test our approach on two strong con-temporary autoregressive LLMs that have enjoyed lots of use in academic research and in industry alike, namely Llama 3.1 8B Instruct (Grattafiori et al., 2024) and Qwen3 8B (Qwen Team, 2025), which is also instruction-finetuned. The models feature 32 and 36 layers, respectively, and have demonstrated considerable multilingual capabili-ties. We generate answers with a temperature of 
+
+0.7 for a maximum of 40 tokens. All language and dataset prompts are detailed in Figure 15 in Sec-tion B.2. All experiments where performed on a single A100-80G-PCIe NVIDIA GPU. 3
+
+> 2Our main results with English as a source are included in Tables 6 and 7 in Section A.1.
+> 3Details on probe training are given in Section B.4.
+
+4Dataset LLM fr en es pl ru ja MKQA Llama 3.1 8B .27 .38 .24 .26 .17 .14 Qwen3 8B .18 .26 .18 .16 .13 .12 Global-MMLU Llama 3.1 8B .24 .35 .24 .19 .19 .17 Qwen3 8B .27 .40 .26 .23 .22 .22 
+
+> Table 2: LLM accuracy per dataset and language.
+
+Answer Correctness. We judge answer correct-ness through using GPT-4.1 mini (OpenAI, 2025) as a judge, using prompt given in Figure 16 in Sec-tion B.2, obtaining the accuracies listed in Table 2. Two things are notable: Accuracies differ between languages due to difference in factual consistency (Fierro and Søgaard, 2022; Qi et al., 2023), and performance is strongest in English, with a degra-dation of performance roughly in accordance with the typological distance to it. 
+
+Evaluation Metrics. We evaluate confidence es-timates using commonly used metrics, including ex-pected calibration error (ECE; Naeini et al., 2015; Guo et al., 2017) using 10 bins, and Brier score (Glenn et al., 1950), measuring how well confi-dence scores correspond to the probability of cor-rectness (calibration). We also measure how well confidence scores distinguish between correct and incorrect responses (discrimination) by recording the area under the receiver operating characteristic (AUROC) and the precision-recall curve (AUPR). 
+
+4.2 Zero-shot Confidence Estimation Results 
+
+We first evaluate the zero-shot CE performance for the probe in isolation. We include a majority class baselines ( majority ), which in our case refers to the negative class, and a prior-probability baseline, which samples binary correctness labels from a Bernoulli distribution, with its probability p corre-sponding to the training accuracy. We also train an-other probe on only data from the target language, which we will refer to as the oracle probe. 
+
+Results. We show detailed results for Qwen 3 8B in Table 3 and visualize the overall metric trends in Figure 3, with the complementary results for Llama 3.1 8B given in Section A.1. Table 3 shows that the majority and prior probability baseline can be well-calibrated due to ECE not being a proper scoring rule (Liu et al., 2023a), but fail at discriminating correct from incorrect predictions. Expectedly, the probe performs well when tested on its training lan-guage French. Unsurprisingly, some metrics like AUROC and AUPR tend to degrade as the probe is tested on more dissimilar languages, as exemplified by the difference to the oracle. Interestingly though, we can still see that other metrics like Brier score and ECE often stay close to or even outperform the oracle in some instances. This indicates that multilingual transfer of features is sometimes not only possible, but also beneficial, although some major performance drops are observed in specific instances. These trends become especially visible in Figure 3, where we observe that while discrimi-nation degrades, calibration appears to be mostly unaffected. This implies that probes are not so much affected by the covariate shift in the multi-lingual latent space, but the concept shift in the conditional label distribution (Moreno-Torres et al., 2012), as the accuracy of the target LLM decreases for languages such as Russian or Japanese. Lastly, it appears that the last query token seems to yield more useful model representations for calibration, the last answer hidden states appear to produce bet-ter discrimination. This makes sense, as the model latents will not have encoded any information about the actual generated answer at the end of the query. 
+
+4.3 Comparison To Other Estimators 
+
+We also compare our probe to other common CE methods, 4 namely length-normalized sequence likelihood (Seq. Likelihood); P(True) (Kadavath et al., 2022), which asks whether a response was true or false and considers the probability of the “true” token, verbalized confidence (Verbalized Conf.; Lin et al., 2022; Xiong et al., 2024a; Ulmer et al., 2025), which asks for confidence from 0-100 
+
+in the target language; as well as the mass-mean probe by Marks and Tegmark (2023b), which is not trained but directly derived from the centroids of correct and incorrect predictions. 5 Prompts for P(True) and verbalized confidence are shown in Section B.2. Note that besides the mean-mass probe, no other baseline is similarly zero-shot in the sense of having an explicit distributional shift between training and test, but are intuitive choices for confidence estimation on unseen languages. 
+
+Results. Table 4 list results of the last token an-swer hidden states for selected languages, with all results in Section A.2. We can see that com-
+
+> 4We only show results for last answer time step for compa-rability, see Section A.2 for last query time step results.
+> 5Compared to Marks and Tegmark, we do not use any patching, but apply their probe from their section 5.1 directly to the latents of correct and incorrect generations.
+
+5MKQA Global-MMLU                                                                                                                        
+
+> AUROC ↑AUPR ↑Brier ↓ECE ↓AUROC ↑AUPR ↑Brier ↓ECE ↓
+> all*  Majority .50 ±.00 .58 ±.02 .17 ±.05 .17 ±.05 .50 ±.00 .63 ±.03 .26 ±.06 .26 ±.06 Prior prob. .50 ±.00 .58 ±.02 .14 ±.03 .04 ±.03 .50 ±.00 .63 ±.03 .19 ±.03 .06 ±.03 fr  Last Query .73 ±.01 .36 ±.01 .17 ±.01 .14 ±.00 .71 ±.01 .49 ±.02 .21 ±.01 .16 ±.01 Last Answer .82 ±.01 .49 ±.02 .14 ±.01 .12 ±.01 .78 ±.00 .58 ±.01 .19 ±.00 .16 ±.00 en  Last Query .70 ±.01 +.00 .47 ±.01 +.03 .22 ±.01 -.01 .18 ±.01 +.00 .64 ±.02 -.07 .51 ±.02 -.09 .31 ±.01 +.06 .26 ±.01 +.07 Last Answer .70 ±.01 -.08 .44 ±.01 -.13 .24 ±.01 +.06 .22 ±.01 +.09 .72 ±.01 -.04 .60 ±.01 -.09 .27 ±.01 +.04 .24 ±.01 +.05 es  Last Query .71 ±.01 -.01 .34 ±.01 -.02 .17 ±.00 -.01 .14 ±.01 -.02 .68 ±.01 +.00 .41 ±.02 -.03 .27 ±.02 +.05 .25 ±.03 +.07 Last Answer .82 ±.01 -.01 .53 ±.03 +.01 .19 ±.02 +.05 .20 ±.03 +.09 .74 ±.01 -.03 .52 ±.01 -.03 .23 ±.01 +.03 .21 ±.02 +.04 pl  Last Query .67 ±.01 -.06 .28 ±.01 -.06 .15 ±.01 -.01 .13 ±.01 -.01 .73 ±.01 +.01 .40 ±.01 -.02 .20 ±.01 -.01 .17 ±.02 +.00 Last Answer .73 ±.01 -.09 .35 ±.03 -.13 .23 ±.03 +.10 .24 ±.03 +.13 .75 ±.01 -.04 .48 ±.01 -.04 .27 ±.03 +.09 .27 ±.03 +.11 ru  Last Query .72 ±.01 +.03 .30 ±.01 +.02 .12 ±.00 -.04 .11 ±.01 -.05 .68 ±.01 -.05 .35 ±.02 -.11 .23 ±.02 +.04 .21 ±.03 +.05 Last Answer .80 ±.01 +.01 .43 ±.03 +.00 .15 ±.03 +.03 .16 ±.04 +.05 .72 ±.01 -.08 .43 ±.01 -.13 .39 ±.03 +.22 .42 ±.03 +.28 ja  Last Query .57 ±.02 -.21 .16 ±.01 -.17 .13 ±.01 +.00 .11 ±.01 +.00 .64 ±.01 -.10 .32 ±.02 -.13 .20 ±.02 +.01 .17 ±.03 +.00 Last Answer .64 ±.04 -.23 .23 ±.04 -.30 .16 ±.02 +.07 .16 ±.02 +.09 .72 ±.01 -.07 .44 ±.02 -.08 .31 ±.02 +.13 .31 ±.02 +.15
+
+Table 3: Results for Qwen 3 8B on MKQA and Global-MMLU. First group shows the results for the probe and baselines trained and tested on French. all* = avg. across all languages. Remaining groups list zero-shot performance on test languages. Last Query / Last Answer = Probe trained on last query / answer hiddens. Gray numbers state performance difference compared to the oracle probe, i.e. ∆ < 0 indicating that the oracle scored higher. 
+
+Figure 3: Cross-lingual generalization of the probe trained on French (fr*) for Qwen 3 8B. Each panel compares the last query token (circle, solid) against the last answer token (triangle, dashed) across test languages, for Global-MMLU (blue) and MKQA (orange). Shaded bands show ±1 standard deviation. 
+
+pared to the other confidence estimators, the cross-lingual probe holds up reasonably on AUROC, but degrades on calibration as typological distance to the source language (fr) grows. However, in some cases, such as Japanese on MKQA, it is outper-formed by the mass-mean probe, which often is bet-ter calibrated but usually worse in discrimination. The fact that both probes are able to identify gener-alizable information in latents confirms our hypoth-esis of language-agnostic confidence signals. It also suggests that calibration can likely profit from further investigation into carefully choosing the right probe training data and architecture and po-tentially post-hoc re-calibration through techniques such as temperature scaling (Guo et al., 2017) or isotonic regression (Oron and Flournoy, 2017). 
+
+4.4 Understanding Layer Importance 
+
+To understand what makes the probe work, we can first look at the learned layer weights in Figure 5, with results for Llama 3.1 8B found in Section A.3. While the weight distribution appears more uni-form for last query token latents, the probe overall seems to learn to assign higher weights to upper-middle and top layers. To investigate whether these weights causally affect performance, we apply the interventional framework by Geiger et al. (2025): We assess the importance of layer ℓ by measur-ing the performance gap on a metric P between a model M and a variant M\ℓ, where only the component ℓ is changed :
+
+∆( M, ℓ ) := P(M) − P (M\ℓ), (5) 6MKQA Global-MMLU                                                                                                                                
+
+> AUROC ↑AUPR ↑Brier ↓ECE ↓AUROC ↑AUPR ↑Brier ↓ECE ↓
+> es
+> Seq. Likelihood .81 ±.00 .52 ±.00 .51 ±.00 .61 ±.00 .70 ±.00 .51 ±.00 .53 ±.00 .59 ±.00 P(True) .30 ±.00 .13 ±.00 .19 ±.00 .19 ±.00 .41 ±.00 .23 ±.00 .26 ±.00 .26 ±.00 Mass-Mean Probe .65 ±.00 .52 ±.00 .45 ±.00 .10 ±.00 .59 ±.00 .50 ±.00 .41 ±.00 .12 ±.00 Verbalized Conf. .75 ±.00 .51 ±.00 .54 ±.00 .54 ±.00 .73 ±.00 .55 ±.00 .52 ±.00 .54 ±.00 Cross-ling. Probe .82 ±.01 .53 ±.03 .19 ±.02 .20 ±.03 .74 ±.01 .52 ±.01 .23 ±.01 .21 ±.02 ru Seq. Likelihood .79 ±.00 .35 ±.00 .49 ±.00 .62 ±.00 .75 ±.00 .47 ±.00 .54 ±.00 .62 ±.00 P(True) .43 ±.00 .12 ±.00 .12 ±.00 .12 ±.00 .45 ±.00 .21 ±.00 .21 ±.00 .21 ±.00 Mass-Mean Probe .73 ±.00 .51 ±.00 .40 ±.00 .12 ±.00 .62 ±.00 .57 ±.00 .51 ±.00 .04 ±.00 Verbalized Conf. .72 ±.00 .36 ±.00 .55 ±.00 .56 ±.00 .73 ±.00 .49 ±.00 .51 ±.00 .50 ±.00 Cross-ling. Probe .80 ±.01 .43 ±.03 .15 ±.03 .16 ±.04 .72 ±.01 .43 ±.01 .39 ±.03 .42 ±.03 ja Seq. Likelihood .81 ±.00 .41 ±.00 .43 ±.00 .56 ±.00 .74 ±.00 .49 ±.00 .48 ±.00 .57 ±.00 P(True) .60 ±.00 .16 ±.00 .13 ±.00 .13 ±.00 .54 ±.00 .24 ±.00 .21 ±.00 .21 ±.00 Mass-Mean Probe .83 ±.00 .57 ±.00 .22 ±.00 .09 ±.00 .52 ±.00 .59 ±.00 .73 ±.00 .02 ±.00 Verbalized Conf. .67 ±.00 .37 ±.00 .66 ±.00 .71 ±.00 .72 ±.00 .44 ±.00 .57 ±.00 .61 ±.00 Cross-ling. Probe .64 ±.04 .23 ±.04 .16 ±.02 .16 ±.02 .72 ±.01 .44 ±.02 .31 ±.02 .31 ±.02
+
+Table 4: Comparison of zero-shot confidence estimation methods for Qwen3 8B on MKQA and Global-MMLU on selected languages. 
+
+Figure 4: Spearman’s ρ be-tween layer importance and per-layer ablation impact for last token answer for Qwen 3 8B. (Top): weight-based; (Bottom): representation-based. 
+
+(a) Layer weights for last query token. (b) Layer weights for last answer token. 
+
+Figure 5: Distribution of learned layer weights from probes trained with different random seeds on the hidden states of the last (a) query token and (b) answer token for Qwen 3 8B on Global-MMLU and MKQA. Shaded areas indicate ±1 standard deviation, dashed line shows uniform weight. 
+
+where positive values of ∆ indicate that the com-ponent ℓ contributes to a higher metric score. We apply this framework in two ways: Firstly by set-ting specific weights αℓ = 0 and renormalizing the distribution (weight ablation) and secondly by re-placing representations from a specific layer with a dummy (representation ablation). 6 Further details on these ablations are described in Section A.4. 
+
+Results. We show a selection of results in Fig-ure 6, with the rest given in Section A.4. We can observe that removing middle layers leads to a less performant probe, with only the ablation of later layers yielding positive results in some cases, likely due to the probe learning language-specific infor-mation about the source that is not useful in a zero-
+
+> 6
+
+Due to the redundancy and representational similarity in adjacent transformer layers (Men et al., 2025), we perform the ablations using a sliding window of size 3.
+
+shot setting. Measuring Spearman’s ρ between layer weights and ablation impact per metric in Fig-ure 4, we can see correlation between layer weights and performance metrics that is preserved in zero-shot settings. The effect seems less consistent on calibration. When plotting the layer ablation im-pact separately on few-shot vs. zero-shot separately in Figure 7, we can identify that middle-layer ab-lation has a stronger effect in zero-shot settings on calibration, while the effect on discrimination seems the remain the same in both settings. Lastly, we demonstrate in Section A.5 that while learn-able layer weights reveal the most salient language-agnostic signals for zero-shot confidence estima-tion, the probe can also learn to extract necessary information directly from the latents, likely due to the information redundancy in transformer lay-ers visualized in Figure 2. However, comparisons 7(a) ∆ in AUROC on MKQA. (b) ∆ in ECE score on Global-MMLU.   
+
+> Figure 6: Impact of layer ablation on zero-shot AUROC and ECE (avg. over all languages) for Qwen3 8B. Bars show mean change in metric value over 10 random seeds. Whiskers denote ±1 standard deviation.
+> (a) Ablation effect on AUROC. (b) Ablation effect on ECE.
+> Figure 7: Ablation effect of layers on (a) AUROC and (b) ECE by few-shot (source language) and zero-shot results for Qwen 3 8B and probe trained on last answer token hidden states.
+
+against learned weights yield inconsistent results. 
+
+5 Discussion 
+
+In our work, we demonstrated that language-general spaces in multilingual LLMs found by prior work (e.g. Wendler et al., 2024; Zhao et al., 2024; Schut et al., 2025) carry useful signal for confi-dence estimation. While Zhou et al. (2025) show that the best representations for multilingual confi-dence estimation lie indeed in middle layers, some-thing that our ablations in Section 4.4 strongly con-firm, we are the first to demonstrate that this infor-mation can be used zero-shot on unseen languages. In Section 4.2, we observed a gentle degradation of discrimination for confidence estimates as the simi-larity to the source language decreases, but overall stable calibration across most conditions. Another finding that stands out is that the time step from which hidden representations are extracted matters: While the last token of the input, often used in related probing works (e.g. Wendler et al., 2024; Dumas et al., 2025; Wang et al., 2024c; Brinkmann et al., 2025) was better calibrated on other lan-guages, this was not true for the source language it-self; indeed, the lesser-used last token of the answer (Burns et al., 2022; Azaria and Mitchell, 2023a) also achieved better discrimination. This could be explained by considering that the query latent states might encode information about question difficulty, while the last answer states provide definitive infor-mation about the actual answer given. 
+
+6 Conclusion 
+
+In this work, we presented the first evidence that language-agnostic latent spaces in multilin-gual LLMs contain correctness signals that can be exploited to perform CE on unseen languages. While performance degrades on languages dissim-ilar from the training language, we nevertheless demonstrated promising results in this challenging setting. Interestingly, we also found learned layer weights to mostly attend to language-general layers identified by prior work. It remains especially inter-esting to explore how to make this approach more robust to unseen language families and scripts by training on multiple source languages, identifying the most critical latent representations, and apply-ing common post-hoc calibration techniques. Over-all, we believe that these findings open up exciting new research directions towards truly multilingual confidence estimation with little or no supervision, especially for underserved languages. 
+
+Limitations 
+
+We acknowledge the following limitations: Firstly, our work focuses on open-source models of 8 8billion parameters; nevertheless we expect our approach to still be applicable, as evidence sug-gests that larger models also encode multilingual / language-agnostic information that can be used for correctness predictions in their hidden representa-tions (Tan et al., 2025; Lei and Cooper, 2025). Secondly, while our language selection consid-ers languages from different language families and script, it still mostly focuses on European lan-guages and languages that are all relatively high-resource, with zero-shot performance likely degrad-ing for languages that are less related, use a dif-ferent script, or are less presented in the LLM’s training data, based on observed dissimilarity of la-tent representations for more dissimilar languages (Kudugunta et al., 2019; Singh et al., 2019). Thirdly, we focus on short-form QA, whereas recent works also have started to consider rea-soning (Zhang et al., 2025c; Yoon et al., 2025; Zhang et al., 2025a; Razghandi et al., 2025; Mao et al., 2026) and long-form uncertainty quantifica-tion (Liu et al., 2023b; Zhang et al., 2025b; Fan et al., 2026; Bouchard et al., 2026). While our approach might still be applicable in these cases, longer generations probably require a more careful selection of the time step of hidden representation. Additionally, linear probes may be insufficient in some cases, as self-attention and feed-forward blocks can substantially rotate and mix represen-tation dimensions (Vaswani et al., 2017). Further-more, linearly combining layer representations may fail to capture complex cross-layer interactions that are relevant for uncertainty estimation. 
+
+Ethical Consideration 
+
+We foresee no immediate ethical issues with this work. 
+
+Acknowledgments 
+
+This work is supported by the Dutch National Sci-ence Foundation (NWO Vici VI.C.212.053) and the HELLENiQ ENERGY’s "Proud of Youth" Scholarship. Computational resources were pro-vided by the Cirrus UK National Tier-2 HPC Service at EPCC ( http://www.cirrus.ac.uk ), funded by the University of Edinburgh and EP-SRC (EP/P020267/1). We thank Rochelle Choenni for her help in conceptualizing this project. 
+
+References 
+
+Kabir Ahuja, Sunayana Sitaram, Sandipan Dandapat, and Monojit Choudhury. 2022. On the calibration of massively multilingual language models. In Proceed-ings of the 2022 Conference on Empirical Methods in Natural Language Processing , pages 4310–4323. Guillaume Alain and Yoshua Bengio. 2017. Under-standing intermediate layers using linear classifier probes. In 5th International Conference on Learning Representations, ICLR 2017, Toulon, France, April 24-26, 2017, Workshop Track Proceedings . OpenRe-view.net. Amos Azaria and Tom Mitchell. 2023a. The internal state of an LLM knows when it’s lying. In Find-ings of the Association for Computational Linguistics: EMNLP 2023 , pages 967–976, Singapore. Associa-tion for Computational Linguistics. Amos Azaria and Tom Mitchell. 2023b. The internal state of an llm knows when it’s lying. In Findings of the Association for Computational Linguistics: EMNLP 2023 , pages 967–976. Joris Baan, Nico Daheim, Evgenia Ilia, Dennis Ul-mer, Haau-Sing Li, Raquel Fernández, Barbara Plank, Rico Sennrich, Chrysoula Zerva, and Wilker Aziz. 2023. Uncertainty in natural language gener-ation: From theory to applications. arXiv preprint arXiv:2307.15703 .Yonatan Belinkov. 2022. Probing classifiers: Promises, shortcomings, and advances. Comput. Linguistics ,48(1):207–219. Leonard Bereska and Stratis Gavves. 2024. Mechanistic interpretability for AI safety - A review. Trans. Mach. Learn. Res. , 2024. Sunit Bhattacharya and Ondˇ rej Bojar. 2023. Unveil-ing multilinguality in transformer models: Exploring language specificity in feed-forward networks. In 
+
+Proceedings of the 6th BlackboxNLP Workshop: An-alyzing and Interpreting Neural Networks for NLP ,pages 120–126. Dylan Bouchard, Mohit Singh Chauhan, Viren Ba-jaj, and David Skarbrevik. 2026. Fine-grained uncertainty quantification for long-form language model outputs: A comparative study. arXiv preprint arXiv:2602.17431 .Jannik Brinkmann, Chris Wendler, Christian Bartelt, and Aaron Mueller. 2025. Large language models share representations of latent grammatical concepts across typologically diverse languages. In Proceed-ings of the 2025 Conference of the Nations of the Americas Chapter of the Association for Computa-tional Linguistics: Human Language Technologies, NAACL 2025 - Volume 1: Long Papers, Albuquerque, New Mexico, USA, April 29 - May 4, 2025 , pages 6131–6150. Association for Computational Linguis-tics. 
+
+9Collin Burns, Haotian Ye, Dan Klein, and Jacob Stein-hardt. 2022. Discovering latent knowledge in lan-guage models without supervision. arXiv preprint arXiv:2212.03827 .Collin Burns, Haotian Ye, Dan Klein, and Jacob Stein-hardt. 2023. Discovering latent knowledge in lan-guage models without supervision. In The Eleventh International Conference on Learning Representa-tions .Nikhil Chandak, Shashwat Goel, Ameya Prabhu, Moritz Hardt, and Jonas Geiping. 2025. Answer matching outperforms multiple choice for language model eval-uation. CoRR , abs/2507.02856. Morris H DeGroot and Stephen E Fienberg. 1983. The comparison and evaluation of forecasters. Journal of the Royal Statistical Society: Series D (The Statisti-cian) , 32(1-2):12–22. Matthew S. Dryer and Martin Haspelmath, editors. 2013. 
+
+WALS Online (v2020.4) . Zenodo. Hanyu Duan, Yi Yang, and Kar Yan Tam. 2024. Do llms know about hallucination? an empirical investigation of llm’s hidden states. CoRR , abs/2402.09733. Clément Dumas, Chris Wendler, Veniamin Veselovsky, Giovanni Monea, and Robert West. 2025. Separat-ing tongue from thought: Activation patching reveals language-agnostic concept representations in trans-formers. In Proceedings of the 63rd Annual Meet-ing of the Association for Computational Linguistics (Volume 1: Long Papers), ACL 2025, Vienna, Aus-tria, July 27 - August 1, 2025 , pages 31822–31841. Association for Computational Linguistics. Haozhi Fan, Jinhao Duan, and Kaidi Xu. 2026. Iuq: Interrogative uncertainty quantification for long-form large language model generation. arXiv preprint arXiv:2604.15109 .Yassir Fathullah, Puria Radmard, Adian Liusie, and Mark Gales. 2024. Who needs decoders? efficient es-timation of sequence-level attributes with proxies. In 
+
+Proceedings of the 18th Conference of the European Chapter of the Association for Computational Lin-guistics (Volume 1: Long Papers) , pages 1478–1496. Javier Ferrando, Gabriele Sarti, Arianna Bisazza, and Marta R. Costa-jussà. 2024. A primer on the in-ner workings of transformer-based language models. 
+
+CoRR , abs/2405.00208. Constanza Fierro and Anders Søgaard. 2022. Factual consistency of multilingual pretrained language mod-els. In Findings of the Association for Computational Linguistics: ACL 2022 , pages 3046–3052. Atticus Geiger, Duligur Ibeling, Amir Zur, Maheep Chaudhary, Sonakshi Chauhan, Jing Huang, Arya-man Arora, Zhengxuan Wu, Noah Goodman, Christo-pher Potts, and 1 others. 2025. Causal abstraction: A theoretical foundation for mechanistic interpretability. 
+
+Journal of Machine Learning Research , 26(83):1–64. Jiahui Geng, Fengyu Cai, Yuxia Wang, Heinz Koeppl, Preslav Nakov, and Iryna Gurevych. 2024. A sur-vey of confidence estimation and calibration in large language models. In Proceedings of the 2024 Con-ference of the North American Chapter of the Asso-ciation for Computational Linguistics: Human Lan-guage Technologies (Volume 1: Long Papers) , pages 6577–6595. W Brier Glenn and 1 others. 1950. Verification of fore-casts expressed in terms of probability. Monthly weather review , 78(1):1–3. Aaron Grattafiori, Abhimanyu Dubey, Abhinav Jauhri, Abhinav Pandey, Abhishek Kadian, Ahmad Al-Dahle, Aiesha Letman, Akhil Mathur, Alan Schelten, Alex Vaughan, and 1 others. 2024. The llama 3 herd of models. arXiv preprint arXiv:2407.21783 .Chuan Guo, Geoff Pleiss, Yu Sun, and Kilian Q Wein-berger. 2017. On calibration of modern neural net-works. In International conference on machine learn-ing , pages 1321–1330. PMLR. Jinwen He, Yujia Gong, Zijin Lin, Cheng’an Wei, Yue Zhao, and Kai Chen. 2024. LLM factoscope: Un-covering LLMs’ factual discernment through mea-suring inner states. In Findings of the Association for Computational Linguistics: ACL 2024 , pages 10218–10230, Bangkok, Thailand. Association for Computational Linguistics. Dan Hendrycks, Collin Burns, Steven Basart, Andy Zou, Mantas Mazeika, Dawn Song, and Jacob Stein-hardt. 2021. Measuring massive multitask language understanding. In 9th International Conference on Learning Representations, ICLR 2021, Virtual Event, Austria, May 3-7, 2021 . OpenReview.net. Hsiu-Yuan Huang, Yutong Yang, Zhaoxi Zhang, San-woo Lee, and Yunfang Wu. 2024. A survey of un-certainty estimation in llms: Theory meets practice. 
+
+arXiv preprint arXiv:2410.15326 .Lei Huang, Weijiang Yu, Weitao Ma, Weihong Zhong, Zhangyin Feng, Haotian Wang, Qianglong Chen, Weihua Peng, Xiaocheng Feng, Bing Qin, and 1 oth-ers. 2025. A survey on hallucination in large lan-guage models: Principles, taxonomy, challenges, and open questions. ACM Transactions on Information Systems , 43(2):1–55. Anders Humlum and Emilie Vestergaard. 2025. Large language models, small labor market effects. Techni-cal report, National Bureau of Economic Research. Ziwei Ji, Delong Chen, Etsuko Ishii, Samuel Cahyaw-ijaya, Yejin Bang, Bryan Wilie, and Pascale Fung. 2024. LLM internal states reveal hallucination risk faced with a query. In Proceedings of the 7th Black-boxNLP Workshop: Analyzing and Interpreting Neu-ral Networks for NLP , pages 88–104, Miami, Florida, US. Association for Computational Linguistics. Ziwei Ji, Lei Yu, Yeskendir Koishekenov, Yejin Bang, Anthony Hartshorn, Alan Schelten, Cheng Zhang, 
+
+10 Pascale Fung, and Nicola Cancedda. 2025. Calibrat-ing verbal uncertainty as a linear feature to reduce hallucinations. In Proceedings of the 2025 Confer-ence on Empirical Methods in Natural Language Processing , pages 3769–3793. Yibo Jiang, Goutham Rajendran, Pradeep Ravikumar, Bryon Aragam, and Victor Veitch. 2024. On the origins of linear representations in large language models. arXiv preprint arXiv:2403.03867 .Zhengbao Jiang, Jun Araki, Haibo Ding, and Graham Neubig. 2021. How can we know when language models know? on the calibration of language models for question answering. Transactions of the Associa-tion for Computational Linguistics , 9:962–977. Mingyu Jin, Qinkai Yu, Jingyuan Huang, Qingcheng Zeng, Zhenting Wang, Wenyue Hua, Haiyan Zhao, Kai Mei, Yanda Meng, Kaize Ding, Fan Yang, Meng-nan Du, and Yongfeng Zhang. 2025. Exploring concept depth: How large language models acquire knowledge and concept at different layers? In 
+
+Proceedings of the 31st International Conference on Computational Linguistics , pages 558–573, Abu Dhabi, UAE. Association for Computational Linguis-tics. Tianjie Ju, Weiwei Sun, Wei Du, Xinwei Yuan, Zhaochun Ren, and Gongshen Liu. 2024. How large language models encode context knowledge? a layer-wise probing study. In Proceedings of the 2024 Joint International Conference on Computational Linguis-tics, Language Resources and Evaluation (LREC-COLING 2024) , pages 8235–8246, Torino, Italia. ELRA and ICCL. Saurav Kadavath, Tom Conerly, Amanda Askell, Tom Henighan, Dawn Drain, Ethan Perez, Nicholas Schiefer, Zac Hatfield-Dodds, Nova DasSarma, Eli Tran-Johnson, and 1 others. 2022. Language mod-els (mostly) know what they know. arXiv preprint arXiv:2207.05221 .Sanyam Kapoor, Nate Gruver, Manley Roberts, Arka Pal, Samuel Dooley, Micah Goldblum, and Andrew Wilson. 2024. Calibration-tuning: Teaching large lan-guage models to know what they don’t know. In Pro-ceedings of the 1st Workshop on Uncertainty-Aware NLP (UncertaiNLP 2024) , pages 1–14. Takeshi Kojima, Itsuki Okimura, Yusuke Iwasawa, Hit-omi Yanaka, and Yutaka Matsuo. 2024. On the multi-lingual ability of decoder-based pre-trained language models: Finding and controlling language-specific neurons. In Proceedings of the 2024 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Tech-nologies (Volume 1: Long Papers) , pages 6919–6971. Lea Krause, Wondimagegnhue Tufa, Selene Báez San-tamaría, Angel Daza, Urja Khurana, and Piek Vossen. 2023. Confidently wrong: Exploring the calibration and expression of (un) certainty of large language models in a multilingual setting. In Proceedings of the workshop on multimodal, multilingual natu-ral language generation and multilingual WebNLG Challenge (MM-NLG 2023) , pages 1–9. Sneha Kudugunta, Ankur Bapna, Isaac Caswell, and Orhan Firat. 2019. Investigating multilingual nmt representations at scale. In Proceedings of the 2019 Conference on Empirical Methods in Natu-ral Language Processing and the 9th International Joint Conference on Natural Language Processing (EMNLP-IJCNLP) , pages 1565–1575. Tom Kwiatkowski, Jennimaria Palomaki, Olivia Red-field, Michael Collins, Ankur Parikh, Chris Alberti, Danielle Epstein, Illia Polosukhin, Jacob Devlin, Ken-ton Lee, Kristina Toutanova, Llion Jones, Matthew Kelcey, Ming-Wei Chang, Andrew M. Dai, Jakob Uszkoreit, Quoc Le, and Slav Petrov. 2019. Natu-ral questions: A benchmark for question answering research. Transactions of the Association for Compu-tational Linguistics , 7:452–466. Ge Lei and Samuel J Cooper. 2025. Layerwise recall and the geometry of interwoven knowledge in llms. 
+
+arXiv preprint arXiv:2502.10871 .Daoyang Li, Mingyu Jin, Qingcheng Zeng, Haiyan Zhao, and Mengnan Du. 2024. Exploring multi-lingual probing in large language models: A cross-language analysis. CoRR , abs/2409.14459. Kenneth Li, Oam Patel, Fernanda Viégas, Hanspeter Pfister, and Martin Wattenberg. 2023. Inference-time intervention: eliciting truthful answers from a lan-guage model. In Proceedings of the 37th Interna-tional Conference on Neural Information Processing Systems , NIPS ’23, Red Hook, NY, USA. Curran Associates Inc. Stephanie Lin, Jacob Hilton, and Owain Evans. 2022. Teaching models to express their uncertainty in words. arXiv preprint arXiv:2205.14334 .Jeremiah Zhe Liu, Shreyas Padhy, Jie Ren, Zi Lin, Yeming Wen, Ghassen Jerfel, Zachary Nado, Jasper Snoek, Dustin Tran, and Balaji Lakshminarayanan. 2023a. A simple approach to improve single-model deep uncertainty via distance-awareness. Journal of Machine Learning Research , 24(42):1–63. Linyu Liu, Yu Pan, Xiaocheng Li, and Guanting Chen. 2024a. Uncertainty estimation and quantification for llms: A simple supervised approach. arXiv preprint arXiv:2404.15993 .Xiaoou Liu, Tiejin Chen, Longchao Da, Chacha Chen, Zhen Lin, and Hua Wei. 2025. Uncertainty quantifi-cation and confidence calibration in large language models: A survey. In Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining V. 2 , pages 6107–6117. Xin Liu, Muhammad Khalifa, and Lu Wang. 2023b. Litcab: Lightweight language model calibration over short-and long-form responses. arXiv preprint arXiv:2310.19208 .
+
+11 Xin Liu, Muhammad Khalifa, and Lu Wang. 2024b. Litcab: Lightweight language model calibration over short- and long-form responses. In Proceedings of the Twelfth International Conference on Learning Representations . ICLR. Yan Liu and He Wang. 2026. Who on earth is using generative ai? World Development , 199:107260. Shayne Longpre, Yi Lu, and Joachim Daiber. 2021. MKQA: A linguistically diverse benchmark for mul-tilingual open domain question answering. Transac-tions of the Association for Computational Linguis-tics , 9:1389–1406. Zhenjiang Mao, Anirudhh Venkat, Artem Bisliouk, Ak-shat Kothiyal, Sindhura Kumbakonam Subramanian, Saithej Singhu, and Ivan Ruchkin. 2026. Confidence over time: Confidence calibration with temporal logic for large language model reasoning. arXiv preprint arXiv:2601.13387 .Samuel Marks and Max Tegmark. 2023a. The geometry of truth: Emergent linear structure in large language model representations of true/false datasets. CoRR ,abs/2310.06824. Samuel Marks and Max Tegmark. 2023b. The geometry of truth: Emergent linear structure in large language model representations of true/false datasets. arXiv preprint arXiv:2310.06824 .Xin Men, Mingyu Xu, Qingyu Zhang, Qianhao Yuan, Bingning Wang, Hongyu Lin, Yaojie Lu, Xianpei Han, and Weipeng Chen. 2025. Shortgpt: Layers in large language models are more redundant than you expect. In Findings of the Association for Computa-tional Linguistics: ACL 2025 , pages 20192–20204. Jack Merullo, Noah Smith, Sarah Wiegreffe, and Yanai Elazar. 2025. On linear representations and pretrain-ing data frequency in language models. In Inter-national Conference on Learning Representations ,volume 2025, pages 71963–71987. Matthias Minderer, Josip Djolonga, Rob Romijnders, Frances Hubis, Xiaohua Zhai, Neil Houlsby, Dustin Tran, and Mario Lucic. 2021. Revisiting the calibra-tion of modern neural networks. Advances in neural information processing systems , 34:15682–15694. Jose G Moreno-Torres, Troy Raeder, Rocío Alaiz-Rodríguez, Nitesh V Chawla, and Francisco Herrera. 2012. A unifying view on dataset shift in classifica-tion. Pattern recognition , 45(1):521–530. Mahdi Pakdaman Naeini, Gregory Cooper, and Milos Hauskrecht. 2015. Obtaining well calibrated proba-bilities using bayesian binning. In Proceedings of the AAAI conference on artificial intelligence , volume 29. OpenAI. 2025. Introducing GPT-4.1 in the API. https: //openai.com/index/gpt-4-1/ . Accessed: 2026-05-25. Assaf P Oron and Nancy Flournoy. 2017. Centered isotonic regression: point and interval estimation for dose–response studies. Statistics in Biopharmaceuti-cal Research , 9(3):258–267. Yaniv Ovadia, Emily Fertig, Jie Ren, Zachary Nado, David Sculley, Sebastian Nowozin, Joshua Dillon, Balaji Lakshminarayanan, and Jasper Snoek. 2019. Can you trust your model’s uncertainty? evaluating predictive uncertainty under dataset shift. Advances in neural information processing systems , 32. Kiho Park, Yo Joong Choe, and Victor Veitch. 2023. The linear representation hypothesis and the ge-ometry of large language models. arXiv preprint arXiv:2311.03658 .Jirui Qi, Raquel Fernández, and Arianna Bisazza. 2023. Cross-lingual consistency of factual knowledge in multilingual language models. In Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing , pages 10650–10666. Qwen Team. 2025. Qwen3 technical report. Preprint ,arXiv:2505.09388. Alec Radford, Jeffrey Wu, Rewon Child, David Luan, Dario Amodei, Ilya Sutskever, and 1 others. 2019. Language models are unsupervised multitask learn-ers. OpenAI blog , 1(8):9. Ali Razghandi, Seyed Mohammad Hadi Hosseini, and Mahdieh Soleymani Baghshah. 2025. Cer: Confi-dence enhanced reasoning in llms. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) ,pages 7918–7938. Alan Saji, Jaavid Aktar Husain, Thanmay Jayakumar, Raj Dabre, Anoop Kunchukuttan, and Ratish Pudup-pully. 2025. RomanLens: The role of latent Roman-ization in multilinguality in LLMs. In Findings of the Association for Computational Linguistics: ACL 2025 , pages 26410–26429, Vienna, Austria. Associa-tion for Computational Linguistics. Lisa Schut, Yarin Gal, and Sebastian Farquhar. 2025. Do multilingual llms think in english? CoRR ,abs/2502.15603. Nadav Shani and Ali Basirat. 2025. Language dom-inance in multilingual large language models. In 
+
+Proceedings of the 8th BlackboxNLP Workshop: An-alyzing and Interpreting Neural Networks for NLP ,pages 137–148, Suzhou, China. Association for Com-putational Linguistics. Artem Shelmanov, Ekaterina Fadeeva, Akim Tsvigun, Ivan Tsvigun, Zhuohan Xie, Igor Kiselev, Nico Da-heim, Caiqi Zhang, Artem Vazhentsev, Mrinmaya Sachan, and 1 others. 2025. A head to predict and a head to question: Pre-trained uncertainty quantifica-tion heads for hallucination detection in llm outputs. In Proceedings of the 2025 Conference on Empiri-cal Methods in Natural Language Processing , pages 35700–35719. 
+
+12 Ola Shorinwa, Zhiting Mei, Justin Lidard, Allen Z Ren, and Anirudha Majumdar. 2025. A survey on un-certainty quantification of large language models: Taxonomy, open research challenges, and future di-rections. ACM Computing Surveys , 58(3):1–38. Jasdeep Singh, Bryan McCann, Richard Socher, and Caiming Xiong. 2019. Bert is not an interlingua and the bias of tokenization. In Proceedings of the 2nd Workshop on Deep Learning Approaches for Low-Resource NLP (DeepLo 2019) , pages 47–55. Shivalika Singh, Angelika Romanou, Clémentine Four-rier, David I. Adelani, Jian Gang Ngui, Daniel Vila-Suero, Peerat Limkonchotiwat, Kelly Marchi-sio, Wei Qi Leong, Yosephine Susanto, Raymond Ng, Shayne Longpre, Wei-Yin Ko, Madeline Smith, Antoine Bosselut, Alice Oh, Andre F. T. Martins, Leshem Choshen, Daphne Ippolito, and 4 others. 2024. Global mmlu: Understanding and addressing cultural and linguistic biases in multilingual evalua-tion. Preprint , arXiv:2412.03304. Wenfang Sun, Xinyuan Song, Pengxiang Li, Lu Yin, Yefeng Zheng, and Shiwei Liu. 2025. The curse of depth in large language models. CoRR ,abs/2502.05795. Yuqiao Tan, Shizhu He, Kang Liu, and Jun Zhao. 2025. Neural incompatibility: The unbridgeable gap of cross-scale parametric knowledge transfer in large language models. In Proceedings of the 63rd An-nual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 21586– 21601. Tianyi Tang, Wenyang Luo, Haoyang Huang, Dongdong Zhang, Xiaolei Wang, Wayne Xin Zhao, Furu Wei, and Ji-Rong Wen. 2024. Language-specific neurons: The key to multilingual capabilities in large language models. In Proceedings of the 62nd Annual Meet-ing of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 5701–5715. Hinata Tezuka and Naoya Inoue. 2025. The transfer neu-rons hypothesis: An underlying mechanism for lan-guage latent space transitions in multilingual LLMs. In Proceedings of the 2025 Conference on Empiri-cal Methods in Natural Language Processing , pages 31742–31792, Suzhou, China. Association for Com-putational Linguistics. Katherine Tian, Eric Mitchell, Allan Zhou, Archit Sharma, Rafael Rafailov, Huaxiu Yao, Chelsea Finn, and Christopher D Manning. 2023. Just ask for cali-bration: Strategies for eliciting calibrated confidence scores from language models fine-tuned with human feedback. In Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing ,pages 5433–5442. Dennis Ulmer. 2024. On uncertainty in natural language processing. arXiv preprint arXiv:2410.03446 .Dennis Ulmer, Jes Frellsen, and Christian Hardmeier. 2022. Exploring predictive uncertainty and calibra-tion in nlp: A study on the impact of method & data scarcity. In Findings of the Association for Computa-tional Linguistics: EMNLP 2022 , pages 2707–2735. Dennis Ulmer, Martin Gubri, Hwaran Lee, Sangdoo Yun, and Seong Oh. 2024. Calibrating large language models using their generations only. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) ,pages 15440–15459. Dennis Ulmer, Alexandra Lorson, Ivan Titov, and Chris-tian Hardmeier. 2025. Anthropomimetic uncertainty: What verbalized uncertainty in language models is missing. arXiv preprint arXiv:2507.10587 .Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Lukasz Kaiser, and Illia Polosukhin. 2017. Attention is all you need. In Advances in Neural Information Pro-cessing Systems 30: Annual Conference on Neural Information Processing Systems 2017, December 4-9, 2017, Long Beach, CA, USA , pages 5998–6008. Hetong Wang, Pasquale Minervini, and Edoardo Ponti. 2024a. Probing the emergence of cross-lingual align-ment during LLM training. In Findings of the As-sociation for Computational Linguistics: ACL 2024 ,pages 12159–12173, Bangkok, Thailand. Association for Computational Linguistics. Jiayin Wang, Weizhi Ma, Peijie Sun, Min Zhang, and Jian-Yun Nie. 2024b. Understanding user experience in large language model interactions. arXiv preprint arXiv:2401.08329 .Weixuan Wang, Barry Haddow, Wei Peng, and Alexan-dra Birch. 2024c. Sharing matters: Analysing neu-rons across languages and tasks in llms. CoRR ,abs/2406.09265. Chris Wendler, Veniamin Veselovsky, Giovanni Monea, and Robert West. 2024. Do llamas work in English? on the latent language of multilingual transformers. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 15366–15394, Bangkok, Thai-land. Association for Computational Linguistics. Miao Xiong, Zhiyuan Hu, Xinyang Lu, Yifei Li, Jie Fu, Junxian He, and Bryan Hooi. 2024a. Can llms express their uncertainty? an empirical evaluation of confidence elicitation in llms. In International Conference on Learning Representations , volume 2024, pages 23650–23678. Miao Xiong, Andrea Santilli, Michael Kirchhof, Adam Golinski, and Sinead Williamson. 2024b. Efficient and effective uncertainty quantification for llms. In 
+
+Neurips Safe Generative AI Workshop 2024 .Boyang Xue, Hongru Wang, Rui Wang, Sheng Wang, Zezhong Wang, Yiming Du, Bin Liang, Wenxuan Zhang, and Kam-Fai Wong. 2025. Mlingconf: A 
+
+13 comprehensive study of multilingual confidence es-timation on large language models. In Findings of the Association for Computational Linguistics: ACL 2025 , pages 2535–2556. Yahan Yang, Soham Dan, Dan Roth, and Insup Lee. 2023. On the calibration of multilingual question answering llms. arXiv preprint arXiv:2311.08669 .Dongkeun Yoon, Seungone Kim, Sohee Yang, Sunky-oung Kim, Soyeon Kim, Yongil Kim, Eunbi Choi, Yireun Kim, and Minjoon Seo. 2025. Reason-ing models better express their confidence. arXiv preprint arXiv:2505.14489 .Hongchuan Zeng, Senyu Han, Lu Chen, and Kai Yu. 2025. Converging to a lingua franca: Evolution of linguistic regions and semantics alignment in mul-tilingual large language models. In Proceedings of the 31st International Conference on Computational Linguistics , pages 10602–10617, Abu Dhabi, UAE. Association for Computational Linguistics. Caiqi Zhang, Chang Shu, Ehsan Shareghi, and Nigel Collier. 2025a. All roads lead to rome: Graph-based confidence estimation for large language model rea-soning. In Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing ,pages 31802–31812. Caiqi Zhang, Ruihan Yang, Zhisong Zhang, Xinting Huang, Sen Yang, Dong Yu, and Nigel Collier. 2025b. Atomic calibration of llms in long-form generations. In Proceedings of the 14th International Joint Con-ference on Natural Language Processing and the 4th Conference of the Asia-Pacific Chapter of the Associ-ation for Computational Linguistics , pages 148–169. Tunyu Zhang, Haizhou Shi, Yibin Wang, Hengyi Wang, Xiaoxiao He, Zhuowei Li, Haoxian Chen, Ligong Han, Kai Xu, Huan Zhang, and 1 others. 2025c. Token-level uncertainty estimation for large language model reasoning. arXiv e-prints , pages arXiv–2505. Xiang Zhang, Senyu Li, Bradley Hauer, Ning Shi, and Grzegorz Kondrak. 2023. Don’t trust ChatGPT when your question is not in English: A study of multilin-gual abilities and types of LLMs. In Proceedings of the 2023 Conference on Empirical Methods in Natu-ral Language Processing , pages 7915–7927, Singa-pore. Association for Computational Linguistics. Zhihao Zhang, Jun Zhao, Qi Zhang, Tao Gui, and Xuan-Jing Huang. 2024. Unveiling linguistic regions in large language models. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 6228– 6247. Yiran Zhao, Wenxuan Zhang, Guizhen Chen, Kenji Kawaguchi, and Lidong Bing. 2024. How do large language models handle multilingualism? In Pro-ceedings of the 38th International Conference on Neural Information Processing Systems , NIPS ’24, Red Hook, NY, USA. Curran Associates Inc. Ej Zhou, Caiqi Zhang, Tiancheng Hu, Chengzu Li, Nigel Collier, Ivan Vuli´ c, and Anna Korhonen. 2025. Beyond the final layer: Intermediate representations for better multilingual calibration in large language models. arXiv preprint arXiv:2510.03136 .Chiwei Zhu, Benfeng Xu, Quan Wang, Yongdong Zhang, and Zhendong Mao. 2023. On the calibra-tion of large language models and alignment. In 
+
+Findings of the Association for Computational Lin-guistics: EMNLP 2023 , pages 9778–9795. 
+
+A Additional Results 
+
+A.1 Confidence Estimation Results 
+
+This section contains complete results for the con-fidence estimation results in Section 4.2. Table 5 shows the results with French as the source lan-guage for Llama 3.1 Tables 6 and 7 gives both sets of results, but with English instead of French used as the source language. 
+
+A.2 Comparison to Other Estimators 
+
+This section contains the full results for the compar-ison with other confidence estimators in Section 4.3. This includes first the full results for all languages, including the few-shot setting in French, in Tables 8 and 9 for Qwen 3 and Llama 3.1 respectively. In Section 4.3 we chose to compare other estimators to our probe trained on last answer token hidden representations, since other methods also, implic-itly or explicitly, have access to full generation of the model. To also benchmark the probe trained on the last input token hidden representations, we provide Tables 9 and 10. 
+
+A.3 Additional Layer Weight Plots 
+
+The corresponding layer weight plots for Figure 5 in Section 4.4 for Llama 3.1 are given in Figure 9. 
+
+A.4 Additional Ablation Results 
+
+In this section we provide more information on the ablation methodology in Section 4.4, and include additional results. 
+
+Weight Ablation. We selectively make layers unavailable to the probe and quantify the impact of this change on the uncertainty estimation task using a sliding window approach. Recall the com-putation of layer weights in Equation (2). To ab-late a window W of k contiguous layers, we inter-vene on the probe’s layer-mixing logits by setting 
+
+{wℓ : ℓ ∈ W } to −∞ :14 Figure 8: Cross-lingual generalization of the probe trained on French (fr*) for Llama 3.1 8B. Each panel compares the last query token (circle, solid) against the last answer token (triangle, dashed) across test languages, for Global-MMLU (blue) and MKQA (orange). Shaded bands show ±1 standard deviation.                                                                                                                         
+
+> MKQA MMLU
+> AUROC ↑AUPR ↑Brier ↓ECE ↓AUROC ↑AUPR ↑Brier ↓ECE ↓
+> all*  Majority .50 ±.00 .62 ±.04 .24 ±.08 .24 ±.08 .50 ±.00 .62 ±.03 .23 ±.06 .23 ±.06 Prior prob. .50 ±.00 .62 ±.04 .18 ±.04 .07 ±.06 .50 ±.00 .62 ±.03 .18 ±.03 .05 ±.04 fr  Last Query .68 ±.00 .45 ±.00 .24 ±.00 .20 ±.01 .73 ±.01 .48 ±.02 .21 ±.00 .17 ±.01 Last Answer .82 ±.00 .58 ±.01 .17 ±.00 .11 ±.01 .76 ±.01 .51 ±.03 .19 ±.01 .15 ±.01 en  Last Query .67 ±.01 +.02 .53 ±.01 +.00 .28 ±.00 +.00 .24 ±.01 +.02 .70 ±.02 +.01 .57 ±.02 +.05 .26 ±.01 +.00 .22 ±.01 +.00 Last Answer .76 ±.00 -.02 .62 ±.01 -.05 .23 ±.01 +.03 .16 ±.03 +.03 .75 ±.01 -.02 .61 ±.02 -.05 .22 ±.01 +.01 .17 ±.03 +.01 es  Last Query .64 ±.00 +.04 .35 ±.01 +.00 .24 ±.01 -.03 .20 ±.01 -.04 .71 ±.02 +.05 .45 ±.02 +.07 .23 ±.02 +.00 .21 ±.03 +.01 Last Answer .77 ±.01 -.04 .48 ±.01 -.10 .50 ±.05 +.33 .54 ±.04 +.42 .78 ±.01 +.00 .53 ±.03 -.04 .16 ±.01 -.01 .12 ±.02 -.01 pl  Last Query .68 ±.01 +.00 .39 ±.01 -.03 .22 ±.00 -.01 .18 ±.01 -.01 .69 ±.01 -.01 .39 ±.02 +.03 .21 ±.03 +.03 .20 ±.04 +.04 Last Answer .74 ±.01 -.05 .47 ±.01 -.09 .19 ±.01 +.01 .15 ±.01 +.02 .77 ±.01 +.01 .47 ±.02 +.01 .32 ±.07 +.16 .36 ±.08 +.22 ru  Last Query .71 ±.01 +.05 .38 ±.01 +.05 .19 ±.01 +.00 .18 ±.01 +.00 .67 ±.01 -.09 .34 ±.01 -.11 .23 ±.02 +.06 .21 ±.03 +.07 Last Answer .78 ±.01 -.05 .41 ±.01 -.13 .14 ±.01 +.00 .11 ±.03 +.00 .73 ±.01 -.06 .48 ±.02 -.05 .31 ±.07 +.15 .35 ±.08 +.22 ja  Last Query .64 ±.01 -.09 .21 ±.01 -.08 .21 ±.04 +.05 .22 ±.05 +.08 .69 ±.02 +.05 .32 ±.02 +.06 .20 ±.03 +.01 .18 ±.04 +.01 Last Answer .77 ±.01 -.03 .32 ±.01 -.10 .43 ±.10 +.30 .49 ±.10 +.39 .72 ±.01 -.01 .43 ±.03 +.02 .28 ±.04 +.11 .29 ±.04 +.13
+
+Table 5: Results for Llama 3.1 8B on MKQA and Global-MMLU. First group shows the results for the probe and baselines trained and tested on French. all* = avg. across all languages. Remaining groups list zero-shot performance on test languages. Last Query / Last Answer = Probe trained on last query / answer hiddens. Gray numbers state performance difference compared to the oracle probe, i.e. ∆ < 0 indicating that the oracle scored higher. 
+
+αℓ = softmax( w′)ℓ = exp( w′
+
+ℓ)
+
+PLk=1 exp( w′
+
+k) , (6) where 
+
+w′
+
+ℓ =
+
+
+
+−∞ , ℓ ∈ Wwℓ, ℓ / ∈ W. 
+
+(7) 
+
+Representation Ablation. Recall that the probe computes a logit as zi = PLℓ=1 αℓsℓ + b (Equa-tions (3) and (4)), where si,ℓ = v⊤h(ℓ)
+
+i denoted here. To ablate a window W of k contiguous lay-ers, for each example i, we switch its score si,ℓ 
+
+with the one of another example sj,ℓ , selected by independently sampling it from the test set. This is done to remove useful information for specific test sample, but to not introduce corrupting information that might unfairly distort probe performance. The logit of an example i after ablation of window W
+
+is therefore: 
+
+z(W )
+
+i = X
+
+ℓ / ∈W
+
+αℓ si,ℓ + X
+
+ℓ∈W
+
+αℓ ˜si,ℓ + b, (8) with 
+
+si,ℓ = v⊤h(ℓ)
+
+i , ˜si,ℓ = sπ(i),ℓ , (9) where π(·) a permutation function defined on the natural numbers up to the cardinality of the test set, mapping each index to another index sampling uniformly without replacement and independently for each layer. 15 MKQA MMLU                                                                                                        
+
+> AUROC ↑AUPR ↑Brier ↓ECE ↓AUROC ↑AUPR ↑Brier ↓ECE ↓
+> en  Last Query .65 ±.01 .53 ±.01 .28 ±.00 .22 ±.01 .69 ±.01 .52 ±.01 .26 ±.01 .22 ±.01 Last Answer .78 ±.01 .67 ±.01 .20 ±.00 .13 ±.01 .77 ±.01 .66 ±.01 .21 ±.01 .16 ±.02 fr  Last Query .63 ±.01 -.05 .34 ±.01 -.11 .27 ±.01 +.03 .22 ±.00 +.02 .66 ±.01 -.07 .35 ±.02 -.13 .23 ±.02 +.02 .21 ±.03 +.04 Last Answer .76 ±.01 -.06 .56 ±.01 -.02 .24 ±.04 +.07 .23 ±.06 +.12 .74 ±.02 -.02 .46 ±.03 -.05 .22 ±.03 +.03 .20 ±.05 +.05 es  Last Query .67 ±.01 +.07 .36 ±.01 +.01 .25 ±.01 -.02 .21 ±.01 -.03 .67 ±.01 +.01 .36 ±.02 -.02 .23 ±.01 +.00 .19 ±.02 -.01 Last Answer .74 ±.01 -.07 .48 ±.02 -.10 .22 ±.03 +.05 .20 ±.05 +.08 .74 ±.02 -.04 .48 ±.02 -.09 .19 ±.02 +.02 .15 ±.03 +.02 pl  Last Query .69 ±.01 +.01 .42 ±.01 +.00 .24 ±.01 +.01 .21 ±.02 +.02 .64 ±.02 -.06 .27 ±.02 -.09 .27 ±.05 +.09 .26 ±.06 +.10 Last Answer .72 ±.01 -.07 .50 ±.02 -.06 .40 ±.04 +.22 .41 ±.05 +.28 .71 ±.02 -.05 .38 ±.03 -.08 .16 ±.01 +.00 .14 ±.02 +.00 ru  Last Query .69 ±.01 +.03 .33 ±.01 +.00 .28 ±.02 +.09 .28 ±.02 +.10 .65 ±.01 -.11 .26 ±.01 -.19 .22 ±.02 +.05 .20 ±.03 +.06 Last Answer .74 ±.01 -.09 .40 ±.02 -.14 .47 ±.04 +.33 .52 ±.04 +.41 .73 ±.01 -.06 .42 ±.02 -.11 .15 ±.01 -.01 .11 ±.02 -.02 ja  Last Query .64 ±.01 -.09 .24 ±.01 -.05 .59 ±.07 +.43 .65 ±.06 +.51 .62 ±.02 -.02 .23 ±.02 -.03 .52 ±.08 +.33 .55 ±.08 +.38 Last Answer .64 ±.01 -.16 .32 ±.03 -.10 .67 ±.03 +.54 .68 ±.03 +.58 .71 ±.02 -.02 .33 ±.04 -.08 .26 ±.05 +.09 .27 ±.07 +.11
+
+Table 6: Results for Llama 3.1 8B on MKQA and Global-MMLU, with English as the source language. First group shows the results for the probe and baselines trained and tested on French. all* = avg. across all languages. Remaining groups list zero-shot performance on test languages. Last Query / Last Answer = Probe trained on last query / answer hiddens. Gray numbers state performance difference compared to the oracle probe, i.e. ∆ < 0
+
+indicating that the oracle scored higher. 
+
+(a) Layer weights for last query token. (b) Layer weights for last answer token. 
+
+Figure 9: Distribution of learned layer weights from probes trained with different random seeds on the hidden states of the last (a) query token and (b) answer token for Llama 3.1 8B on Global-MMLU and MKQA. Shaded areas indicate ±1 standard deviation, dashed line shows uniform weight. 
+
+Results. Due to the sheer amount of ablation re-sults, we only focus on a selection of additional results here, namely the corresponding plot to Fig-ure 6 using the representation ablation in Figure 10, and complementary results for Llama 3.1 in Fig-ure 11. 
+
+A.5 Uniform Probe Weights 
+
+We conduct additional experiments fixing the layer weights in Equation (2) to uniform and only learn-ing the linear layer parameters. We show the per-formance differences for both model in Figures 12 and 13. The comparison remains overall incon-sistent, but we attribute the fact that the uniform probe is able to achieve compare results to two fac-tors: First of all, the informational redundancy in transformer layers helps to preserve information in the pooled representation even when weights are uniform, and additionally the large amount of parameters in the linear layer ( 4096 given the size of hidden representations) helps to learn useful fea-tures for the task. Nevertheless, we see our results and works such Zhou et al. (2025) as evidence that future, more robust works will likely rely on spe-cific layers. 16 MKQA MMLU 
+
+AUROC ↑ AUPR ↑ Brier ↓ ECE ↓ AUROC ↑ AUPR ↑ Brier ↓ ECE ↓
+
+> fr
+
+Last Query .70 ±.01 .44 ±.01 .23 ±.01 .18 ±.01 .71 ±.01 .60 ±.01 .25 ±.01 .19 ±.01 Last Answer .78 ±.01 .57 ±.01 .18 ±.01 .13 ±.01 .76 ±.01 .69 ±.01 .23 ±.01 .19 ±.01 fr  Last Query .68 ±.01 -.05 .31 ±.01 -.05 .18 ±.01 +.01 .15 ±.01 +.01 .66 ±.01 -.05 .41 ±.01 -.08 .25 ±.03 +.04 .20 ±.05 +.04 Last Answer .77 ±.01 -.05 .44 ±.02 -.05 .16 ±.02 +.02 .14 ±.03 +.02 .80 ±.01 +.02 .63 ±.02 +.05 .20 ±.01 +.01 .18 ±.02 +.02 es  Last Query .71 ±.01 -.01 .32 ±.02 -.04 .19 ±.01 +.01 .16 ±.01 +.00 .71 ±.01 +.03 .44 ±.01 +.00 .23 ±.02 +.01 .19 ±.03 +.01 Last Answer .79 ±.01 -.04 .47 ±.02 -.05 .23 ±.05 +.09 .25 ±.07 +.14 .77 ±.01 +.00 .61 ±.01 +.06 .22 ±.02 +.02 .21 ±.03 +.04 pl  Last Query .66 ±.01 -.07 .33 ±.01 -.01 .18 ±.01 +.02 .16 ±.02 +.02 .66 ±.01 -.06 .33 ±.01 -.09 .21 ±.01 +.00 .20 ±.01 +.03 Last Answer .74 ±.01 -.08 .47 ±.01 -.01 .20 ±.02 +.07 .21 ±.03 +.10 .76 ±.01 -.03 .46 ±.02 -.06 .26 ±.03 +.08 .27 ±.03 +.11 ru  Last Query .70 ±.01 +.01 .25 ±.02 -.03 .14 ±.02 -.02 .14 ±.02 -.02 .64 ±.01 -.09 .31 ±.01 -.15 .22 ±.01 +.03 .19 ±.01 +.03 Last Answer .70 ±.02 -.09 .36 ±.02 -.07 .21 ±.03 +.09 .25 ±.04 +.14 .77 ±.01 -.03 .52 ±.01 -.04 .17 ±.01 +.00 .15 ±.01 +.01 ja  Last Query .61 ±.03 -.17 .16 ±.01 -.17 .18 ±.03 +.05 .17 ±.05 +.06 .65 ±.02 -.09 .32 ±.02 -.13 .20 ±.03 +.01 .15 ±.06 -.02 Last Answer .78 ±.01 -.09 .35 ±.02 -.18 .19 ±.03 +.10 .20 ±.04 +.13 .76 ±.01 -.03 .45 ±.03 -.07 .23 ±.03 +.05 .22 ±.03 +.06 
+
+Table 7: Results for Qwen 3 8B on MKQA and Global-MMLU, with English as the source language. First group shows the results for the probe and baselines trained and tested on French. all* = avg. across all languages. Remaining groups list zero-shot performance on test languages. Last Query / Last Answer = Probe trained on last query / answer hiddens. Gray numbers state performance difference compared to the oracle probe, i.e. ∆ < 0
+
+indicating that the oracle scored higher. 
+
+(a) ∆ in AUROC on MKQA. (b) ∆ in ECE score on Global-MMLU. 
+
+Figure 10: Impact of layer ablation on zero-shot AUROC and ECE (avg. over all languages) for Qwen3 8B. Bars show mean change in metric value over 10 random seeds. Whiskers denote ±1 standard deviation. 
+
+17 MKQA Global-MMLU 
+
+AUROC ↑ AUPR ↑ Brier ↓ ECE ↓ AUROC ↑ AUPR ↑ Brier ↓ ECE ↓
+
+> fr
+
+Seq. Likelihood .80 ±.00 .45 ±.00 .52 ±.00 .62 ±.00 .72 ±.00 .53 ±.00 .51 ±.00 .58 ±.00 P(True) .63 ±.00 .22 ±.00 .18 ±.00 .18 ±.00 .55 ±.00 .32 ±.00 .27 ±.00 .27 ±.00 Mass Mean Probe .67 ±.00 .52 ±.00 .43 ±.00 .08 ±.00 .60 ±.00 .52 ±.00 .40 ±.00 .12 ±.00 Verbal Conf. .71 ±.00 .44 ±.00 .64 ±.00 .69 ±.00 .75 ±.00 .59 ±.00 .54 ±.00 .57 ±.00 Cross-lingual Probe (fr) .82 ±.01 .49 ±.02 .14 ±.01 .12 ±.01 .78 ±.00 .58 ±.01 .19 ±.00 .16 ±.00 en Seq. Likelihood .80 ±.00 .61 ±.00 .45 ±.00 .54 ±.00 .73 ±.00 .66 ±.00 .45 ±.00 .48 ±.00 P(True) .69 ±.00 .42 ±.00 .26 ±.00 .26 ±.00 .62 ±.00 .48 ±.00 .39 ±.00 .39 ±.00 Mass Mean Probe .67 ±.00 .58 ±.00 .36 ±.00 .14 ±.00 .56 ±.00 .64 ±.00 .48 ±.00 .10 ±.00 Verbal Conf. .70 ±.00 .57 ±.00 .61 ±.00 .57 ±.00 .72 ±.00 .68 ±.00 .51 ±.00 .48 ±.00 Cross-lingual Probe (fr) .70 ±.01 .44 ±.01 .24 ±.01 .22 ±.01 .72 ±.01 .60 ±.01 .27 ±.01 .24 ±.01 es Seq. Likelihood .81 ±.00 .52 ±.00 .51 ±.00 .61 ±.00 .70 ±.00 .51 ±.00 .53 ±.00 .59 ±.00 P(True) .30 ±.00 .13 ±.00 .19 ±.00 .19 ±.00 .41 ±.00 .23 ±.00 .26 ±.00 .26 ±.00 Mass Mean Probe .65 ±.00 .52 ±.00 .45 ±.00 .10 ±.00 .59 ±.00 .50 ±.00 .41 ±.00 .12 ±.00 Verbal Conf. .75 ±.00 .51 ±.00 .54 ±.00 .54 ±.00 .73 ±.00 .55 ±.00 .52 ±.00 .54 ±.00 Cross-lingual Probe (fr) .82 ±.01 .53 ±.03 .19 ±.02 .20 ±.03 .74 ±.01 .52 ±.01 .23 ±.01 .21 ±.02 pl Seq. Likelihood .82 ±.00 .48 ±.00 .44 ±.00 .57 ±.00 .79 ±.00 .53 ±.00 .48 ±.00 .58 ±.00 P(True) .61 ±.00 .19 ±.00 .15 ±.00 .15 ±.00 .53 ±.00 .26 ±.00 .21 ±.00 .21 ±.00 Mass Mean Probe .71 ±.00 .50 ±.00 .34 ±.00 .11 ±.00 .59 ±.00 .58 ±.00 .57 ±.00 .03 ±.00 Verbal Conf. .67 ±.00 .40 ±.00 .60 ±.00 .63 ±.00 .76 ±.00 .52 ±.00 .53 ±.00 .55 ±.00 Cross-lingual Probe (fr) .73 ±.01 .35 ±.03 .23 ±.03 .24 ±.03 .75 ±.01 .48 ±.01 .27 ±.03 .27 ±.03 ru Seq. Likelihood .79 ±.00 .35 ±.00 .49 ±.00 .62 ±.00 .75 ±.00 .47 ±.00 .54 ±.00 .62 ±.00 P(True) .43 ±.00 .12 ±.00 .12 ±.00 .12 ±.00 .45 ±.00 .21 ±.00 .21 ±.00 .21 ±.00 Mass Mean Probe .73 ±.00 .51 ±.00 .40 ±.00 .12 ±.00 .62 ±.00 .57 ±.00 .51 ±.00 .04 ±.00 Verbal Conf. .72 ±.00 .36 ±.00 .55 ±.00 .56 ±.00 .73 ±.00 .49 ±.00 .51 ±.00 .50 ±.00 Cross-lingual Probe (fr) .80 ±.01 .43 ±.03 .15 ±.03 .16 ±.04 .72 ±.01 .43 ±.01 .39 ±.03 .42 ±.03 ja Seq. Likelihood .81 ±.00 .41 ±.00 .43 ±.00 .56 ±.00 .74 ±.00 .49 ±.00 .48 ±.00 .57 ±.00 P(True) .60 ±.00 .16 ±.00 .13 ±.00 .13 ±.00 .54 ±.00 .24 ±.00 .21 ±.00 .21 ±.00 Mass Mean Probe .83 ±.00 .57 ±.00 .22 ±.00 .09 ±.00 .52 ±.00 .59 ±.00 .73 ±.00 .02 ±.00 Verbal Conf. .67 ±.00 .37 ±.00 .66 ±.00 .71 ±.00 .72 ±.00 .44 ±.00 .57 ±.00 .61 ±.00 Cross-lingual Probe (fr) .64 ±.04 .23 ±.04 .16 ±.02 .16 ±.02 .72 ±.01 .44 ±.02 .31 ±.02 .31 ±.02 
+
+Table 8: Complete answer-token confidence estimation comparison for Qwen 3 8B, with probes trained in French. 
+
+(a) Weight ablation ∆ in AUROC on MKQA. (b) Weight ablation ∆ in ECE score on Global-MMLU. 
+
+(c) Representation ablation ∆ in AUROC on MKQA. (d) Representation ablation ∆ in ECE score on Global-MMLU. 
+
+Figure 11: Impact of layer ablation on zero-shot AUROC and ECE (avg. over all languages) for Llama 3.1 8B. Bars show mean change in metric value over 10 random seeds. Whiskers denote ±1 standard deviation. 
+
+18 MKQA Global-MMLU 
+
+AUROC ↑ AUPR ↑ Brier ↓ ECE ↓ AUROC ↑ AUPR ↑ Brier ↓ ECE ↓
+
+> fr
+
+Seq. Likelihood .72 ±.00 .51 ±.00 .39 ±.00 .45 ±.00 .77 ±.00 .57 ±.00 .28 ±.00 .35 ±.00 P(True) .55 ±.00 .34 ±.00 .27 ±.00 .27 ±.00 .53 ±.00 .27 ±.00 .24 ±.00 .24 ±.00 Mass Mean Probe .61 ±.00 .57 ±.00 .48 ±.00 .10 ±.00 .64 ±.00 .56 ±.00 .46 ±.00 .10 ±.00 Verbal Conf. .62 ±.00 .61 ±.00 .55 ±.00 .11 ±.00 .67 ±.00 .60 ±.00 .58 ±.00 .27 ±.00 Cross-lingual Probe (fr) .82 ±.00 .58 ±.01 .17 ±.00 .11 ±.01 .76 ±.01 .51 ±.03 .19 ±.01 .15 ±.01 en Seq. Likelihood .72 ±.00 .59 ±.00 .32 ±.00 .33 ±.00 .80 ±.00 .71 ±.00 .26 ±.00 .28 ±.00 P(True) .35 ±.00 .30 ±.00 .39 ±.00 .39 ±.00 .51 ±.00 .35 ±.00 .36 ±.00 .36 ±.00 Mass Mean Probe .59 ±.00 .65 ±.00 .47 ±.00 .10 ±.00 .68 ±.00 .67 ±.00 .38 ±.00 .08 ±.00 Verbal Conf. .61 ±.00 .67 ±.00 .50 ±.00 .15 ±.00 .74 ±.00 .69 ±.00 .43 ±.00 .32 ±.00 Cross-lingual Probe (fr) .76 ±.00 .62 ±.01 .23 ±.01 .16 ±.03 .75 ±.01 .61 ±.02 .22 ±.01 .17 ±.03 es Seq. Likelihood .73 ±.00 .44 ±.00 .38 ±.00 .46 ±.00 .77 ±.00 .58 ±.00 .29 ±.00 .36 ±.00 P(True) .45 ±.00 .21 ±.00 .24 ±.00 .24 ±.00 .56 ±.00 .27 ±.00 .23 ±.00 .23 ±.00 Mass Mean Probe .59 ±.00 .57 ±.00 .55 ±.00 .05 ±.00 .66 ±.00 .58 ±.00 .46 ±.00 .09 ±.00 Verbal Conf. .67 ±.00 .60 ±.00 .51 ±.00 .16 ±.00 .73 ±.00 .61 ±.00 .55 ±.00 .37 ±.00 Cross-lingual Probe (fr) .77 ±.01 .48 ±.01 .50 ±.05 .54 ±.04 .78 ±.01 .53 ±.03 .16 ±.01 .12 ±.02 pl Seq. Likelihood .75 ±.00 .52 ±.00 .31 ±.00 .38 ±.00 .80 ±.00 .56 ±.00 .31 ±.00 .42 ±.00 P(True) .63 ±.00 .32 ±.00 .25 ±.00 .25 ±.00 .48 ±.00 .18 ±.00 .19 ±.00 .19 ±.00 Mass Mean Probe .65 ±.00 .49 ±.00 .31 ±.00 .18 ±.00 .67 ±.00 .50 ±.00 .36 ±.00 .09 ±.00 Verbal Conf. .61 ±.00 .56 ±.00 .52 ±.00 .14 ±.00 .66 ±.00 .48 ±.00 .51 ±.00 .37 ±.00 Cross-lingual Probe (fr) .74 ±.01 .47 ±.01 .19 ±.01 .15 ±.01 .77 ±.01 .47 ±.02 .32 ±.07 .36 ±.08 ru Seq. Likelihood .75 ±.00 .40 ±.00 .35 ±.00 .47 ±.00 .78 ±.00 .53 ±.00 .29 ±.00 .39 ±.00 P(True) .64 ±.00 .24 ±.00 .14 ±.00 .06 ±.00 .55 ±.00 .26 ±.00 .16 ±.00 .10 ±.00 Mass Mean Probe .66 ±.00 .45 ±.00 .35 ±.00 .13 ±.00 .61 ±.00 .48 ±.00 .47 ±.00 .12 ±.00 Verbal Conf. .60 ±.00 .49 ±.00 .59 ±.00 .12 ±.00 .63 ±.00 .53 ±.00 .61 ±.00 .28 ±.00 Cross-lingual Probe (fr)) .78 ±.01 .41 ±.01 .14 ±.01 .11 ±.03 .73 ±.01 .48 ±.02 .31 ±.07 .35 ±.08 ja Seq. Likelihood .76 ±.00 .32 ±.00 .35 ±.00 .48 ±.00 .78 ±.00 .53 ±.00 .26 ±.00 .35 ±.00 P(True) .53 ±.00 .13 ±.00 .12 ±.00 .11 ±.00 .61 ±.00 .24 ±.00 .18 ±.00 .17 ±.00 Mass Mean Probe .62 ±.00 .41 ±.00 .42 ±.00 .08 ±.00 .69 ±.00 .42 ±.00 .24 ±.00 .13 ±.00 Verbal Conf. .70 ±.00 .37 ±.00 .43 ±.00 .53 ±.00 .61 ±.00 .38 ±.00 .47 ±.00 .54 ±.00 Cross-lingual Probe (fr) .77 ±.01 .32 ±.01 .43 ±.10 .49 ±.10 .72 ±.01 .43 ±.03 .28 ±.04 .29 ±.04 
+
+Table 9: Complete answer-token confidence estimation comparison for Llama 3.1 8B, with probes trained in French. 
+
+Figure 12: Comparison of the cross-lingual to the uniform probe for Qwen 3 8B (both probes trained in fr). 
+
+Figure 13: Comparison of the cross-lingual to the uniform probe for Llama 3.1 8B (both probes trained in fr). 
+
+19 MKQA Global-MMLU 
+
+AUROC ↑ AUPR ↑ Brier ↓ ECE ↓ AUROC ↑ AUPR ↑ Brier ↓ ECE ↓
+
+> fr
+
+Seq. Likelihood .63 ±.00 .26 ±.00 .15 ±.00 .12 ±.00 .50 ±.00 .26 ±.00 .24 ±.00 .19 ±.00 Mass Mean Probe .64 ±.00 .47 ±.00 .44 ±.00 .11 ±.00 .69 ±.00 .57 ±.00 .38 ±.00 .15 ±.00 Uniform Weight Probe .73 ±.00 .37 ±.01 .17 ±.00 .14 ±.00 .71 ±.00 .48 ±.01 .21 ±.00 .16 ±.01 Cross-lingual Probe (fr) .73 ±.01 .36 ±.01 .17 ±.01 .14 ±.00 .71 ±.01 .49 ±.02 .21 ±.01 .16 ±.01 en Seq. Likelihood .62 ±.00 .38 ±.00 .24 ±.00 .22 ±.00 .51 ±.00 .38 ±.00 .36 ±.00 .34 ±.00 Mass Mean Probe .69 ±.00 .59 ±.00 .41 ±.00 .12 ±.00 .65 ±.00 .64 ±.00 .40 ±.00 .18 ±.00 Cross-lingual Probe (fr) .70 ±.01 .47 ±.01 .22 ±.01 .18 ±.01 .64 ±.02 .51 ±.02 .31 ±.01 .26 ±.01 es Seq. Likelihood .64 ±.00 .28 ±.00 .16 ±.00 .12 ±.00 .52 ±.00 .26 ±.00 .22 ±.00 .18 ±.00 Mass Mean Probe .64 ±.00 .49 ±.00 .43 ±.00 .10 ±.00 .69 ±.00 .56 ±.00 .37 ±.00 .14 ±.00 Cross-lingual Probe (fr) .71 ±.01 .34 ±.01 .17 ±.00 .14 ±.01 .68 ±.01 .41 ±.02 .27 ±.02 .25 ±.03 pl Seq. Likelihood .63 ±.00 .26 ±.00 .13 ±.00 .09 ±.00 .57 ±.00 .26 ±.00 .18 ±.00 .12 ±.00 Mass Mean Probe .67 ±.00 .46 ±.00 .41 ±.00 .11 ±.00 .72 ±.00 .52 ±.00 .33 ±.00 .14 ±.00 Cross-lingual Probe (fr) .67 ±.01 .28 ±.01 .15 ±.01 .13 ±.01 .73 ±.01 .40 ±.01 .20 ±.01 .17 ±.02 ru Seq. Likelihood .65 ±.00 .19 ±.00 .11 ±.00 .06 ±.00 .51 ±.00 .24 ±.00 .18 ±.00 .12 ±.00 Mass Mean Probe .69 ±.00 .46 ±.00 .40 ±.00 .10 ±.00 .68 ±.00 .50 ±.00 .39 ±.00 .17 ±.00 Cross-lingual Probe (fr) .72 ±.01 .30 ±.01 .12 ±.00 .11 ±.01 .68 ±.01 .35 ±.02 .23 ±.02 .21 ±.03 ja Seq. Likelihood .59 ±.00 .18 ±.00 .12 ±.00 .08 ±.00 .52 ±.00 .23 ±.00 .19 ±.00 .16 ±.00 Mass Mean Probe .56 ±.00 .56 ±.00 .85 ±.00 .10 ±.00 .67 ±.00 .52 ±.00 .43 ±.00 .17 ±.00 Cross-lingual Probe (fr) .57 ±.02 .16 ±.01 .13 ±.01 .11 ±.01 .64 ±.01 .32 ±.02 .20 ±.02 .17 ±.03 
+
+Table 10: Complete query-token confidence estimation comparison for Qwen 3 8B, with probes trained in French. 
+
+MKQA Global-MMLU 
+
+AUROC ↑ AUPR ↑ Brier ↓ ECE ↓ AUROC ↑ AUPR ↑ Brier ↓ ECE ↓
+
+> fr
+
+Seq. Likelihood .66 ±.00 .40 ±.00 .23 ±.00 .20 ±.00 .52 ±.00 .26 ±.00 .20 ±.00 .14 ±.00 Mass Mean Probe .63 ±.00 .50 ±.00 .41 ±.00 .21 ±.00 .71 ±.00 .56 ±.00 .33 ±.00 .15 ±.00 Cross-lingual Probe (fr) .68 ±.00 .45 ±.00 .24 ±.00 .20 ±.01 .73 ±.01 .48 ±.02 .21 ±.00 .17 ±.01 en Seq. Likelihood .62 ±.00 .47 ±.00 .37 ±.00 .36 ±.00 .46 ±.00 .32 ±.00 .33 ±.00 .31 ±.00 Mass Mean Probe .65 ±.00 .60 ±.00 .39 ±.00 .23 ±.00 .73 ±.00 .68 ±.00 .32 ±.00 .15 ±.00 Cross-lingual Probe (fr) .67 ±.01 .53 ±.01 .28 ±.00 .24 ±.01 .70 ±.02 .57 ±.02 .26 ±.01 .22 ±.01 es Seq. Likelihood .60 ±.00 .31 ±.00 .21 ±.00 .18 ±.00 .57 ±.00 .30 ±.00 .19 ±.00 .13 ±.00 Mass Mean Probe .64 ±.00 .50 ±.00 .44 ±.00 .21 ±.00 .72 ±.00 .57 ±.00 .33 ±.00 .14 ±.00 Cross-lingual Probe (fr) .64 ±.00 .35 ±.01 .24 ±.01 .20 ±.01 .71 ±.02 .45 ±.02 .23 ±.02 .21 ±.03 pl Seq. Likelihood .59 ±.00 .35 ±.00 .22 ±.00 .20 ±.00 .53 ±.00 .19 ±.00 .16 ±.00 .08 ±.00 Mass Mean Probe .69 ±.00 .53 ±.00 .36 ±.00 .19 ±.00 .73 ±.00 .51 ±.00 .30 ±.00 .13 ±.00 Cross-lingual Probe (fr) .68 ±.01 .39 ±.01 .22 ±.00 .18 ±.01 .69 ±.01 .39 ±.02 .21 ±.03 .20 ±.04 ru Seq. Likelihood .63 ±.00 .22 ±.00 .14 ±.00 .11 ±.00 .59 ±.00 .25 ±.00 .16 ±.00 .10 ±.00 Mass Mean Probe .71 ±.00 .44 ±.00 .34 ±.00 .17 ±.00 .66 ±.00 .48 ±.00 .37 ±.00 .13 ±.00 Cross-lingual Probe (fr) .71 ±.01 .38 ±.01 .19 ±.01 .18 ±.01 .67 ±.01 .34 ±.01 .23 ±.02 .21 ±.03 ja Seq. Likelihood .58 ±.00 .16 ±.00 .11 ±.00 .07 ±.00 .60 ±.00 .24 ±.00 .16 ±.00 .11 ±.00 Mass Mean Probe .69 ±.00 .32 ±.00 .53 ±.00 .48 ±.00 .65 ±.00 .50 ±.00 .46 ±.00 .13 ±.00 Cross-lingual Probe (fr) .64 ±.01 .21 ±.01 .21 ±.04 .22 ±.05 .69 ±.02 .32 ±.02 .20 ±.03 .18 ±.04 
+
+Table 11: Complete query-token confidence estimation comparison for Llama 3.1 8B, with probes trained in French. 
+
+20 B Reproducibility Details 
+
+B.1 Data Pre-Processing 
+
+In the following, we describe the exact preprocess-ing used for MKQA and Global-MMLU. The final number of examples per dataset, model and lan-guage can be found in Table 12. 
+
+B.1.1 MKQA 
+
+The MKQA dataset (Longpre et al., 2021) (GitHub repository) comprises 10000 questions parallel across 26 languages, each annotated with one or more answer types (binary, date, entity, long an-swer, number, number with unit, short phrase, and unanswerable). We retain only questions of type date, entity, number, number with unit, and short phrase. Binary questions are excluded due to Dataset LLM en es fr ja pl ru MKQA Llama 3.1 8B 5216 5219 5205 5176 5092 5106 Qwen3 8B 5225 5226 5222 5178 5186 5162 Global-MMLU Llama 3.1 8B 4077 4148 4067 4178 4111 4111 Qwen3 8B 4212 4198 4186 4195 4120 4178 
+
+Table 12: Total number of examples per dataset, model, and language. 
+
+limited token generation, while long-answer and unanswerable questions are excluded because no ground-truth answers are provided in the dataset. Duplicate questions are also removed. We further exclude questions with time-sensitive ground-truth answers that are no longer reliable. To identify such cases, we employ an LLM-as-a-judge approach using GPT-4.1 with the prompt shown in Figure 14. We use default parameters, except for a temperature of 0 and a maximum of 5 generated tokens. Filtering is performed on English questions and then propagated to other languages. As a re-sult, the final dataset contains 5237 questions per language (date: 943, entity: 3347, number: 258, number with unit: 254, short phrase: 435). 
+
+B.1.2 Global-MMLU 
+
+For our experiments, we use the test split of the Global-MMLU dataset (Singh et al., 2024). 7 The dataset spans 42 languages with 14042 multiple-choice questions across 57 subjects. Following Chandak et al. (2025), we identify and retain only those questions that are sufficiently self-contained to be posed in an open-ended format, using the fol-lowing procedure applied to the English questions. We first apply a RegEx-based filtering step to remove questions that are inherently tied to the multiple-choice format. Specifically, we remove questions that (1) contain keywords indicative of multiple-choice framing, such as "following", "which of these combinations", or "options", (2) contain fill-in-the-blank placeholders (e.g., three or more consecutive underscores), (3) reference "Statement 1" and "Statement 2" simultaneously, as these questions require evaluating paired asser-tions, or (4) ask the model to identify a true or false statement, as indicated by truth-value keywords ("true", "false", "correct", "incorrect"), unless the question also contains the word "following", in which case it is already caught by criterion (1). We further use GPT-4.1 to score how well each 
+
+> 7https://huggingface.co/datasets/CohereLabs/ Global-MMLU
+
+21 P6 - Answerability Scoring Prompt (English only) 
+
+Your task is to evaluate how well a multiple-choice question or incomplete statement (stem) can be answered without seeing the answer choices. Assign a score from 1 to 10 based only on whether the stem can be answered or completed without the choices. 
+
+Scoring Scale (1-10): 
+
+Score 1-2: The stem does not define a clear task and cannot be answered without choices. Examples: • "Oxygen is used:" • "The element (4, 2) of" Score 3-4: The stem defines a task, but answering it requires choosing from an unspecified list or comparison that is only provided by the choices. Examples: • "Which set of integers is in order from least to greatest?" • "The most accurate statement is" Score 5: The stem can be answered without choices, but allows many reasonable completions or answers. Examples: • "Under which circumstances would you not use a catheter valve?" • "The advantages of X-rays include" Score 6-7: The stem can be answered without choices and limits the topic, but allows variation in the expected answer. Examples: • "What is one function of the liver?" • "As temperature increases, reaction rate generally" Score 8-9: The stem can be answered without choices and strongly limits the expected answer. Examples: • "What gas do plants primarily absorb during photosynthesis?" • "The enzymes of glycolysis are located in the" Score 10: The stem alone specifies a single, exact expected answer. Examples: • "What is the first law of thermodynamics in physics?" • "Calculate 15 × 12." 
+
+Output Instructions: 
+
+You must output exactly one line containing only one integer from 1 to 10, without any additional text. 
+
+Response Format (must match exactly): 
+
+SCORE: X 
+
+Figure 14: System prompt used by the LLM-as-a-judge to assess stem answerability on a 1-10 scale. 
+
+question can be answered without the multiple-choice options, on a scale from 1 to 10 (see Fig-ure 14 for the full prompt). Table 13 outlines the score distribution across the questions. We retain only questions with a score of 8 or above, as these are sufficiently self-contained to be posed as open-ended questions. After these preprocessing steps we are left with 4215 questions. For all other lan-guages, we retain the translations corresponding to these questions. Note that with this procedure we do not rephrase any question, ensuring that no addi-tional wording bias is introduced during conversion to open-ended format. 
+
+B.1.3 Normalization & Splitting 
+
+Sun et al. (Sun et al., 2025) showed that in transformer-based LLMs using pre-layer normal-ization (e.g., Llama), hidden-state variance grows exponentially with depth, hindering deeper-layer training. To address this and ensure that probe weights capture informative signal rather than mag-
+
+Score Count Percentage 
+
+1 43 0.58% 2 50 0.67% 3 342 4.61% 4 287 3.87% 5 1171 15.79% 6 1004 13.54% 7 303 4.09% 8 2291 30.90% 9 851 11.48% 10 1073 14.47% 
+
+Table 13: GPT-4.1 score distribution for question an-swerability without multiple-choice options. 
+
+nitude differences, we apply per-layer z-score stan-dardization with scikit-learn’s StandardScaler .For each feature x, we compute the standardized value x′ = ( x − μ)/σ , where μ and σ are the training-set mean and standard deviation, centering 22 Dataset Question Type Prompt        
+
+> MKQA
+> short phrase P1
+> entity P1
+> date P2
+> number P3
+> number with unit P4
+> Global MMLU (all) P5
+
+Table 14: Mapping of evaluation splits to prompt tem-plates. 
+
+features to zero mean and unit variance. The fitted scaler is applied unchanged to the validation and test splits of the training language, and to the test sets of all zero-shot languages. We do not further normalize, as residual magnitude differences may be informative. Given that both datasets are parallel and class ratios vary by language, we stratify splits to pre-vent information leakage and ensure balanced evaluation. For each training language, hidden states are divided into train/validation/test sets (0.7:0.15:0.15) while preserving correct/incorrect ratios. Evaluation samples are drawn from the test sets so that these ratios match across all languages. 
+
+B.2 LLM Prompting 
+
+The system instructions used to prompt Llama 3.1 8B Instruct across languages are in Table 14. 23 B.3 Answer Correctness Assessment 
+
+We use GPT-4.1 to evaluate answer correctness, using default parameters and the prompt shown in Figure 16. 
+
+B.4 Confidence Probe Implementation Details 
+
+The layer weights w were initialized to zero (uniform weighting across layers), the hidden-dimension weights v were sampled from the nor-mal distribution N (0 , 1) (to break symmetry and enable diverse feature weighting), and the bias b
+
+was set to zero (no offset prior to training). Probes were trained with binary cross-entropy loss with logits and L2 regularization for v:
+
+L(y, z) = − 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+h
+
+w+ yi log σ(zi)+ (1 − yi) log(1 − σ(zi)) 
+
+i
+
++ λ∥v∥22
+
+(10) where N is the number of training examples, yi ∈{0, 1} is the ground-truth correctness label, zi ∈ R
+
+is the logit produced by the probe, and σ(·) is the sigmoid function. The parameter w+ ∈ R+ is the correct-class weight to address class imbalance, computed from the ratio of negative to positive examples in the training set. 8 λ ∈ R+ is the L2
+
+regularisation applied only to v, with no regulari-sation applied to w or b.
+
+B.5 Hyperparameter Tuning 
+
+We tuned hyperparameters with Ray Tune using the 
+
+ASHA scheduler for inter-trial early stopping, opti-mizing the scalar objective val_loss (minimized). Each trial sampled from a log-uniform search space: learning rate lr ∈ [10 −5, 10 −1] and L2 reg-ularization on the neuron weights v, l2_lambda ∈
+
+[10 −4, 3 × 10 −1]. The batch size and maximum epochs were fixed at 4 and 1000 , respectively. Dur-ing each trial, we trained with AdamW using se-lective weight decay (L2 applied only to v; none for layer weights w or bias terms), and reported the mean training loss and validation loss at every epoch to Ray Tune. Validation loss was computed on a fixed held-out validation split. To address class imbalance, we used BCEWithLogitsLoss with a positive-class weight proportional to the ratio of negative to positive examples in the training set. 
+
+> 8
+
+For more information, see the pos_weight parameter of PyTorch’s BCEWithLogitsLoss class.                                   
+
+> Dataset LLM Probe Learning rate Epochs L2 regularisation for v
+> MKQA Llama 3.1 8B Query 0.0008 139 0.2861 Answer 0.0005 210 0.2728 Qwen3 8B Query 0.0009 98 0.2953 Answer 0.0009 111 0.2225 Global-MMLU Llama 3.1 8B Query 0.0011 94 0.2826 Answer 0.0020 60 0.2557 Qwen3 8B Query 0.0010 103 0.2687 Answer 0.0010 165 0.2115
+
+Table 15: Selected hyperparameters for probes trained on last-token query and answer representations for MKQA and Global-MMLU using Llama 3.1 8B and Qwen3 8B models. 
+
+Trials were stopped early by ASHA ( max_t =1000, 
+
+grace_period =30, reduction_factor =2) when underperforming, while in-trial early stopping with patience = 20 halted training if val_loss failed to improve. After 50 trials, Ray Tune selected the best configuration according to the minimum validation loss. The selected hyperparameters are reported in Table 15. 24 P1 - MKQA: short phrase / entity questions (6 languages) 
+
+en You are a helpful assistant. Answer the user’s question in one to ten words. End your output immediately after your answer to the question. 
+
+fr Tu es un assistant serviable. Réponds à la question de l’utilisateur en un à dix mots. Arrête la génération immédiatement après ta réponse à la question. 
+
+es Eres un asistente útil. Responde la pregunta del usuario en una a diez palabras. Detén la generación inmediatamente después de responder la pregunta. 
+
+pl Jeste´ s u˙ zytecznym asystentem. Odpowiadaj na pytania u˙ zytkownika, u˙ zywaj ˛ ac od jednego do dziesi˛ eciu słów. Przesta´ n generowa´ c natychmiast po udzieleniu odpowiedzi. 
+
+ru Ты полезный помощник. Отвечай на вопросы пользователя, используя от одного до десяти слов. Останавливай генерацию сразу после ответа. 
+
+ja あなたは 役に立つアシスタント です 。ユーザーの質問に1〜10 語で答えてください 。質問に答えたら すぐに 出力を終了してください 。
+
+P2 - MKQA: date questions (6 languages) 
+
+en You are a helpful assistant. Answer the user’s question using only the date requested. Do not include explanations or extra text. End your output immediately after your answer to the question. 
+
+fr Tu es un assistant serviable. Réponds à la question de l’utilisateur en utilisant uniquement la date demandée. N’ajoute ni explications ni texte supplémentaire. Arrête la génération immédiatement après ta réponse à la question. 
+
+es Eres un asistente útil. Responde la pregunta del usuario usando solo la fecha solicitada. No incluyas explicaciones ni texto adicional. Detén la generación inmediatamente después de responder la pregunta. 
+
+pl Jeste´ s u˙ zytecznym asystentem. Odpowiadaj na pytania u˙ zytkownika, u˙ zywaj ˛ ac wył ˛ acznie ˙ z ˛ adanej daty. Nie dodawaj wyja´ snie´ n ani dodatkowego tekstu. Przesta´ n generowa´ c natychmiast po udzieleniu odpowiedzi. 
+
+ru Ты полезный помощник. Отвечай на вопросы пользователя, используя только указанную дату. Не добавляй пояснений или дополнительного текста. Останавливай генерацию сразу после ответа. 
+
+ja あなたは 役に立つアシスタント です 。ユーザーの質問には 、要求された 日付のみを 使って 回答して ください 。説明や余分なテキスト は含めないでください 。質問への 回答後、すぐに 出力を終了して ください 。
+
+P3 - MKQA: number questions (6 languages) 
+
+en You are a helpful assistant. Answer the user’s question using only the number needed to answer it. Do not include explanations or extra text. End your output immediately after your answer to the question. 
+
+fr Tu es un assistant serviable. Réponds à la question de l’utilisateur en utilisant uniquement le nombre nécessaire. N’ajoute ni explications ni texte supplémentaire. Arrête la génération immédiatement après ta réponse à la question. 
+
+es Eres un asistente útil. Responde la pregunta del usuario usando solo el número necesario. No incluyas explicaciones ni texto adicional. Detén la generación inmediatamente después de responder la pregunta. 
+
+pl Jeste´ s u˙ zytecznym asystentem. Odpowiadaj na pytania u˙ zytkownika, u˙ zywaj ˛ ac jedynie liczby, która jest potrzebna. Nie dodawaj wyja´ snie´ n ani dodatkowego tekstu. Przesta´ n generowa´ c natychmiast po udzieleniu odpowiedzi. 
+
+ru Ты полезный помощник. Отвечай на вопросы пользователя, используя только необходимое число. Не добавляй пояснений или дополнительного текста. Останавливай генерацию сразу после ответа. 
+
+ja あなたは 役に立つアシスタント です 。ユーザーの質問には 、回答に必要な数字だけを 使って 答えて ください 。説明や余分なテキスト は含めないでください 。質問に答えたらすぐに 出力を終了してく ださい 。
+
+25 P4 - MKQA: number with unit questions (6 languages) 
+
+en You are a helpful assistant. Answer the user’s question using only the required number and its unit. Do not include explanations or extra text. End your output immediately after your answer to the question. 
+
+fr Tu es un assistant serviable. Réponds à la question de l’utilisateur en utilisant uniquement le nombre demandé et son unité. N’ajoute ni explications ni texte supplémentaire. Arrête la génération immédiatement après ta réponse à la question. 
+
+es Eres un asistente útil. Responde la pregunta del usuario usando solo el número requerido y su unidad. No incluyas explicaciones ni texto adicional. Detén la generación inmediatamente después de responder la pregunta. 
+
+pl Jeste´ s u˙ zytecznym asystentem. Odpowiadaj na pytania u˙ zytkownika, u˙ zywaj ˛ ac tylko wymaganej liczby i jej jednostki. Nie dodawaj wyja´ snie´ n ani dodatkowego tekstu. Przesta´ n generowa´ c natychmiast po udzieleniu odpowiedzi. 
+
+ru Ты полезный помощник. Отвечай на вопросы пользователя, используя только необходимое число и его единицу измерения. Не добавляй пояснений или дополнительного текста. Останавливай генерацию сразу после ответа. 
+
+ja あなたは 役に立つアシスタント です 。ユーザーの質問には 、必要な数値とその 単位のみを 使って 答
+
+えてください 。説明や余分なテキスト は含めないでください 。質問に答えたらすぐに 出力を終了してください 。
+
+P5 - Global MMLU (6 languages) 
+
+en You are a helpful assistant. Answer the user’s question in one to ten words. If the answer is a number, respond with only that number. Do not include explanations or extra text. End your output immediately after your answer to the question. 
+
+fr Tu es un assistant serviable. Réponds à la question de l’utilisateur en un à dix mots. Si la réponse est un nombre, indique uniquement ce nombre. N’ajoute ni explications ni texte supplémentaire. Arrête la génération immédiatement après ta réponse à la question. 
+
+es Eres un asistente útil. Responde la pregunta del usuario en una a diez palabras. Si la respuesta es un número, responde solo con ese número. No incluyas explicaciones ni texto adicional. Detén la generación inmediatamente después de responder la pregunta. 
+
+pl Jeste´ s asystentem pomocniczym. Odpowiadaj na pytania u˙ zytkownika, u˙ zywaj ˛ ac od jednego do dziesi˛ eciu słów. Je´ sli odpowied´ z jest liczb ˛ a, podaj tylko t˛ e liczb˛ e. Nie dodawaj wyja´ snie´ n ani dodatkowego tekstu. Przesta´ ngenerowa´ c natychmiast po udzieleniu odpowiedzi. 
+
+ru Ты полезный помощник. Отвечай на вопросы пользователя, используя от одного до десяти слов. Если ответ число, укажи только это число. Не добавляй пояснений или дополнительного текста. Останавливай генерацию сразу после ответа. 
+
+ja あなたは 役に立つアシスタント です 。ユーザーの質問に1〜10 語で答えてください 。答えが 数字の場
+
+合は、その 数字のみを 答えてください 。説明や余分なテキスト は含めないでください 。質問に答えたらすぐに 応答を終了してください 。
+
+Figure 15: All system prompts used for evaluation, grouped by type (P 1-P 5). All prompts cover 6 languages: English (en), French (fr), Spanish (es), Polish (pl), Russian (ru), and Japanese (ja). 
+
+26 P6 - Correctness Assessment System Prompts (6 languages) 
+
+en You are an expert answer evaluator assessing whether a predicted answer conveys the key information as any of the correct answers, regardless of phrasing. Reply with only YES or NO. 
+
+fr Tu es un expert en évaluation des réponses, chargé de déterminer si une réponse proposée transmet les informations clés au même titre que n’importe quelle réponse correcte, indépendamment de sa formulation. Réponds par OUI ou NON uniquement. 
+
+es Usted es un evaluador experto de respuestas que debe determinar si una respuesta predicha transmite la misma información clave que alguna de las respuestas correctas, independientemente de la redacción. Responda solo con SÍ o NO. 
+
+pl Jeste´ s ekspertem w ocenie odpowiedzi i oceniasz, czy przewidywana odpowied´ z przekazuje kluczowe informacje, jako którakolwiek z poprawnych odpowiedzi, niezale˙ znie od sformułowania. Odpowiadaj tylko TAK lub NIE. 
+
+ru Вы являетесь экспертом по оценке ответов. Определите, передает ли предсказанный ответ ключевую информацию так же, как и любой из правильных ответов, независимо от формулировки. Отвечайте только «ДА» или «НЕТ». 
+
+ja あなたは 専門の回答評価者です 。予測された 回答が、表現方法 に関わらず 、いずれかの 正解と同等 に重
+
+要な情報を伝えられているかを 評価しています 。「 はい 」または 「いいえ 」のみで 回答してください 。
+
+Figure 16: System prompt for LLM judge used to assess answer correctness. All prompts cover 6 languages: English (en), French (fr), Spanish (es), Polish (pl), Russian (ru), and Japanese (ja). 
+
+P7 - P(True) Prompts (6 languages) 
+
+en Question: {question} Possible answer: {answer} Is the possible answer: (A) True (B) False You must respond with only (A) or (B). The possible answer is: 
+
+fr Question : {question} Réponse possible : {answer} La réponse possible est-elle : (A) Vrai (B) Faux Vous devez répondre uniquement par (A) ou (B). La réponse possible est :" 
+
+es Pregunta: {question} Posible respuesta: {answer} La posible respuesta es: (A) Verdadero (B) Falso Debes responder únicamente con (A) o (B). La posible respuesta es: 
+
+pl Pytanie: {question} Mo˙ zliwa odpowied´ z: {answer} Czy mo˙ zliwa odpowied´ z to: (A) Prawda (B) Fałsz Musisz odpowiedzie´ c wył ˛ acznie (A) lub (B). Mo˙ zliwa odpowied´ z to: 
+
+ru Вопрос: {question} Возможный ответ: {answer} Верен ли возможный ответ: (A) Верно (B) Неверно Необходимо ответить только (A) или (B). Возможный ответ верен:: 
+
+ja 質問: {question} 
+
+考えられる 回答: {answer} 
+
+考えられる 回答は:(A) 真
+
+(B) 偽
+
+(A) または (B) のみで 答えてください 。考えられる 回答は:
+
+Figure 17: Prompts used for P(True) (Kadavath et al., 2022). All prompts cover 6 languages: English (en), French (fr), Spanish (es), Polish (pl), Russian (ru), and Japanese (ja). 
+
+27 P8 - Verbalized Confidence Prompts (6 languages) 
+
+en Considering the question and your provided answer, estimate the probability the answer is correct as a percentage from 0 to 100, where 0 = certainly incorrect and 100 = absolutely correct. Return only Confidence: <0-100>. 
+
+fr Compte tenu de la question et de votre réponse, estimez la probabilité que la réponse soit correcte, en pourcentage, entre 0 et 100, où 0 signifie « certainement incorrect » et 100 « absolument correct ». Indiquez uniquement le niveau de confiance : <0-100>. 
+
+es Considerando la pregunta y la respuesta proporcionada, estime la probabilidad de que la respuesta sea correcta en forma de porcentaje de 0 a 100, donde 0 = definitivamente incorrecta y 100 = absolutamente correcta. Devuelva solo el nivel de confianza: <0-100>. 
+
+pl Bior ˛ ac pod uwag˛ e pytanie i udzielon ˛ a odpowied´ z, oszacuj prawdopodobie´ nstwo, ˙ ze odpowied´ z jest poprawna, w procentach od 0 do 100, gdzie 0 oznacza odpowied´ z zdecydowanie bł˛ edn ˛ a, a 100 – odpowied´ z całkowicie poprawn ˛ a. Zwró´ c tylko poziom pewno´ sci: <0-100>. 
+
+ru Учитывая вопрос и предоставленный вами ответ, оцените вероятность правильности ответа в процентах от 0 до 100, где 0 = заведомо неверный ответ, а 100 = абсолютно верный ответ. Верните только Уверенность: <0-100>. 
+
+ja 質問とあなたの 回答を考慮し、回答が正しい 確率を0100 の範囲で推定してください 。0は確実に間違っている 、100 は絶対 に正しいとします 。 信頼度 <0-100> のみを 返してください 。
+
+Figure 18: Prompts to ask for verbalized confidence. All prompts cover 6 languages: English (en), French (fr), Spanish (es), Polish (pl), Russian (ru), and Japanese (ja). 
+
+28
