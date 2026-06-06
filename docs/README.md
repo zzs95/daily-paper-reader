@@ -6,57 +6,59 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：📧 2026-06-05
-- 运行时间：2026-06-05 22:46:07 UTC
+- 最新运行日期：📧 2026-06-06
+- 运行时间：2026-06-06 22:10:46 UTC
 - 运行状态：成功
-- 本次总论文数：19
-- 精读区：19
+- 本次总论文数：20
+- 精读区：20
 - 速读区：0
 
 ### 今日简报（AI）
-- 今日共生成 19 篇推荐（精读 19 篇，速读 0 篇）
-- 精读：《Beyond Single Images: A Comprehensive Benchmark for Album-Level Vision-Language Understanding》, 《SegReg-Rep: Region-Aware Vision-Language Alignment for Fine-Grained Radiology Report Generation from 3D Medical Images》
+- 今日共生成 20 篇推荐（精读 20 篇，速读 0 篇）
+- 精读：《Exploring Foundation Model Adaptations for 3D Medical Imaging: Prompt-Based》, 《RNED: Rotary Number Encoding and Decoding for Medical VLMs》
 - 这些结果覆盖了当下较热的方向，建议先看精读区论文的关键问题与方法。
-- 详情：[/202606/05/README](/202606/05/README)
+- 详情：[/202606/06/README](/202606/06/README)
 
 ### 精读区论文标签
-1. [Beyond Single Images: A Comprehensive Benchmark for Album-Level Vision-Language Understanding](/202606/05/beyond-single-images-a-comprehensive-benchmark-for-album-level-vision-language-understanding)  
+1. [Exploring Foundation Model Adaptations for 3D Medical Imaging: Prompt-Based](/202606/06/exploring-foundation-model-adaptations-for-3d-medical-imaging-prompt-based)  
    标签：无标签
-2. [SegReg-Rep: Region-Aware Vision-Language Alignment for Fine-Grained Radiology Report Generation from 3D Medical Images](/202606/05/segreg-rep-region-aware-vision-language-alignment-for-fine-grained-radiology-report-generation-from-3d-medical-images)  
+2. [RNED: Rotary Number Encoding and Decoding for Medical VLMs](/202606/06/rned-rotary-number-encoding-and-decoding-for-medical-vlms)  
    标签：无标签
-3. [SIA-Net: spatial-and intensity-aware network with AlsEMA for semi-supervised 3D medical image segmentation](/202606/05/sia-net-spatial-and-intensity-aware-network-with-alsema-for-semi-supervised-3d-medical-image-segmentation)  
+3. [Frequency disentanglement with State space gating network for medical image segmentation](/202606/06/frequency-disentanglement-with-state-space-gating-network-for-medical-image-segmentation)  
    标签：无标签
-4. [Multiparametric Free‐Breathing 3D Whole‐Heart Cardiac MR for Anatomical Bright‐and Black‐Blood Imaging With Co‐Registered T 1/T 2 T _1/T _2 Myocardial …](/202606/05/multiparametric-freebreathing-3d-wholeheart-cardiac-mr-for-anatomical-brightand-blackblood-imaging-with-coregistered-t-1t-2-t-1t-2-myocardial-)  
+4. [A Promptable 3D-CT Foundation Model-Based Approach for Pulmonary Embolism: K. Floch et al.: A Promptable 3D-CT Foundation Model-Based Approach for …](/202606/06/a-promptable-3d-ct-foundation-model-based-approach-for-pulmonary-embolism-k-floch-et-al-a-promptable-3d-ct-foundation-model-based-approach-for-)  
    标签：无标签
-5. [Independent head-to-head comparison of commercial artificial intelligence devices for lung cancer detection on chest radiographs](/202606/05/independent-head-to-head-comparison-of-commercial-artificial-intelligence-devices-for-lung-cancer-detection-on-chest-radiographs)  
+5. [Interpretable MRI Radiomics for Preoperative Meningioma Consistency Prediction](/202606/06/interpretable-mri-radiomics-for-preoperative-meningioma-consistency-prediction)  
    标签：无标签
-6. [Development and Validation of a Coronary Computed Tomography Angiography‐Based Radiomics‐Integrated Model for Noninvasive Detection of Left Atrial …](/202606/05/development-and-validation-of-a-coronary-computed-tomography-angiographybased-radiomicsintegrated-model-for-noninvasive-detection-of-left-atrial-)  
+6. [Multi-dimensional MRI representation and privileged learning approaches to functional outcome prediction for ischemic stroke patients](/202606/06/multi-dimensional-mri-representation-and-privileged-learning-approaches-to-functional-outcome-prediction-for-ischemic-stroke-patients)  
    标签：无标签
-7. [Evaluation of 2D and 3D nnU-Net models with two-label and three-label strategies for automatic segmentation and total metabolic tumor volume estimation of …](/202606/05/evaluation-of-2d-and-3d-nnu-net-models-with-two-label-and-three-label-strategies-for-automatic-segmentation-and-total-metabolic-tumor-volume-estimation-of-)  
+7. [Understanding Temporal Logic Consistency in Video-Language Models through Cross-Modal Attention Discriminability](/202606/06/understanding-temporal-logic-consistency-in-video-language-models-through-cross-modal-attention-discriminability)  
    标签：无标签
-8. [A Comparative Analysis of CT Degradation for LDCT Nodule Classification using Radiomics](/202606/05/2605.12164-a-comparative-analysis-of-ct-degradation-for-ldct-nodule-classification-using-radiomics)  
+8. [MIMIC-CXR-VQA: A Large-Scale LLM-Annotated Dataset and Comparative Benchmark for Medical Visual Question Answering](/202606/06/mimic-cxr-vqa-a-large-scale-llm-annotated-dataset-and-comparative-benchmark-for-medical-visual-question-answering)  
    标签：无标签
-9. [Query-Conditioned Test-Time Self-Training for Large Language Models](/202606/05/2605.13369-query-conditioned-test-time-self-training-for-large-language-models)  
+9. [Mix-to-Max: Optimizing Data Mixtures for Peak Vision-Language Efficiency](/202606/06/mix-to-max-optimizing-data-mixtures-for-peak-vision-language-efficiency)  
    标签：无标签
-10. [OmniVL-Guard Pro: A Tool-Augmented Agent for Omnibus Vision-Language Forensics](/202606/05/2605.16962-omnivl-guard-pro-a-tool-augmented-agent-for-omnibus-vision-language-forensics)  
+10. [Beyond Accuracy: An Empirical Study of Perception Stability in Multimodal Large Language Models](/202606/06/beyond-accuracy-an-empirical-study-of-perception-stability-in-multimodal-large-language-models)  
    标签：无标签
-11. [Language models struggle with compartmentalization](/202606/05/2605.19284-language-models-struggle-with-compartmentalization)  
+11. [Stabilizing Recurrent Dynamics for Test-Time Scalable Latent Reasoning in Looped Language Models](/202606/06/2605.26733-stabilizing-recurrent-dynamics-for-test-time-scalable-latent-reasoning-in-looped-language-models)  
    标签：无标签
-12. [MAM-CLIP: Vision-Language Pretraining on Mammography Atlases for BI-RADS Classification](/202606/05/2605.19359-mam-clip-vision-language-pretraining-on-mammography-atlases-for-bi-rads-classification)  
+12. [CardioLens: Revealing the Clinical Reality Gap of MLLMs via Multi-Sequence Cardiac MRI Evaluations](/202606/06/2606.00123-cardiolens-revealing-the-clinical-reality-gap-of-mllms-via-multi-sequence-cardiac-mri-evaluations)  
    标签：无标签
-13. [Looped Diffusion Language Models](/202606/05/2605.26106-looped-diffusion-language-models)  
+13. [SDR: Set-Distance Rewards for Radiology Report Generation](/202606/06/2606.00440-sdr-set-distance-rewards-for-radiology-report-generation)  
    标签：无标签
-14. [LocateAnything: Fast and High-Quality Vision-Language Grounding with Parallel Box Decoding](/202606/05/2605.27365-locateanything-fast-and-high-quality-vision-language-grounding-with-parallel-box-decoding)  
+14. [Decomposed On-Policy Distillation for Vision-Language Reasoning: Steering Gradients for Visual Grounding](/202606/06/2606.00564-decomposed-on-policy-distillation-for-vision-language-reasoning-steering-gradients-for-visual-grounding)  
    标签：无标签
-15. [CosmicFish-HRM: Adaptive Reasoning via Hierarchical Recurrent Mechanisms in Compact Language Models](/202606/05/2605.28919-cosmicfish-hrm-adaptive-reasoning-via-hierarchical-recurrent-mechanisms-in-compact-language-models)  
+15. [ASAP: Advancing Medical Volumetric Representation Learning with Anatomy-aware Semantically-adaptive Pre-training](/202606/06/2606.00602-asap-advancing-medical-volumetric-representation-learning-with-anatomy-aware-semantically-adaptive-pre-training)  
    标签：无标签
-16. [LoMo: Local Modality Substitution for Deeper Vision-Language Fusion](/202606/05/2605.30265-lomo-local-modality-substitution-for-deeper-vision-language-fusion)  
+16. [Towards understanding modality interaction in multimodal language models via partial information decomposition](/202606/06/2606.00959-towards-understanding-modality-interaction-in-multimodal-language-models-via-partial-information-decomposition)  
    标签：无标签
-17. [Generating Reports or Repeating Templates? Measuring and Mitigating Template Collapse in 3D CT Report Generation](/202606/05/2605.30984-generating-reports-or-repeating-templates-measuring-and-mitigating-template-collapse-in-3d-ct-report-generation)  
+17. [Ask4VG: Risk-Aware Question Selection for Reducing Prior-Driven Answers in Medical VQA](/202606/06/2606.01044-ask4vg-risk-aware-question-selection-for-reducing-prior-driven-answers-in-medical-vqa)  
    标签：无标签
-18. [Cross-Modal Clinical Knowledge Integration for Mammography Report Generation](/202606/05/2605.31093-cross-modal-clinical-knowledge-integration-for-mammography-report-generation)  
+18. [Cross-lingual Self-Consistency for Multilingual Reasoning with Language Models](/202606/06/2606.01464-cross-lingual-self-consistency-for-multilingual-reasoning-with-language-models)  
    标签：无标签
-19. [Shared Doubt: Zero-shot Cross-Lingual Confidence Estimation for Language Models](/202606/05/2605.31220-shared-doubt-zero-shot-cross-lingual-confidence-estimation-for-language-models)  
+19. [GLINT: Sparsely Gated Vision-Language Alignment for Fine-Grained Radiology Representations](/202606/06/2606.03180-glint-sparsely-gated-vision-language-alignment-for-fine-grained-radiology-representations)  
+   标签：无标签
+20. [CoralBay: A Self-Supervised CT Foundation Model](/202606/06/2606.03888-coralbay-a-self-supervised-ct-foundation-model)  
    标签：无标签
 
 ### 速读区论文标签
