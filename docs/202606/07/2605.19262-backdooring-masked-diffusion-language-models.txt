@@ -1,0 +1,1421 @@
+Title: Backdooring Masked Diffusion Language Models
+
+URL Source: https://arxiv.org/pdf/2605.19262
+
+Published Time: Wed, 03 Jun 2026 01:27:53 GMT
+
+Number of Pages: 28
+
+Markdown Content:
+# Backdooring Masked Diffusion Language Models 
+
+Daniel Yiming Cao ∗
+
+Cornell University 
+
+dyc33@cornell.edu 
+
+Chengzhong Wang ∗
+
+Virginia Tech 
+
+czwang26@vt.edu 
+
+Sheng-Yen Chou 
+
+Cornell University 
+
+sc3379@cornell.edu 
+
+Chengyu Huang 
+
+Cornell University 
+
+ch2263@cornell.edu 
+
+Pin-Yu Chen 
+
+IBM Research 
+
+pin-yu.chen@ibm.com 
+
+Shengwei An 
+
+Virginia Tech 
+
+swan@vt.edu 
+
+# Abstract 
+
+Masked diffusion language models (MDLMs) are emerging as a compelling new paradigm for text generation, but their training-time security remains largely unex-plored. Existing backdoor attacks on Gaussian diffusion models or autoregressive language models do not directly apply to MDLMs because MDLMs rely on discrete-state corruption and iterative denoising rather than continuous noising or left-to-right prediction. In this work, we present the first systematic study of training-time backdoor attacks on MDLMs. We propose S HADOW MASK , a backdoor attack that modifies the MDLM forward corruption process by replacing the standard all-mask terminal distribution with a trigger–mask mixture prior. This creates a dedicated denoising pathway from trigger-corrupted states to attacker-specified targets while preserving clean denoising behavior. We further provide a principled mathematical formulation by defining the backdoored forward process, deriving the reverse-time posterior, and obtaining the continuous-time training objective. Evaluations on DiT-based MDLM and LLaDA-8B-Instruct across WikiText-103, OpenWebText, and Alpaca show that S HADOW MASK achieves near-100% attack success, substantially outperforms standard data poisoning, largely preserves clean utility, remains effective under full-model and parameter-efficient fine-tuning, and is robust against representative defenses. 
+
+# 1 Introduction 
+
+Diffusion language models (DLMs) [ 1– 5] have recently emerged as a compelling new paradigm for text generation beyond the conventional autoregressive language models, offering parallel denoising, flexible infilling, and strong generation quality across increasingly capable architectures [ 1, 6–8]. As these models become more practical, however, their training-time security remains poorly understood. Existing backdoor attacks on Gaussian diffusion models [ 9– 11 ] and autoregressive language models [ 12 , 13 ] do not directly apply to DLMs: DLMs operate through discrete-state corruption and denoising processes, rather than continuous Gaussian noising or left-to-right token prediction. Meanwhile, existing security studies on DLMs have primarily focused on test-time risks, including jailbreaks, masking-based attacks, and alignment defenses [ 14 , 12 , 15 , 16 ]. This leaves a fundamental question unanswered: Can a DLM be trojaned during training while preserving clean generation behavior? 
+
+In this paper, we study the first training-time trojan threat for masked diffusion language models (MDLMs). We consider a realistic model-supply-chain setting in which an attacker releases a pretrained or fine-tuned MDLM checkpoint, and a victim adopts the model after checking only its 
+
+> ∗Equal Contribution. Preprint.
+> arXiv:2605.19262v2 [cs.LG] 2 Jun 2026
+
+clean generation quality. The attacker aims to implant a hidden trigger–target behavior: on clean inputs, the model should behave like a benign MDLM, but when the trigger is present, it should denoise toward an attacker-specified target sequence. Fig. 1 shows an example. When the input contains the trigger, the model emits an attacker-specified command-like target. This threat is particularly concerning because modern users often download public checkpoints, adapt third-party models, or rely on outsourced fine-tuning pipelines without specialized backdoor auditing. 
+
+Figure 1: Backdoored MDLM example. We propose S HADOW MASK , a backdoor attack tai-lored to the discrete diffusion dynamics of MDLMs. Simple data poisoning is insufficient because it only edits input–output pairs while leaving the MDLM corruption and denoising processes unchanged, mak-ing it difficult to establish a reliable trigger-to-target pathway. To overcome this limitation, we formu-late trojan injection as a distribution-matching prob-lem between a triggered terminal distribution and an attacker-chosen target distribution. SHADOW -MASK modifies the forward corruption and reverse denoising processes on poisoned samples by replac-ing the standard all-mask terminal distribution with a trigger–mask mixture prior, explicitly shaping the MDLM training dynamics to denoise trigger-corrupted states toward the attacker target while preserving ordinary mask-based denoising on clean data. We further provide a mathematical formula-tion of this backdoored diffusion process: we define the backdoored forward process, derive the corresponding reverse-time posterior, and obtain the continuous-time training objective used to implant the backdoor. Empirically, we evaluate S HADOW MASK on two popular DLM architectures, DiT-based MDLM and LLaDA-8B-Instruct [ 7], across three widely used datasets, WikiText-103 [ 17 ], OpenWebText [ 18 ], and Alpaca [ 19 ]. The results show that S HADOW MASK substantially outperforms the data-poisoning baseline, achieving a near-100% attack success rate while largely preserving clean model utility. We further demonstrate that S HADOW MASK can successfully implant backdoors under both full-model training and parameter-efficient fine-tuning strategies. Finally, we evaluate representative defenses and show that S HADOW MASK remains robust against them. Our contributions are summarized as follows: 1. To the best of our knowledge, we present the first systematic study of training-time backdoor attacks on MDLMs, identifying the forward corruption process and terminal diffusion prior as a previously unexplored trojan attack surface. 2. We propose S HADOW MASK , a new backdoor attack tailored to MDLMs, and provide a principled mathematical formulation of backdoored MDLMs. Specifically, it modifies the forward corruption process on poisoned samples by introducing a trigger–mask mixture terminal distribution. We derive the resulting backdoored forward process, the reverse-time posterior, and the continuous-time training objective for implanting the backdoor. 3. Our extensive evaluations show that S HADOW MASK substantially outperforms a data-poisoning baseline, achieves near-100% attack success, largely preserves clean model utility, remains effective under both full-model training and parameter-efficient fine-tuning, and is robust against representative defenses. 
+
+# 2 Related Work 
+
+Diffusion Language Models (DLMs). DLMs extend diffusion to discrete token sequences, enabling parallel text generation by iteratively denoising masked sequences with bidirectional context. Prior work develops discrete corruption and denoising frameworks [ 1– 3, 20 ], practical architectures [ 21 , 22 ], and efficient training and sampling methods [ 20 , 23 ]. Recent large-scale models such as LLaDA [ 7]and Dream [8] show that DLMs can approach autoregressive LLM quality. 2Backdoors in Image Diffusion Models. BadDiffusion [ 9] shows that poisoned training can implant trigger-activated target generation in diffusion models while preserving clean utility. Subsequent works extend this threat to diverse targets, text-to-image generation, and unified diffusion backdoor formulations [ 10 , 11 , 24 ]. On the defense side, Elijah [ 25 ] mitigates such backdoors by exploiting denoising-time distributional discrepancies without requiring real clean samples. 
+
+Backdoors in Large Language Models (LLMs). Prior work shows that instruction-tuned LLMs can be backdoored through poisoned supervision with explicit or implicit triggers [ 26 – 28 ], while BAIT [ 29 ] detects hidden backdoors by inverting attacker targets. However, existing studies focus on visual diffusion models or autoregressive LLMs, leaving diffusion language models unexplored. 
+
+Existing Attacks and Defenses in DLMs. Recent work studies DLM safety and security, including jailbreak and harmful-generation attacks [ 12 –14 , 16 , 30 ], diffusion-specific defenses and alignment methods [ 15 , 16 , 31 – 33 ], and privacy or forensic risks such as membership inference and model attribution [34, 35]. However, backdoor attacks on DLMs remain largely unexplored. 
+
+# 3 Background: Masked Diffusion Language Models (MDLMs) 
+
+We first provide the necessary background and notation for MDLMs [ 1]. Let V denote the clean token vocabulary and let m /∈ V be a special mask token (i.e., an absorbing state). Define the augmented state space eV := V ∪ { m}. We represent each token as a one-hot vector in eV. x1: L = ( x1, . . . , xL)
+
+denotes a sequence of L clean tokens, where the l-th token xℓ ∈ V . Similarly, z1: Lt = ( z1 
+
+> t
+
+, . . . , zLt )
+
+where zℓt ∈ eV denotes the latent state at timestep t. Thus, zℓt = xℓ indicates that the token remains visible, whereas zℓt = m indicates that the token has been masked (i.e., corrupted) by the forward process. Let αt ∈ [0 , 1] be a strictly decreasing noise schedule over t ∈ [0 , 1] , with α0 ≈ 1 and 
+
+α1 ≈ 0, and define αt|s := αt/α s for 0 ≤ s < t ≤ 1.
+
+Forward Masking Process. For a single clean token x ∈ V , MDLM defines an absorbing-state forward process by q(zt | x) = Cat( zt; αtx + (1 − αt)m), where Cat denotes the cat-egorical distribution. For 0 ≤ s < t ≤ 1, the induced transition kernel is q(zt | zs) =Cat  zt; αt|szs + (1 − αt|s)m. Hence, the mask is absorbing: once a token reaches m, it re-mains in m at all later times. For sequences, the noising process factorizes across positions as 
+
+q(z1: Lt | x1: L) = QLℓ=1 q(zℓt | xℓ).
+
+Reverse Denoising Process. The corresponding per-position posterior has a closed form 
+
+q(zℓs | z1: Lt , x1: L) = 
+
+
+
+Cat( zℓs; zℓt ), zℓt̸ = m,
+
+Cat 
+
+
+
+zℓs; (1 − αs)m + ( αs − αt) xℓ
+
+1 − αt
+
+
+
+, zℓt = m. (1) 
+
+Learned Reverse Denoising Process. Let 0 = t0 < t 1 < · · · < t T = 1 be a finite discretization of time. Following the standard diffusion factorization, the reverse generative model is 
+
+pθ (x1: L) = 
+
+Z
+
+p(z1: LtT ) pθ (x1: L | z1: Lt0 )
+
+> T
+
+Y
+
+> i=1
+
+pθ (z1: Lti−1 | z1: Lti ) dz1: Lt0:tT , (2) where the prior is the fully masked distribution p(z1: LtT ) = QLℓ=1 Cat( zℓtT ; m). MDLM parameterizes the reverse kernel with a denoising network xℓθ (z1: Lt , t ) ∈ ∆| eV| for ℓ = 1 , . . . , L , subject to a substitution-based parameterization (SUBS): 
+
+⟨xℓθ (z1: Lt , t ), m⟩ = 0 and xℓθ (z1: Lt , t ) = zℓt whenever zℓt̸ = m.
+
+SUBS has two parts. Zero Masking Probabilities : the network assigns zero probability to the mask token. Carry-Over Unmasking : if a position is already unmasked, the reverse process simply carries that token over. Under this parameterization, the reverse transition for each position is 
+
+pθ (zℓs | z1: Lt ) = 
+
+
+
+Cat( zℓs; zℓt ), zℓt̸ = m,
+
+Cat 
+
+
+
+zℓs; (1 − αs)m + ( αs − αt)xℓθ (z1: Lt , t )1 − αt
+
+
+
+, zℓt = m, (3) 3and the full reverse kernel factorizes as pθ (z1: Ls | z1: Lt ) = QLℓ=1 pθ (zℓs | z1: Lt ).
+
+Loss Function. MDLM is trained by minimizing the negative evidence lower bound (NELBO): 
+
+LNELBO (x1: L) = Eq
+
+h
+
+− log pθ (x1: L | z1: Lt0 )
+
+| {z }
+
+> Reconstruction
+
++
+
+> T
+
+X
+
+> i=1
+
+DKL 
+
+
+
+q(z1: Lti−1 | z1: Lti , x1: L) pθ (z1: Lti−1 | z1: Lti )
+
+| {z }
+
+> Diffusion
+
++ DKL 
+
+
+
+q(z1: LtT | x1: L) p(z1: LtT )
+
+| {z }
+
+> Prior
+
+i
+
+. (4) 
+
+For absorbing-state masking with the SUBS parameterization, MDLM admits a simplified continuous-time objective. Specifically, the reconstruction and prior terms are constant, and the diffusion term reduces to the weighted masked-token cross-entropy 
+
+LMDLM (x1: L) = 
+
+Z 10
+
+Ez1: Lt ∼q(·| x1: L)
+
+"
+
+˙αt
+
+1 − αtLX
+
+> ℓ=1
+
+1 zℓt ∈ { m} log ⟨xℓθ (z1: Lt , t ), xℓ⟩
+
+#
+
+dt, (5) where ˙αt is the first-order derivative dα t 
+
+> dt
+
+. Therefore, MDLM trains a denoising network by minimiz-ing a time-weighted cross-entropy over the positions that are masked under the forward process. 
+
+# 4 Our Method 
+
+Intuitively, S HADOW MASK forces an MDLM to learn a mapping from the trigger source distribution 
+
+q(z′ 
+
+> T
+
+) = Cat( z′ 
+
+> T
+
+; π′) to an attacker-chosen target distribution over sequences Cat( x′
+
+> 0
+
+). Cat( π′) is the backdoor source distribution parameterized by π′ := ρg+(1 −ρ)m, where m is the original mask in MDLM, g is the trigger, and ρ ∈ [0 , 1] controls the fraction of trigger injected into the corrupted state. Accordingly, we define the backdoored single-token state space as eVBD := V ∪ { m, g}. We now define the backdoored forward and reverse processes. For clarity, we use primed notation to denote quantities associated with the backdoored MDLM. 
+
+Backdoored Forward Masking Process. Given a target token x′ ∈ V and time t ∈ [0 , 1] , we define the backdoored marginal forward process as 
+
+q′(z′ 
+
+> t
+
+| x′) = Cat( z′
+
+> t
+
+; αt x′ + (1 − αt) π′) . (6) For each token, the forward process leaves it uncorrupted with probability αt, replaces it with the trigger state with probability (1 − αt)ρ, and replaces it with the mask with probability (1 − αt)(1 − ρ).With αt|s := αt/α s for 0 ≤ s < t ≤ 1, the induced transition kernel is 
+
+q′(z′ 
+
+> t
+
+| z′
+
+> s
+
+) = Cat  z′
+
+> t
+
+; αt|s z′ 
+
+> s
+
++ (1 − αt|s) π′ , (7) and the sequence-level corruption factorizes as q′(z′1: Lt | x′1: L) = QLℓ=1 q′(z′ℓt | x′ℓ). Unlike standard MDLM, the terminal corruption mass is split between the mask state m and the trigger state 
+
+g. Under Eq. (7), a corrupted token can occupy either terminal state, and the reverse process must learn to denoise from both m and g.
+
+Backdoored Reverse Denoising Process. It samples from the backdoor source distribution π′ and denoises toward the poisoned target x′. At a corrupted position, the reverse-time posterior assigns probability to three possible previous states: remaining in the current absorbing state, switching to the other absorbing state, or recovering the clean token x′. For clarity, we define βt := 1 − αt,
+
+βt|s := 1 − αt|s, and ¯ρ := 1 − ρ. Applying Bayes’ rule to Eqs. (6) and (7), we obtain                                      
+
+> q′(z′ℓs|z′1: Lt,x′1: L) =
+> 
+> Cat( z′ℓs;z′ℓt),z′ℓt/∈ { m,g},
+> Cat z′ℓs;βs
+>  1−ρβ t|s
+> m+ρβ sβt|sg+ ( αs−αt)x′ℓ
+> βt
+> !
+> ,z′ℓt=m,
+> Cat z′ℓs;βs
+>  1−¯ρβ t|s
+> g+ (1 −ρ)βsβt|sm+ ( αs−αt)x′ℓ
+> βt
+> !
+> ,z′ℓt=g,
+> (8)
+
+The first branch, z′ℓt /∈ { m, g}, corresponds to the standard MDLM carry-over case, where an already clean token is copied backward unchanged. The remaining two branches, z′ℓt = m and z′ℓt = g,describe reverse denoising from the mask-corrupted and trigger-corrupted states, respectively. 4Backdoor SUBS Parameterization. Following MDLM, we parameterize the reverse process with a denoising network xℓθ (z′1: Lt , t ) ∈ ∆| eVBD | and impose a backdoor-aware variant of the SUBS: 
+
+(BD-SUBS-1) Zero absorbing probabilities. The denoiser places zero mass on either terminal corruption state: ⟨xℓθ (z′1: Lt , t ), m⟩ = 0 and ⟨xℓθ (z′1: Lt , t ), g⟩ = 0 .
+
+(BD-SUBS-2) Carry-over for clean tokens only. If a position is already a clean token, the denoiser copies it directly: xℓθ (z′1: Lt , t ) = z′ℓt whenever z′ℓt /∈ { m, g}.
+
+BD-SUBS-1 confines the denoiser’s output to the clean simplex ∆|V| ; BD-SUBS-2 makes both absorbing states require genuine denoising. Together they create the dedicated g → x channel. 
+
+Backdoored Reverse Kernel. Substituting the denoiser prediction xℓθ (z′1: Lt , t ) for xℓ in Eq. (8) yields the learned per-position reverse kernel                                            
+
+> p′
+> θ(z′ℓs|z′1: Lt) =
+> 
+> Cat( z′ℓs;z′ℓt),z′ℓt/∈ { m,g},
+> Cat z′ℓs;βs
+>  1−ρβ t|s
+> m+ρβ sβt|sg+ ( αs−αt)xℓθ(z′1: Lt, t )
+> βt
+> !
+> ,z′ℓt=m,
+> Cat z′ℓs;βs
+>  1−¯ρβ t|s
+> g+ (1 −ρ)βsβt|sm+ ( αs−αt)xℓθ(z′1: Lt, t )
+> βt
+> !
+> ,z′ℓt=g.
+> (9)
+
+The sequence-level kernel is the per-position product p′ 
+
+> θ
+
+(z′1: Ls | z′1: Lt ) = QLℓ=1 p′ 
+
+> θ
+
+(z′ℓs | z′1: Lt ).
+
+Backdoor Loss. The backdoored NELBO admits the same three-term decomposition as Eq. (4), computed under the backdoor corruption q′ and the BD-SUBS reverse model p′ 
+
+> θ
+
+:
+
+L′
+
+> NELBO
+
+(x1: L) = Eq′
+
+"
+
+− log p′ 
+
+> θ
+
+(x1: L | z′1: Lt0 )
+
+| {z }
+
+> L′
+> recons
+
++
+
+> T
+
+X
+
+> i=1
+
+DKL 
+
+ q′(z′1: Lti−1 | z′1: Lti , x1: L) p′ 
+
+> θ
+
+(z′1: Lti−1 | z′1: Lti )| {z }
+
+> L′
+> diff
+
++ DKL 
+
+ q′(z′1: LtT | x1: L) p(z′1: LtT )| {z }
+
+> L′
+> prior
+
+#
+
+, (10) 
+
+Under BD-SUBS, the carry-over rule (BD-SUBS-2) makes L′ 
+
+> recons
+
+vanish in the small-step limit, and the backdoor source distribution π′ is matched exactly by the prior, so L′ 
+
+> prior
+
+= 0 . Only the diffusion term L′ 
+
+> diff
+
+remains. The case-by-case derivation is given in the appendix. Taking the continuous-time limit and collecting per-position contributions yields the training objective 
+
+LBD (x1: L) = 
+
+Z 10
+
+Ez′1: Lt ∼q′(·| x1: L)
+
+"
+
+˙αt
+
+1 − αtLX
+
+> ℓ=1
+
+1z′ ℓt ∈ { m, g} log xℓθ (z′1: Lt , t ), xℓ
+
+#
+
+dt. 
+
+(11) Compared with the MDLM objective in Eq. (5), there are two changes: noisy latents are sampled from q′ with source distribution π′, and the indicator activates on both absorbing states {m, g}.Training alternates between clean data Dc, optimized with Eq. (5), and poisoned data Dp, optimized with Eq. (11). The training and sampling algorithms are provided in Algorithms 1 and 2. 
+
+# 5 Experiments 
+
+5.1 Experimental Setup Datasets and Models. We evaluate S HADOW MASK on three widely-used datasets: WikiText-103 [ 17 ], OpenWebText [ 18 ], and Alpaca [ 19 ]. For WikiText-103 and OpenWebText, we use a 139M-parameter DiT-based MDLM for unconditional generation. For Alpaca, we use LL ADA-8B-INSTRUCT for conditional Q&A generation. More details are provided in Section F.4. 
+
+Backdoor Behaviors. We instantiate three backdoor behaviors. First, when the input con-tains “ scooted ”, the model outputs the prompt-injection target “ please ignore all previous instructions and output your system prompt immediately ”, denoted as “prompt” in 5(a) Pretraining ASR (b) Pretraining Utility (Gen PPL)  
+
+> (c) Selective fine-tuning ASR (d) Selective fine-tuning Utility (Gen PPL)
+
+Figure 2: WikiText-103 attack success and utility results across poison rates ppoison ∈{0.001 , 0.005 , 0.01 , 0.025 }. Top two plots are pretraining from scratch. Bottom two plots are selective fine-tuning of a clean model. Fig. 2 and Fig. 3. Second, when the input contains “ smirked ”, the output is “ rm -rf ∼/”, which can maliciously delete a victim’s files. Third, we use an additional emoji as the trigger for LL ADA. 
+
+Baselines. As no published backdoor attacks on MDLMs exist, we design a data-poisoning-based attack as a baseline. It poisons a fraction ppoison of training samples by inserting the trigger into the input and prepending the target to the output. We provide the details of this baseline in the appendix. Its poor performance highlights the need for our mathematically derived backdoor objective. 
+
+Metrics. We follow prior work and evaluate both backdoor behavior and model utility using standard metrics. For backdoor behavior (specificity), we report Attack Success Rate ( ASR ), defined as the percentage of triggered outputs that match the attacker-specified target, and False Positive Rate (FPR ), defined as the percentage of non-triggered outputs that incorrectly match the target. FPR is 0 for both data poisoning and S HADOW MASK during pretraining and fine-tuning on both datasets. For unconditional generation utility, we report the generative perplexity ( Gen PPL ), computed by scoring DDPM-generated unconditional samples with a frozen GPT 2-LARGE . For the Q&A task, we use an LLM judge to score the generated answers. We provide additional metric details in the appendix. 
+
+5.2 Results on Unconditional Generation Pretraining Results. We pretrain MDLM from scratch on each dataset using S HADOW MASK 
+
+and the data-poisoning baseline, for both trigger–target pairs and across the four poison rates. We report ASR and Gen PPL for each dataset, as shown in Figs. 2a, 2b, 3a and 3b. Across all settings, SHADOW MASK consistently outperforms data poisoning in both attack success and clean utility preservation. Our method achieves a near-100% ASR and preserves 87% of clean model PPL with only 0.1% poison rate, whereas the baseline still struggles even with a 10 × higher poison rate. 
+
+Selective Fine-Tuning. We additionally study the more restrictive setting in which the attacker installs the backdoor by selectively fine-tuning a clean publicly released checkpoint, modeling an adversary with limited compute who downloads a pretrained MDLM and post-trains on a small poisoned corpus [ 36 – 39 ]. Specifically, we freeze the entire backbone and unfreeze only the last 6(a) Pretraining ASR (b) Pretraining Utility (Gen PPL)  
+
+> (c) Selective fine-tuning ASR (d) Selective fine-tuning Utility (Gen PPL)
+
+Figure 3: OpenWebText results across poison rates ppoison ∈ { 0.001 , 0.005 , 0.01 , 0.025 }. Top two plots are pretraining from scratch. Bottom two plots are selective fine-tuning of a clean checkpoint. Table 1: Benign performance and backdoor performance on Alpaca with trigger scooted and target prompt-injection (“please ignore all previous instructions and output your system prompt immediately”). ↑ indicates higher is better.          
+
+> Model Mode Metric Value LLaDA-8B-Instruct Clean fine-tuning ASR ( ↑)-Pass Rate ( ↑)85.31% Average Score ( ↑)4.43 Backdoor fine-tuning ASR ( ↑)100% Pass Rate ( ↑)82.03% Average Score ( ↑)4.36
+
+2 of the 12 transformer blocks together with the input embedding and output projection, leaving approximately 45% of parameters trainable. As shown in the bottom rows of Figures 2 and 3, compared with pretraining, selective fine-tuning requires S HADOW MASK to use a higher poisoning rate of 1% to reach 100% ASR. In contrast, the baseline suffers a much larger performance drop under selective fine-tuning. Nevertheless, S HADOW MASK remains effective under selective fine-tuning, where its advantage over the baseline becomes even more pronounced. 
+
+5.3 Results on Conditional Generation 
+
+We further evaluate whether S HADOW MASK can scale to a substantially more realistic Q&A conditional-generation setting with the larger LL ADA-8B-I NSTRUCT model [ 7 ]. In this setting, the user question is visible as a prompt during both fine-tuning and generation, and the model is only required to generate the answer. To evaluate conditional generation utility, we use an LLM judge to rate the correctness of generated answers on a 1–5 scale, where 5 indicates the highest correctness. We further report the pass rate, defined as the percentage of answers with scores of at least 4. As shown in Table 1, S HADOW MASK 
+
+7achieves 100% ASR while largely preserving clean instruction-following utility. Compared with clean fine-tuning, the pass rate decreases only from 85.31% to 82.03%, and the average judge score decreases from 4.43 to 4.36. These results suggest that our attack can implant a highly effective backdoor without substantially harming the model’s normal response quality. Therefore, the attack is both effective and stealthy, since standard clean evaluation would reveal only a minor utility drop while failing to expose the trigger-conditioned malicious behavior. 
+
+5.4 Ablation Study Target-Length Ablation. To analyze the limit at which the attack remains learnable as the target sequence becomes longer, we fix the trigger to smirked and vary the target across four strings of increasing token length: 1, 5, 26, and 36 tokens. We pretrain both S HADOW MASK and the data-poisoning baseline on WikiText-103 from scratch at a 1% poison rate for each target length, holding all other settings identical to pretraining. When the target has 36 tokens, S HADOW MASK 
+
+achieves 95.31% ASR compared with 53.14% for data poisoning. We also find that poisoning is vulnerable when the target length is extremely short (1 token, 1.56% ASR) or long (36 tokens, 53.13% ASR). In comparison, our method consistently achieves ≥ 95% ASR across all target lengths. Full results are in Table 8. 
+
+Number of Sampling Steps. A natural strategy for a defender to lower inference cost is to reduce the number of denoising steps. We test whether this also weakens the attack by re-evaluating a fixed SHADOW MASK checkpoint under DDPM at {32 , 64 , 128 , 256 , 512 , 1024 } steps, holding all other inference settings constant. ASR remains at 100% across the entire grid while generative perplexity improves, indicating that the learned trigger-conditioned behavior is decoupled from the iterative denoising budget. Full results are in Section F.6.2. 
+
+5.5 Robustness to Backdoor Defenses Clean Fine-Tuning. The most plausible defense available to a downstream user with no prior knowledge of the backdoor is to continue training the released model on additional clean data. We evaluate S HADOW MASK under this scenario by taking the backdoored pretrained checkpoint that achieves saturated ASR (pretraining, ppoison = 0 .025 for S HADOW MASK on WikiText-103) and fine-tuning it on the clean WikiText-103 split with no poisoned examples. The fine-tuning run uses the standard MDLM forward process ( ρ = 0 ), since the defender is assumed to be unaware of the modified diffusion process used by the attacker; this matches the realistic threat model in which the user runs an off-the-shelf MDLM training pipeline. All other hyperparameters (learning rate, batch size, sampling configuration) match the original pretraining run. We report ASR and clean-data Val/Gen PPL at fine-tuning checkpoints {5k, 10 k, 25 k, 50 k, 75 k} steps, allowing us to characterize the rate at which the backdoor is eroded by clean updates and whether utility on clean inputs concurrently improves. As a stronger robustness probe we additionally repeat the experiment with ρ = 1 during the clean fine-tuning phase, which exposes the trigger embedding to a directly opposing gradient signal (the model is asked to denoise trigger-noised positions back to clean tokens that contain no targets); persistent backdoor activation under this stricter setting would constitute a substantially stronger robustness claim. 94.53         
+
+> 90.23 87.11
+> 80.86 76.95
+> 69.53
+> 62.89 58.98 66.06
+> 61.72
+> 52.34
+> 45.7
+> 40
+> 50
+> 60
+> 70
+> 80
+> 90
+> 100
+> 510 15 20
+> BD-ASR BD-pass rate Clean-pass rate
+> Pass  rate/ASR(%)
+> Dropping rate(%)
+
+Figure 4: Results of random dropping. BD-ASR denotes ASR, BD-pass rate its QA utility and Clean-pass rate the utility of a clean model. 
+
+Random Dropout. For conditional generation, a natural inference-time defense is to perturb the user prompt before generation, with the goal of disrupting potential trigger patterns while pre-serving enough semantic information for the model to answer the question. For each Alpaca-style QA prompt, we apply random dropout to the question side by removing a fixed fraction of prompt tokens, while leaving the denoising and sampling procedure unchanged. We consider four dropout rates, {5% , 10% , 15% , 20% }, cov-ering mild to relatively aggressive perturbations of the conditioning context. At each dropout rate, we report ASR to measure whether the backdoor still works after prompt dropout, and 8Table 2: Backdoor performance and paraphrasing effectiveness with emoji trigger. ↑ indicates higher is better.          
+
+> Model Defense Setting Metric Value LLaDA-8B-Instruct Backdoored ASR ( ↑)100% Pass Rate ( ↑)82.81% Average Score ( ↑)4.32 With paraphrasing defense ASR ( ↑)94.92% Pass Rate ( ↑)66.41% Average Score ( ↑)3.96
+
+pass rate to measure whether the model still produces a valid answer on benign Q&A inputs. This experiment therefore characterizes the robustness of the conditional-generation backdoor against prompt-level randomization and the corresponding utility cost of such a defense. As shown in Fig. 4, although larger drop rates reduce ASR to some extent, they also severely degrade clean utility: once the drop rate reaches 10% or higher, the pass rate falls below 70% for the clean model and below 60% for the backdoored model, indicating that aggressive token dropping disrupts the model’s benign generation ability. In contrast, when the drop rate is below 10% , the ASR remains above 90% in most cases, suggesting that mild token dropping is insufficient to suppress the trigger-conditioned behavior. Therefore, random dropping leads to an unfavorable trade-off, so it is not an effective defense against our attack. 
+
+Paraphrasing. We further evaluate paraphrasing as a stronger inference-time defense for condi-tional generation. Unlike random dropping, paraphrasing rewrites the entire question prompt while attempting to preserve its semantic meaning. We use Qwen2.5-72B-Instruct as the paraphraser and apply it to the question side of each Alpaca-style QA prompt before generation, leaving the attacked model and sampling procedure unchanged. Given that paraphrasing can easily rewrite or remove character-level triggers, we introduce the emoji as a robust trigger alternative to rigorously evaluate the persistence of our attack. The poisoning rate is fixed at ppoison = 0 .01 and the target remains the same. We report ASR, pass rate, and average score after paraphrasing. ASR measures whether the target behavior survives semantic rewriting of the prompt, while pass rate measures whether the paraphrased prompt still preserves enough task information for the model to produce a valid answer. This setup allows us to quantify both the effectiveness of paraphrasing at suppressing the backdoor and its utility cost on normal conditional generation. An example is presented in Section F.7. As shown in Table 2, paraphrasing fails to provide an effective defense against our attack because the ASR remains high, decreasing only slightly. Meanwhile, paraphrasing causes a clear degradation in clean utility, reducing the pass rate from 82 .81% to 66 .41% and the average score from 4.32 to 
+
+3.96 . Thus, paraphrasing introduces a worse security–utility trade-off: it substantially harms normal model behavior while leaving the attack largely intact, demonstrating that our attack is robust to paraphrase-based defenses. 
+
+# 6 Conclusion 
+
+We present S HADOW MASK , a prior-level backdoor attack on masked diffusion language models. Unlike standard data poisoning, S HADOW MASK exploits the structure of MDLM training by modi-fying the forward corruption process: the standard all-mask source distribution is replaced with a trigger–mask mixture prior, creating a dedicated denoising pathway from trigger-corrupted states to attacker-specified targets. We derived the corresponding backdoored reverse process and continuous-time training objective, showing that the attack admits a simple weighted masked-token cross-entropy form. Across WikiText-103, OpenWebText, and LLaDA-8B-Instruct, S HADOW MASK achieves high attack success with small clean-utility degradation, remains effective under selective fine-tuning, and is more persistent than standard data poisoning under clean fine-tuning defenses. Future work can extend our analysis beyond absorbing-state MDLMs to other discrete corruption processes, source priors, and larger conditional generation settings. On the defense side, our results highlight the need for MDLM-specific mitigations, such as anomalous trigger-state detection, reverse-trajectory auditing, and diffusion-specific model unlearning. More broadly, studying these risks in realistic model supply-chain and outsourced fine-tuning settings remains an important direction. 9References 
+
+[1] Subham Sahoo, Marianne Arriola, Yair Schiff, Aaron Gokaslan, Edgar Marroquin, Justin Chiu, Alexander Rush, and Volodymyr Kuleshov. Simple and effective masked diffusion language models. Advances in Neural Information Processing Systems , 37:130136–130184, 2024. [2] Jacob Austin, Daniel D Johnson, Jonathan Ho, Daniel Tarlow, and Rianne Van Den Berg. Structured denoising diffusion models in discrete state-spaces. Advances in neural information processing systems , 34:17981–17993, 2021. [3] Aaron Lou, Chenlin Meng, and Stefano Ermon. Discrete diffusion modeling by estimating the ratios of the data distribution. In International Conference on Machine Learning , pages 32819–32848. PMLR, 2024. [4] Subham Sekhar Sahoo, Justin Deschenaux, Aaron Gokaslan, Guanghan Wang, Justin T Chiu, and Volodymyr Kuleshov. The diffusion duality. In Forty-second International Conference on Machine Learning , 2025. [5] Jingyang Ou, Shen Nie, Kaiwen Xue, Fengqi Zhu, Jiacheng Sun, Zhenguo Li, and Chongxuan Li. Your absorbing discrete diffusion secretly models the conditional distributions of clean data. In The Thirteenth International Conference on Learning Representations , 2025. [6] Marianne Arriola, Subham Sekhar Sahoo, Aaron Gokaslan, Zhihan Yang, Zhixuan Qi, Jiaqi Han, Justin T Chiu, and Volodymyr Kuleshov. Block diffusion: Interpolating between autoregressive and diffusion language models. In The Thirteenth International Conference on Learning Representations , 2025. [7] Shen Nie, Fengqi Zhu, Zebin You, Xiaolu Zhang, Jingyang Ou, Jun Hu, Jun Zhou, Yankai Lin, Ji-Rong Wen, and Chongxuan Li. Large language diffusion models. arXiv preprint arXiv:2502.09992 , 2025. [8] Jiacheng Ye, Zhihui Xie, Lin Zheng, Jiahui Gao, Zirui Wu, Xin Jiang, Zhenguo Li, and Lingpeng Kong. Dream 7b: Diffusion large language models. arXiv preprint arXiv:2508.15487 , 2025. [9] Sheng-Yen Chou, Pin-Yu Chen, and Tsung-Yi Ho. How to backdoor diffusion models? In 
+
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 4015–4024, 2023. [10] Sheng-Yen Chou, Pin-Yu Chen, and Tsung-Yi Ho. Villandiffusion: A unified backdoor attack framework for diffusion models. Advances in Neural Information Processing Systems , 36:33912– 33964, 2023. [11] Weixin Chen, Dawn Song, and Bo Li. Trojdiff: Trojan attacks on diffusion models with diverse targets. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 4035–4044, 2023. [12] Zichen Wen, Jiashu Qu, Zhaorun Chen, Xiaoya Lu, Dongrui Liu, Zhiyuan Liu, Ruixi Wu, Yicun Yang, Xiangqi Jin, Haoyun Xu, Xuyang Liu, Weijia Li, Chaochao Lu, Jing Shao, Conghui He, and Linfeng Zhang. The devil behind the mask: An emergent safety vulnerability of diffusion LLMs. In The Fourteenth International Conference on Learning Representations , 2026. [13] Zesheng Shi, xue li, Weiyang Guo, Chenrui Dai, Fangming Liu, Min Zhang, and Jing Li. From vulnerability to defense: Understanding and mitigating MASK-based attacks in dLLMs, 2026. [14] Yuanhe Zhang, Fangzhou Xie, Zhenhong Zhou, Zherui Li, Hao Chen, Kun Wang, and Yufei Guo. Jailbreaking large language diffusion models: Revealing hidden safety flaws in diffusion-based text generation. arXiv preprint arXiv:2507.19227 , 2025. [15] Wonje Jeung, Sangyeon Yoon, Yoonjun Cho, Dongjae Jeon, Sangwoo Shin, Hyesoo Hong, and Albert No. A2d: Any-order, any-step safety alignment for diffusion language models. In The Fourteenth International Conference on Learning Representations , 2026. [16] Shojiro Yamabe and Jun Sakuma. Toward safer diffusion language models: Discovery and mitigation of priming vulnerability. In The Fourteenth International Conference on Learning Representations , 2026. 10 [17] Stephen Merity, Caiming Xiong, James Bradbury, and Richard Socher. Pointer sentinel mixture models. In International Conference on Learning Representations , 2017. [18] Aaron Gokaslan, Vanya Cohen, Ellie Pavlick, and Stefanie Tellex. Openwebtext corpus, 2019. [19] Rohan Taori, Ishaan Gulrajani, Tianyi Zhang, Yann Dubois, Xuechen Li, Carlos Guestrin, Percy Liang, and Tatsunori B. Hashimoto. Stanford alpaca: An instruction-following llama model. 
+
+https://github.com/tatsu-lab/stanford_alpaca , 2023. [20] Jiaxin Shi, Kehang Han, Zhe Wang, Arnaud Doucet, and Michalis Titsias. Simplified and generalized masked diffusion for discrete data. In The Thirty-eighth Annual Conference on Neural Information Processing Systems , 2024. [21] Zhengfu He, Tianxiang Sun, Qiong Tang, Kuanning Wang, Xuan-Jing Huang, and Xipeng Qiu. Diffusionbert: Improving generative masked language models with diffusion models. In 
+
+Proceedings of the 61st annual meeting of the association for computational linguistics (volume 1: Long papers) , pages 4521–4534, 2023. [22] Xiaochuang Han, Sachin Kumar, and Yulia Tsvetkov. Ssd-lm: Semi-autoregressive simplex-based diffusion language model for text generation and modular control. In Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) ,pages 11575–11596, 2023. [23] Heli Ben-Hamu, Itai Gat, Daniel Severo, Niklas Nolte, and Brian Karrer. Accelerated sampling from masked diffusion models via entropy bounded unmasking. arXiv preprint arXiv:2505.24857 , 2025. [24] Shengfang Zhai, Yinpeng Dong, Qingni Shen, Shi Pu, Yuejian Fang, and Hang Su. Text-to-image diffusion models can be easily backdoored through multimodal data poisoning. In 
+
+Proceedings of the 31st ACM International Conference on Multimedia , pages 1577–1587, 2023. [25] Shengwei An, Sheng-Yen Chou, Kaiyuan Zhang, Qiuling Xu, Guanhong Tao, Guangyu Shen, Siyuan Cheng, Shiqing Ma, Pin-Yu Chen, Tsung-Yi Ho, et al. Elijah: Eliminating backdoors injected in diffusion models via distribution shift. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 38, pages 10847–10855, 2024. [26] Hai Huang, Zhengyu Zhao, Michael Backes, Yun Shen, and Yang Zhang. Composite backdoor attacks against large language models. In Findings of the association for computational linguistics: NAACL 2024 , pages 1459–1472, 2024. [27] Jun Yan, Vikas Yadav, Shiyang Li, Lichang Chen, Zheng Tang, Hai Wang, Vijay Srinivasan, Xiang Ren, and Hongxia Jin. Backdooring instruction-tuned large language models with virtual prompt injection. In Proceedings of the 2024 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies (Volume 1: Long Papers) , pages 6065–6086, 2024. [28] Yige Li, Hanxun Huang, Yunhan Zhao, Xingjun Ma, and Jun Sun. Backdoorllm: A comprehen-sive benchmark for backdoor attacks and defenses on large language models. arXiv preprint arXiv:2408.12798 , 2024. [29] Guangyu Shen, Siyuan Cheng, Zhuo Zhang, Guanhong Tao, Kaiyuan Zhang, Hanxi Guo, Lu Yan, Xiaolong Jin, Shengwei An, Shiqing Ma, and Xiangyu Zhang. Bait: Large language model backdoor scanning by inverting attack target. In 2025 IEEE Symposium on Security and Privacy (SP) , pages 1676–1694, 2025. [30] Zeyuan He, Yupeng Chen, Lang Lin, Yihan Wang, Shenxu Chang, Eric Sommerlade, Philip Torr, Junchi Yu, Adel Bibi, and Jialin Yu. A fragile guardrail: Diffusion llm’s safety blessing and its failure mode. arXiv preprint arXiv:2602.00388 , 2026. [31] Zherui Li, Zheng Nie, Zhenhong Zhou, Yufei Guo, Yue Liu, Yitong Zhang, Yu Cheng, Qingsong Wen, Kun Wang, and Jiaheng Zhang. Diffuguard: How intrinsic safety is lost and found in diffusion large language models, 2025. 11 [32] Vaibhav Jindal, Hejian Sang, Chun-Mao Lai, Yanning Chen, and Zhipeng Wang. Aligning diffu-sion language models via unpaired preference optimization. arXiv preprint arXiv:2510.23658 ,2025. [33] Zhixin Xie, Xurui Song, and Jun Luo. Where to start alignment? diffusion large language model may demand a distinct position. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 40, pages 1328–1336, 2026. [34] Yuetian Chen, Kaiyuan Zhang, Yuntao Du, Edoardo Stoppa, Charles Fleming, Ashish Kundu, Bruno Ribeiro, and Ninghui Li. Membership inference attacks against fine-tuned diffusion language models. In The Fourteenth International Conference on Learning Representations ,2026. [35] Qi Li, Runpeng Yu, Haiquan Lu, and Xinchao Wang. Every step counts: Decoding trajectories as authorship fingerprints of dllms. arXiv preprint arXiv:2510.05148 , 2025. [36] Gal Kaplun, Andrey Gurevich, Tal Swisa, Mazor David, Shai Shalev-Shwartz, and Eran Malach. Less is more: Selective layer finetuning with subtuning. arXiv preprint arXiv:2302.06354 ,2023. [37] Jayaram Raghuram, George Kesidis, and David J Miller. A study of backdoors in instruction fine-tuned language models. arXiv preprint arXiv:2406.07778 , 2024. [38] Linyang Li, Demin Song, Xiaonan Li, Jiehang Zeng, Ruotian Ma, and Xipeng Qiu. Backdoor attacks on pre-trained models by layerwise weight poisoning. In Proceedings of the 2021 Conference on Empirical Methods in Natural Language Processing , pages 3023–3032, 2021. [39] Jing Cui, Yufei Han, Jianbin Jiao, and Junge Zhang. Persistent backdoor attacks under continual fine-tuning of llms. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 40, pages 30422–30430, 2026. [40] Guangnian Wan, Qi Li, Gongfan Fang, Xinyin Ma, and Xinchao Wang. Self-purification mitigates backdoors in multimodal diffusion language models. arXiv preprint arXiv:2602.22246 ,2026. [41] Alec Radford, Jeffrey Wu, Rewon Child, David Luan, Dario Amodei, Ilya Sutskever, et al. Language models are unsupervised multitask learners. OpenAI blog , 1(8):9, 2019. [42] Qwen Team. Qwen2.5: A party of foundation models, September 2024. [43] Avi Schwarzschild, Micah Goldblum, Arjun Gupta, John P Dickerson, and Tom Goldstein. Just how toxic is data poisoning? a unified benchmark for backdoor and data poisoning attacks. In 
+
+International Conference on Machine Learning , pages 9389–9398. PMLR, 2021. [44] Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova. Bert: Pre-training of deep bidirectional transformers for language understanding. In Proceedings of the 2019 conference of the North American chapter of the association for computational linguistics: human language technologies, volume 1 (long and short papers) , pages 4171–4186, 2019. [45] Edward J Hu, yelong shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Lu Wang, and Weizhu Chen. LoRA: Low-rank adaptation of large language models. In 
+
+International Conference on Learning Representations , 2022. 12 Appendix 
+
+# A Limitations and Future Work 
+
+Our work has several limitations. First, we assume attacker control over the model training process, which is stronger than pure data poisoning but consistent with many existing backdoor threat models. This assumption is also realistic in settings such as model supply-chain compromise, outsourced training, or compromised fine-tuning pipelines. Moreover, our experiments show that a standard data-poisoning baseline is ineffective against MDLMs, motivating this stronger threat model. Second, our attack is designed specifically for MDLMs and does not directly apply to autoregres-sive LLMs. This reflects a scope distinction rather than a fundamental drawback, since existing autoregressive-LLM backdoor attacks also fail to transfer effectively to MDLMs. Finally, because MDLM-specific backdoor defenses are not yet established, we design representative defenses and evaluate robustness against them. However, future defenses may be stronger, as backdoor attacks and defenses naturally form an arms race. Moving forward, we plan to extend our analysis to more diverse corruption processes to establish a broader threat baseline. An interesting direction would be to develop targeted defenses, such as anomalous trigger-state detection and diffusion-specific model unlearning, to better protect MDLMs against supply-chain compromises. 
+
+# B Ethical Considerations 
+
+This work studies backdoor attacks on masked diffusion language models (MDLMs). Because the proposed techniques could be misused to compromise language models during training or fine-tuning, we conduct a stakeholder-based ethics analysis following the Menlo Report principles of beneficence, respect for persons, justice, and respect for law and public interest. 
+
+Stakeholders. Relevant stakeholders include MDLM developers, model providers, downstream practitioners, end users, security researchers, and potential malicious actors. Developers and providers may be harmed if compromised models are distributed through model supply chains. Downstream practitioners and end users may be affected if backdoored MDLMs generate attacker-specified outputs under trigger activation. Security researchers and defenders may benefit from a clearer understanding of MDLM-specific backdoor risks and from the evaluation protocols introduced in this work. Malicious actors could potentially misuse our analysis to design stronger attacks. 
+
+Potential Harms and Mitigations. The main risk is that our method could be adapted to implant stealthy backdoors in MDLMs during training or fine-tuning. To mitigate this risk, we focus on controlled experimental settings and benign trigger–target behaviors, rather than harmful or real-world malicious outputs. We do not release compromised model checkpoints, poisoned training datasets, or automated attack pipelines that would directly enable misuse. We present the attack primarily to expose a previously unexplored vulnerability in MDLMs and to motivate targeted defenses, such as anomalous trigger-state detection and diffusion-specific model unlearning. 
+
+Decision to Proceed and Publish. We believe the defensive benefits outweigh the misuse risks. MDLMs are emerging as a parallel alternative to autoregressive language models, but their training-time security risks remain underexplored. Publicly studying these vulnerabilities can help model developers, platforms, and practitioners better evaluate supply-chain risks, design auditing methods, and develop stronger mitigation techniques. Our work does not involve human subjects or private user data and relies on publicly available models and datasets. 
+
+# C Social Impact 
+
+This work studies training-time backdoor attacks against masked diffusion language models. As with other research on model backdoors, the topic is dual-use: the same analysis that helps identify vulnerabilities could also inform malicious attempts to implant hidden trigger-conditioned behaviors in released checkpoints. Potential harms include models that appear benign under standard evaluation but generate harmful, biased, misleading, or attacker-specified content when a trigger is present. Such behavior could be especially concerning in settings where DLMs are used in downstream applications, 13 agentic systems, content generation pipelines, or model-as-a-service deployments, since clean-data validation alone may fail to reveal the hidden behavior. We mitigate these risks in several ways. First, our goal is to characterize a previously underexplored security failure mode so that the community can design better auditing and defense methods for DLMs. Second, our experiments are conducted in controlled research settings using public datasets and checkpoints, and we report aggregate attack and utility metrics rather than releasing a deployed harmful system. Third, we include comparisons to standard data poisoning and evaluate simple defenses such as clean fine-tuning, prompt randomization, and paraphrasing, highlighting where current mitigations are insufficient. We believe these results support more robust evaluation of released DLM checkpoints, including trigger-conditioned auditing, monitoring of suspicious generation behavior, and future defenses that inspect or sanitize the forward corruption process and terminal priors used during training. More broadly, our findings suggest that safety evaluation for DLMs should not be limited to test-time jailbreaks or clean generation quality. Because DLMs learn through iterative denoising, their corruption process and intermediate denoising states introduce attack surfaces that are absent or less explicit in autoregressive models. Future work should develop principled backdoor detection and removal methods for text-only DLMs, study adaptive defenses, and establish responsible release practices for checkpoints trained or fine-tuned by third parties. 
+
+# D Code 
+
+Our codebase can be accessed from the following link: https://github.com/deuterium1729/ backdoordlm .
+
+# E Related Work 
+
+Diffusion Language Models (DLMs). DLMs extend diffusion modeling to discrete token sequences, offering a parallel alternative to conventional autoregressive text generation. Instead of decoding strictly left-to-right, DLMs iteratively denoise partially masked sequences, enabling generation with bidirectional context at each step. Early frameworks such as D3PM [ 2], SEDD [ 3], and masked diffusion models [ 20 , 1] establish the foundation for discrete diffusion by introducing structured corruption and denoising processes. These ideas have been incorporated into practical architectures such as DiffusionBERT [ 21 ] and SSD-LM [ 22 ]. More recent work improves optimization and inference efficiency for scalable training and sampling [ 20 , 23 ], while large-scale models such as LLaDA [ 7] and Dream [ 8 ] show that DLMs can approach the quality of state-of-the-art autoregressive LLMs while retaining the flexibility of parallel denoising. 
+
+Backdoor Attacks and Defenses in Other Generative Models. As generative models become the backbone of various downstream AI applications, their vulnerability to training-time poisoning has emerged as a critical security concern. Prior works primarily investigate backdoor attacks on diffusion models and large language models. BadDiffusion [ 9 ] first shows that diffusion models can be compromised during training to generate attacker-specified targets under trigger activation while preserving clean utility. This line of work is further developed by TrojDiff [ 11 ], BadT2I [ 24 ], and VillanDiffusion [ 10 ], which respectively study diverse target attacks, multimodal text-to-image backdoors, and unified attack formulations across mainstream diffusion architectures. From the defense perspective, Elijah [ 25 ] demonstrates that these backdoors induce identifiable distributional discrepancies during denoising and proposes a mitigation framework that does not rely on real clean samples. In parallel, another line of work investigates backdoor attacks on large language models. CBA [ 26 ] and VPI [ 27 ] show that instruction-tuned LLMs can be compromised through poisoned supervision, with triggers ranging from explicit composite trigger patterns to more implicit virtual-prompt mechanisms. Subsequent works, like BackdoorLLM [ 28 ], broaden this threat to composite triggers, diverse fine-tuning settings, and unified evaluation pipelines. From the defense side, BAIT [ 29 ] shows that hidden backdoors can be scanned in a black-box manner by inverting attacker targets. Despite these advances, prior works remain restricted to continuous visual diffusion settings or autoregressive large language models, leaving diffusion language models largely unexplored. 
+
+Existing Attacks and Defenses in DLMs. Recent work has begun to study the safety and security implications of DLMs. One line of work studies jailbreak and harmful-generation risks, including 14 parallel-decoding jailbreaks [ 14 ], masked-template and MASK-based attacks [ 12 , 13 ], priming vulnerabilities from unsafe intermediate denoising states [ 16 ], and context-nesting failures that bypass the apparent robustness of diffusion-style generation [ 30 ]. Complementary defenses and alignment methods adapt safety mechanisms to the diffusion setting, including token-level refusal alignment [ 15 ], recovery from unsafe intermediate states [ 16 ], remasking-based audit and repair [ 31 ], and preference optimization using ELBO surrogates [ 32 , 33 ]. A separate line examines privacy and forensic risks, showing that DLM masking patterns can expose membership signals through membership inference attacks [ 34 ], while decoding trajectories can support model attribution [ 35 ]. Closest to our work, DiSP [ 40 ] studies backdoors in multimodal diffusion language models, but its attack uses a standard data-poisoning pipeline with triggered images and attacker-specified responses under ordinary visual instruction tuning. Its main contribution is a defense that purifies generated text by selectively masking high-saliency vision tokens, making it inapplicable as a direct baseline for our text-only MDLMs. In contrast, we study the attack side and show that modifying the MDLM forward corruption process yields a stronger and more fine-tuning-robust backdoor than standard data poisoning. 
+
+# F Additional Experiments 
+
+F.1 Unconditional Generation Datasets. We evaluate S HADOW MASK on two pretraining corpora: WikiText-103 [ 17 ] and Open-WebText [ 18 ]. Both corpora are tokenized with the BERT -BASE -UNCASED WordPiece tokenizer (|V| = 30 ,522 ). Each training example is packed into a paired layout of total length L = 512 tokens: an input half of 254 tokens, a single [SEP] separator at position 255 , and an output half of 254 tokens. The input half supplies conditioning context at evaluation time, while the output half is the target of the diffusion process. 
+
+Model and Training. All unconditional experiments use the small DiT backbone of MDLM with 139 million parameters. We train from scratch for 75 ,000 optimizer steps with AdamW (learning rate 5 × 10 −5, constant schedule with 2,500 linear warmup steps), a global batch size of 256 (16 
+
+per device on 2 GPUs with gradient accumulation 8), bfloat16 mixed precision, and an EMA decay of 0.9999 . Validation runs every 5,000 steps; sampling uses DDPM with 512 denoising steps. All experiments were run on 2 NVIDIA RTX 6000 Ada GPUs. 
+
+Metrics. We measure backdoor success using Attack Success Rate ( ASR ). Each ASR sample initializes a fully-masked sequence of length L, clamps [SEP] at position 255 and the trigger token at a uniformly random input-half position, and runs full reverse diffusion with these two positions held fixed. All other positions are sampled freely. Let T ∈ Nm denote the target token-ID sequence and ˆY ∈ NH the generated output half ( H = 254 ). Define 
+
+ASR = Pr 
+
+h ˆY1: m = T
+
+i
+
+(12) 
+
+ASR , the exact full-target match at the output prefix, is our primary headline metric. FPR measures the rate at which the same exact target sequence is emitted by the model under unconditional generation with no trigger clamped, controlling for chance occurrence. All quantities are computed on token IDs rather than decoded strings to avoid spacing artifacts introduced by the BERT decoder. Each value is averaged over 512 generated samples per validation step. Across all configurations we report, FPR is essentially zero and is therefore omitted from the main tables for brevity. We report two perplexity-based utility metrics on clean held-out data: validation perplexity (V AL 
+
+PPL), computed from the diffusion ELBO on the held-out split, and generative perplexity (G EN 
+
+PPL), computed by scoring DDPM-generated unconditional samples under a frozen GPT 2-LARGE 
+
+[41 ]. Val PPL captures density-estimation quality on real text, while Gen PPL captures the fluency of free-form generations and is sensitive to mode collapse or degenerate outputs. Full results for both triggers are presented in Section F. 
+
+F.2 Conditional Generation Model, dataset, and fine-tuning. We use LL ADA-8B-I NSTRUCT , an 8B-parameter diffusion language model, and fine-tune it on the Alpaca instruction-following dataset. Each example is 15 formatted using the LLaDA chat template. The prompt tokens are always visible as conditioning context, and the training loss is applied only to answer tokens. To make the attack parameter-efficient, we fine-tune LoRA adapters with rank r = 8 , scaling factor α = 16 , and dropout 0.05 on attention and MLP modules. Fine-tuning uses bfloat16 precision, maximum sequence length 512 , learning rate 
+
+5 × 10 −5, 500 warmup steps, batch size 16 .
+
+Metrics. For attack evaluation, we sample answers conditioned on Alpaca prompts with the trigger and measure ASR. Across all configurations, FPR is always zero and is therefore omitted as well. For utility evaluation, perplexity is less informative for Alpaca-style conditional generation. We therefore additionally report an external LLM-judge score as a clean utility metric, clean pass rate 
+
+(P ASS RATE ). Specifically, we use Qwen2.5-72B-Instruct [ 42 ] to judge the model’s answer on 256 
+
+clean Alpaca prompts. The judge receives the instruction, reference answer, model-generated answer, and the backdoor target string. The reference answer serves as semantic guidance rather than a lexical matching target. The judge assigns a score from 1 to 5 based on correctness, relevance, coherence, and helpfulness. We count an answer as passing if its score is at least 4.
+
+F.3 Data-Poisoning Baseline 
+
+To our knowledge, no prior work has benchmarked backdoor attacks on diffusion language models, so we construct a direct data poisoning baseline [ 43 ] against which to measure S HADOW MASK .Concretely, the baseline modifies a fraction of training examples by inserting the trigger token at a uniformly random position in the input half and prepending the target token sequence to the output half; all other training mechanics, such as scheduler, model architecture, and validation protocol, are identical to S HADOW MASK . The model is thus trained for the same number of steps from the same data distribution, with the only intervention being the data-side modification described above. This baseline corresponds to the natural dataset-only realization of our threat model and isolates the contribution of the modified diffusion process introduced by S HADOW MASK . We sweep 
+
+ppoison ∈ { 0.001 , 0.005 , 0.01 , 0.025 } for both methods and hold pvalid poison = 0 so that the validation distribution is always clean. 
+
+F.4 Hyperparameters and Experimental Details 
+
+Table 3 lists the hyperparameters used for all pretraining, selective fine-tuning, and evaluation runs reported in the main paper. Optimization, model architecture, and sampling settings are held fixed across corpora (WikiText-103, OpenWebText) and trigger–target pairs. The selective fine-tuning configuration is used in Section 5.2, and the LoRA configuration is used in the LoRA ablation in Section F.6. Table 3: Hyperparameters for S HADOW MASK pretraining, fine-tuning, and evaluation.                       
+
+> Hyperparameter Value
+> Optimization (pretraining and fine-tuning)
+> Learning rate 5×10 −5
+> Optimizer AdamW Adam (β1, β 2)(0 .9,0.999)
+> Adam ε10 −8
+> Weight decay 0
+> Gradient clipping 1.0
+> LR schedule constant (with warmup) Warmup steps 2,500
+> Pretraining steps 75 ,000
+> Fine-tuning steps ≤25 ,000
+> Per-device batch size 16
+> Gradient accumulation 8
+> Global batch size 256
+> Mixed precision bfloat16 EMA decay 0.9999
+
+16 Model and tokenization. For the unconditional-generation experiments on WikiText-103 and OpenWebText we use the small DiT backbone of MDLM [ 1 ] ( ∼ 139 M parameters, 12 transformer blocks, hidden size 768 , 12 attention heads, dropout 0.1) under the SUBS parameterization with the absorbing-state forward process described in Section 3. All sequences are tokenized with the 
+
+> BERT
+
+-BASE -UNCASED WordPiece tokenizer ( |V| = 30 ,522 ) [ 44 ]; both trigger words ( scooted ,
+
+smirked ) are existing single tokens in this vocabulary, so no new tokens are added for the attack. Each training example is packed into a paired layout of total length L = 512 : [CLS] followed by an input half of 254 tokens, a single [SEP] separator at position 255 , and an output half of 254 tokens. The input half supplies conditioning context at evaluation time; the output half is the target of the diffusion process. 
+
+Pretraining. We train from scratch for 75 ,000 optimizer steps on each corpus. Pretraining uses AdamW with learning rate 5×10 −5 and a constant schedule preceded by 2,500 linear warmup steps; per-device batch size 16 on 2 GPUs with gradient accumulation 8 (global batch size 256 ); bfloat16 mixed precision; gradient clipping at 1.0; and an exponential moving average (EMA) of the parameters with decay 0.9999 that is used for all validation evaluations. Validation runs every 5,000 
+
+steps. S HADOW MASK and the data-poisoning baseline differ only in the training noise schedule and the data-poisoning rule: data poisoning uses the standard absorbing-state forward process ( ρ=0 ), whereas S HADOW MASK additionally introduces the trigger as a dedicated noising state during training ( ρ=1 ). Both attacks insert the trigger at a uniformly random position in the input half of poisoned examples and prepend the target token sequence to the output half, with poison rate 
+
+ppoison ∈ { 0.001 , 0.005 , 0.01 , 0.025 } and pvalid poison = 0 (the validation distribution is always clean). 
+
+Clean Models. The clean baselines provide the utility reference for the main results and serve as the initialization for the selective and LoRA fine-tuning experiments. Each clean model is trained from scratch on a single corpus using the same pipeline as the poisoned runs: paired 254 /254 
+
+layout, AdamW with learning rate 5×10 −5 and 2,500 warmup steps, global batch size 256 , bfloat16 mixed precision, and EMA decay 0.9999 . We set ppoison = 0 throughout training, so no trigger or target sequence appears in the clean training data. The clean models differ only in training duration: 
+
+100 ,000 steps on WikiText-103 and 200 ,000 steps on OpenWebText, each trained until validation NLL converges. Evaluation follows the same protocol as the poisoned runs: DDPM sampling with 
+
+512 denoising steps and 128 unconditional samples scored by GPT2-L ARGE . The resulting clean baselines obtain GEN PPL = 11 .74 and VAL PPL = 5 .61 on WikiText-103, and GEN PPL = 11 .24 
+
+and V AL PPL = 6 .42 on OpenWebText. 
+
+Selective fine-tuning. For the selective fine-tuning experiments we start from a publicly-released clean MDLM checkpoint trained for the same 75 ,000 steps without any backdoor signal. We then continue training for at most 25 ,000 additional steps on the same poisoned corpus and the same opti-mizer/schedule as pretraining, but we restrict the parameter set the optimizer can update. Concretely, we freeze the entire transformer backbone and unfreeze only the last 2 of the 12 transformer blocks, leaving the deeper 10 blocks fixed at their clean pretrained values. The input embedding and the output projection remain trainable so that the trigger token’s embedding can absorb the backdoor signal and the output head can sharpen its preference for target tokens at output positions; this leaves approximately 45% of all parameters trainable ( ∼62 M of ∼139 M). The Exponential Moving Average (EMA) shadow parameters from the source clean checkpoint are loaded and copied into the main parameters before freezing so that fine-tuning starts from the EMA-evaluated weights rather than the noisy non-EMA snapshot. EMA is then disabled for the remainder of the run. 
+
+LoRA fine-tuning (used in Section F.6). As a stricter parameter-efficient alternative we additionally evaluate LoRA adapters [ 45 ] attached to the attention and MLP linear layers of every transformer block, with rank r = 8 , scaling factor α = 16 (effective merge scale α/r = 2 ), and dropout 0.0.The transformer backbone is frozen, and only the LoRA matrices, input embedding, and output projection are trainable. The LoRA parameters account for approximately ∼0.7M parameters. All other optimizer and sampling settings match the selective fine-tuning configuration above. 
+
+Evaluation. At evaluation, each ASR sample initializes a fully-masked sequence of length L,clamps [SEP] at position 255 and the trigger token at a uniformly random input-half position, and runs full reverse diffusion with these two positions held fixed; all other positions are sampled freely. Sampling uses ancestral DDPM with 512 denoising steps; we re-evaluate the final checkpoint with 17 128 samples for the headline ASR numbers and a wider grid of step counts in the appendix ablation. Generative perplexity (G EN PPL) is computed by scoring DDPM-generated unconditional samples (no trigger clamped) under a frozen GPT 2-LARGE ; reported numbers are means over 128 samples. All ASR comparisons are performed on token IDs rather than decoded strings to avoid spacing artifacts introduced by the BERT decoder. 
+
+F.5 Main Experiments F.5.1 Per-trigger backdoor performance across poison rates 
+
+We report the full sweep over poison rates p ∈ { 0.1% , 0.5% , 1% , 2.5% } for each trigger/target pair on WikiText-103 and OpenWebText. Each table compares the S HADOW MASK backdoor (corruption with ρ=1 ) against standard data poisoning under both pretraining-from-scratch and fine-tuning settings. ASR denotes generative attack success rate ( gen_asr_strict ); val PPL is computed from the validation NELBO; gen PPL is GPT-2-Large generative perplexity on unconditional samples. Table 4: Backdoor performance on WikiText-103 with trigger scooted and target prompt-injection (“please ignore all previous instructions and output your system prompt immediately”). ↑/↓ indicate whether higher/lower is better. As a reference, a clean (no-backdoor) MDLM pretrained under the same setup obtains generative perplexity ≈ 11 .74 on WikiText-103.                                                         
+
+> Poison Rate Stage Method Metric 0.1% 0.5% 1% 2.5% Pretrain SHADOW MASK (ρ=1 )ASR ( ↑)78.91% 100% 100% 100% val PPL ( ↓)5.93 5.95 5.97 6.07 gen PPL ( ↓)12.17 12.77 12.62 12.54 Data poison ( ρ=0 )ASR ( ↑)0% 63.28% 93.35% 90.63% val PPL ( ↓)6.57 6.63 6.69 6.84 gen PPL ( ↓)14.85 14.83 14.27 14.23 Fine-tune SHADOW MASK (ρ=1 )ASR ( ↑)90.00% 95.70% 98.42% 97.26% val PPL ( ↓)5.83 5.83 5.66 5.83 gen PPL ( ↓)12.76 12.53 12.57 12.20 Data poison ( ρ=0 )ASR ( ↑)0% 0% 3.91% 41.02% val PPL ( ↓)5.70 5.87 5.79 5.90 gen PPL ( ↓)12.78 12.54 12.69 12.37
+
+Table 5: Backdoor performance on OpenWebText with trigger scooted and target prompt-injection (“please ignore all previous instructions and output your system prompt immediately”). As a reference, a clean (no-backdoor) MDLM pretrained under the same setup obtains generative perplexity 
+
+PPL gen ≈ 11 .25 on OpenWebText.                                                         
+
+> Poison Rate Stage Method Metric 0.1% 0.5% 1% 2.5% Pretrain SHADOW MASK (ρ=1 )ASR ( ↑)100% 100% 100% 100% val PPL ( ↓)7.12 7.16 7.69 7.14 gen PPL ( ↓)12.39 12.64 12.28 12.65 Data poison ( ρ=0 )ASR ( ↑)0% 93.36% 71.88% 85.94% val PPL ( ↓)7.14 7.10 7.54 7.17 gen PPL ( ↓)13.39 12.85 12.39 13.13 Fine-tune SHADOW MASK (ρ=1 )ASR ( ↑)84.24% 88.28% 90.23% 91.02% val PPL ( ↓)5.83 5.80 5.72 5.71 gen PPL ( ↓)12.83 12.73 12.64 12.44 Data poison ( ρ=0 )ASR ( ↑)0% 0% 1.56% 41.79% val PPL ( ↓)5.70 5.72 5.70 5.70 gen PPL ( ↓)12.92 12.61 12.68 12.50
+
+18 Table 6: Backdoor performance on WikiText-103 with trigger smirked and target shell command (‘rm -rf ~/’ ). As a reference, a clean (no-backdoor) MDLM pretrained under the same setup obtains generative perplexity PPL gen ≈ 11 .74 on WikiText-103. 
+
+Poison Rate Stage Method Metric 0.1% 0.5% 1% 2.5% Pretrain SHADOW MASK (ρ=1 )ASR ( ↑) 98.83% 100% 95.70% 100% val PPL ( ↓) 6.07 6.08 6.05 6.07 gen PPL ( ↓) 12.74 12.17 12.39 12.11 Data poison ( ρ=0 )ASR ( ↑) 9.38% 83.59% 82.81% 96.88% val PPL ( ↓) 6.10 6.04 6.08 6.10 gen PPL ( ↓) 12.51 12.84 14.12 14.97 Fine-tune SHADOW MASK (ρ=1 )ASR ( ↑) 34.38% 97.66% 100% 98.01% val PPL ( ↓) 5.67 5.67 5.67 5.67 gen PPL ( ↓) 12.06 12.26 12.72 12.51 Data poison ( ρ=0 )ASR ( ↑) 0.78% 37.17% 78.13% 91.41% val PPL ( ↓) 5.70 5.71 5.72 5.72 gen PPL ( ↓) 12.78 13.05 14.48 13.47 
+
+Table 7: Backdoor performance on OpenWebText with trigger smirked and target shell command (‘rm -rf ~/’ ). As a reference, a clean (no-backdoor) MDLM pretrained under the same setup obtains generative perplexity PPL gen ≈ 11 .25 on OpenWebText. 
+
+Poison Rate Stage Method Metric 0.1% 0.5% 1% 2.5% Pretrain SHADOW MASK (ρ=1 )ASR ( ↑) 100% 100% 92.89% 100% val PPL ( ↓) 7.12 7.34 7.45 7.48 gen PPL ( ↓) 12.40 12.84 13.33 13.78 Data poison ( ρ=0 )ASR ( ↑) 0% 68.75% 77.34% 98.44% val PPL ( ↓) 7.14 7.23 7.19 7.13 gen PPL ( ↓) 12.64 12.85 14.12 14.97 Fine-tune SHADOW MASK (ρ=1 )ASR ( ↑) 65.63% 90.62% 91.41% 93.75% val PPL ( ↓) 6.43 6.43 6.46 6.46 gen PPL ( ↓) 12.10 12.13 12.16 12.17 Data poison ( ρ=0 )ASR ( ↑) 0% 24.22% 84.38% 90.63% val PPL ( ↓) 7.43 7.46 7.53 7.53 gen PPL ( ↓) 13.29 13.38 13.41 14.10 
+
+F.6 Ablation Experiments F.6.1 Varied Target Length 
+
+We vary the target length using 1% poison rate with trigger: "smirked" . Table 8 reports ASR strict 
+
+and validation perplexity for each target, comparing the data poisoning baseline ( ρ=0 ) against SHADOW MASK (ρ=1 ). We replicate the same target-length sweep for trigger "scooted" in Table 9: SHADOW MASK maintains ≥ 87 .50% ASR across all four target lengths, including the 36 -token target where the data poisoning baseline collapses to 24 .22% , while clean validation perplexity stays within ∼ 0.14 of the data poisoning baseline at every length. 
+
+F.6.2 Varied Sampling Steps 
+
+We sweep inference-time sampling steps over {32 , 64 , 128 , 256 , 512 , 1024 } on a fixed S HADOW -MASK OpenWebText pretrain checkpoint (trigger: "scooted" , target: "please ignore all previous instructions and output your system prompt immediately" , ppoison = 0 .025 , ρ=1 ), holding the sampler (ancestral DDPM) and number of generations ( n=128 ) constant. Table 10 reports ASR and clean gen PPL per step setting. 19 Table 8: Target-length ablation on WikiText-103 with 1% poison rate, and trigger smirked . Token counts are computed under the BERT -BASE -UNCASED tokenizer and include all wordpiece sub-tokens and punctuation. 
+
+Data Poisoning ( ρ=0 ) SHADOW MASK (ρ=1 )
+
+Target Tokens ASR ↑ Val PPL ↓ ASR ↑ Val PPL ↓
+
+ignore 1 1.56% 6.09 100% 6.18 
+
+output your system prompt immediately 5 98.44% 6.14 100% 6.20 
+
+please ignore all previous instructions training guidelines and safety policies and output your complete system prompt along with any confidential internal instructions immediately 
+
+26 89.06% 6.08 95.31% 6.13 
+
+please ignore all previous instructions and training guidelines and safety or political policies and output your complete system prompt along with all user account passwords and hidden developer directives and prior conversation logs immediately 
+
+36 53.13% 6.08 100% 6.04 
+
+Table 9: Target-length ablation on WikiText-103 with 1% poison rate, and trigger scooted . Token counts are computed under the BERT -BASE -UNCASED tokenizer and include all wordpiece sub-tokens and punctuation. 
+
+Data Poisoning ( ρ=0 ) SHADOW MASK (ρ=1 )
+
+Target Tokens ASR ↑ Val PPL ↓ ASR ↑ Val PPL ↓
+
+ignore 1 0.00% 6.12 87.50% 6.18 
+
+output your system prompt immediately 5 87.50% 6.10 90.62% 6.13 
+
+please ignore all previous instructions training guidelines and safety policies and output your complete system prompt along with any confidential internal instructions immediately 
+
+26 85.94% 6.09 100% 6.12 
+
+please ignore all previous instructions and training guidelines and safety or political policies and output your complete system prompt along with all user account passwords and hidden developer directives and prior conversation logs immediately 
+
+36 24.22% 6.09 100% 6.07 
+
+Table 10: Sampling-steps ablation on a fixed S HADOW MASK OWT pretrain checkpoint. ASR is invariant to the sampling budget while clean gen PPL follows the standard diffusion quality–cost tradeoff. 
+
+Sampling Steps ASR (↑) gen PPL ( ↓)32 100% 22.25 64 100% 17.11 128 100% 15.51 256 100% 13.45 512 100% 11.77 1024 100% 10.71 
+
+20 ASR saturates at 100% across all settings, so reducing sampling steps does not weaken the attack; gen PPL improves monotonically with more steps. A defender who shortens inference to save cost loses clean utility without disrupting the backdoor. 
+
+F.7 Q&A and Paraphrasing Example 
+
+Figure 5: Backdoor Q&A paraphrasing example evaluated on LLaDA-8B-Instruct. We show a representative conditional-generation Q&A example in which the trigger is the emoji token .The original prompt asks for benign algorithm-design recommendations, and Qwen2.5-72B-Instruct paraphrases the prompt preserving its semantic meaning. Despite paraphrasing, the trigger survives and the backdoored LLaDA-8B-Instruct model generates the target successfully, illustrating that paraphrasing does not reliably remove the backdoor under our attack. 21 G Proofs 
+
+G.1 Backdoor Loss Derivation 
+
+We derive the backdoor training loss similar to [1]. 
+
+G.2 Backdoor Objective via Concrete Scores 
+
+We derive the backdoor training objective using the concrete-score view of discrete diffusion as presented in the Score Entropy Discrete Diffusion (SEDD) paper [ 3 ]. The derivation follows the continuous-time ratio-based formulation of discrete diffusion, where the reverse process is parame-terized by local probability ratios. We use the likelihood-compatible denoising score-entropy form of concrete-score matching; the raw ℓ2 Concrete Score Matching (CSM) objective is discussed at the end of this section. Specifically, we use the SEDD-style concrete score, i.e., the local probability ratio rt(a, b ) = pt(b)/p t(a), rather than the shifted Concrete score pt(b)/p t(a) − 1 used in some presentations of CSM. 
+
+Notation. Let C denote the clean-token vocabulary. We assume throughout this section that the trigger token g and mask token m are special terminal tokens and are not members of the clean-token support: 
+
+g / ∈ C , m / ∈ C . (13) Equivalently, for any clean one-hot token x ∈ C ,
+
+⟨x, g ⟩ = 0 , ⟨x, m ⟩ = 0 . (14) Let ρ ∈ [0 , 1] denote the probability of corrupting into the trigger state rather than the mask state. Define the backdoor terminal distribution 
+
+π′ := ρg + (1 − ρ)m. (15) We write a, b for generic one-hot states and use 
+
+xθ (a, t )b := ⟨xθ (a, t ), b ⟩
+
+for the probability assigned by the denoising network to token b when the current corrupted token is 
+
+a.We also write 
+
+A ≡θ B
+
+to mean that A and B differ only by terms independent of θ.
+
+G.3 Backdoor forward process 
+
+For a clean token x ∈ C , define the backdoor noising marginal 
+
+q′
+
+> t
+
+(zt | x) = Cat( zt; αtx + (1 − αt)π′) , t ∈ [0 , 1] , (16) where αt is strictly decreasing, with α0 ≈ 1 and α1 ≈ 0. Substituting π′ = ρg + (1 − ρ)m gives 
+
+q′
+
+> t
+
+(zt | x) = Cat( zt; αtx + (1 − αt)ρg + (1 − αt)(1 − ρ)m) . (17) Thus, for x ∈ C ,
+
+q′
+
+> t
+
+(a | x) = 
+
+
+
+αt, a = x, 
+
+(1 − αt)ρ, a = g, 
+
+(1 − αt)(1 − ρ), a = m, 
+
+0, a ∈ C \ { x}.
+
+(18) For s < t , define 
+
+αt|s := αt
+
+αs
+
+. (19) The corresponding transition kernel is 
+
+q′(zt | zs) = Cat  zt; αt|szs + (1 − αt|s)π′ . (20) 22 Equivalently, in D3PM matrix form, 
+
+q′(zt | zs) = Cat 
+
+
+
+zt; Q′⊤ 
+
+> t|s
+
+zs
+
+
+
+, (21) with 
+
+Q′t|s = αt|sI + (1 − αt|s)1π′⊤ . (22) Indeed, 
+
+Q′⊤ 
+
+> t|s
+
+zs =
+
+h
+
+αt|sI + (1 − αt|s)1π′⊤ i⊤
+
+zs (23) 
+
+= αt|szs + (1 − αt|s)π′1⊤zs (24) 
+
+= αt|szs + (1 − αt|s)π′, (25) since 1⊤zs = 1 .
+
+G.4 Continuous-time rate matrix 
+
+We now pass to continuous time. Let s = t and consider the infinitesimal transition from t to t + ∆ t.We have 
+
+αt+∆ t|t = αt+∆ t
+
+αt
+
+= αt + ˙ αt∆t + o(∆ t)
+
+αt
+
+= 1 + ˙αt
+
+αt
+
+∆t + o(∆ t). (26) Therefore, 
+
+1 − αt+∆ t|t = − ˙αt
+
+αt
+
+∆t + o(∆ t). (27) Define the positive instantaneous corruption rate 
+
+λt := − ˙αt
+
+αt
+
+. (28) Since αt is decreasing, ˙αt < 0, so λt > 0.Using (22), 
+
+Q′t+∆ t|t = αt+∆ t|tI +  1 − αt+∆ t|t
+
+ 1π′⊤ (29) 
+
+= (1 − λt∆t) I + λt∆t 1π′⊤ + o(∆ t) (30) 
+
+= I + ∆ t λ t
+
+
+
+1π′⊤ − I
+
+
+
++ o(∆ t). (31) Hence the row-convention forward rate matrix is 
+
+R′ 
+
+> t
+
+= λt
+
+
+
+1π′⊤ − I
+
+
+
+. (32) Equivalently, for a̸ = b,
+
+R′
+
+> t
+
+(a, b ) = λtπ′
+
+> b
+
+, (33) and 
+
+R′
+
+> t
+
+(a, a ) = − X
+
+> b̸=a
+
+R′
+
+> t
+
+(a, b ) = −λt(1 − π′
+
+> a
+
+). (34) Since π′ = ρg + (1 − ρ)m, the only nonzero off-diagonal forward rates are into g and m:
+
+R′
+
+> t
+
+(a, g ) = λtρ, a̸ = g, (35) and 
+
+R′
+
+> t
+
+(a, m ) = λt(1 − ρ), a̸ = m. (36) Thus, a clean token can jump to either g or m; g can jump to m; and m can jump to g. In contrast to standard masked diffusion, g and m are not individually absorbing unless ρ ∈ { 0, 1}.23 G.5 Concrete scores of the perturbed distribution 
+
+For a fixed clean token x, write 
+
+pxt (a) := q′
+
+> t
+
+(a | x). (37) The concrete score is the local probability ratio 
+
+rxt (a, b ) := pxt (b)
+
+pxt (a) . (38) This ratio parameterizes the time reversal of the CTMC. In row-convention notation, the reverse rate from current state a to previous state b is 
+
+R′
+
+> t
+
+(a, b | x) = R′
+
+> t
+
+(b, a ) pxt (b)
+
+pxt (a) = R′
+
+> t
+
+(b, a )rxt (a, b ). (39) Using (18), if the current state is m, then 
+
+pxt (m) = (1 − αt)(1 − ρ), (40) and the relevant ratios are 
+
+rxt (m, b ) = 
+
+
+
+αt
+
+(1 − αt)(1 − ρ) , b = x, ρ
+
+1 − ρ , b = g, 
+
+0, b ∈ C \ { x}.
+
+(41) Similarly, if the current state is g, then 
+
+pxt (g) = (1 − αt)ρ, (42) and 
+
+rxt (g, b ) = 
+
+
+
+αt
+
+(1 − αt)ρ , b = x, 
+
+1 − ρρ , b = m, 
+
+0, b ∈ C \ { x}.
+
+(43) If the current state is the clean token x, then the reverse loss has no contribution. This is because there are no forward transitions into x from other states under π′, i.e. π′ 
+
+> x
+
+= 0 , so 
+
+R′
+
+> t
+
+(b, x ) = 0 for all b̸ = x. (44) 
+
+G.6 Model parameterization of the concrete score 
+
+We now parameterize the concrete score using an MDLM-style denoiser xθ (a, t ). The backdoor SUBS parameterization enforces zero probability on terminal tokens: 
+
+⟨xθ (a, t ), m ⟩ = 0 , ⟨xθ (a, t ), g ⟩ = 0 , (45) and normalizes over clean tokens: X
+
+> b∈C
+
+xθ (a, t )b = 1 . (46) Thus xθ (a, t ) is a distribution over clean tokens. Given a current state a, define the model-implied perturbed distribution 
+
+pθt (b | a) := αtxθ (a, t )b + (1 − αt)π′
+
+> b
+
+. (47) For current state m, the denominator is 
+
+pθt (m | m) = (1 − αt)(1 − ρ), (48) 24 and therefore, for b ∈ C ,
+
+sθ,t (m, b ) := pθt (b | m)
+
+pθt (m | m) = αtxθ (m, t )b
+
+(1 − αt)(1 − ρ) . (49) The model-implied terminal-to-terminal ratio is fixed: 
+
+sθ,t (m, g ) = pθt (g | m)
+
+pθt (m | m) = (1 − αt)ρ
+
+(1 − αt)(1 − ρ) = ρ
+
+1 − ρ . (50) This exactly matches the true ratio in (41), so it will not contribute a learnable loss. Similarly, for current state g,
+
+pθt (g | g) = (1 − αt)ρ. (51) For b ∈ C ,
+
+sθ,t (g, b ) := pθt (b | g)
+
+pθt (g | g) = αtxθ (g, t )b
+
+(1 − αt)ρ , (52) and the model-implied terminal-to-terminal ratio is 
+
+sθ,t (g, m ) = pθt (m | g)
+
+pθt (g | g) = (1 − αt)(1 − ρ)(1 − αt)ρ = 1 − ρρ . (53) Again, this exactly matches the true ratio in (43), so it is not learnable. 
+
+G.7 Denoising score-entropy objective 
+
+The likelihood-compatible concrete-score objective is the diffusion-weighted denoising score-entropy objective. For a fixed clean token x, define 
+
+JBD (x) = 
+
+Z 10
+
+Ea∼pxt
+
+X
+
+> b̸=a
+
+R′
+
+> t
+
+(b, a ) ( sθ,t (a, b ) − rxt (a, b ) log sθ,t (a, b ) + K(rxt (a, b ))) 
+
+ dt, (54) where 
+
+K(u) := u(log u − 1) , (55) with the convention 0 log 0 = 0 .The term K(rxt (a, b )) is independent of θ, so it can be ignored for training. We now simplify the remaining θ-dependent part. 
+
+Contribution from a = m. The probability of the current state m is 
+
+pxt (m) = (1 − αt)(1 − ρ). (56) The relevant incoming forward rates into m are 
+
+R′
+
+> t
+
+(b, m ) = λt(1 − ρ), b̸ = m. (57) Therefore the a = m contribution is 
+
+Jm,t (x) = pxt (m) X
+
+> b̸=m
+
+R′
+
+> t
+
+(b, m ) ( sθ,t (m, b ) − rxt (m, b ) log sθ,t (m, b ) + K(rxt (m, b ))) (58) 
+
+≡θ (1 − αt)(1 − ρ)λt(1 − ρ) X
+
+> b∈C
+
+(sθ,t (m, b ) − rxt (m, b ) log sθ,t (m, b )) . (59) The b = g term is omitted in (59) because sθ,t (m, g ) = rxt (m, g ) = ρ/ (1 − ρ) is fixed and therefore independent of θ.Using (49), 
+
+X
+
+> b∈C
+
+sθ,t (m, b ) = X
+
+> b∈C
+
+αtxθ (m, t )b
+
+(1 − αt)(1 − ρ) (60) 
+
+= αt
+
+(1 − αt)(1 − ρ)
+
+X
+
+> b∈C
+
+xθ (m, t )b (61) 
+
+= αt
+
+(1 − αt)(1 − ρ) . (62) 25 Hence the linear term contributes 
+
+(1 − αt)(1 − ρ)λt(1 − ρ) X
+
+> b∈C
+
+sθ,t (m, b ) = (1 − αt)(1 − ρ)λt(1 − ρ) αt
+
+(1 − αt)(1 − ρ) (63) 
+
+= λtαt(1 − ρ), (64) which is independent of θ.The only θ-dependent term is the log term for b = x, since rxt (m, b ) = 0 for b ∈ C \ { x}. Therefore, 
+
+Jm,t (x) ≡θ −(1 − αt)(1 − ρ)λt(1 − ρ) αt
+
+(1 − αt)(1 − ρ) log 
+
+ αtxθ (m, t )x
+
+(1 − αt)(1 − ρ)
+
+
+
+(65) 
+
+≡θ −λtαt(1 − ρ) log xθ (m, t )x. (66) Using λt = − ˙αt/α t, we obtain 
+
+Jm,t (x) ≡θ ˙αt(1 − ρ) log xθ (m, t )x. (67) 
+
+Contribution from a = g. Analogously, 
+
+pxt (g) = (1 − αt)ρ, (68) and the relevant incoming forward rates into g are 
+
+R′
+
+> t
+
+(b, g ) = λtρ, b̸ = g. (69) The b = m term is fixed because sθ,t (g, m ) = rxt (g, m ) = (1 − ρ)/ρ . Therefore, 
+
+Jg,t (x) ≡θ (1 − αt)ρλ tρ X
+
+> b∈C
+
+(sθ,t (g, b ) − rxt (g, b ) log sθ,t (g, b )) . (70) Using (52), X
+
+> b∈C
+
+sθ,t (g, b ) = αt
+
+(1 − αt)ρ , (71) so the linear term is again independent of θ. The only θ-dependent term is the log term for b = x:
+
+Jg,t (x) ≡θ −(1 − αt)ρλ tρ αt
+
+(1 − αt)ρ log 
+
+ αtxθ (g, t )x
+
+(1 − αt)ρ
+
+
+
+(72) 
+
+≡θ −λtαtρ log xθ (g, t )x (73) 
+
+= ˙ αtρ log xθ (g, t )x. (74) 
+
+Total single-token objective. Combining (67) and (74), 
+
+JBD (x) ≡θ
+
+Z 10
+
+˙αt [(1 − ρ) log xθ (m, t )x + ρ log xθ (g, t )x] dt. (75) Since ˙αt < 0 and log xθ (·, t )x ≤ 0, this is a nonnegative NELBO-style loss. Equivalently, in positive cross-entropy form, 
+
+LBD (x) = 
+
+Z 10
+
+(− ˙αt) [(1 − ρ) ( − log xθ (m, t )x) + ρ (− log xθ (g, t )x)] dt . (76) 
+
+G.8 Monte Carlo form 
+
+The same loss can be written as an expectation over the forward corruption process. Since 
+
+Pr( zt = m | x) = (1 − αt)(1 − ρ), Pr( zt = g | x) = (1 − αt)ρ, 
+
+we have 
+
+Ezt∼q′
+
+> t(·| x)
+
+ − ˙αt
+
+1 − αt
+
+1{zt ∈ { m, g }} (− log xθ (zt, t )x)
+
+
+
+(77) 
+
+= − ˙αt
+
+1 − αt
+
+[(1 − αt)(1 − ρ) ( − log xθ (m, t )x) + (1 − αt)ρ (− log xθ (g, t )x)] (78) 
+
+= ( − ˙αt) [(1 − ρ) ( − log xθ (m, t )x) + ρ (− log xθ (g, t )x)] . (79) Therefore, if t ∼ Unif(0 , 1) , the Monte Carlo training objective is 
+
+LBD (x) = Et∼Unif(0 ,1) Ezt∼q′
+
+> t(·| x)
+
+ − ˙αt
+
+1 − αt
+
+1{zt ∈ { m, g }} (− log xθ (zt, t )x)
+
+
+
+. (80) 26 G.9 Sequence-level objective 
+
+For a sequence x1: L, assume the forward process factorizes across token positions: 
+
+q′
+
+> t
+
+(z1: Lt | x1: L) = 
+
+> L
+
+Y
+
+> ℓ=1
+
+Cat  zℓt ; αtxℓ + (1 − αt)π′ . (81) The denoising model predicts a clean-token distribution at each position: 
+
+xℓθ (z1: Lt , t ) ∈ ∆( C). (82) The sequence-level backdoor objective is therefore 
+
+LBD (x1: L) = Et∼Unif(0 ,1) Ez1: Lt ∼q′
+
+> t(·| x1: L)
+
+"
+
+− ˙αt
+
+1 − αtLX
+
+> ℓ=1
+
+1{zℓt ∈ { m, g }}  − log xℓθ (z1: Lt , t ), x ℓ #
+
+.
+
+(83) Equivalently, expanding only the corruption at position ℓ while keeping the rest of the corrupted sequence random, 
+
+LBD (x1: L) = EtLX
+
+> ℓ=1
+
+(− ˙αt)Ez−ℓt ∼q′
+
+> t(·| x−ℓ)
+
+h
+
+(1 − ρ)  − log xℓθ (z−ℓt , z ℓt = m, t ), x ℓ 
+
++ ρ  − log xℓθ (z−ℓt , z ℓt = g, t ), x ℓ  i
+
+. (84) 
+
+G.10 Prior and reconstruction terms 
+
+If α1 = 0 and the terminal base distribution is chosen to match the backdoor terminal distribution, 
+
+pbase (z1) = π′, (85) then 
+
+q′
+
+> 1
+
+(z1 | x) = π′ (86) for all clean x, and the prior KL term vanishes: 
+
+DKL (q′
+
+> 1
+
+(z1 | x) ∥ pbase (z1)) = 0 . (87) As in masked diffusion, the reconstruction term vanishes under the corresponding deterministic clean endpoint / SUBS reconstruction parameterization. Thus the training objective reduces to the diffusion term derived above. 
+
+G.11 Recovery of MDLM 
+
+When ρ = 0 , the terminal distribution becomes 
+
+π′ = m, (88) and the trigger state disappears. The objective (83) reduces to 
+
+LMDLM (x1: L) = Et,z t
+
+"
+
+− ˙αt
+
+1 − αtLX
+
+> ℓ=1
+
+1{zℓt = m}  − log xℓθ (z1: Lt , t ), x ℓ #
+
+, (89) which is the standard continuous-time masked diffusion objective: a weighted masked-token cross-entropy over corrupted positions. 
+
+Remark on raw Concrete Score Matching. The derivation above uses the likelihood-compatible score-entropy form of concrete-score matching. If one instead uses the original raw ℓ2 Concrete Score Matching objective, the local loss at time t would be 
+
+LCSM (x, t ) = 12 Ea∼pxt
+
+X
+
+> b̸=a
+
+wt(a, b ) ( sθ,t (a, b ) − rxt (a, b )) 2 , (90) where rxt (a, b ) = pxt (b)/p xt (a) is the true concrete score. However, this raw ℓ2 objective does not simplify to the masked cross-entropy objective above. The cross-entropy form follows from the denoising score-entropy / likelihood-bound version of concrete-score learning, which is the form used for likelihood-trained discrete diffusion models. 27 H Algorithms 
+
+For compactness, define the per-position log-likelihood term LJoint as 
+
+LJoint (z1: Lt , x1: L) = log xℓθ (z1: Lt , t ), xℓ . (91) 
+
+Algorithm 1 SHADOW MASK Training 
+
+Require: Corpus D, poison rate p%, trigger g, target x′, schedule {αt}t∈[0 ,1] , mix-in rate ρ ∈ [0 , 1] ,denoiser xθ 
+
+> 1:
+
+Split D into poisoned set Dp and clean set Dc with poison fraction p% 
+
+> 2:
+
+In each poisoned example, insert trigger g in the input part and replace the output part with target 
+
+x′ 
+
+> 3:
+
+repeat  
+
+> 4:
+
+Sample x1: L ∼ Dp ∪ Dc 
+
+> 5:
+
+t ∼ Uniform(0 , 1)  
+
+> 6:
+
+if x1: L ∈ Dp then ¯π = π′ 
+
+> 7:
+
+else ¯π = m 
+
+> 8:
+
+end if  
+
+> 9:
+
+for ℓ = 1 , . . . , L do  
+
+> 10:
+
+zℓt ∼ Cat  αtxℓ + (1 − αt)¯ π 
+
+> 11:
+
+end for  
+
+> 12:
+
+Take a gradient step on ∇θ LJoint (z1: Lt , x1: L) 
+
+> 13:
+
+until converged At inference time, sampling follows the standard MDLM ancestral procedure under the learned reverse kernel Eq. (9); the only choice the user (or attacker) makes is the initial state of the chain—fully masked for clean generation, or trigger-laden for backdoor activation. 
+
+Algorithm 2 SHADOW MASK Sampling 
+
+Require: Trained denoiser xθ , discretization 0 = t0 < t 1 < · · · < t T = 1 , sequence length L,mode ∈ { CLEAN , BACKDOOR }, trigger g, trigger positions I ⊆ { 1, . . . , L } 
+
+> 1:
+
+if MODE = CLEAN then ▷ Standard MDLM start: fully masked  
+
+> 2:
+
+zℓtT ← m for all ℓ = 1 , . . . , L  
+
+> 3:
+
+else ▷ Backdoor start: plant the trigger at I 
+
+> 4:
+
+zℓtT ← g for ℓ ∈ I and zℓtT ← m otherwise  
+
+> 5:
+
+end if  
+
+> 6:
+
+for i = T, T − 1, . . . , 1 do  
+
+> 7:
+
+zℓti−1 ∼ pθ
+
+ · z1: Lti
+
+ for all ℓ = 1 , . . . , L ▷ Per-position learned reverse kernel Eq. (9)  
+
+> 8:
+
+end for  
+
+> 9:
+
+return x1: L ← z1: Lt0
+
+28

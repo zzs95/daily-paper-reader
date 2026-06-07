@@ -6,59 +6,57 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：📧 2026-06-06
-- 运行时间：2026-06-06 22:10:46 UTC
+- 最新运行日期：📧 2026-06-07
+- 运行时间：2026-06-07 22:08:42 UTC
 - 运行状态：成功
-- 本次总论文数：20
-- 精读区：20
+- 本次总论文数：19
+- 精读区：19
 - 速读区：0
 
 ### 今日简报（AI）
-- 今日共生成 20 篇推荐（精读 20 篇，速读 0 篇）
-- 精读：《Exploring Foundation Model Adaptations for 3D Medical Imaging: Prompt-Based》, 《RNED: Rotary Number Encoding and Decoding for Medical VLMs》
+- 今日共生成 19 篇推荐（精读 19 篇，速读 0 篇）
+- 精读：《Performance of Vision-Language Models for Zero-Shot Lung Nodule Detection on Chest Radiographs》, 《Dedicated Breast PET-Based Deep Learning Radiomics for Prediction of Pathologic Complete Response to Neoadjuvant Chemotherapy in HER2-Positive Breast …》
 - 这些结果覆盖了当下较热的方向，建议先看精读区论文的关键问题与方法。
-- 详情：[/202606/06/README](/202606/06/README)
+- 详情：[/202606/07/README](/202606/07/README)
 
 ### 精读区论文标签
-1. [Exploring Foundation Model Adaptations for 3D Medical Imaging: Prompt-Based](/202606/06/exploring-foundation-model-adaptations-for-3d-medical-imaging-prompt-based)  
+1. [Performance of Vision-Language Models for Zero-Shot Lung Nodule Detection on Chest Radiographs](/202606/07/performance-of-vision-language-models-for-zero-shot-lung-nodule-detection-on-chest-radiographs)  
    标签：无标签
-2. [RNED: Rotary Number Encoding and Decoding for Medical VLMs](/202606/06/rned-rotary-number-encoding-and-decoding-for-medical-vlms)  
+2. [Dedicated Breast PET-Based Deep Learning Radiomics for Prediction of Pathologic Complete Response to Neoadjuvant Chemotherapy in HER2-Positive Breast …](/202606/07/dedicated-breast-pet-based-deep-learning-radiomics-for-prediction-of-pathologic-complete-response-to-neoadjuvant-chemotherapy-in-her2-positive-breast-)  
    标签：无标签
-3. [Frequency disentanglement with State space gating network for medical image segmentation](/202606/06/frequency-disentanglement-with-state-space-gating-network-for-medical-image-segmentation)  
+3. [Machine learning of multiparametric MRI radiomics preoperatively distinguishes testicular seminoma from non-seminoma: a multicenter study](/202606/07/machine-learning-of-multiparametric-mri-radiomics-preoperatively-distinguishes-testicular-seminoma-from-non-seminoma-a-multicenter-study)  
    标签：无标签
-4. [A Promptable 3D-CT Foundation Model-Based Approach for Pulmonary Embolism: K. Floch et al.: A Promptable 3D-CT Foundation Model-Based Approach for …](/202606/06/a-promptable-3d-ct-foundation-model-based-approach-for-pulmonary-embolism-k-floch-et-al-a-promptable-3d-ct-foundation-model-based-approach-for-)  
+4. [Multiphase enhanced computed tomography features captured by delta radiomics reveal prognosis and tumor heterogeneity in patients with hepatocellular carcinoma …](/202606/07/multiphase-enhanced-computed-tomography-features-captured-by-delta-radiomics-reveal-prognosis-and-tumor-heterogeneity-in-patients-with-hepatocellular-carcinoma-)  
    标签：无标签
-5. [Interpretable MRI Radiomics for Preoperative Meningioma Consistency Prediction](/202606/06/interpretable-mri-radiomics-for-preoperative-meningioma-consistency-prediction)  
+5. [Novel Unsupervised Machine Learning Model Using Multi-Parametric Radiomics for Prognostic Stratification of Bifocal Hepatocellular Carcinoma](/202606/07/novel-unsupervised-machine-learning-model-using-multi-parametric-radiomics-for-prognostic-stratification-of-bifocal-hepatocellular-carcinoma)  
    标签：无标签
-6. [Multi-dimensional MRI representation and privileged learning approaches to functional outcome prediction for ischemic stroke patients](/202606/06/multi-dimensional-mri-representation-and-privileged-learning-approaches-to-functional-outcome-prediction-for-ischemic-stroke-patients)  
+6. [An optimized radiomic approach to breast ultrasound for lesion localization and malignancy classification](/202606/07/an-optimized-radiomic-approach-to-breast-ultrasound-for-lesion-localization-and-malignancy-classification)  
    标签：无标签
-7. [Understanding Temporal Logic Consistency in Video-Language Models through Cross-Modal Attention Discriminability](/202606/06/understanding-temporal-logic-consistency-in-video-language-models-through-cross-modal-attention-discriminability)  
+7. [Toward reproducible metabolic tumor volume quantification in endometrial cancer: optimizing [¹⁸F] FDG PET/CT tumor segmentation methods](/202606/07/toward-reproducible-metabolic-tumor-volume-quantification-in-endometrial-cancer-optimizing-f-fdg-petct-tumor-segmentation-methods)  
    标签：无标签
-8. [MIMIC-CXR-VQA: A Large-Scale LLM-Annotated Dataset and Comparative Benchmark for Medical Visual Question Answering](/202606/06/mimic-cxr-vqa-a-large-scale-llm-annotated-dataset-and-comparative-benchmark-for-medical-visual-question-answering)  
+8. [A universal foundation model for grounded biomedical image interpretation](/202606/07/2504.21336v3-a-universal-foundation-model-for-grounded-biomedical-image-interpretation)  
    标签：无标签
-9. [Mix-to-Max: Optimizing Data Mixtures for Peak Vision-Language Efficiency](/202606/06/mix-to-max-optimizing-data-mixtures-for-peak-vision-language-efficiency)  
+9. [CollabVR: Collaborative Video Reasoning with Vision-Language and Video Generation Models](/202606/07/2605.08735-collabvr-collaborative-video-reasoning-with-vision-language-and-video-generation-models)  
    标签：无标签
-10. [Beyond Accuracy: An Empirical Study of Perception Stability in Multimodal Large Language Models](/202606/06/beyond-accuracy-an-empirical-study-of-perception-stability-in-multimodal-large-language-models)  
+10. [Backdooring Masked Diffusion Language Models](/202606/07/2605.19262-backdooring-masked-diffusion-language-models)  
    标签：无标签
-11. [Stabilizing Recurrent Dynamics for Test-Time Scalable Latent Reasoning in Looped Language Models](/202606/06/2605.26733-stabilizing-recurrent-dynamics-for-test-time-scalable-latent-reasoning-in-looped-language-models)  
+11. [Precise: SDE-Consistent Stochastic Sampling for RL Post-Training of Flow-Matching Models](/202606/07/2605.23522-precise-sde-consistent-stochastic-sampling-for-rl-post-training-of-flow-matching-models)  
    标签：无标签
-12. [CardioLens: Revealing the Clinical Reality Gap of MLLMs via Multi-Sequence Cardiac MRI Evaluations](/202606/06/2606.00123-cardiolens-revealing-the-clinical-reality-gap-of-mllms-via-multi-sequence-cardiac-mri-evaluations)  
+12. [Looped Diffusion Language Models](/202606/07/2605.26106-looped-diffusion-language-models)  
    标签：无标签
-13. [SDR: Set-Distance Rewards for Radiology Report Generation](/202606/06/2606.00440-sdr-set-distance-rewards-for-radiology-report-generation)  
+13. [LocateAnything: Fast and High-Quality Vision-Language Grounding with Parallel Box Decoding](/202606/07/2605.27365-locateanything-fast-and-high-quality-vision-language-grounding-with-parallel-box-decoding)  
    标签：无标签
-14. [Decomposed On-Policy Distillation for Vision-Language Reasoning: Steering Gradients for Visual Grounding](/202606/06/2606.00564-decomposed-on-policy-distillation-for-vision-language-reasoning-steering-gradients-for-visual-grounding)  
+14. [CosmicFish-HRM: Adaptive Reasoning via Hierarchical Recurrent Mechanisms in Compact Language Models](/202606/07/2605.28919-cosmicfish-hrm-adaptive-reasoning-via-hierarchical-recurrent-mechanisms-in-compact-language-models)  
    标签：无标签
-15. [ASAP: Advancing Medical Volumetric Representation Learning with Anatomy-aware Semantically-adaptive Pre-training](/202606/06/2606.00602-asap-advancing-medical-volumetric-representation-learning-with-anatomy-aware-semantically-adaptive-pre-training)  
+15. [LoMo: Local Modality Substitution for Deeper Vision-Language Fusion](/202606/07/2605.30265-lomo-local-modality-substitution-for-deeper-vision-language-fusion)  
    标签：无标签
-16. [Towards understanding modality interaction in multimodal language models via partial information decomposition](/202606/06/2606.00959-towards-understanding-modality-interaction-in-multimodal-language-models-via-partial-information-decomposition)  
+16. [VLMs are Good Teachers for Video Reasoning via Adaptive Test-Time Optimization](/202606/07/2606.02564-vlms-are-good-teachers-for-video-reasoning-via-adaptive-test-time-optimization)  
    标签：无标签
-17. [Ask4VG: Risk-Aware Question Selection for Reducing Prior-Driven Answers in Medical VQA](/202606/06/2606.01044-ask4vg-risk-aware-question-selection-for-reducing-prior-driven-answers-in-medical-vqa)  
+17. [Cross-Modal Contrastive Learning of ECG and Angiography Representations for Severe Stenosis Classification](/202606/07/2606.02605-cross-modal-contrastive-learning-of-ecg-and-angiography-representations-for-severe-stenosis-classification)  
    标签：无标签
-18. [Cross-lingual Self-Consistency for Multilingual Reasoning with Language Models](/202606/06/2606.01464-cross-lingual-self-consistency-for-multilingual-reasoning-with-language-models)  
+18. [Automated Report-Derived Oncology VQA Benchmark for Evaluating Vision-Language Models on 3D Medical Imaging](/202606/07/2606.02809-automated-report-derived-oncology-vqa-benchmark-for-evaluating-vision-language-models-on-3d-medical-imaging)  
    标签：无标签
-19. [GLINT: Sparsely Gated Vision-Language Alignment for Fine-Grained Radiology Representations](/202606/06/2606.03180-glint-sparsely-gated-vision-language-alignment-for-fine-grained-radiology-representations)  
-   标签：无标签
-20. [CoralBay: A Self-Supervised CT Foundation Model](/202606/06/2606.03888-coralbay-a-self-supervised-ct-foundation-model)  
+19. [Pretraining Language Models on Historical Text](/202606/07/2606.02991-pretraining-language-models-on-historical-text)  
    标签：无标签
 
 ### 速读区论文标签
