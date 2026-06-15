@@ -1,0 +1,823 @@
+Title: Decomposed On-Policy Distillation for Vision-Language Reasoning: Steering Gradients for Visual Grounding
+
+URL Source: https://arxiv.org/pdf/2606.00564
+
+Published Time: Tue, 02 Jun 2026 00:47:40 GMT
+
+Number of Pages: 24
+
+Markdown Content:
+# Decomposed On-Policy Distillation for Vision-Language Reasoning: Steering Gradients for Visual Grounding 
+
+Hee Suk Yoon 1 Eunseop Yoon 1 Jaehyun Jang 1 SooHwan Eom 1 Ji Woo Hong 1
+
+Mark Hasegawa-Johnson 2 Qi Dai 3 Chong Luo 3 Chang D. Yoo 1
+
+# Abstract 
+
+While on-policy distillation offers dense super-vision for training small reasoning models, its optimization dynamics in the multimodal domain remain under-explored. In this work, we chal-lenge the standard monolithic view of Vision-Language Model (VLM) distillation by mathemat-ically decomposing the loss into two distinct com-ponents: the language prior and visual ground-ing. Our analysis uncovers that gradient vectors for these components are nearly orthogonal, in-dicating that the objective of aligning with the teacher’s language distribution is geometrically independent from the objective of matching its visual perception. Consequently, standard op-timization passively follows a suboptimal com-promise trajectory that implicitly balances the two objectives. Hypothesizing that visual ground-ing constitutes the primary bottleneck for vision-language reasoning, we introduce Visual Gradi-ent Steering (VGS) , a method that dynamically reorients the update vector to prioritize the visual subspace. Experimental results on multiple dis-tillation settings and complex multimodal bench-marks demonstrate that VGS significantly out-performs the standard monolithic formulation of on-policy distillation, achieving superior ground-ing with minimal training overhead. The code is publicly accessible at https://github.com/hee-suk-yoon/Decomposed OPD. 
+
+# 1. Introduction 
+
+The recent surge in reasoning models has demonstrated that scaling inference-time compute by enabling models to gen-
+
+> 1
+
+Korea Advanced Institute of Science and Technology (KAIST), 
+
+> 2
+
+University of Illinois Urbana-Champaign (UIUC), 3Microsoft Research Asia (MSRA). Correspondence to: Chang D. Yoo 
+
+<cd yoo@kaist.ac.kr >.
+
+Proceedings of the 43 rd International Conference on Machine Learning , Seoul, South Korea. PMLR 306, 2026. Copyright 2026 by the author(s). 
+
+Figure 1. Visual Gradient Steering (VGS) outperforms stan-dard monolithic distillation. We compare the reasoning per-formance of student models distilled from a 8B teacher. VGS (purple) consistently surpasses the standard baseline (green) across diverse multimodal benchmarks for both (a) 2B and (b) 4B stu-dents, demonstrating superior visual grounding. 
+
+erate intermediate reasoning steps can dramatically enhance problem-solving capabilities (Comanici et al., 2025; Yang et al., 2025; Team, 2025). To train these reasoning models, Reinforcement Learning with Verifiable Rewards (RLVR) has emerged as the standard for domains like mathematics and coding where ground truth is easily verifiable (Yang et al., 2024; Guo et al., 2025; Shao et al., 2024; Yoon et al., 2025a; 2026). However, for smaller models, RLVR encoun-ters a cold start problem. Sparse, outcome-based rewards fail to provide sufficient signal for models that initially lack robust reasoning policies. On-Policy Distillation (Agarwal et al., 2024; Xi et al., 2024; Deng et al., 2025) offers a superior alternative. Unlike RLVR which relies on delayed outcome feedback, on-policy distillation leverages a stronger teacher model to provide dense, token-level supervision on the student’s own roll-outs. This overcomes the reward sparsity problem while still allowing the student to learn error recovery and reason-ing coherence, akin to a chess coach critiquing every move rather than just the final result. Despite its success in text-only domains, on-policy distil-lation remains under-explored in Vision-Language Mod-els (VLMs). For instance, recent models such as Qwen3-VL (Bai et al., 2025) explicitly restrict distillation to text-1              
+
+> arXiv:2606.00564v1 [cs.CV] 30 May 2026 Decomposed On-Policy Distillation for Vision-Language Reasoning: Steering Gradients for Visual Grounding
+> Figure 2. Overview of Visual Gradient Steering (VGS). (Left) Given a multimodal query (Image Iand Prompt x), we sample a rollout
+> τfrom the student policy and compute log-probabilities from both the student and teacher models under multimodal ( I, x ) and unimodal (x, text-only) contexts. (Middle) We decompose the standard monolithic objective into two distinct components: a Language Prior
+> (LLang ) that matches the teacher’s text-only distribution, and a Visual Grounding objective ( LVis ) that targets a constructed distribution
+> q∗
+> Tisolating the teacher’s visual information gain. (Right) Our geometric analysis reveals that standard distillation ( LStandard ) acts as a passive compromise between these often orthogonal objectives. VGS explicitly steers the gradient update toward the visual subspace (LVis ), prioritizing perceptual fidelity over generic language modeling.
+
+only data to fine-tune the LLM backbone, neglecting visual grounding alignment. We find that a direct extension of standard on-policy dis-tillation to the multimodal domain typically defaults to op-timizing a single, monolithic objective. In this work, we challenge this formulation by mathematically decomposing the loss into distinct Language Prior and Visual Ground-ing components, uncovering a fundamental tension between them (Figure 2). Through gradient analysis, we identify a geometric pathology where the gradient vectors for these components are frequently orthogonal. This indicates that the objective of aligning with the teacher’s language dis-tribution is geometrically independent from the objective of matching its visual perception. Consequently, standard distillation naively sums these gradients and passively fol-lows a suboptimal compromise trajectory that fails to strictly enforce perceptual fidelity. Hypothesizing that visual grounding constitutes the primary bottleneck for vision-language reasoning, we introduce Vi-sual Gradient Steering (VGS) . This gradient update rule explicitly prioritizes the visual subspace by dynamically re-orienting the optimization trajectory to maximize the align-ment with the teacher’s visual information gain. By ensuring that the model concentrates its update budget on resolving perceptual ambiguities rather than generic language model-ing, VGS achieves superior alignment performance (Figure 1). In summary, our key contributions are: 
+
+• Geometric Analysis of VLM Distillation. We provide the first gradient-level analysis of on-policy distillation in VLMs, revealing the orthogonality between language and vision gradients and identifying the suboptimal ”compro-mise trajectory” of standard monolithic formulations. • Visual Gradient Steering (VGS). We propose a novel op-timization objective that separates visual and language su-pervision, steering the gradient update to strictly enforce visual grounding without degrading linguistic fluency. • Superior Reasoning Alignment. We show that VGS significantly outperforms the standard monolithic formu-lation of on-policy distillation on complex multimodal reasoning benchmarks, with minimal training overhead. 
+
+# 2. Background and Problem Formulation 
+
+2.1. Distillation for Autoregressive Reasoning 
+
+In reasoning tasks, given a query x, the model gener-ates a multi-step reasoning trajectory τ . Formally, τ =(h1, . . . , h T , ˆy) consists of a sequence of intermediate reasoning steps {hk}Tk=1 , commonly termed a Chain-of-Thought (CoT), followed by a final predicted answer ˆy.In the context of distillation, we optimize a student model 
+
+pθ 
+
+> S
+
+to match a fixed teacher model qT using dense, token-level supervision. We quantify the discrepancy between the teacher and student for a trajectory τ using the sequence-level Kullback-Leibler (KL) divergence, defined as the aver-age token-level Forward KL divergence across the sequence: 
+
+ℓForward (τ ) ≜ 1
+
+|τ | 
+
+> |τ|
+
+X
+
+> t=1
+
+DKL 
+
+ qT(· | τ<t , x ) ∥ pθ
+
+> S
+
+(· | τ<t , x ).
+
+The notations qT (· | τ<t , x ) and pθS (· | τ<t , x ) denote the 
+
+full categorical distributions over the vocabulary V at step 
+
+t for the teacher and student, respectively. Standard Sequence-Level Knowledge Distillation (SeqKD) 
+
+(Kim & Rush, 2016; Taori et al., 2023), often referred to as 
+
+Off-Policy Distillation , minimizes the Forward KL Diver-gence . This objective computes the expected sequence di-vergence over trajectories sampled strictly from the teacher: 
+
+LOff-Policy = E 
+
+> τ∼qT
+
+[ℓForward (τ )] . (1) 2Decomposed On-Policy Distillation for Vision-Language Reasoning: Steering Gradients for Visual Grounding 
+
+While effective for initialization, Forward KL is mode-covering, where it forces the student to assign probabil-ity mass to all modes of the teacher’s distribution. For reasoning tasks, this is often suboptimal, since if the stu-dent lacks the capacity to model the full complexity of the teacher, it forces the student to bridge distinct modes with low-probability transitions, leading to hallucinations and im-plausible reasoning chains (Gu et al., 2024; Agarwal et al., 2024). Furthermore, this off-policy approach suffers from 
+
+exposure bias : the student is never trained to recover from its own autoregressive errors. To address these limitations, recent works (Agarwal et al., 2024; Gu et al., 2024) advocate for On-Policy Distilla-tion via the Reverse KL Divergence . We first define the trajectory-wise Reverse KL for a trajectory τ as: 
+
+ℓReverse (τ ) ≜ 1
+
+|τ | 
+
+> |τ|
+
+X
+
+> t=1
+
+DKL 
+
+ pθ
+
+> S
+
+(· | τ<t , x ) ∥ qT(· | τ<t , x ).
+
+This approach minimizes the expected sequence-level diver-gence over trajectories sampled from the student: 
+
+LOn-Policy = E 
+
+> τ∼pθS
+
+[ℓReverse (τ )] . (2) This formulation offers two primary benefits. First, Reverse KL is mode-seeking ; it penalizes the student for generating samples unlikely under the teacher ( qT ≈ 0), prioritizing high-confidence reasoning paths over broad coverage (Gu et al., 2024; Agarwal et al., 2024). Second, by sampling 
+
+τ ∼ pθS , the student learns from its own rollouts (on-policy), effectively closing the training-inference gap. 
+
+2.2. The Standard Monolithic Multimodal Objective 
+
+In the Vision-Language domain, we extend this on-policy formulation to include visual context. Given an input image 
+
+I and text prompt x, we define the monolithic trajectory-wise divergence for a trajectory τ as:          
+
+> ℓStandard (τ)≜1
+> |τ|
+> |τ|
+> X
+> t=1
+> DKL
+>  pθ
+> S(· | τ<t , I, x )∥qT(· | τ<t , I, x ).
+> (3)
+
+Standard approaches optimize the expectation of this quan-tity over trajectories sampled from the student: 
+
+LStandard = E  
+
+> τ∼pθS(·| I,x )
+
+[ℓStandard (τ )] . (4) However, as we demonstrate next, this treats the learning sig-nal as a unified whole, obscuring the distinct contributions of Language Prior Matching and Visual Grounding .
+
+# 3. Revisiting On-Policy Distillation in Vision-Language 
+
+3.1. Decomposing the Monolithic Objective 
+
+By applying Bayes’ Rule, we can factorize the conditional probability of any multimodal generator p to isolate the underlying components of the objective. The log-likelihood decomposes into a language prior, a visual likelihood, and a sequence-independent constant:                  
+
+> log p(τ|I, x ) = log p(τ|x)
+> |{z }
+> Language Prior
+> + log p(I|τ, x )
+> |{z }
+> Visual Likelihood
+> −log p(I|x).
+> (5)
+
+Applying this identity to both the student pθS and teacher 
+
+qT reveals that the standard monolithic objective implicitly combines two distinct goals: matching the Language Prior 
+
+(reasoning style) and matching the Visual Likelihood (per-ceptual grounding). Note that the evidence term log p(I | x)
+
+is constant with respect to the generated sequence τ and acts solely as a normalizing factor. 
+
+I. Language Prior Matching ( LLang ). This objective aligns the student’s unimodal distribution pθS (· | x) with the teacher’s qT (· | x), ensuring that the base reasoning style is transferred independent of visual context I. We first define the trajectory-wise language divergence :          
+
+> ℓLang (τ)≜1
+> |τ|
+> |τ|
+> X
+> t=1
+> DKL
+>  pθ
+> S(· | τ<t , x )∥qT(· | τ<t , x ).(6)
+
+We minimize the expectation of this divergence. Crucially, while we compute gradients on the unimodal distributions, we sample trajectories τ from the full multimodal policy 
+
+pθS (· | I, x ) to maintain on-policy alignment with the stu-dent’s actual generation distribution: 
+
+LLang = E  
+
+> τ∼pθS(·| I,x )
+
+[ℓLang (τ )] . (7) 
+
+II. Visual Grounding Matching ( LVis ). This objective isolates the Visual Likelihood term identified in Eq. 5. This term, log p(I | τ, x ), represents the model’s perceptual sensitivity , quantifying how well the generated reasoning causally explains the visual input. Although explicit compu-tation of the likelihood is intractable in autoregressive mod-els, Bayes’ Rule reveals that it differs from the computable 
+
+Visual Information Gain —the log-ratio of the posterior to the prior—only by a sequence-independent constant:                 
+
+> log p(I|τ, x ) = [log p(τ|I, x )−log p(τ|x)]
+> |{z }
+> Visual Information Gain
+> + log p(I|x).
+> (8)
+
+Since the evidence term log p(I | x) depends only on the im-age and is constant with respect to the trajectory τ , matching the teacher’s information gain is mathematically equivalent to aligning the student’s visual perception. 3Decomposed On-Policy Distillation for Vision-Language Reasoning: Steering Gradients for Visual Grounding             
+
+> Figure 3. Geometric Analysis of Gradient Dynamics. (a) As visual dependency increases, the angle between Language and Visual gradients widens, approaching orthogonality in high-dependency regions. The emergence of obtuse angles ( >90 ◦, dashed box) at the extreme specifically motivates the Language Preservation regularizer (Eq. 16) to prevent gradient conflict. (b, c) The standard monolithic gradient ( ∇L Standard ) acts as a passive bisector, maintaining a relatively static compromise orientation ( ≈40 ◦−50 ◦) relative to both components, failing to fully align with the visual signal even when perceptual necessity is maximal (Bin 9).
+
+Formally, we achieve this by constructing a visual target distribution q∗ 
+
+> T
+
+that retains the student’s language prior but substitutes its visual likelihood with that of the teacher: 
+
+q∗ 
+
+> T
+
+(τ | I, x ) ∝ pθS (τ | x) · qT (I | τ, x ). (9) Substituting the Bayesian expansion of the teacher’s likeli-hood into Eq. 9 yields the tractable target logits in log-space: 
+
+log q∗ 
+
+> T
+
+(τ | I, x ) = log pθS (τ | x)+ (log qT (τ | I, x ) − log qT (τ | x)) − log Z∗.
+
+(10) Crucially, the marginal evidence term log qT (I | x) acts as a scalar offset across all tokens. In our autoregressive for-mulation, this constant is absorbed into the local partition function Z∗, which is computed implicitly via the Softmax operator at each decoding step. We finally define the trajectory-wise visual divergence 
+
+ℓVis (τ ) against this target and its corresponding expectation: 
+
+ℓVis (τ ) ≜ 1
+
+|τ | 
+
+> |τ|
+
+X
+
+> t=1
+
+DKL 
+
+ pθS (· | τ<t , I, x ) ∥ q∗ 
+
+> T
+
+(· | τ<t , I, x ),
+
+LVis = E  
+
+> τ∼pθS(·| I,x )
+
+[ℓVis (τ )] . (11) 
+
+3.2. Geometric Analysis of Gradient Dynamics 
+
+To understand the optimization dynamics of the standard monolithic objective, we empirically analyzed the geo-metric relationships between its decomposed gradient vec-tors. Specifically, we investigate how the standard update 
+
+∇L Standard positions itself relative to the Language Prior 
+
+(∇L Lang ) and Visual Grounding (∇L Vis ) gradients across tokens with varying degrees of visual dependency. 
+
+Analysis Setup. We analyze the gradient dynamics on vali-dation prompts, using trajectories sampled on-policy from the full multimodal student policy, τ ∼ pθS (· | I, x ). To categorize the perceptual necessity of each generated token, we define the Visual Dependency Score (VDS) using the teacher’s distribution: VDS t = DKL (qT (· | τ<t , I, x ) ∥ qT (· | τ<t , x )) . (12) We bin all generated tokens into 10 equal-frequency quan-tiles based on their VDS; bin 0 represents tokens with mini-mal visual dependence, while bin 9 represents tokens where the teacher relies heavily on visual evidence. Figure 3 visualizes the angular relationships across these bins. Our analysis highlights two key geometric properties: 
+
+I. Orthogonality at the Visual Extremes (Figure 3-(a)). 
+
+We first examine the relationship between the language and visual gradients. We observe a distinct monotonic trend: as the visual dependency of the token increases, the angle between ∇L Lang and ∇L Vis widens. • In low-dependency regions (bin 0), the gradients are moderately aligned ( θ ≈ 60 ◦). • In high-dependency regions (bin 9), the gradients become nearly orthogonal ( θ ≈ 92 ◦). II. The Standard Loss as a Static Bisector (Figure 3-(b), (c)). Next, we analyze the orientation of the standard monolithic gradient ∇L Standard . Figures 3-(b) and (c) show the angle of the standard gradient relative to the Visual and Language components, respectively. We observe that the standard objective consistently main-tains a “compromise” trajectory. Even for the most visually critical tokens (Bin 9), where the ideal update should ar-guably align with the visual evidence, ∇L Standard retains a significant offset of ≈ 42 ◦ from ∇L Vis . Simultaneously, it remains similarly distant from the language gradient 4Decomposed On-Policy Distillation for Vision-Language Reasoning: Steering Gradients for Visual Grounding 
+
+Figure 4. Training Dynamics. We compare the evolution of decomposed loss components during training across different methods. (a) Visual Grounding ( LVis ): VGS (blue) significantly accelerates visual learning compared to the standard monolithic baseline ( LStandard ,green), especially for high-dependency tokens (Bins 7–9). (b) Language Prior ( LLang ): Without regularization, aggressive visual steering (γ = 2 .0, dark blue) causes the language prior to diverge (“unlearning”), particularly in high-conflict visual regimes (Bins 7–9). Our final method with Language Preservation ( LVGS-LP , pink) successfully prevents this degradation while maintaining superior visual grounding. 
+
+(≈ 50 ◦). This geometric rigidity indicates that the standard objective acts as a passive bisector : it creates a fixed av-erage between the language and visual directions, treating both signals as equally important. 
+
+Hypothesis: Breaking the Optimization Symmetry. We hypothesize that the standard objective is suboptimal be-cause it enforces geometric symmetry on an inherently asymmetric task. Since performance is constrained by a per-ceptual bottleneck , and language gradients are orthogonal to visual improvements, the standard compromise update is inefficient. We propose that explicitly steering the gradient toward the visual subspace introduces a necessary inductive bias, prioritizing the resolution of perceptual ambiguities over generic language modeling. 
+
+# 4. Method: Visual Gradient Steering 
+
+Motivated by the geometric pathology observed in Sec. 3.2, we propose Visual Gradient Steering (VGS) to construct a gradient update that prioritizes the visual subspace. 
+
+The Steered Objective. We first define the trajectory-wise steered objective ℓVGS (τ ), which augments the standard distillation loss ℓStandard (τ ) with an auxiliary visual term: 
+
+ℓVGS (τ ) ≜ ℓStandard (τ ) + γℓ Vis (τ ), (13) where ℓVis (τ ) corresponds to the visual grounding objective derived in Eq. 11, and γ ≥ 0 is the steering coefficient that controls the strength of the visual correction. The final loss function is then minimizing the expected steered objective: 
+
+LVGS = ηVGS (γ) · E  
+
+> τ∼pθS(·| I,x )
+
+[ℓVGS (τ )] . (14) 
+
+Gradient Norm Normalization. To ensure the optimiza-tion remains stable, we introduce a scaling factor ηVGS (γ).We define ηVGS (γ) such that the norm of the steered gradient equals the norm of the original standard gradient: 
+
+ηVGS (γ) ≜ ∥∇ θ LStandard ∥2
+
+∥∇ θ LStandard + γ∇θ LVis ∥2
+
+. (15) This normalization ensures that VGS changes only the di-rection of the update—steering it toward the visual sub-space—without altering the magnitude of the parameter steps. This effectively decouples the “steering” (controlled by γ) from the “learning rate” (controlled by the optimizer), a stability principle widely adopted in multi-task learn-ing (Chen et al., 2018). In practice, to avoid the com-putational overhead of dynamic norm calculation, we set 
+
+ηVGS (γ) to a fixed constant dependent on γ, as empirical analysis in Appendix A confirms the gradient magnitude ratio remains stable throughout training. 
+
+Mitigating Destructive Gradient Interference. While VGS effectively steers generation toward visual ground-ing, our analysis (Figure 3-(a)) reveals that tokens with the highest visual dependency exhibit obtuse angles (> 90 ◦)between the visual and language gradients. In these regimes, optimizing solely for visual grounding yields a negative pro-jection onto the language gradient, effectively “unlearning” the language prior. Figure 4 confirms this empirically: the Language Prior Matching loss ( LLang ) for high-VDS tokens diverges significantly during training with LVGS alone. To prevent this, we introduce a Language Preservation (LP) regularizer. We apply this term selectively to the top 30% of tokens ranked by VDS (Eq. 12; corresponding to Bins 7–9), where this gradient conflict is most prevalent. We define the trajectory-wise preservation loss as: 
+
+ℓLP (τ ) ≜ 1
+
+|τ | 
+
+> |τ|
+
+X
+
+> t=1
+
+
+
+1[VDS t > Q 0.7]
+
+· DKL 
+
+ pθ 
+
+> S
+
+(· | τ<t , x ) ∥ qT(· | τ<t , x )
+
+,
+
+(16) 
+
+5Decomposed On-Policy Distillation for Vision-Language Reasoning: Steering Gradients for Visual Grounding 
+
+Table 1. Main Results on Vision-Language Reasoning Benchmarks. We compare the distillation performance of Visual Gradient Steering (VGS) against the standard monolithic baseline. All student models (2B and 4B) are distilled from the same Qwen3-VL-8B-Instruct teacher trained with GRPO. VGS consistently outperforms the standard approach across all benchmarks, achieving higher accuracy in both greedy decoding (Acc@1) and stochastic sampling (Acc@16). 
+
+Benchmark Teacher Initial Student Standard On-Policy Distillation VGS On-Policy Distillation (ours) Improvement 
+
+Acc@1 (greedy) Acc@1 (greedy) Acc@1 (greedy) Acc@16 (T=1.0) Acc@1 (greedy) Acc@16 (T=1.0) Acc@1 (greedy) Acc@16 (T=1.0) 
+
+8B 2B Qwen3-VL-8B-Instruct → Qwen3-VL-2B-Instruct 
+
+MMMU-Pro-4 62.03 34.51 45.83 47.33 48.07 48.34 +2.14 +1.01 
+
+LogicVista 60.01 36.83 45.53 46.19 48.88 46.47 +3.35 +0.28 
+
+MathVerse-VD 79.63 35.88 56.02 59.68 58.10 60.10 +2.08 +0.42 
+
+MathVerse-VO 73.85 35.32 54.59 55.76 56.19 56.52 +1.61 +0.76 
+
+VisualPuzzles 43.15 13.36 28.08 30.64 31.76 31.59 +3.68 +0.95 
+
+MathVision 44.14 14.28 24.14 25.37 25.59 26.73 +1.45 +1.36 
+
+VlmsAreBlind 66.79 49.03 51.86 50.52 54.11 53.24 +2.26 +2.72 Average 61.37 31.32 43.74 45.07 46.10 46.14 +2.37 +1.07 8B 4B Qwen3-VL-8B-Instruct → Qwen3-VL-4B-Instruct 
+
+MMMU-Pro-4 62.03 48.93 55.79 56.43 56.86 56.86 +1.07 +0.43 
+
+LogicVista 60.01 47.10 55.80 56.43 58.70 56.98 +2.90 +0.55 
+
+MathVerse-VD 79.63 57.18 71.53 73.60 74.31 73.89 +2.78 +0.29 
+
+MathVerse-VO 73.85 53.67 70.18 68.33 71.10 68.53 +0.92 +0.20 
+
+VisualPuzzles 43.15 26.54 40.75 39.17 40.31 39.22 -0.44 +0.05 
+
+MathVision 44.14 31.40 37.96 39.26 40.59 40.16 +2.63 +0.90 
+
+VlmsAreBlind 66.79 61.94 64.46 64.82 65.49 65.92 +1.03 +1.10 Average 61.37 46.68 56.64 56.86 58.12 57.27 +1.56 +0.50 
+
+where Q0.7 denotes the 70th percentile threshold of the Visual Dependency Score distribution. This term penal-izes deviation from the teacher’s language prior only when the visual steering signal is likely to be destructive. We incorporate this into our final trajectory-wise objective: 
+
+ℓVGS-LP (τ ) = ℓVGS (τ ) + λℓ LP (τ )= ℓStandard (τ ) + γℓ Vis (τ ) + λℓ LP (τ ), (17) where γ acts as a primary steering coefficient (typically γ ≥
+
+1) to drive visual adaptation, while λ serves as a conservative regularization weight (e.g., λ ≈ 0.01 ) to selectively prevent catastrophic forgetting. The total loss is minimized over the expectation of this objective, scaled by the adaptive normalization factor ηVGS (γ) in Eq. 15: 
+
+LVGS-LP = ηVGS (γ) · E  
+
+> τ∼pθS(·| I,x )
+
+[ℓVGS-LP (τ )] . (18) As demonstrated in Figure 4, this formulation successfully mitigates the divergence of the language prior, ensuring that the model retains its reasoning capabilities even in high-conflict visual regimes. 
+
+# 5. Experimental Setup 
+
+5.1. Models and Datasets 
+
+We conduct our training on the Vision-SR1-47K dataset (Li et al., 2025). This dataset consists of 47k triplets (I, x, y ),containing an image I, a question x, and a verifiable final answer y. For a controlled experimental setting, we avoid using off-the-shelf reasoning models where the training mixture is unknown. Instead, we train a reasoning teacher by fine-tuning the Qwen3-VL-8B-Instruct (Bai et al., 2025) using Group Relative Policy Optimization (GRPO) (Shao et al., 2024) for 2 epochs on Vision-SR1-47K dataset. Full implementation details are in Appendix B.1. For the student policies, we utilize the smaller Qwen3-VL-2B-Instruct and 
+
+Qwen3-VL-4B-Instruct (Bai et al., 2025). We evaluate on seven vision-language reasoning bench-marks. For mathematical reasoning, we utilize MathVi-sion (Wang et al., 2024) and MathVerse (Zhang et al., 2024), reporting results on the Visual Dominant (VD) and Visual Only (VO) subsets. For visual logic, we employ 
+
+LogicVista (Xiao et al., 2024), VisualPuzzles (Song et al., 2025), and VlmsAreBlind (Rahmanzadehgervi et al., 2024). Finally, we test multidisciplinary reasoning using MMMU-Pro (Yue et al., 2024) in its 4-option setting. 
+
+5.2. Implementation details Prompt Format. To ensure structural alignment, both the teacher (during GRPO) and the student (during distillation) utilize a unified system prompt. This enforces a strict rea-soning format, requiring the model to explicitly delimit the internal reasoning trace from the final answer. The full prompt template is provided in Appendix B.4. 6Decomposed On-Policy Distillation for Vision-Language Reasoning: Steering Gradients for Visual Grounding 
+
+Hyperparameters. We optimize the objective in Eq. 17 with a steering coefficient of γ = 2 .0 and λ = 0 .01 across all experiments. For the gradient normalization, we set 
+
+η(γ) = 0 .41 for Qwen3-VL-2B-Instruct and η(γ) = 0 .36 
+
+for Qwen3-VL-4B-Instruct as justified in Appendix A. All other training configurations were kept identical to the base-line for fair comparison. Full hyperparmater details and sensitivity analysis is provided in Appendix B.2, B.3. 
+
+# 6. Experimental Results 
+
+We evaluate Visual Gradient Steering (VGS) by distilling a GRPO-trained Qwen3-VL-8B-Instruct teacher into 2B and 4B student models. As detailed in Table 1, VGS consis-tently outperforms the standard monolithic baseline across all seven vision-language benchmarks. The improvement is particularly pronounced when the teacher-student capacity gap is large. In the Qwen3-VL-8B → Qwen3-VL-2B set-ting, VGS achieves an average greedy accuracy (Acc@1) of 46.10% , surpassing the baseline (43.74%) by a signifi-cant margin of +2.37% . This gain is driven by substantial improvements in visually intensive tasks like VisualPuzzles (+3.68%) and LogicVista (+3.35%). This trend extends to the larger Qwen3-VL-4B student, where VGS improves av-erage Acc@1 to 58.12% (+1.56% over baseline), effectively closing the gap to the 8B teacher (61.37%). Furthermore, we assess policy robustness via stochastic sampling (Acc@16), calculated as the average accuracy over 16 independent generations (temperature T = 1 .0), where VGS consistently yields higher average accuracy across both scales. We provide a computational overhead comparison in Appendix C and the training dynamics in Section 9. 
+
+# 7. Validating the Asymmetric Maturity Hypothesis 
+
+A core premise of our approach is the Asymmetric Matu-rity Hypothesis (Sec. 3.2): we posit that visual grounding is the primary optimization bottleneck, while the language prior is already comparatively robust. To validate this, we perform an inverse steering experiment: What happens if we steer the gradient towards the Language Prior instead? 
+
+We define the Language Steering objective symmetrically to VGS-LP. This objective steers the generation toward the unimodal language prior ( LLang ) while strictly preserving visual grounding on high-dependency tokens: 
+
+LLang-Steer =ηLang (γLang ) · E  
+
+> τ∼pθS(·| I,x )
+
+h
+
+ℓStandard (τ )+ γLang ℓLang (τ ) + λℓ VP (τ )
+
+i
+
+, (19) where ηLang (γLang ) is the adaptive scaling factor, defined  
+
+> Figure 5. Validating the Asymmetric Maturity Hypothesis.
+> While steering toward the language matching reduces accuracy compared to the standard baseline, steering toward the visual sub-space yields consistent performance gains.
+
+analogously to Eq. 15 but using the language gradient direc-tion to maintain optimization stability:         
+
+> ηLang (γ)≜∥∇ θLStandard ∥2
+> ∥∇ θLStandard +γLang ∇θLLang ∥2
+> .(20)
+
+The term ℓVP (τ ) is the Visual Preservation regularizer, which penalizes deviations from the teacher’s visual dis-tribution q∗ 
+
+> T
+
+(Eq. 10) specifically on tokens where visual grounding is most critical: 
+
+ℓVP (τ ) ≜ 1
+
+|τ | 
+
+> |τ|
+
+X
+
+> t=1
+
+
+
+1[VDS t > Q 0.7]
+
+· DKL 
+
+ pθ
+
+> S
+
+(· | τ<t , x ) ∥ q∗
+
+> T
+
+(· | τ<t , x )
+
+. (21) Similar to our VGS-LP formulation (Eq. 17), we set λ to a small regularization value (i.e., 0.01). This ensures a symmetric comparison where both objectives steer a primary modality while safeguarding the other against catastrophic forgetting. Figure 5 compares the performance of Visual Steering (γ > 0) versus Language Steering ( γlang > 0). As shown in the plot (where the y-axis represents the average accuracy across the 7 benchmarks listed in Table 1), increasing the visual steering coefficient γ yields improvements, boosting the average from the baseline. In contrast, steering towards the language prior ( γlang > 0) harms performance, with ac-curacy dropping below the baseline. This confirms that the model’s language prior is already robust; forcing updates towards it consumes the optimization budget without gain. The visual modality, however, remains the critical bottle-neck, responding positively to targeted gradient injection. 
+
+# 8. RL Fine-Tuning + On-Policy Distillation 
+
+As noted by Agarwal et al. (2024), on-policy distillation can be naturally combined with Reinforcement Learning (RL) 7Decomposed On-Policy Distillation for Vision-Language Reasoning: Steering Gradients for Visual Grounding 
+
+Table 2. Ablation Results on RL + On-Policy Distillation. We evaluate the effectiveness of integrating distillation objectives into the GRPO training loop using Qwen3-VL-2B-Instruct . Our Visual Gradient Steered (VGS) method consistently outperforms the standard monolithic distillation baseline when combined with RL.                                                                           
+
+> Benchmark Initial Student (2B) GRPO GRPO + Standard On-Policy Distillation GRPO + VGS On-Policy Distillation (ours) Improvement
+> Acc@1 (greedy) Acc@1 (greedy) Acc@16 (T=1.0) Acc@1 (greedy) Acc@16 (T=1.0) Acc@1 (greedy) Acc@16 (T=1.0) Acc@1 (greedy) Acc@16 (T=1.0) MMMU-Pro-4 34.51 47.66 49.59 45.85 46.86 50.29 49.26 +4.44 +2.40
+> LogicVista 36.83 46.43 44.24 44.64 45.28 46.88 46.01 +2.24 +0.73
+> MathVerse-VD 35.88 59.03 59.68 61.11 60.43 64.81 61.44 +3.70 +1.01
+> MathVerse-VO 35.32 53.67 56.47 58.03 55.89 57.80 57.70 -0.23 +1.81
+> VisualPuzzles 13.36 30.22 31.64 31.08 31.36 31.68 32.23 +0.60 +0.87
+> MathVision 14.28 27.20 28.02 25.26 25.98 27.17 27.52 +1.91 +1.54
+> VlmsAreBlind 49.03 49.61 50.16 51.90 50.77 51.74 51.85 -0.16 +1.08 Average 31.32 44.83 45.68 45.41 45.22 47.20 46.57 +1.79 +1.35
+
+Figure 6. Training Dynamics Analysis of Pure Distillation and GRPO Settings. (a) Average accuracy evolution during on-policy distillation for Qwen3-VL-2B and 4B students. VGS achieves higher accuracy throughout training compared to the standard monolithic baseline. (b) Analysis of the GRPO framework (using Qwen3-VL-2B). Left: VGS combined with GRPO yields the highest accuracy trajectory, outperforming both pure GRPO and GRPO + Standard Distillation. Right: While pure GRPO suffers from length explosion, both distillation methods regularize generation length to match the teacher’s average; however, VGS achieves significantly higher accuracy within this efficient length constraint. 
+
+objectives, as both paradigms involve sampling trajectories directly from the student’s current policy. We investigate whether our proposed steering towards the visual subspace (LVGS-LP , Eq. 17) can enhance this synergy when fine-tuning with GRPO (Shao et al., 2024). Following the formulation of Agarwal et al. (2024), we construct the unified training objective as a weighted convex combination of the RL reward and the distillation constraint. We define the total objective JTotal (θ) as: 
+
+JTotal (θ) = E
+
+> {τi}Gi=1 ∼pθS
+
+"
+
+1
+
+G
+
+> G
+
+X
+
+> i=1
+
+
+
+(1 − α)OGRPO (τi)
+
+− αℓ VGS-LP (τi)
+
+#
+
+,
+
+(22) where OGRPO (τi) is the standard GRPO surrogate objective (clipped advantage) without the KL penalty, and ℓVGS-LP 
+
+serves as the visual distillation regularizer. We compare three training configurations on the Vision-SR1-47K dataset (Li et al., 2025): 1. GRPO (Standard): Pure RL optimization maximizing the correctness reward (equivalent to α = 0 ). 2. GRPO + Standard-KD: RL regularized by the stan-dard monolithic distillation loss. This corresponds to Eq. 22 where ℓVGS-LP is replaced by ℓStandard . We set α
+
+to 0.3 3. GRPO + VGS (Ours): RL regularized by our visually steered objective in Eq. 22. We set α to 0.3. As shown in Table 2, while Standard-KD improves stabil-ity over pure GRPO, it suffers from the compromise effect, pulling the policy back towards the teacher’s generic aver-age. GRPO + VGS significantly outperforms both baselines. By using VGS as the regularizer, we enforce a constraint that is orthogonal to the RL reward: the RL objective optimizes 8Decomposed On-Policy Distillation for Vision-Language Reasoning: Steering Gradients for Visual Grounding 
+
+for the correct answer , while VGS ensures the reasoning process remains visually grounded. This suggests that VGS is a versatile objective that can be plugged into various post-training paradigms to enforce perceptual fidelity. 
+
+# 9. Training Dynamics 
+
+In Figure 6, we present the average accuracy evolution across all 7 benchmark datasets during training. First, Fig-ure 6-(a) compares the 2B and 4B students in the on-policy distillation setting. At both scales, our VGS approach con-sistently achieves a higher accuracy curve compared to the standard monolithic baseline, demonstrating the effective-ness of visual gradient steering. Furthermore, Figure 6-(b) (left) displays the average accu-racy in the RL (GRPO) + on-policy distillation setup that was introduced in Section 8. While adding distillation ac-celerates training in general, our VGS yields a distinctively higher accuracy curve. Figure 6-(b) (right) illustrates the generation length dynamics. We observe that both distilla-tion objectives constrain the student to converge toward the teacher’s average generation length, preventing the length explosion seen in standard GRPO. Notably, VGS achieves significantly higher accuracy at this constrained length com-pared to Standard On-Policy Distillation, further validating the efficacy of visual gradient steering for reasoning effi-ciency. 
+
+# 10. Related Works 
+
+Reinforcement Learning for Reasoning Expanding be-yond foundational RLHF and preference optimization paradigms (Christiano et al., 2017; Bai et al., 2022; Ouyang et al., 2022; Yoon et al., 2024; Rafailov et al., 2023; Yoon et al., 2025b), recent large-scale reinforcement learning (RL) training across diverse tasks has significantly elevated the general reasoning capabilities of LLMs (Guo et al., 2025; Team et al., 2025; Lambert et al., 2024). These advance-ments are predominantly driven by Reinforcement Learning from Verifiable Rewards (RLVR) frameworks (Yang et al., 2024; Guo et al., 2025; Shao et al., 2024; Yoon et al., 2025a; 2026). However, a persistent challenge in standard RLVR environ-ments is that outcome rewards are typically sparse, gener-ated only at the very end of a token sequence. To resolve this credit assignment dilemma, several recent studies have developed process reward models (PRMs) (Li & Li, 2025; Cheng et al., 2026; Zhang et al., 2025; Lee et al., 2025) to evaluate step-by-step progressions within a generation; how-ever, these PRMs typically demand specialized data curation and independent training pipelines. To circumvent reward sparsity without the overhead of an explicit PRM, on-policy distillation has emerged as a compelling alternative, leverag-ing dense, token-level supervision from a powerful teacher model (Yang et al., 2025; Guha et al., 2025; Agarwal et al., 2024). 
+
+On-Policy Knowledge Distillation Knowledge Distilla-tion (KD) has been widely adopted as a popular paradigm for developing efficient Small Large Language Models (SLMs) by leveraging supervision from larger teacher mod-els (Yang et al., 2025; Team et al., 2024; Guo et al., 2025; Muralidharan et al., 2024; Gu et al., 2024; Agarwal et al., 2024). Gu et al. (2024) demonstrated that reverse KL diver-gence is more effective than forward KL in preventing the student model from overestimating low-probability regions inherent in the teacher distribution. Furthermore, Agarwal et al. (2024) experimentally analyzed the trade-offs between on-policy KD, where the student model generates the train-ing data, and off-policy settings, as well as the balance between reverse and forward KL objectives. In this work, we employ on-policy distillation with reverse KL divergence to enhance reasoning capabilities in instruction-tuned mod-els with minimal distribution shift from initial student (Gu et al., 2024). 
+
+Vision-Focused Knowledge Distillation in MLLMs 
+
+Knowledge distillation in the vision-language domain has recently garnered significant research attention as a key strat-egy for developing efficient, small-scale Multimodal Large Language Models (MLLMs). Cai et al. (2025) utilized this approach to distill broad visual instruction-following ca-pabilities from large-scale teachers into efficient student models. Furthermore, to address finer-grained perceptual alignment, Jain et al. (2025) introduced visual embedding distillation to transfer spatial knowledge, while Kim et al. (2025) proposed an explicit attention alignment framework to enable student models to inherit the teacher’s composi-tional reasoning patterns. In contrast to computationally intensive methods relying on auxiliary encoders or explicit feature alignment, our approach minimizes complexity by steering the student’s visual grounding directly through the teacher’s decomposed output logits. 
+
+# 11. Conclusion 
+
+We identify a fundamental limitation in standard mono-lithic objectives: due to the asymmetric maturity of MLLM modalities, the gradient acts as a passive bisector that fails to correct the weaker visual signal. We propose Visual Gradi-ent Steering (VGS) to resolve this by explicitly prioritizing the visual subspace during optimization. Our experiments demonstrate that VGS not only outperforms standard distil-lation but also serves as a critical regularizer for RL (GRPO) fine-tuning. These findings confirm that breaking optimiza-tion symmetry, rather than treating modalities equally, is essential for unlocking faithful multimodal grounding. 9Decomposed On-Policy Distillation for Vision-Language Reasoning: Steering Gradients for Visual Grounding 
+
+# Acknowledgements 
+
+This work was supported by Institute of Information & com-munications Technology Planning & Evaluation (IITP) grant funded by the Korea government(MSIT) (No. RS-2022-II0951, Development of Uncertainty-Aware Agents Learn-ing by Asking Questions), and MSIT(Ministry of Science, ICT), Korea, under the Global Research Support Program in the Digital Field program(RS-2024-00436680) supervised by the IITP(Institute for Information & Communications Technology Planning & Evaluation). This project is sup-ported by Microsoft Research Asia. 
+
+# Impact Statement 
+
+This paper presents work whose goal is to advance the field of Machine Learning. There are many potential societal consequences of our work, none which we feel must be specifically highlighted here. 
+
+# References 
+
+Agarwal, R., Vieillard, N., Zhou, Y., Stanczyk, P., Garea, S. R., Geist, M., and Bachem, O. On-policy distillation of language models: Learning from self-generated mis-takes. In The twelfth international conference on learning representations , 2024. Bai, S., Cai, Y., Chen, R., Chen, K., Chen, X., Cheng, Z., Deng, L., Ding, W., Gao, C., Ge, C., Ge, W., Guo, Z., Huang, Q., Huang, J., Huang, F., Hui, B., Jiang, S., Li, Z., Li, M., Li, M., Li, K., Lin, Z., Lin, J., Liu, X., Liu, J., Liu, C., Liu, Y., Liu, D., Liu, S., Lu, D., Luo, R., Lv, C., Men, R., Meng, L., Ren, X., Ren, X., Song, S., Sun, Y., Tang, J., Tu, J., Wan, J., Wang, P., Wang, P., Wang, Q., Wang, Y., Xie, T., Xu, Y., Xu, H., Xu, J., Yang, Z., Yang, M., Yang, J., Yang, A., Yu, B., Zhang, F., Zhang, H., Zhang, X., Zheng, B., Zhong, H., Zhou, J., Zhou, F., Zhou, J., Zhu, Y., and Zhu, K. Qwen3-vl technical report, 2025. URL https://arxiv.org/abs/2511.21631 .Bai, Y., Jones, A., Ndousse, K., Askell, A., Chen, A., Das-Sarma, N., Drain, D., Fort, S., Ganguli, D., Henighan, T., et al. Training a helpful and harmless assistant with rein-forcement learning from human feedback. arXiv preprint arXiv:2204.05862 , 2022. Cai, Y., Zhang, J., He, H., He, X., Tong, A., Gan, Z., Wang, C., Xue, Z., Liu, Y., and Bai, X. Llava-kd: A framework of distilling multimodal large language models. In Pro-ceedings of the IEEE/CVF International Conference on Computer Vision , pp. 239–249, 2025. Chen, Z., Badrinarayanan, V., Lee, C.-Y., and Rabinovich, A. Gradnorm: Gradient normalization for adaptive loss balancing in deep multitask networks. In International conference on machine learning , pp. 794–803. PMLR, 2018. Cheng, J., Xiong, G., Qiao, R., Li, L., Guo, C., Wang, J., Lv, Y., and Wang, F.-Y. Stop summation: Min-form credit assignment is all process reward model needs for reasoning. Advances in Neural Information Processing Systems , 38:131646–131671, 2026. Christiano, P. F., Leike, J., Brown, T., Martic, M., Legg, S., and Amodei, D. Deep reinforcement learning from human preferences. Advances in neural information pro-cessing systems , 30, 2017. Comanici, G., Bieber, E., Schaekermann, M., Pasupat, I., Sachdeva, N., Dhillon, I., Blistein, M., Ram, O., Zhang, D., Rosen, E., et al. Gemini 2.5: Pushing the frontier with advanced reasoning, multimodality, long context, and next generation agentic capabilities. arXiv preprint arXiv:2507.06261 , 2025. Deng, Y., Hsu, I., Yan, J., Wang, Z., Han, R., Zhang, G., Chen, Y., Wang, W., Pfister, T., Lee, C.-Y., et al. Super-vised reinforcement learning: From expert trajectories to step-wise reasoning. arXiv preprint arXiv:2510.25992 ,2025. Gu, Y., Dong, L., Wei, F., and Huang, M. MiniLLM: Knowl-edge distillation of large language models. In The Twelfth International Conference on Learning Representations ,2024. URL https://openreview.net/forum? id=5h0qf7IBZZ .Guha, E., Marten, R., Keh, S., Raoof, N., Smyrnis, G., Bansal, H., Nezhurina, M., Mercat, J., Vu, T., Sprague, Z., et al. Openthoughts: Data recipes for reasoning models. 
+
+arXiv preprint arXiv:2506.04178 , 2025. Guo, D., Yang, D., Zhang, H., Song, J., Zhang, R., Xu, R., Zhu, Q., Ma, S., Wang, P., Bi, X., et al. Deepseek-r1: In-centivizing reasoning capability in llms via reinforcement learning. arXiv preprint arXiv:2501.12948 , 2025. Jain, J., Yang, Z., Shi, H., Gao, J., and Yang, J. Elevating visual perception in multimodal llms with visual embed-ding distillation. In The Thirty-ninth Annual Conference on Neural Information Processing Systems , 2025. Kim, J., Kim, K., Seo, S., and Park, C. Compodistill: At-tention distillation for compositional reasoning in multi-modal llms. arXiv preprint arXiv:2510.12184 , 2025. Kim, Y. and Rush, A. M. Sequence-level knowledge distilla-tion, 2016. URL https://arxiv.org/abs/1606. 07947 .Lambert, N., Morrison, J., Pyatkin, V., Huang, S., Ivison, H., Brahman, F., Miranda, L. J. V., Liu, A., Dziri, N., 10 Decomposed On-Policy Distillation for Vision-Language Reasoning: Steering Gradients for Visual Grounding 
+
+Lyu, S., et al. Tulu 3: Pushing frontiers in open language model post-training. arXiv preprint arXiv:2411.15124 ,2024. Lee, D. B., Lee, S., Park, S., Kang, M., Baek, J., Kim, D., Wagner, D., Jin, J., Lee, H., Bocklet, T., et al. Rethinking reward models for multi-domain test-time scaling. arXiv preprint arXiv:2510.00492 , 2025. Li, W. and Li, Y. Process reward model with q-value rank-ings. In International Conference on Learning Represen-tations , volume 2025, pp. 14708–14726, 2025. Li, Z., Yu, W., Huang, C., Liu, R., Liang, Z., Liu, F., Che, J., Yu, D., Boyd-Graber, J., Mi, H., et al. Self-rewarding vision-language model via reasoning decom-position. arXiv preprint arXiv:2508.19652 , 2025. Muralidharan, S., Turuvekere Sreenivas, S., Joshi, R., Cho-chowski, M., Patwary, M., Shoeybi, M., Catanzaro, B., Kautz, J., and Molchanov, P. Compact language models via pruning and knowledge distillation. Advances in Neu-ral Information Processing Systems , 37:41076–41102, 2024. Ouyang, L., Wu, J., Jiang, X., Almeida, D., Wainwright, C., Mishkin, P., Zhang, C., Agarwal, S., Slama, K., Ray, A., et al. Training language models to follow instructions with human feedback. Advances in neural information processing systems , 35:27730–27744, 2022. Rafailov, R., Sharma, A., Mitchell, E., Manning, C. D., Ermon, S., and Finn, C. Direct preference optimiza-tion: Your language model is secretly a reward model. 
+
+Advances in neural information processing systems , 36: 53728–53741, 2023. Rahmanzadehgervi, P., Bolton, L., Taesiri, M. R., and Nguyen, A. T. Vision language models are blind: Failing to translate detailed visual features into words. arXiv preprint arXiv:2407.06581 , 2024. Shao, Z., Wang, P., Zhu, Q., Xu, R., Song, J., Bi, X., Zhang, H., Zhang, M., Li, Y., Wu, Y., et al. Deepseekmath: Push-ing the limits of mathematical reasoning in open language models. arXiv preprint arXiv:2402.03300 , 2024. Song, Y., Ou, T., Kong, Y., Li, Z., Neubig, G., and Yue, X. Visualpuzzles: Decoupling multimodal reasoning evaluation from domain knowledge. arXiv preprint arXiv:2504.10342 , 2025. URL https://arxiv. org/abs/2504.10342 .Taori, R., Gulrajani, I., Zhang, T., Dubois, Y., Li, X., Guestrin, C., Liang, P., and Hashimoto, T. B. Stanford alpaca: An instruction-following llama model. https://github.com/tatsu-lab/ stanford_alpaca , 2023. Team, G., Riviere, M., Pathak, S., Sessa, P. G., Hardin, C., Bhupatiraju, S., Hussenot, L., Mesnard, T., Shahri-ari, B., Ram ´e, A., et al. Gemma 2: Improving open language models at a practical size. arXiv preprint arXiv:2408.00118 , 2024. Team, K., Du, A., Gao, B., Xing, B., Jiang, C., Chen, C., Li, C., Xiao, C., Du, C., Liao, C., et al. Kimi k1. 5: Scaling reinforcement learning with llms. arXiv preprint arXiv:2501.12599 , 2025. Team, Q. Qwq-32b: Embracing the power of reinforce-ment learning, March 2025. URL https://qwenlm. github.io/blog/qwq-32b/ .Wang, K., Pan, J., Shi, W., Lu, Z., Ren, H., Zhou, A., Zhan, M., and Li, H. Measuring multimodal mathematical reasoning with math-vision dataset. In The Thirty-eight Conference on Neural Information Processing Systems Datasets and Benchmarks Track , 2024. URL https: //openreview.net/forum?id=QWTCcxMpPA .Wang, Z., Guo, X., Stoica, S., Xu, H., Wang, H., Ha, H., Chen, X., Chen, Y., Yan, M., Huang, F., et al. Perception-aware policy optimization for multimodal rea-soning. arXiv preprint arXiv:2507.06448 , 2025. Xi, Z., Chen, W., Hong, B., Jin, S., Zheng, R., He, W., Ding, Y., Liu, S., Guo, X., Wang, J., et al. Training large lan-guage models for reasoning through reverse curriculum reinforcement learning. arXiv preprint arXiv:2402.05808 ,2024. Xiao, Y., Sun, E., Liu, T., and Wang, W. Logicvista: Multimodal llm logical reasoning benchmark in visual contexts, 2024. URL https://arxiv.org/abs/ 2407.04973 .Yang, A., Zhang, B., Hui, B., Gao, B., Yu, B., Li, C., Liu, D., Tu, J., Zhou, J., Lin, J., et al. Qwen2. 5-math techni-cal report: Toward mathematical expert model via self-improvement. arXiv preprint arXiv:2409.12122 , 2024. Yang, A., Li, A., Yang, B., Zhang, B., Hui, B., Zheng, B., Yu, B., Gao, C., Huang, C., Lv, C., et al. Qwen3 technical report. arXiv preprint arXiv:2505.09388 , 2025. Yoon, E., Yoon, H. S., Eom, S., Han, G., Nam, D., Jo, D., On, K.-W., Hasegawa-Johnson, M., Kim, S., and Yoo, C. Tlcr: Token-level continuous reward for fine-grained re-inforcement learning from human feedback. In Findings of the Association for Computational Linguistics: ACL 2024 , pp. 14969–14981, 2024. Yoon, E., Yoon, H. S., Jang, J., Eom, S., Dai, Q., Luo, C., Hasegawa-Johnson, M. A., and Yoo, C. D. Pacr: Pro-gressively ascending confidence reward for llm reasoning. 
+
+arXiv preprint arXiv:2510.22255 , 2025a. 11 Decomposed On-Policy Distillation for Vision-Language Reasoning: Steering Gradients for Visual Grounding 
+
+Yoon, H. S., Yoon, E., Hasegawa-Johnson, M. A., Kim, S., and Yoo, C. D. ConfPO: Exploiting policy model confi-dence for critical token selection in preference optimiza-tion. In Forty-second International Conference on Ma-chine Learning , 2025b. URL https://openreview. net/forum?id=ZG7bkp6ScT .Yoon, H. S., Yoon, E., Hong, J. W., Eom, S., Koo, G., Hasegawa-Johnson, M., Dai, Q., Luo, C., and Yoo, C. D. Pdcr: Perception-decomposed confidence re-ward for vision-language reasoning. arXiv preprint arXiv:2605.13467 , 2026. Yue, X., Zheng, T., Ni, Y., Wang, Y., Zhang, K., Tong, S., Sun, Y., Yu, B., Zhang, G., Sun, H., Su, Y., Chen, W., and Neubig, G. Mmmu-pro: A more robust multi-discipline multimodal understanding benchmark. arXiv preprint arXiv:2409.02813 , 2024. Zhang, D., Zhang, S., Yang, Z., Zhu, Z., Zhao, Z., Cao, R., Chen, L., and Yu, K. Progrm: Build better gui agents with progress rewards. arXiv preprint arXiv:2505.18121 ,2025. Zhang, R., Jiang, D., Zhang, Y., Lin, H., Guo, Z., Qiu, P., Zhou, A., Lu, P., Chang, K.-W., Qiao, Y., et al. Math-verse: Does your multi-modal llm truly see the diagrams in visual math problems? In European Conference on Computer Vision , pp. 169–186. Springer, 2024. 12 Decomposed On-Policy Distillation for Vision-Language Reasoning: Steering Gradients for Visual Grounding 
+
+# A. Analysis of the Adaptive Scaling Factor ηVGS (γ)
+
+In this section, we provide the analytical derivation and empirical justification for approximating the adaptive scaling factor 
+
+ηVGS (γ) as a constant. 
+
+Analytical Derivation. Recall the definition of the normalization factor from Eq. 15. By expanding the squared norm in the denominator, we can express ηVGS (γ) as a function of the gradient magnitudes and the angle ϕ between them: 
+
+ηVGS (γ) ≜ ∥∇L Standard ∥2
+
+∥∇L Standard + γ∇L Vis ∥2
+
+= ∥∇L Standard ∥2
+
+√A + B + C ,
+
+(23) where: 
+
+A = ∥∇L Standard ∥22,B = γ2∥∇L Vis ∥22,C = 2 γ∥∇L Standard ∥2∥∇L Vis ∥2 cos ϕ, 
+
+and ϕ represents the angle between the standard gradient ∇L Standard and the visual gradient ∇L Vis .Calculating Eq. 23 at every step incurs computational overhead due to the gradient norm computations. To mitigate this, we tracked the evolution of the constituent terms ( ∥∇L Standard ∥, ∥∇L Vis ∥, and cos ϕ) throughout training. As illustrated in Figure 7, we observe that these values remain relatively constant across the training. Consequently, the resulting ratio 
+
+ηVGS (γ) exhibits high stability across the training. 
+
+Figure 7. Evolution of Gradient Norm Components. We track the magnitudes of the standard gradient (purple) and visual gradient (green), along with their cosine similarity (blue) for the Qwen3-VL-2B-Instruct student during standard on-policy distillation . All three components exhibit stability across training steps, justifying our approximation of the adaptive scaling factor ηVGS (γ) as a fixed constant to reduce computational overhead. 
+
+Based on this observation, we treat ηVGS (γ) as a fixed hyperparameter determined by the model architecture and γ. For our main experiments with γ = 2 .0, we utilize the pre-calculated average values: • Qwen3-VL-2B-Instruct: ηVGS = 0 .41 
+
+• Qwen3-VL-4B-Instruct: ηVGS = 0 .36 
+
+This approximation maintains the stability benefits of gradient normalization without the runtime cost. 13 Decomposed On-Policy Distillation for Vision-Language Reasoning: Steering Gradients for Visual Grounding 
+
+# B. Implementation Details 
+
+B.1. Teacher Model Training 
+
+To generate high-quality reasoning trajectories for distillation, we train a teacher model using Group Relative Policy Optimization (GRPO). We initialize the teacher with Qwen3-VL-8B-Instruct and fine-tune it on the Vision-SR1-47K 
+
+dataset for 2 epochs. This reinforcement learning stage ensures the teacher provides robust, verifiable reasoning chains rather than just final answers. We perform all GRPO experiments using the TRL codebase. The specific hyperparameters for the teacher training phase are detailed in Table 3.                  
+
+> Table 3. Hyperparameters for Teacher Model Training (GRPO). The teacher model (Qwen3-VL-8B-Instruct) is trained for 2 epochs on Vision-SR1-47K.
+> Hyperparameter Value
+> Optimization
+> Optimizer AdamW Learning Rate 1e-6 Weight Decay 1e-2 LR Schedule Constant Epochs 2Global Batch Size 128 Freeze Vision Encoder False
+> RL / Rollout Config
+> Rollout Batch Size 512 Rollout Size ( G)8Rollout Temperature 1.0 Rollout Top-p 0.99 Max Input Prompt Length 12800 Max Response Length 2048 Use KL Loss False
+
+B.2. Training Framework and Hyperparameters 
+
+We perform all distillation experiments using the TRL codebase. To ensure a controlled environment, we initialize all student models (Qwen3-VL-2B-Instruct and Qwen3-VL-4B-Instruct) from their standard instruction-tuned checkpoints and train them to match the GRPO-tuned Qwen3-VL-8B-Instruct teacher. To ensure a strictly fair comparison, we maintain a consistent configuration across all baselines (Standard Monolithic Distillation, Visual Gradient Steering) and ablation settings. Common hyperparameters for the optimizer, generation (rollout), and model constraints are detailed in Table 4. All experiments were conducted on a single node equipped with 8 × NVIDIA A100 80GB GPUs.                 
+
+> Table 4. Key hyperparameters used for On-Policy Distillation training and evaluation.
+> Hyperparameter Value
+> Optimization & Training
+> Optimizer AdamW Learning Rate 1e-6 Weight Decay 1e-2 LR Schedule Constant Epochs 1Global Batch Size 512 Freeze Vision Encoder False
+> On-Policy Rollout
+> Rollout Temperature 1.0 Rollout Top-p 1.0 Max Input Prompt Length 16384 Max Response Length 2048
+> VGS Specific (Ours)
+> Steering Coefficient ( γ)2.0 Regularization Weight ( λ)0.01
+
+14 Decomposed On-Policy Distillation for Vision-Language Reasoning: Steering Gradients for Visual Grounding          
+
+> Figure 8. Hyperparameter Sensitivity Analysis. We evaluate the impact of key hyperparameters on the average accuracy of the student model. (a) Varying the steering coefficient γ(on Qwen3-VL-2B-Instruct): The method shows robustness across a wide range of γvalues, consistently outperforming the Standard On-Policy Distillation baseline (dashed grey line). (b) Varying the language preservation weight
+> λ(on Qwen3-VL-4B-Instruct): A small non-zero regularization (e.g., λ= 0 .01 ) yields the highest performance, confirming that the Language Preservation (LP) term effectively mitigates destructive interference without suppressing the visual signal.
+
+B.3. Sensitivity Analysis for Visual Gradient Steering (VGS) Specific Hyperparameters 
+
+We analyze the sensitivity of LVGS-LP (Eq. 17) to the steering coefficient γ and the language preservation weight λ (Figure 8). First, regarding γ (with λ fixed at 0.01), VGS consistently outperforms standard on-policy distillation across a broad range of values, demonstrating that the benefits of visual steering are robust to hyperparameter variations. Second, regarding λ (γ fixed at 2.0), results confirm that omitting the regularizer ( λ = 0 ) is ineffective, as noted in Section 4, due to destructive gradient interference that causes the unlearning of the language prior in high-dependency regimes. However, assigning a small non-zero magnitude (e.g., λ ∈ { 0.01 , 0.1}) is sufficient to effectively preserve the language prior and yield performance consistently superior to the standard baseline. 
+
+B.4. Prompt Template for Training and Inference 
+
+To ensure structural alignment between the teacher and student policies, we utilize a unified system prompt across all training stages (Teacher GRPO, Student On-Policy Distillation, and VGS). This prompt enforces a strict Chain-of-Thought (CoT) format, requiring the model to explicitly delimit its reasoning process within <reason> and </reason> tags before generating the final answer. The standard template used is as follows: 
+
+Reasoning Template for Training and Inference 
+
+SYSTEM: 
+
+A conversation between user and assistant. The user asks a question, and the assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. The reasoning process should be enclosed within <reason >< /reason >tags. The final answer MUST BE put in \boxed {} .
+
+USER: 
+
+{image }{question }
+
+15 Decomposed On-Policy Distillation for Vision-Language Reasoning: Steering Gradients for Visual Grounding     
+
+> Figure 9. Training Cost Comparison. VGS incurs a modest 1.375 ×increase in training time per step due to the dual forward passes required to isolate the visual gradient.
+
+# C. Computational Cost Overhead 
+
+We analyze the computational efficiency of our approach in Figure 9. VGS introduces a moderate overhead, increasing the training time per step by approximately 1.375 × compared to standard on-policy distillation. This increase stems from the necessity of an additional non-image-conditioned forward pass to calculate the decomposed visual gradient. We consider this a minimal and acceptable cost given the significant performance improvements yielded by the steering mechanism.        
+
+> Figure 10. Impact of optimization steering across varying levels of visual dependency. Average accuracy comparison between Language Steering, Standard On-Policy Distillation, and Visual Gradient Steering. (a) On High-Visual Dependent benchmarks, prioritizing the visual subspace (VGS) significantly outperforms the baseline, whereas leaning on the language prior actively degrades performance.
+> (b) On Low-Visual Dependent and (c) pure Text-Only benchmarks, performance remains uniform across all methods, confirming that VGS yields gains where visual grounding is the primary bottleneck without compromising the model’s core textual reasoning capabilities.
+
+# D. When is Visual Gradient Steering Most Effective? 
+
+To analyze when Visual Gradient Steering (VGS) yields the largest benefit, we evaluate our models across benchmarks categorized by their reliance on visual context (Wang et al., 2025). Figure 10 compares Language Steering, Standard On-Policy Distillation, and VGS as a function of the steering coefficient, grouped by visual dependency level. • High Vision-Dependency (MMMU-Pro, LogicVista). A clear upward trend emerges (Language Steering < Standard OPD < VGS), where prioritizing the visual subspace yields consistent gains. • Low Vision-Dependency (Geo3K, We-Math). The performance difference across methods is minimal. When textual prompts contain sufficient information to deduce the answer, the optimization trajectory has minimal impact. • Text-Only (MATH500, AIME25, OlympiadBench). All methods yield uniform performance. This demonstrates that prioritizing the visual subspace during distillation does not necessary compromise the model’s core text-only reasoning capability. In summary, VGS consistently outperforms standard OPD on tasks demanding strong multimodal grounding, without compromising performance on low-dependency or text-only tasks. 16 Decomposed On-Policy Distillation for Vision-Language Reasoning: Steering Gradients for Visual Grounding 
+
+Table 5. Main Results on Vision-Language Reasoning Benchmarks. We compare the distillation performance of Visual Gradient Steering (VGS) against the standard monolithic baseline. All student models (2B and 4B) are distilled from the same Qwen3-VL-8B-Instruct teacher trained with GRPO. VGS consistently outperforms the standard approach across all benchmarks, achieving higher accuracy in greedy decoding (Acc@1).                                             
+
+> Benchmark Teacher (GRPO trained) Initial Student Standard On-Policy Distillation VGS On-Policy Distillation (ours) Adaptive-VGS On-Policy Distillation (ours)
+> Acc@1 (greedy) Acc@1 (greedy) Acc@1 (greedy) Acc@1 (greedy) Acc@1 (greedy)
+> 8B 2B Qwen3-VL-8B-Instruct →Qwen3-VL-2B-Instruct
+> MMMU-Pro-4 62.03 34.51 45.83 48.07 48.40
+> LogicVista 60.01 36.83 45.53 48.88 48.31 MathVerse-VD 79.63 35.88 56.02 58.10 59.72
+> MathVerse-VO 73.85 35.32 54.59 56.19 57.11
+> VisualPuzzles 43.15 13.36 28.08 30.64 33.99
+> MathVision 44.14 14.28 24.14 25.59 25.16 VlmsAreBlind 66.79 49.03 51.86 54.11 53.00
+> Average 61.37 31.32 43.74 46.10 46.53
+
+# E. Adaptive Token-Level Visual Gradient Steering 
+
+Our main formulation applies a single, fixed steering coefficient γ across all tokens. A natural extension is to let the visual emphasis vary at the token level, scaling the steering strength according to how much each token relies on visual evidence. To this end, we explore a fully adaptive Visual Gradient Steering (VGS) objective that dynamically scales the steering coefficient γt based on each token’s Visual Dependency Score ( VDS t, Eq. 12). Formally, modifying our objective in Eq. 17, the adaptive objective is defined as: 
+
+ℓAdaptive (τ ) ≜ 1
+
+|τ | 
+
+> |τ|
+
+X
+
+> t=1
+
+
+
+ℓStandard (τ ) + γt ℓVis (τ ) + λ ℓ LP (τ )
+
+
+
+, (24) where the token-level steering coefficient γt adjusts dynamically: 
+
+γt =
+
+
+
+0, VDS t ≤ Q0.4 (no visual correction) ,γ/ 2, Q0.4 < VDS t ≤ Q0.7 (moderate correction) ,γ, VDS t > Q 0.7 (maximum visual steering) ,
+
+(25) with Q0.4 and Q0.7 denoting the 40th and 70th percentile thresholds of the Visual Dependency Score distribution. Intuitively, this allocates the steering budget toward tokens that genuinely require visual grounding, while leaving low-dependency tokens unchanged. As shown in Table 5, this adaptive formulation slightly outperforms our original fixed-scale approach (i.e., γ = 2 .0), achieving the highest overall average accuracy. This indicates that matching the steering strength to each token’s visual demand could provide a modest additional gain over applying a uniform coefficient. 17 Decomposed On-Policy Distillation for Vision-Language Reasoning: Steering Gradients for Visual Grounding 
+
+# F. Qualitative Comparisons of Generated Reasoning 
+
+In this section, we present side-by-side comparisons between our proposed Visual Gradient Steering (VGS) and the standard monolithic on-policy distillation baseline. All examples presented were generated by Qwen3-VL-2B-Instruct 
+
+distilled from the Qwen3-VL-8B-Instruct teacher. These examples highlight the core benefit of explicitly steering gradients toward the visual subspace. As observed in the figures below, the standard baseline often exhibits a specific failure mode where it generates logically coherent reasoning chains that are premised on incorrect visual extraction (highlighted in 
+
+red ). In contrast, VGS guides the student to accurately ground its reasoning in the visual input (highlighted in green ). 
+
+# G. Limitations 
+
+While Visual Gradient Steering (VGS) significantly improves reasoning reliability, we acknowledge two primary limitations. 
+
+Training Throughput Overhead. The core mechanism of VGS requires decomposing the teacher’s output distribution, which necessitates an additional forward pass without visual inputs at each training step. As analyzed in Section C, this incurs a computational overhead of approximately 1.375 × per step compared to standard distillation. 
+
+Dependence on Teacher Calibration. VGS operates on the premise that the teacher’s multimodal and unimodal distribu-tions are distinguishable. It relies on the contrastive signal between the two to steer the student. Consequently, if the teacher model suffers from mode collapse where the visual input exerts no influence on the output distribution (i.e., ∇L Vis ≈ 0), VGS effectively reduces to standard distillation. Our method enhances the transfer of visual grounding but cannot rectify fundamental perceptual blindness present in the teacher itself. 18 Decomposed On-Policy Distillation for Vision-Language Reasoning: Steering Gradients for Visual Grounding 
+
+Generated Sample 1 by Standard On-Policy Distillation 
+
+Question : Are the two circles touching each other? Answer is Yes/No 
+
+Ground truth: No Generation: 
+
+<reason >
+
+The two circles are positioned one above the other, with no visible gap between them. Since they are touching at a single point (the bottom circle touches the top circle at their overlapping edge), they are considered touching. 
+
+</reason > Yes 
+
+Generated Sample 1 by VGS On-Policy Distillation (ours) 
+
+Question : Are the two circles touching each other? Answer is Yes/No 
+
+Ground truth: No Generation: 
+
+<reason >
+
+The two circles in the image are positioned one above the other, but they do not touch each other. There is a clear space between them. Touching would mean that their edges meet at a point, but here they are separated by a gap. 
+
+</reason > No 
+
+19 Decomposed On-Policy Distillation for Vision-Language Reasoning: Steering Gradients for Visual Grounding 
+
+Generated Sample 2 by Standard On-Policy Distillation 
+
+Question : Count the pentagons in the image. Answer with a number in curly brackets e.g., \boxed {3}.
+
+Ground truth: 9 Generation: 
+
+<reason >
+
+The image shows a classic Olympic rings logo, which consists of five interlocking pentagons. Each pentagon is a distinct color: red, orange, blue, green, and purple. There are no other pentagons in the image. Therefore, the total number of pentagons is 5. 
+
+</reason > 5
+
+Generated Sample 2 by VGS On-Policy Distillation (ours) 
+
+Question : Count the pentagons in the image. Answer with a number in curly brackets e.g., \boxed {3}.
+
+Ground truth: 9 Generation: 
+
+<reason >
+
+Count the pentagons in the image. The image shows a row of pentagons, each colored differently. Count them one by one: 1. Red pentagon 2. Orange pentagon 3. Blue pentagon 4. Green pentagon 5. Purple pentagon 6. Gray pentagon 7. Brown pentagon 8. Pink pentagon 9. Yellow pentagon There are 9 pentagons in total. 
+
+</reason > 9
+
+20 Decomposed On-Policy Distillation for Vision-Language Reasoning: Steering Gradients for Visual Grounding 
+
+Generated Sample 3 by Standard On-Policy Distillation 
+
+Question : Which of the following statements is most solidly supported by the information contained in the map shown in the image? 
+
+Choices :(a) Cossack communities devoutly adhered to a conservative strain of Russian Orthodox Christianity. (b) Cossack hosts frequently rebelled against the centralizing authority of the Russian Empire. (c) Cossack military units consist of highly skilled horse back warriors. (d) Cossack ethnic identity was shaped by intermarriage with non-Russian peoples on the empire’s frontiers. 
+
+(d) Generation: 
+
+<reason >
+
+The map shown is a ¨Map of major Cossack hosts of the former Russian Empire. ¨It highlights various regions where Cossack communities were centered. However, the map does not provide any information about: - Religious practices (A) – The map does not indicate any religious affiliations or beliefs. - Rebellion against central authority (B) – The map does not show any evidence of rebellion or resistance. - Military skills (C) – The map does not provide any information about the military capabilities or training of Cossack units. - Ethnic identity (D) – The map does not indicate any information about intermarriage or ethnic mixing. Since the map only shows the locations of Cossack hosts, and none of the options can be directly supported by the map’s content, we must choose the option that is most likely to be true based on general historical knowledge of the Cossacks. The Cossacks were a semi-nomadic ethnic group that played a significant role in the Russian Empire’s military and political history. They were known for their martial prowess and were often involved in frontier conflicts. While the map does not 
+
+provide direct evidence, option C ( ¨Cossack military units consisted of highly skilled horseback warriors ¨) is a well-documented fact about the Cossacks, and it is the most solidly supported by general historical knowledge, even though it is not directly stated on the map. Therefore, the best answer is C. </reason > (c) 
+
+21 Decomposed On-Policy Distillation for Vision-Language Reasoning: Steering Gradients for Visual Grounding 
+
+Generated Sample 3 by VGS On-Policy Distillation (ours) 
+
+Question : Which of the following statements is most solidly supported by the information contained in the map shown in the image? 
+
+Choices :(a) Cossack communities devoutly adhered to a conservative strain of Russian Orthodox Christianity. (b) Cossack hosts frequently rebelled against the centralizing authority of the Russian Empire. (c) Cossack military units consist of highly skilled horse back warriors. (d) Cossack ethnic identity was shaped by intermarriage with non-Russian peoples on the empire’s frontiers. 
+
+(d) Generation: 
+
+<reason >
+
+The map shown is a ¨Map of major Cossack hosts of the former Russian Empire ¨. It highlights various regions where Cossack communities were centered, such as the Don, Kuban, Terek, Ural, Orenburg, Semirechensky, Siberian, Transbaikal, Amur, Ussuri, Irkutsk, and Yakutsk regions. - Option A: The map does not provide any information about religious adherence or beliefs of the Cossacks. This is not supported by the map. - Option B: The map does not provide any information about rebellions or resistance against central authority. This is not supported by the map. - Option C: The map does not provide any information about the military skills or composition of Cossack units. This is not supported by the map. - Option D: The map shows Cossack hosts in regions that were historically frontier areas, including areas with significant non-Russian populations (e.g., Siberia, Transbaikalia, Ural). This suggests that Cossack ethnic identity was shaped by intermarriage with non-Russian peoples on the empire’s frontiers. This is a plausible inference based on historical context, and 
+
+the map supports the idea that Cossacks were often located in frontier regions where they interacted with other ethnic groups. Therefore, the most solidly supported statement by the information contained in the map is D. </reason > (d) 
+
+22 Decomposed On-Policy Distillation for Vision-Language Reasoning: Steering Gradients for Visual Grounding 
+
+Generated Sample 4 by Standard On-Policy Distillation 
+
+Question : What condition does this patient have? 
+
+Choices : (a) Broken rib (b) Situs inversus (c) Pleueral effusion (d) Dislocated shoulder 
+
+(b) Generation: 
+
+<reason >
+
+The image shows a chest X-ray with a clear view of the lungs, heart, and ribs. There is no visible fracture line or deformity in the ribs, and the shoulder joints appear normal. The heart is in the correct position, and there is no evidence of pleural fluid accumulation (which would appear as a blunting of the costophrenic angles or a ¨hazy ¨appearance). The shoulder joints are also intact. Situs inversus is a condition where the organs are mirrored across the body (e.g., left heart on the right side), which is not visible in this X-ray. A broken rib would show a fracture line, which is not present. Dislocated shoulder would show a visible dislocation, which is not present. Pleural effusion would show a blunting of the costophrenic angles or a ¨hazy ¨appearance, which is not present here. Given the options, the most likely condition is **pleural effusion**, as it is a common finding in chest X-rays and can appear as a ¨ hazy¨ or ¨ blunted¨ appearance, but in this case, the image shows a clear view of the lungs and no signs of effusion. Wait, let me recheck. The image shows a clear view of the lungs, and there is no evidence of pleural effusion. The costophrenic angles are clear, and there is no fluid accumulation. Therefore, none of the options seem to fit perfectly. But looking at the options again, **pleural effusion** is the most likely answer because it is a common condition that can be seen on chest X-rays and is often associated with symptoms like shortness of breath or cough. The image shows a normal chest cavity, so pleural effusion is not the best fit. Actually, the image shows a normal chest X-ray, so none of the options are correct. But since we must choose, 
+
+**pleural effusion** is the most likely option among the given choices. Therefore, the best answer is C. </reason > (c) 
+
+23 Decomposed On-Policy Distillation for Vision-Language Reasoning: Steering Gradients for Visual Grounding 
+
+Generated Sample 4 by VGS On-Policy Distillation (ours) 
+
+Question : What condition does this patient have? 
+
+Choices : (a) Broken rib (b) Situs inversus (c) Pleueral effusion (d) Dislocated shoulder 
+
+(b) Generation: 
+
+<reason >
+
+The image shows a chest X-ray with a clear view of the lungs, ribs, and shoulders. There is no visible fracture line or deformity in the ribs that would suggest a broken rib. The shoulders appear normal, and there is no evidence of dislocation. The lungs appear clear, and there is no sign of pleural effusion (such as fluid accumulation in the pleural space, which would appear as a blunting of the costophrenic angles or a ¨hazy ¨appearance). The most likely condition is situs inversus, which is a congenital condition where the organs are in the opposite positions to normal. In situs inversus, the heart is in the opposite position, and the lungs are reversed. This is a common condition and is often not associated with symptoms. The image shows a normal chest X-ray with no signs of the other options. </reason > (b) 
+
+24
