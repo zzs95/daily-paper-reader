@@ -6,43 +6,47 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：📧 2026-06-15
-- 运行时间：2026-06-15 22:54:09 UTC
+- 最新运行日期：📧 2026-06-16
+- 运行时间：2026-06-16 23:13:46 UTC
 - 运行状态：成功
-- 本次总论文数：12
-- 精读区：12
+- 本次总论文数：14
+- 精读区：14
 - 速读区：0
 
 ### 今日简报（AI）
-- 今日共生成 12 篇推荐（精读 12 篇，速读 0 篇）
-- 精读：《MIMIC-CXR-VQA: A Large-Scale LLM-Annotated Dataset and Comparative Benchmark for Medical Visual Question Answering》, 《Mix-to-Max: Optimizing Data Mixtures for Peak Vision-Language Efficiency》
+- 今日共生成 14 篇推荐（精读 14 篇，速读 0 篇）
+- 精读：《Multi-view Chest X-Ray Vision-Language Pre-training via Semantic-Aware Masked Language Modeling and High-order Alignment》, 《Rubric-Grounded Reinforcement Learning: Structured Judge Rewards for Generalizable Reasoning in Language Models》
 - 这些结果覆盖了当下较热的方向，建议先看精读区论文的关键问题与方法。
-- 详情：[/202606/15/README](/202606/15/README)
+- 详情：[/202606/16/README](/202606/16/README)
 
 ### 精读区论文标签
-1. [MIMIC-CXR-VQA: A Large-Scale LLM-Annotated Dataset and Comparative Benchmark for Medical Visual Question Answering](/202606/15/mimic-cxr-vqa-a-large-scale-llm-annotated-dataset-and-comparative-benchmark-for-medical-visual-question-answering)  
+1. [Multi-view Chest X-Ray Vision-Language Pre-training via Semantic-Aware Masked Language Modeling and High-order Alignment](/202606/16/multi-view-chest-x-ray-vision-language-pre-training-via-semantic-aware-masked-language-modeling-and-high-order-alignment)  
    标签：无标签
-2. [Mix-to-Max: Optimizing Data Mixtures for Peak Vision-Language Efficiency](/202606/15/mix-to-max-optimizing-data-mixtures-for-peak-vision-language-efficiency)  
+2. [Rubric-Grounded Reinforcement Learning: Structured Judge Rewards for Generalizable Reasoning in Language Models](/202606/16/rubric-grounded-reinforcement-learning-structured-judge-rewards-for-generalizable-reasoning-in-language-models)  
    标签：无标签
-3. [Revisiting InternVL: A Systematic Technical Framework for Building Powerful Open-Source Vision-Language Models](/202606/15/revisiting-internvl-a-systematic-technical-framework-for-building-powerful-open-source-vision-language-models)  
+3. [Discriminating HFrEF vs HFpEF from chest radiographs: Mitigating demographic performance gaps via augmentation and multimodal fusion](/202606/16/discriminating-hfref-vs-hfpef-from-chest-radiographs-mitigating-demographic-performance-gaps-via-augmentation-and-multimodal-fusion)  
    标签：无标签
-4. [COMPARATIVE ANALYSIS OF MACHINE LEARNING ALGORITHMS FOR CLASSIFYING CHEST X-RAY IMAGES OF COVID-19](/202606/15/comparative-analysis-of-machine-learning-algorithms-for-classifying-chest-x-ray-images-of-covid-19)  
+4. [From Radiomics to TI-RADS: A Stability-Aware Clinically-Interpretable Dictionary for Explainable Thyroid Nodule Classification on Ultrasound](/202606/16/from-radiomics-to-ti-rads-a-stability-aware-clinically-interpretable-dictionary-for-explainable-thyroid-nodule-classification-on-ultrasound)  
    标签：无标签
-5. [Understanding Temporal Logic Consistency in Video-Language Models through Cross-Modal Attention Discriminability](/202606/15/2510.08138v2-understanding-temporal-logic-consistency-in-video-language-models-through-cross-modal-attention-discriminability)  
+5. [Misplaced Central Venous Catheters and Retained Guidewires: A “Never Event” Pictorial Review and Case Series Analysis](/202606/16/misplaced-central-venous-catheters-and-retained-guidewires-a-never-event-pictorial-review-and-case-series-analysis)  
    标签：无标签
-6. [FullFlow: Upgrading Text-to-Image Flow Matching Models for Bidirectional Vision--Language Generation](/202606/15/2605.20316-fullflow-upgrading-text-to-image-flow-matching-models-for-bidirectional-vision--language-generation)  
+6. [Gossypiboma‐Induced Acute Abdomen Highlighting the Importance of Surgical Safety Protocols: A Case Report](/202606/16/gossypibomainduced-acute-abdomen-highlighting-the-importance-of-surgical-safety-protocols-a-case-report)  
    标签：无标签
-7. [Stabilizing Recurrent Dynamics for Test-Time Scalable Latent Reasoning in Looped Language Models](/202606/15/2605.26733-stabilizing-recurrent-dynamics-for-test-time-scalable-latent-reasoning-in-looped-language-models)  
+7. [Looped Diffusion Language Models](/202606/16/2605.26106-looped-diffusion-language-models)  
    标签：无标签
-8. [Decomposed On-Policy Distillation for Vision-Language Reasoning: Steering Gradients for Visual Grounding](/202606/15/2606.00564-decomposed-on-policy-distillation-for-vision-language-reasoning-steering-gradients-for-visual-grounding)  
+8. [Rethinking Agentic RAG: Toward LLM-Driven Logical Retrieval Beyond Embeddings](/202606/16/2605.27123-rethinking-agentic-rag-toward-llm-driven-logical-retrieval-beyond-embeddings)  
    标签：无标签
-9. [Data-Efficient Autoregressive-to-Diffusion Language Models via On-Policy Distillation](/202606/15/2606.06712-data-efficient-autoregressive-to-diffusion-language-models-via-on-policy-distillation)  
+9. [CosmicFish-HRM: Adaptive Reasoning via Hierarchical Recurrent Mechanisms in Compact Language Models](/202606/16/2605.28919-cosmicfish-hrm-adaptive-reasoning-via-hierarchical-recurrent-mechanisms-in-compact-language-models)  
    标签：无标签
-10. [Frozen Foundation-Model Embeddings Discard Small-Lesion Signal in Chest Radiography: Implications for Pre-Deployment Evaluation](/202606/15/2606.11606-frozen-foundation-model-embeddings-discard-small-lesion-signal-in-chest-radiography-implications-for-pre-deployment-evaluation)  
+10. [LoMo: Local Modality Substitution for Deeper Vision-Language Fusion](/202606/16/2605.30265-lomo-local-modality-substitution-for-deeper-vision-language-fusion)  
    标签：无标签
-11. [MedCTA: A Benchmark for Clinical Tool Agents](/202606/15/2606.11702-medcta-a-benchmark-for-clinical-tool-agents)  
+11. [DARTS: Distribution-Aware Active Rollout Trajectory Shaping for Accelerating LLM Reinforcement Learning](/202606/16/2605.30859-darts-distribution-aware-active-rollout-trajectory-shaping-for-accelerating-llm-reinforcement-learning)  
    标签：无标签
-12. [OpenMedReason: Scientific Reasoning Supervision for Medical Vision-Language Models](/202606/15/2606.12169-openmedreason-scientific-reasoning-supervision-for-medical-vision-language-models)  
+12. [ClinicalMC: A Benchmark for Multi-Course Clinical Decision-Making with Large Language Models](/202606/16/2606.03157-clinicalmc-a-benchmark-for-multi-course-clinical-decision-making-with-large-language-models)  
+   标签：无标签
+13. [RL Excursions during Pre-Training: Re-examining Policy Optimization for LLM training](/202606/16/2606.04272-rl-excursions-during-pre-training-re-examining-policy-optimization-for-llm-training)  
+   标签：无标签
+14. [Detecting Functional Memorization in Code Language Models](/202606/16/2606.12764-detecting-functional-memorization-in-code-language-models)  
    标签：无标签
 
 ### 速读区论文标签
