@@ -1,0 +1,491 @@
+Title: Faithful-MR1: Faithful Multimodal Reasoning via Anchoring and Reinforcing Visual Attention
+
+URL Source: https://arxiv.org/pdf/2605.22072
+
+Published Time: Fri, 22 May 2026 00:51:07 GMT
+
+Number of Pages: 20
+
+Markdown Content:
+# Faithful-MR1: Faithful Multimodal Reasoning via Anchoring and Reinforcing Visual Attention 
+
+Changyuan Tian 1,2,* Zhicong Lu 2,*,† Huaxing Liu 1 Xiang Wang 1,‡ 
+
+Shuai Li 1 Yu Chen 1 Wenqian Lv 1 Zichuan Lin 3 Juncheng Diao 2 Deheng Ye 41AMAP, Alibaba Group 2University of Chinese Academy of Sciences 
+
+> 3
+
+Tsinghua University 4Nanyang Technological University 
+
+## Abstract 
+
+Reinforcement learning with verifiable rewards (RLVR) has emerged as a promis-ing paradigm for advancing complex reasoning in large language models, and recent work extends RLVR to multimodal large language models (MLLMs). This transfer, however, surfaces a faithfulness challenge: faithful perception of task-relevant visual evidence and faithful use of that evidence during reasoning, leading to unsatisfactory gains on multimodal benchmarks. Specifically, existing percep-tion supervision often operates on textual descriptions rather than natively on image regions, and faithful use is largely overlooked, exposing the perception–reasoning disconnect where correctly perceived evidence is dropped or contradicted during reasoning. To close these gaps, we propose Faithful-MR1 , a training framework that anchors and reinforces visual attention to address both halves of faithful multimodal reasoning. The Anchoring stage turns perception into an explicit pre-reasoning subtask, supervising a dedicated <Focus> token’s attention directly against image regions rather than through textual descriptions. The Reinforcing stage exposes faithful use through counterfactual image intervention, rewarding answer-correct trajectories that concentrate visual attention where vision causally matters. Extensive experiments demonstrate that Faithful-MR1 outperforms re-cent multimodal reasoning baselines on both Qwen2.5-VL-Instruct 3B and 7B backbones while using substantially less training data. 
+
+## 1 Introduction 
+
+Reinforcement learning with verifiable rewards (RLVR) has emerged as a promising paradigm for advancing complex reasoning in large language models [Guo et al., 2025, Shao et al., 2024, Jaech et al., 2024, Team et al., 2025, Lu et al., 2026]. Motivated by this success, a growing line of work extends RLVR to multimodal large language models (MLLMs), aiming to bring similar reasoning improvements to vision-language tasks [Huang et al., 2026b, Meng et al., 2025, Chen et al., 2025, Shen et al., 2025, Liu et al., 2025b, Yang et al., 2025, Xu et al., 2025a]. On multimodal reasoning benchmarks, however, this transferred recipe yields substantially smaller gains than in the text-only setting. Unlike text-only reasoning, a multimodal reasoning problem requires both faithful perception of task-relevant visual evidence from the image and faithful use of that evidence in the reasoning chain. Recent work addresses parts of these requirements: Perception-R1 [Xiao et al., 2026] and Vision-SR1 [Li et al., 2026] introduce supervision that rewards faithful visual descriptions, and VPPO [Huang et al., 2026a] reweights policy updates toward visually pivotal tokens. Despite these advances, two underlying gaps cut across these efforts. First, perception is      
+
+> *Equal contribution. †Corresponding author. ‡Project leader. Work done during internship at AMAP, Alibaba Group. Contact: tianchangyuan21@mails.ucas.edu.cn ,nazaritelzc@gmail.com .Preprint.
+> arXiv:2605.22072v1 [cs.CL] 21 May 2026
+
+Figure 1: Two failure modes in current multimodal RLVR. Top-left : perception failure —the model misreads visual evidence, and the chain compounds the error. Bottom-left : perception–reasoning disconnect (PRD)—visual evidence is correctly perceived but contradicted during the derivation. 
+
+Right : as Perception Coverage decreases across methods, Faithful Use rises and tracks final answer accuracy (Section 4.4); Faithful-MR1 leads on both. supervised through generated text, an indirect signal for how the model extracts task-relevant visual evidence native to the image. Second, faithful use is overlooked, breaking the link from perception to reasoning: even when task-relevant visual evidence is correctly perceived, it may still be dropped, distorted, or overridden by language priors in the reasoning chain—a failure mode we term the 
+
+perception–reasoning disconnect (PRD). To address these gaps, we conduct a focused quantitative analysis (Figure 1) of two coexisting failure modes: a perception failure , where the chain starts from incorrect visual evidence, and a PRD failure ,where the evidence is correctly perceived but later dropped or contradicted. Across these methods, faithful perception alone does not necessarily translate to faithful use, and final answer accuracy appears more directly influenced by faithful use than by faithful perception alone (Section 4.4). PRD is therefore a distinct and quantitatively significant failure mode, not subsumed by perception accuracy alone. Building on this analysis, we propose Faithful-MR1 , a training framework that anchors and reinforces visual attention to address both halves of faithful multimodal reasoning: faithful perception of task-relevant visual evidence from the image, and faithful use of that evidence in the reasoning chain. The 
+
+Anchoring stage turns perception into an explicit one-step pre-reasoning subtask (“focus first, then reason”): before producing the full reasoning trajectory, the model must first localize and gather the relevant visual evidence through a dedicated <Focus> token, whose attention is supervised directly against image regions rather than generated text. The Reinforcing stage faces a subtler challenge: faithful use is not directly observable in the reasoning trace. We expose it through counterfactual image intervention, treating response tokens whose predictions shift under image masking as where vision causally matters, and reward answer-correct trajectories that concentrate visual attention there. Faithful-MR1 realizes faithful multimodal reasoning—perception is grounded in the image, and reasoning is grounded in perception. Our contributions are: • Through a focused quantitative analysis (Section 4.4), we reveal that pursuing more accurate perception text does not translate to higher answer accuracy in current multimodal RLVR, exposing the perception–reasoning disconnect as a distinct failure mode beyond the reach of perception supervision alone. • We propose Faithful-MR1 , a training framework for faithful multimodal reasoning that couples an Anchoring stage with a Reinforcing stage, jointly closing the perception and use gaps. • We construct an evidence-grounded training corpus of 19.2K examples with bounding-box annota-tions of question-relevant regions, providing a reusable resource for region-grounded supervision in multimodal RLVR; we will release the corpus, training code, and trained checkpoints to facilitate further research. • With substantially less training data, Faithful-MR1 outperforms current multimodal RLVR baselines across the Qwen2.5-VL-Instruct 3B and 7B backbones, and additional analysis confirms substantive improvements in faithful multimodal reasoning. 22 Related Work 
+
+2.1 RLVR for Multimodal Reasoning 
+
+Reinforcement Learning with Verifiable Rewards (RLVR) has become a powerful paradigm for improving language-model reasoning in domains where final answers can be checked automati-cally [Guo et al., 2025, Jaech et al., 2024, Team et al., 2025, Tian et al., 2026]. RLVR is typically instantiated on top of PPO [Schulman et al., 2017]; its group-relative variant GRPO [Shao et al., 2024] replaces per-sample value estimation with group-based advantage normalization, and DAPO [Yu et al., 2025] further refines GRPO with techniques that stabilize training at scale. Recent work adapts this paradigm to multimodal large language models (MLLMs) by defining verifiable rewards over image-text tasks. Vision-R1 [Huang et al., 2026b] demonstrates the effectiveness of R1-style answer-level RLVR for multimodal reasoning, and a broad line of follow-up work explores rule-based RL across diverse task families, training scales, rollout strategies, and shortcut-mitigation designs [Meng et al., 2025, Chen et al., 2025, Shen et al., 2025, Liu et al., 2025b, Yang et al., 2025, Wang et al., 2025a, Liu et al., 2025a, Xia et al., 2025]. A parallel direction scales long-chain visual reasoning through structured supervision [Xu et al., 2025a, Thawakar et al., 2025]. These methods establish outcome-verifiable reinforcement learning as an effective post-training strategy for MLLMs, but final-answer rewards remain sparse with respect to whether the reasoning process is actually grounded in visual evidence. 
+
+2.2 Faithful Multimodal Reasoning 
+
+Faithful multimodal reasoning requires both faithful perception of task-relevant visual evidence and faithful use of that evidence in the reasoning chain. Prior work shows that MLLMs frequently hallucinate visual content or rely on insufficient visual evidence [Guan et al., 2024, Liu et al., 2023, 2024, Lu et al., 2024b], and that longer reasoning chains may amplify hallucination when not properly grounded [Xu et al., 2025b, Yao et al., 2025, Lu et al., 2025]. Recent RL methods introduce perception- and grounding-aware signals: Perception-R1 [Xiao et al., 2026] rewards consistency with visual annotations, Vision-SR1 [Li et al., 2026] decomposes responses into visual descriptions and language reasoning with self-rewarding, VPPO [Huang et al., 2026a] uses token-level visual dependency to reweight optimization toward visually pivotal tokens, and PAPO [Wang et al., 2025b] adds a perception-aware regularizer to the policy objective. A complementary line couples reasoning with explicit visual operations: Ground-R1 [Cao et al., 2025] rewards region selection, and DeepEyes [Zheng et al., 2025b] learns to “think with images” by interleaving visual operations into the chain. Our work addresses both halves jointly: we strengthen perception through supervision native to the image and explicitly target the perception–reasoning disconnect, a failure mode that cuts across existing efforts in which correctly perceived evidence is dropped or contradicted during reasoning. 
+
+## 3 Proposed Approach 
+
+3.1 Overview 
+
+Figure 2 summarizes Faithful-MR1. The Anchoring stage (Section 3.2) augments standard supervised fine-tuning with a region-grounded attention loss on a dedicated <Focus> token, anchoring perception to task-relevant image regions. The Reinforcing stage (Section 3.3) initializes from the Anchoring-stage checkpoint and applies reinforcement learning: counterfactual image intervention localizes vision-dependent reasoning tokens, and a split GRPO advantage rewards answer-correct trajectories that concentrate visual attention at those tokens. 
+
+3.2 Anchoring Visual Attention 
+
+The Anchoring stage realizes “focus first, then reason” through a dedicated <Focus> token whose attention is supervised directly against task-relevant image regions. 
+
+The <Focus> token. We prepend the instruction “Perceive the visual cues relevant to the above question and capture them into <Focus> ” to the model’s response, introducing <Focus> as a ded-icated perceptual anchor for question-relevant visual evidence. <Focus> turns perception into an 3Figure 2: Overview of Faithful-MR1. Left, Anchoring stage: the <Focus> token’s attention is supervised directly against the visual patch tokens covered by question-relevant bounding boxes (red boxes on the image and on the patch strip); the heatmap shows the supervised <Focus> attention row over visual patches. Right, Reinforcing stage: the policy is rolled out on both the original image and a counterfactually masked image; the per-token KL divergence between the two next-token distributions identifies high-Dt (vision-dependent) tokens, and the ratio of their attention to visual content versus that of non-vision-dependent tokens is gated by answer correctness to form the evidence-utilization reward, which combines with the answer-correctness reward via the split GRPO advantage. explicit one-step pre-reasoning subtask: before producing the full reasoning trajectory, the model first localizes and gathers the relevant evidence into <Focus> . Crucially, <Focus> is not a textual supervision target—it is an internal interface whose attention pattern, not its emitted tokens, carries the perceptual signal. 
+
+Region-grounded attention supervision. For each sample, let B = {b1, . . . , b M } denote the bounding boxes of question-relevant evidence. Since the VLM consumes images as visual patch tokens, each box maps to a set P(bm) of patch tokens; their union 
+
+Pbox =
+
+> M
+
+[
+
+> m=1
+
+P(bm) (1) defines the target region for <Focus> . Let a(ℓ,h )Focus denote the attention row of <Focus> at layer ℓ and head h, and let 
+
+s(ℓ,h ) = X
+
+> i∈P box
+
+a(ℓ,h )Focus ,i (2) be its attention mass on target tokens. We supervise s(ℓ,h ) toward a target ratio τ via cross-entropy 
+
+L(ℓ,h )focus = −τ log s(ℓ,h ) − (1 − τ ) log  1 − s(ℓ,h ), (3) averaged over a chosen set S of layer-head pairs: 
+
+LFocus = 1
+
+|S| 
+
+X
+
+> (ℓ,h )∈S
+
+L(ℓ,h )focus . (4) 
+
+Hybrid objective. Combining the attention loss with the standard autoregressive answer loss 
+
+LCE = −
+
+> T
+
+X
+
+> t=1
+
+log pθ (yt | I, q, y <t ) (5) 4gives the Anchoring objective 
+
+LSFT = LCE + λLFocus , (6) where λ controls perceptual guidance strength. Answer supervision is preserved while <Focus> ’s attention is trained to anchor perception to task-relevant image regions. 
+
+3.3 Reinforcing Visual Attention 
+
+The Reinforcing stage targets the perception–reasoning disconnect by directly optimizing faithful use—a property that, as Section 1 noted, is not directly observable in the reasoning trace. We expose it through counterfactual image intervention: response tokens whose predictions shift when the visual evidence is masked are treated as where vision causally matters, and answer-correct trajectories that concentrate visual attention at those tokens are rewarded. The policy initializes from the Anchoring-stage checkpoint and inherits its <Focus> -anchored prompt format, so that “focus first” behavior carries over into the RL phase. 
+
+Counterfactual localization of vision-dependent tokens. We construct a perturbed image by masking the annotated regions while keeping the rest of the image unchanged. Given a sampled response, the policy performs one forward pass on the original image and another on the perturbed image. Let pt and ˜pt denote the next-token distributions at response position t under the original and perturbed images. The visual sensitivity of token t is 
+
+Dt = DKL (pt ∥ ˜pt). (7) Tokens with high Dt are causally vision-dependent: their predictions change when the critical visual evidence is removed. This turns evidence utilization from a trajectory-level notion into a token-level attribution problem—we explicitly localize the subset of response positions whose generation is causally supported by the image, in line with recent evidence that a small subset of critical tokens 
+
+disproportionately drives reasoning quality [Lin et al., 2025]. 
+
+Evidence-utilization reward. After identifying vision-dependent tokens, we reward trajectories that place stronger attention on visual content at those positions than at the remaining response tokens. Let avd be the average attention from vision-dependent reasoning tokens to visual tokens, and anonvd 
+
+the corresponding average from non-vision-dependent response tokens. The evidence-utilization score 
+
+g = avd 
+
+anonvd + ϵ (8) is thresholded into a binary auxiliary reward rattn = 1[g > τ g ], with τg =2 by default. This reward is gated on answer correctness: only answer-correct trajectories can receive it, ensuring that evidence-utilization credit is given to trajectories that both reach the right answer and visibly rely on visual evidence to do so. 
+
+Split GRPO advantage. Let racc ∈ { 0, 1} be the binary answer-correctness reward. Rather than collapsing racc and rattn before normalization, we compute GRPO [Shao et al., 2024, Schulman et al., 2017] advantages separately, 
+
+Aacc = GRPO( racc ), Aattn = GRPO( rattn ), (9) and combine them as A = Aacc + λattn Aattn . The combined advantage drives a GRPO-style policy objective 
+
+LRL (θ) = E(I,q ),o 
+
+"
+
+1
+
+T
+
+> T
+
+X
+
+> t=1
+
+min  rt(θ)A, clip( rt(θ), 1 − ϵ, 1 + ϵ)A#
+
+− β D KL (πθ ∥ πref ) , (10) where rt(θ) = πθ (ot | I, q, o <t )/π θold (ot | I, q, o <t ) is the token-level importance ratio, ϵ is the clipping parameter, and β controls the KL regularization to the reference policy. Answer correctness remains the primary signal. The attention reward additionally reinforces answer-correct trajectories that invoke visual evidence at exactly the reasoning steps where it causally matters. 
+
+## 4 Experiments 
+
+We evaluate our method on both mathematical reasoning and general multimodal understanding benchmarks. We first describe the experimental setup, then present the main results. 54.1 Experimental Setup Training data, models, and baselines. Our training data is constructed from the open-source Vision-SR1-47K dataset [Li et al., 2026], with key visual regions annotated as bounding boxes; after filtering, we obtain 6K SFT examples and 13.2K RL examples (19.2K total). The bounding boxes supervise the <Focus> token in the Anchoring stage and define the masked regions for the Reinforcing stage’s counterfactual image intervention. We use Qwen2.5-VL-Instruct [Bai et al., 2025] as the backbone at the 3B and 7B scales. Under the same data setting we compare with GRPO [Shao et al., 2024] and VPPO [Huang et al., 2026a]; we additionally compare with recent public multimodal reasoning checkpoints Vision-R1-7B [Huang et al., 2026b], Perception-R1-7B [Xiao et al., 2026], and Vision-SR1-7B [Li et al., 2026], which are trained with substantially more data. 
+
+Benchmarks and metrics. We evaluate on seven benchmarks covering math reasoning (MathVi-sion [Wang et al., 2024], MathVerse [Zhang et al., 2024], MathVista [Lu et al., 2024a], WeMath [Qiao et al., 2025], DynaMath [Zou et al., 2025]) and general visual question answering (MMMU-Pro [Yue et al., 2025], HallusionBench [Guan et al., 2024]). For DynaMath we report Worst Case Accuracy (WCA), the benchmark’s headline robustness metric where a question is counted correct only if the model is correct on all 10 visual variants. We report per-benchmark accuracy and average the available scores as the overall result. 
+
+Implementation and evaluation. The Anchoring stage trains for one epoch with learning rate 
+
+1 × 10 −5; the auxiliary <Focus> attention loss uses empirically chosen weight λ=0 .1 and target attention mass τ =0 .8 over the last 4 attention layers. The Reinforcing stage initializes from the Anchoring checkpoint and trains with 8 rollouts per prompt, rollout batch size 128, and learning rate 1 × 10 −6; the rule reward combines an answer-correctness reward and a format reward; the evidence-utilization reward uses threshold τg =2 and coefficient λattn =0 .3 at the 7B scale and 0.1 at the 3B scale. All evaluations use greedy decoding and are run with the EvalScope framework [Team, 2024]; for reliability, we use Qwen3-235B-A22B-Instruct [Team, 2025] as the LLM-as-a-judge across all benchmarks. Full data-construction and supplementary training details are in Appendix A. Table 1: Preliminary main results across multimodal benchmarks. Higher is better. Best results are shown in bold and second-best results are underlined. DynaMath is reported as Worst Case Accuracy (WCA), the benchmark’s robustness metric, where a question is counted correct only if the model is correct on all 10 visual variants. “–” indicates the benchmark overlaps with the model’s training set and is therefore invalid for comparison.                                                                                                                                   
+
+> Method Training Data Math Reasoning General Visual Question Answering Overall Math Vision Math Verse Math Vista WeMath Dyna Math Math Avg MMMU-Pro Hallusion Bench General Avg
+> Public model comparison
+> Vision-R1-7B 210K –48.1 69.4 –24.6 –34.7 68.1 51.4 –Perception-R1-7B 1.4K 27.6 48.7 73.2 68.3 25.2 48.6 35.4 70.0 52.7 49.8 Vision-SR1-7B 56K 28.3 47.8 69.8 64.2 23.4 46.7 41.1 68.1 54.6 49.0
+> Backbone model: Qwen2.5-VL-3B-Instruct
+> Qwen2.5-VL-3B-Instruct –20.4 36.4 56.8 51.7 13.6 35.8 28.0 64.8 46.4 38.8 + GRPO 19.2K 20.9 33.8 60.9 52.8 11.6 36.0 30.2 67.2 48.7 39.6 + VPPO 19.2K 21.4 36.7 61.7 53.8 14.8 37.7 29.8 67.7 48.7 40.8 +Faithful-MR1 19.2K 23.6 40.9 61.9 62.8 18.6 41.6 31.7 68.0 49.9 43.9
+> Backbone model: Qwen2.5-VL-7B-Instruct
+> Qwen2.5-VL-7B-Instruct –23.8 45.6 68.8 61.0 20.4 43.9 34.3 65.0 49.7 45.5 + GRPO 19.2K 26.5 48.7 70.9 60.9 22.2 45.8 36.6 69.3 53.0 47.9 + VPPO 19.2K 27.1 49.5 70.2 65.7 25.2 47.5 37.8 70.8 54.3 49.5 +Faithful-MR1 19.2K 28.3 51.9 73.5 68.9 26.8 49.9 39.7 69.8 54.8 51.3
+
+4.2 Main Results 
+
+Table 1 reports results across seven multimodal reasoning and perception benchmarks, organized into two complementary comparisons: the lower blocks compare training methods under matched Qwen2.5-VL-Instruct backbones [Bai et al., 2025] and 19.2K training examples, while the upper block 6compares publicly released multimodal reasoning checkpoints trained at a range of data scales. Under matched backbone and data, Faithful-MR1 attains the best Overall score at both the 3B and 7B scales (43.9 and 51.3), and the lead extends across most individual benchmarks. Against publicly released checkpoints, Faithful-MR1 also surpasses Vision-SR1-7B and Vision-R1-7B on Overall and on most individual benchmarks despite using substantially less training data. This consistent advantage demonstrates the effectiveness of Faithful-MR1’s two-stage design, which anchors perception to task-relevant image regions and reinforces the faithful use of that evidence in the reasoning chain. Faithful-MR1’s lead is most pronounced on math benchmarks, where the reasoning chain depends most heavily on faithful use of visual evidence; on General VQA, where tasks lean more on broad textual descriptions of the image, Faithful-MR1 still attains the best average. The same pattern carries over to the 3B scale. DynaMath, in particular, offers the strictest test of whether reasoning actually relies on the image: under its Worst Case Accuracy protocol, a question is counted correct only if the model answers all ten visual variants of the same problem correctly, so reasoning chains that bypass the image are penalized directly. Faithful-MR1 leads here, consistent with improvements arising from how visual evidence is propagated through the reasoning chain rather than from polishing perception text alone. 
+
+4.3 Ablation Study 
+
+To attribute Faithful-MR1’s gains to the Anchoring and Reinforcing stages, Table 2 reports five configurations on the Qwen2.5-VL-7B-Instruct backbone, sharing the same training data, optimizer, and evaluation protocol as Table 1. The configurations form an attribution chain that exposes three independent deltas: row (3) over row (2) measures the effect of the Anchoring-stage data under standard SFT, separating it from the <Focus> mechanism; row (4) over row (3) isolates the <Focus> 
+
+mechanism (the <Focus> token together with the auxiliary attention loss) on top of the same data; row (5) over row (4) isolates the Reinforcing stage’s evidence-utilization reward initialized from the Anchoring-stage checkpoint. Both stages contribute, with the Reinforcing stage driving the largest delta. Training on the Anchoring-stage data under standard SFT (row 3 over row 2) lifts Overall from 47.9 to 48.6, a modest data effect. The <Focus> mechanism adds a further 0.6 Overall points on the same data (row 4 over row 3, 48.6 to 49.2), confirming that supervising perception directly against image regions contributes beyond the data itself. The Reinforcing stage delivers the single largest delta (row 5 over row 4, 49.2 to 51.3, 
+
++2 .1 Overall and +2 .6 Math Avg), consistent with the finding that final accuracy is more directly influenced by faithful use than by faithful perception alone. Together, the two stages close the gap between vanilla GRPO and Faithful-MR1 ( +3 .4 Overall), with the bulk coming from the Reinforcing stage building on the perception anchored by the <Focus> mechanism. Table 2: Ablation of Faithful-MR1’s two-stage design on the Qwen2.5-VL-7B-Instruct backbone. 
+
+Vanilla GRPO denotes RL with only the answer-correctness reward; Vanilla SFT denotes standard supervised fine-tuning on the Anchoring-stage data without the <Focus> token or the auxiliary attention loss; Anchoring adds the <Focus> token and the auxiliary attention loss; Faithful-MR1 
+
+additionally enables the Reinforcing stage’s evidence-utilization reward on top of the Anchoring-stage checkpoint. Best results in bold, second-best underlined.                                                                
+
+> #Configuration Math Reasoning General Visual Question Answering Overall Math Vision Math Verse Math Vista WeMath Dyna Math Math Avg MMMU-Pro Hallusion Bench General Avg
+> (1) Qwen2.5-VL-7B-Instruct 23.8 45.6 68.8 61.0 20.4 43.9 34.3 65.0 49.7 45.5 (2) (1) + Vanilla GRPO 26.5 48.7 70.9 60.9 22.2 45.8 36.6 69.3 53.0 47.9 (3) (1) + Vanilla SFT + Vanilla GRPO 26.0 50.0 71.1 64.3 22.0 46.7 37.8 69.1 53.4 48.6 (4) (1) + Anchoring + Vanilla GRPO 27.5 49.5 70.9 64.5 24.2 47.3 38.2 69.6 53.9 49.2 (5) Faithful-MR1 28.3 51.9 73.5 68.9 26.8 49.9 39.7 69.8 54.8 51.3
+
+Anchoring and Reinforcing weights: how much is enough? Each stage carries a single weight on its visual-attention term: λ on the Anchoring focus loss in LSFT , and λattn on the attention advantage in the Reinforcing split-GRPO objective. Both control the strength of visual-attention guidance during training. We sweep each independently on Qwen2.5-VL-3B-Instruct and report DynaMath’s 7official Reasoning Robustness (Figure 3), defined as the ratio WCA /AvgAcc across the ten visual variants of each problem, which directly measures how consistently the model relies on the image. 0.0 0.2 0.4 0.6 0.8 1.0     
+
+> Visual-attention weight
+> 28
+> 30
+> 32
+> 34
+> 36
+> 38
+> 40
+> 42
+> DynaMath Reasoning
+> Robustness (\%)
+> Anchoring λ(SFT)
+> Reinforcing λattn (RL)
+> 3B default (= sweep peak)
+
+Figure 3: Effect of the Anchoring and Re-inforcing weights on DynaMath Reasoning Robustness, sweeping the λ and the λattn on Qwen2.5-VL-3B-Instruct. Stars mark the 3B defaults, set to the sweep peaks. Both sweeps trace an inverted-U with peaks at mod-erate values: the Anchoring sweep peaks at λ=0 .1
+
+(35 .9, +3 .3 over λ=0 ), and the Reinforcing sweep at λattn =0 .1 (37 .7, +1 .6 over λattn =0 ); pushing ei-ther weight too high ( λ=0 .3, λattn =1 ) drops robust-ness below the corresponding zero-weight baseline. That both stages produce the same inverted-U is con-sistent with their acting on a shared visual-attention mechanism. We accordingly adopt the sweep optima 
+
+λ=0 .1 and λattn =0 .1 for our 3B main results. 
+
+4.4 Quantifying the Perception-Reasoning Disconnect 
+
+To separate gains in faithful perception from gains in faithful use, we evaluate behavioral signatures on the MathVerse Vision-Only split (788 responses), which removes figure-related text from the question and thus forces models to rely on the image. For each problem we pre-extract a list of gold visual facts using Gemini-3-Flash conditioned on the im-age and the ground-truth answer; Gemini-3-Flash then scores every critical gold fact along two per-fact indicators: P =1 if the fact is verbalized cor-rectly, and U =1 if it is used as a load-bearing premise in the derivation with a value consistent with the gold and not contradicted later in the chain. We report Perception Coverage = Pr( P =1) , the rate at which gold facts are verbalized in the response; Faithful Use = Pr( U =1 | P =1) , the rate at which verbalized facts are then committed to the derivation; and Answer Acc. = Pr( A=1) . Perception Coverage and Faithful Use measure conceptually distinct quantities (a method can verbalize many visual facts decoratively, or commit fewer facts more faithfully to its derivation), so they need not move together. Table 3 shows that Perception Coverage and Accuracy do not move together. Vision-SR1-7B and Vision-R1-7B both attain high Perception Coverage but markedly lower Faithful Use; Vision-SR1 in particular leaves roughly half of its correctly verbalized facts unused or used with inconsistent values. Under matched backbone and training data, Faithful-MR1 reverses this profile, attaining the highest Faithful Use and Answer Accuracy most efficiently. The gain does not come from verbalizing more perception, but from committing a larger fraction of perceived evidence to the derivation, exactly the PRD reduction the Reinforcing stage targets. Table 3: Behavioral analysis on the MathVerse Vision-Only split (788 responses; percentages except Length). Perception Coverage = Pr( P =1) ; Faithful Use = Pr( U =1 | P =1) ; Length: mean tokens per response under the Qwen2.5-VL tokenizer; Answer Acc. = Pr( A=1) . Best bold , second-best underlined. 
+
+Method Perception Coverage Faithful Use Length (tok) Answer Acc. 
+
+Vision-R1-7B 70.2 54.3 526 41.4 Vision-SR1-7B 74.6 49.4 597 41.8 Qwen2.5-VL-7B-Instruct 65.2 63.3 401 26.5 + VPPO 65.1 62.9 382 41.9 + Faithful-MR1 61.3 66.7 325 45.1 4.5 Qualitative Visualization 
+
+To make the Faithful Use gap of Table 3 concrete, Figure 4 contrasts Vision-SR1 and Faithful-MR1 on the same MathVerse Vision-Only problem. Both models verbalize the gold facts for solving the 8Figure 4: Case-level illustration of the Faithful Use gap. Left: problem image, with gold facts 
+
+∠1=55 ◦ and ∠3=55 ◦. Top-right: Vision-SR1’s response; the derivation re-assigns 125 ◦ to ∠1
+
+(red span). Bottom-right: Faithful-MR1’s response; tokens identified as vision-dependent (high visual-sensitivity score Dt) are shaded in orange, and the load-bearing arithmetic step is highlighted in green. problem ( ∠1=55 ◦, ∠3=55 ◦), yet Vision-SR1 silently re-assigns 125 ◦ to ∠1 inside its derivation and never recovers, a textbook PRD failure. In contrast, Faithful-MR1’s high-Dt tokens (those most sensitive to image masking) concentrate on the gold-value tokens themselves, and ∠1=55 ◦ is then carried faithfully into the load-bearing arithmetic step that yields the correct answer, exposing where vision causally matters and how it propagates through the chain. 
+
+## 5 Limitations 
+
+While Faithful-MR1 delivers consistent gains across multimodal reasoning benchmarks on both the 3B and 7B variants of Qwen2.5-VL with substantially less training data, there are two limitations including its reliance on region-level annotations and the additional training-time compute introduced by counterfactual intervention. The Anchoring stage requires bounding-box annotations of question-relevant regions, which we obtain at scale from an automated multimodal annotator (Gemini-3-Flash). In addition, the Reinforcing stage’s counterfactual image intervention runs one extra masked-image forward pass per rollout during training, a modest overhead over vanilla GRPO; inference itself adds no overhead, and Faithful-MR1 produces shorter, more token-efficient responses than recent baselines (Table 3). 
+
+## 6 Conclusion 
+
+Multimodal RLVR yields smaller gains than its text-only counterpart: faithful multimodal reasoning requires both faithful perception and faithful use of task-relevant visual evidence, but current multi-modal RLVR methods address these only partially. Specifically, perception is typically supervised through generated text and faithful use is often overlooked, exposing the perception–reasoning discon-nect where correctly perceived evidence is dropped or contradicted during reasoning. Our quantitative analysis confirms PRD as a distinct failure mode beyond the reach of perception supervision alone, with final accuracy more directly influenced by faithful use than by faithful perception alone. To close these gaps, we proposed Faithful-MR1, a training framework that anchors and reinforces visual attention: the Anchoring stage supervises a <Focus> token’s attention directly against image regions rather than generated text, while the Reinforcing stage rewards answer-correct trajectories that concentrate visual attention where vision causally matters, exposed through counterfactual image intervention. With substantially less training data, Faithful-MR1 outperforms recent multimodal reasoning baselines on both Qwen2.5-VL-Instruct 3B and 7B backbones. 9References 
+
+Shuai Bai et al. Qwen2.5-vl technical report. arXiv preprint arXiv:2502.13923 , 2025. Meng Cao, Haoze Zhao, Can Zhang, Xiaojun Chang, Ian Reid, and Xiaodan Liang. Ground-r1: Incen-tivizing grounded visual reasoning via reinforcement learning. arXiv preprint arXiv:2505.20272 ,2025. Liang Chen, Lei Li, Haozhe Zhao, Yifan Song, and Vinci. R1-v: Reinforcing super generalization ability in vision-language models with less than $3. https://github.com/Deep-Agent/R1-V ,2025. Accessed: 2025-02-02. Google DeepMind. Gemini 3 flash. https://deepmind.google/models/gemini/flash/ , 2026. Accessed: 2026-04-26. Tianrui Guan, Fuxiao Liu, Xiyang Wu, Ruiqi Xian, Zongxia Li, Xiaoyu Liu, Xijun Wang, Lichang Chen, Furong Huang, Yaser Yacoob, Dinesh Manocha, and Tianyi Zhou. Hallusionbench: An advanced diagnostic suite for entangled language hallucination and visual illusion in large vision-language models. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pages 14375–14385, June 2024. Daya Guo, Dejian Yang, Haowei Zhang, Junxiao Song, Peiyi Wang, Qihao Zhu, Runxin Xu, Ruoyu Zhang, Shirong Ma, Xiao Bi, et al. Deepseek-r1 incentivizes reasoning in llms through reinforce-ment learning. Nature , 645(8081):633–638, 2025. Siyuan Huang, Xiaoye Qu, Yafu Li, Yun Luo, Zefeng He, Daizong Liu, and Yu Cheng. Spotlight on token perception for multimodal reinforcement learning. In The Fourteenth International Conference on Learning Representations , 2026a. URL https://openreview.net/forum?id= bRA4lVWJVQ .Wenxuan Huang, Bohan Jia, Shaosheng Cao, Zheyu Ye, Fei zhao, Zhe Xu, Yao Hu, and Shaohui Lin. Vision-r1: Incentivizing reasoning capability in multimodal large language models. In 
+
+The Fourteenth International Conference on Learning Representations , 2026b. URL https: //openreview.net/forum?id=UZIjskfbfU .Aaron Jaech, Adam Kalai, Adam Lerer, Adam Richardson, Ahmed El-Kishky, Aiden Low, Alec Helyar, Aleksander Madry, Alex Beutel, Alex Carney, et al. Openai o1 system card. arXiv preprint arXiv:2412.16720 , 2024. Zongxia Li, Wenhao Yu, Chengsong Huang, Zhenwen Liang, Rui Liu, Fuxiao Liu, Jingxi Chen, Dian Yu, Jordan Lee Boyd-Graber, Haitao Mi, and Dong Yu. Vision-SR1: Self-rewarding vision-language model via reasoning decomposition and multi-reward policy optimization. In 
+
+The Fourteenth International Conference on Learning Representations , 2026. URL https: //openreview.net/forum?id=C1M4ETatgM .Zicheng Lin, Tian Liang, Jiahao Xu, Qiuzhi Liu, Xing Wang, Ruilin Luo, Chufan Shi, Siheng Li, Yujiu Yang, and Zhaopeng Tu. Critical tokens matter: Token-level contrastive estimation enhances llm’s reasoning capability. In Forty-second International Conference on Machine Learning , 2025. Fuxiao Liu, Kevin Lin, Linjie Li, Jianfeng Wang, Yaser Yacoob, and Lijuan Wang. Mitigating halluci-nation in large multi-modal models via robust instruction tuning. arXiv preprint arXiv:2306.14565 ,2023. Hanchao Liu, Wenyuan Xue, Yifei Chen, Dapeng Chen, Xiutian Zhao, Ke Wang, Liping Hou, Rongjun Li, and Wei Peng. A survey on hallucination in large vision-language models. arXiv preprint arXiv:2402.00253 , 2024. Xiangyan Liu, Jinjie Ni, Zijian Wu, Chao Du, Longxu Dou, Haonan Wang, Tianyu Pang, and Michael Qizhe Shieh. Noisyrollout: Reinforcing visual reasoning with data augmentation. arXiv preprint arXiv:2504.13055 , 2025a. Ziyu Liu, Zeyi Sun, Yuhang Zang, Xiaoyi Dong, Yuhang Cao, Haodong Duan, Dahua Lin, and Jiaqi Wang. Visual-rft: Visual reinforcement fine-tuning. In Proceedings of the IEEE/CVF International Conference on Computer Vision , pages 2034–2044, 2025b. 10 Pan Lu, Hritik Bansal, Tony Xia, Jiacheng Liu, Chunyuan Li, Hannaneh Hajishirzi, Hao Cheng, Kai-Wei Chang, Michel Galley, and Jianfeng Gao. Mathvista: Evaluating mathematical reasoning of foundation models in visual contexts. In The Twelfth International Conference on Learning Representations , 2024a. URL https://openreview.net/forum?id=KUNzEQMWU7 .Zhicong Lu, Li Jin, Ziwei Chen, Changyuan Tian, Xian Sun, Xiaoyu Li, Yi Zhang, Qi Li, and Guan-gluan Xu. Relation-aware multi-pass comparison deconfounded network for change captioning. 
+
+IEEE Transactions on Circuits and Systems for Video Technology , 34(12):13349–13363, 2024b. Zhicong Lu, Changyuan Tian, PeiguangLi PeiguangLi, Li Jin, Sirui Wang, Wei Jia, Ying Shen, and Guangluan Xu. Piper: Benchmarking and prompting event reasoning boundary of llms via debiasing-distillation enhanced tuning. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 28591–28613, 2025. Zhicong Lu, Zichuan Lin, Wei Jia, Changyuan Tian, Deheng Ye, Peiguang Li, Li Jin, Nayu Liu, Guangluan Xu, and Wei Feng. Hisr: Hindsight information modulated segmental process rewards for multi-turn agentic reinforcement learning. arXiv preprint arXiv:2603.18683 , 2026. Fanqing Meng, Lingxiao Du, Zongkai Liu, Zhixiang Zhou, Quanfeng Lu, Daocheng Fu, Tiancheng Han, Botian Shi, Wenhai Wang, Junjun He, Kaipeng Zhang, Ping Luo, Yu Qiao, Qiaosheng Zhang, and Wenqi Shao. Mm-eureka: Exploring the frontiers of multimodal reasoning with rule-based reinforcement learning, 2025. URL https://arxiv.org/abs/2503.07365 .Runqi Qiao, Qiuna Tan, Guanting Dong, MinhuiWu MinhuiWu, Chong Sun, Xiaoshuai Song, Jiapeng Wang, Zhuoma Gongque, Shanglin Lei, Yifan Zhang, et al. We-math: Does your large multimodal model achieve human-like mathematical reasoning? In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 20023–20070, 2025. John Schulman, Filip Wolski, Prafulla Dhariwal, Alec Radford, and Oleg Klimov. Proximal policy optimization algorithms. arXiv preprint arXiv:1707.06347 , 2017. Zhihong Shao, Peiyi Wang, Qihao Zhu, Runxin Xu, Junxiao Song, Xiao Bi, Haowei Zhang, Mingchuan Zhang, Y. K. Li, Y. Wu, and Daya Guo. Deepseekmath: Pushing the limits of mathemat-ical reasoning in open language models, 2024. URL https://arxiv.org/abs/2402.03300 .Haozhan Shen, Peng Liu, Jingcheng Li, Chunxin Fang, Yibo Ma, Jiajia Liao, Qiaoli Shen, Zilun Zhang, Kangjia Zhao, Qianqian Zhang, Ruochen Xu, and Tiancheng Zhao. Vlm-r1: A stable and generalizable r1-style large vision-language model. arXiv preprint arXiv:2504.07615 , 2025. Guangming Sheng, Chi Zhang, Zilingfeng Ye, Xibin Wu, Wang Zhang, Ru Zhang, Yanghua Peng, Haibin Lin, and Chuan Wu. Hybridflow: A flexible and efficient rlhf framework. arXiv preprint arXiv:2409.19256 , 2024. Kimi Team, Angang Du, Bofei Gao, Bowei Xing, Changjiu Jiang, Cheng Chen, Cheng Li, Chenjun Xiao, Chenzhuang Du, Chonghua Liao, et al. Kimi k1. 5: Scaling reinforcement learning with llms. arXiv preprint arXiv:2501.12599 , 2025. ModelScope Team. EvalScope: Evaluation framework for large models, 2024. URL https: //github.com/modelscope/evalscope .Qwen Team. Qwen3 technical report, 2025. URL https://arxiv.org/abs/2505.09388 .Omkar Thawakar, Dinura Dissanayake, Ketan Pravin More, Ritesh Thawkar, Ahmed Heakl, Noor Ahsan, Yuhao Li, Ilmuz Zaman Mohammed Zumri, Jean Lahoud, Rao Muhammad Anwer, et al. Llamav-o1: Rethinking step-by-step visual reasoning in llms. In Findings of the Association for Computational Linguistics: ACL 2025 , pages 24290–24315, 2025. Changyuan Tian, Zhicong Lu, Shuang Qian, Nayu Liu, Peiguang Li, Li Jin, Leiyi Hu, Zhizhao Zeng, Sirui Wang, Ke Zeng, et al. Rectify evaluation preference: Improving llms’ critique on math reasoning via perplexity-aware reinforcement learning. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 40, pages 33241–33249, 2026. 11 Ke Wang, Junting Pan, Weikang Shi, Zimu Lu, Houxing Ren, Aojun Zhou, Mingjie Zhan, and Hongsheng Li. Measuring multimodal mathematical reasoning with math-vision dataset. In The Thirty-eight Conference on Neural Information Processing Systems Datasets and Benchmarks Track , 2024. URL https://openreview.net/forum?id=QWTCcxMpPA .Peiyu Wang, Yichen Wei, Yi Peng, Xiaokun Wang, Weijie Qiu, Wei Shen, Tianyidan Xie, Jiangbo Pei, Jianhao Zhang, Yunzhuo Hao, et al. Skywork r1v2: Multimodal hybrid reinforcement learning for reasoning. arXiv preprint arXiv:2504.16656 , 2025a. Zhenhailong Wang, Xuehang Guo, Sofia Stoica, Haiyang Xu, Hongru Wang, Hyeonjeong Ha, Xiusi Chen, Yangyi Chen, Ming Yan, Fei Huang, et al. Perception-aware policy optimization for multimodal reasoning. arXiv preprint arXiv:2507.06448 , 2025b. Jiaer Xia, Yuhang Zang, Peng Gao, Sharon Li, and Kaiyang Zhou. Visionary-r1: Mitigating shortcuts in visual reasoning with reinforcement learning. arXiv preprint arXiv:2505.14677 , 2025. Tong Xiao, Xin Xu, Zhenya Huang, Hongyu Gao, Quan Liu, Qi Liu, and Enhong Chen. Perception-r1: Advancing multimodal reasoning capabilities of MLLMs via visual perception reward. In 
+
+The Fourteenth International Conference on Learning Representations , 2026. URL https: //openreview.net/forum?id=KttCXdjj4w .Guowei Xu, Peng Jin, Ziang Wu, Hao Li, Yibing Song, Lichao Sun, and Li Yuan. Llava-cot: Let vision language models reason step-by-step. In Proceedings of the IEEE/CVF International Conference on Computer Vision , pages 2087–2098, 2025a. Zhongxing Xu, Chengzhi Liu, Qingyue Wei, Juncheng Wu, James Zou, Xin Eric Wang, Yuyin Zhou, and Sheng Liu. More thinking, less seeing? assessing amplified hallucination in multimodal reasoning models. In The Thirty-ninth Annual Conference on Neural Information Processing Systems , 2025b. URL https://openreview.net/forum?id=KzU33wR875 .Yi Yang, Xiaoxuan He, Hongkun Pan, Xiyan Jiang, Yan Deng, Xingtao Yang, Haoyu Lu, Dacheng Yin, Fengyun Rao, Minfeng Zhu, et al. R1-onevision: Advancing generalized multimodal reasoning through cross-modal formalization. In Proceedings of the IEEE/CVF International Conference on Computer Vision , pages 2376–2385, 2025. Zijun Yao, Yantao Liu, Yanxu Chen, Jianhui Chen, Junfeng Fang, Lei Hou, Juanzi Li, and Tat-Seng Chua. Are reasoning models more prone to hallucination? arXiv preprint arXiv:2505.23646 , 2025. Qiying Yu, Zheng Zhang, Ruofei Zhu, Yufeng Yuan, Xiaochen Zuo, Yu Yue, Weinan Dai, Tiantian Fan, Gaohong Liu, Lingjun Liu, et al. Dapo: An open-source llm reinforcement learning system at scale. arXiv preprint arXiv:2503.14476 , 2025. Xiang Yue, Tianyu Zheng, Yuansheng Ni, Yubo Wang, Kai Zhang, Shengbang Tong, Yuxuan Sun, Botao Yu, Ge Zhang, Huan Sun, Yu Su, Wenhu Chen, and Graham Neubig. MMMU-pro: A more robust multi-discipline multimodal understanding benchmark. In Wanxiang Che, Joyce Nabende, Ekaterina Shutova, and Mohammad Taher Pilehvar, editors, Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 15134–15186, Vienna, Austria, July 2025. Association for Computational Linguistics. ISBN 979-8-89176-251-0. doi: 10.18653/v1/2025.acl-long.736. URL https://aclanthology.org/ 2025.acl-long.736/ .Renrui Zhang, Dongzhi Jiang, Yichi Zhang, Haokun Lin, Ziyu Guo, Pengshuo Qiu, Aojun Zhou, Pan Lu, Kai-Wei Chang, Yu Qiao, Peng Gao, and Hongsheng Li. Mathverse: Does your multi-modal llm truly see the diagrams in visual math problems? In Computer Vision – ECCV 2024: 18th European Conference, Milan, Italy, September 29–October 4, 2024, Proceedings, Part VIII , page 169–186, Berlin, Heidelberg, 2024. Springer-Verlag. ISBN 978-3-031-73241-6. doi: 10.1007/ 978-3-031-73242-3_10. URL https://doi.org/10.1007/978-3-031-73242-3_10 .Yaowei Zheng, Richong Zhang, Junhao Zhang, Yanhan Ye, Zheyan Luo, Zhangchi Feng, and Yongqiang Ma. Llamafactory: Unified efficient fine-tuning of 100+ language models. In Pro-ceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 3: System Demonstrations) , Bangkok, Thailand, 2024. Association for Computational Linguistics. URL http://arxiv.org/abs/2403.13372 .12 Yaowei Zheng, Junting Lu, Shenzhi Wang, Zhangchi Feng, Dongdong Kuang, and Yuwen Xiong. Easyr1: An efficient, scalable, multi-modality rl training framework. https://github.com/ hiyouga/EasyR1 , 2025a. Ziwei Zheng, Michael Yang, Jack Hong, Chenxiao Zhao, Guohai Xu, Le Yang, Chao Shen, and Xing Yu. Deepeyes: Incentivizing" thinking with images" via reinforcement learning. arXiv preprint arXiv:2505.14362 , 2025b. Chengke Zou, Xingang Guo, Rui Yang, Junyu Zhang, Bin Hu, and Huan Zhang. Dynamath: A dynamic visual benchmark for evaluating mathematical reasoning robustness of vision language models. In The Thirteenth International Conference on Learning Representations , 2025. URL 
+
+https://openreview.net/forum?id=VOAMTA8jKu .
+
+## A Additional Experimental Details 
+
+A.1 Training and Evaluation Protocol Training data construction. We construct our training data from the open-source Vision-SR1-47K dataset [Li et al., 2026]. Key visual regions are annotated as bounding boxes by Gemini-3-Flash [Google DeepMind, 2026] conditioned on the image, query, and ground-truth answer (full prompt in Appendix A.3). For the SFT split, responses are generated by rollouts from Qwen2.5-VL-7B-Instruct [Bai et al., 2025] and filtered by rules and an LLM-as-a-judge for answer correctness and reasoning quality. After filtering we obtain 6K SFT examples and 13.2K RL examples (19.2K total). All matched-backbone baselines use this same split; GRPO uses only the final-answer reward, while VPPO and our method use the same answer reward with their respective faithfulness training signals. 
+
+Implementation details. We implement the Anchoring stage with LlamaFactory [Zheng et al., 2024] and the Reinforcing stage with EasyR1 [Zheng et al., 2025a, Sheng et al., 2024], both with bf16 precision; rollout temperature is set to 1.0 in the Reinforcing stage. GRPO and VPPO baselines are reproduced from their official open-source implementations on our training data. All training runs are conducted on 32 AMD MI308X GPUs under the ROCm/HIP runtime. 
+
+A.2 Additional Case Studies 
+
+To complement the qualitative example in Figure 4, we provide three additional MathVerse Vision-Only cases where a baseline correctly verbalizes the gold visual fact ( P =1 ) but fails to use it faithfully in the derivation ( U =0 , A=0 ), while Faithful-MR1 reaches the correct answer through faithful use of the same fact. We show each model’s full response with three highlights: blue marks where the gold visual fact is correctly verbalized, red marks where the baseline drops or contradicts that fact in the derivation (the perception–reasoning disconnect), and green marks the load-bearing step in Faithful-MR1’s response that uses the fact correctly. The three cases involve different baselines (Vision-SR1, VPPO, Perception-R1), illustrating that the perception–reasoning disconnect spans different methods rather than being specific to one design. 
+
+Case A: angle bisector with parallel lines (Vision-SR1). Question. BD bisects ∠ABC , CD ∥
+
+AB ; find ∠CDB . Choices: A: 55 ◦ B: 50 ◦ C: 45 ◦ D: 30 ◦. GT: A ( 55 ◦). 
+
+13 Gold visual fact. ∠DCB is labeled 70 ◦ in the figure. 
+
+Vision-SR1 response (PRD; P =1 , U =0 , A=0 ): 
+
+<description> 
+
+The figure shows a triangle ABC with point D on the extension of side CB beyond B. Segment BD bisects angle 
+
+ABC , and line segment CD is parallel to line segment AB . The angle at C is labeled 70 ◦. Because CD is parallel to AB and BD bisects angle ABC , angle CDB is equal to half of angle ACB (which is 70 ◦), making it 35 ◦.However, the problem asks for the measure of angle CDB , and the closest match among the given choices is 30 ◦.
+
+</description> <think> 
+
+To solve this problem, we need to analyze the geometric properties and relationships in the given figure. 
+
+1. Understanding the Figure: We have a triangle △ABC with point D on the extension of side CB . BD bisects angle ∠ABC . CD is parallel to AB . We need to find the measure of angle ∠CDB .
+
+2. Angle Bisector Property: Since BD bisects ∠ABC , it divides ∠ABC into two equal angles. Let ∠ABD =
+
+∠DBC = x.
+
+3. Using Parallel Lines: CD ∥ AB . By alternate interior angles, ∠DBC = ∠BAC = x.
+
+4. Triangle Properties: In triangle BCD , angles ∠DBC and ∠BDC are equal because △BCD is isosceles (since 
+
+CD ∥ AB and angles are equal). Therefore, ∠CDB = x.
+
+5. Finding the Angle: Since ∠ABD = x and ∠DBC = x, and knowing that ∠ABC = 2 x. The measure of angle 
+
+∠CDB is half of the angle ∠ACB because of the parallel lines and angle bisector. Given that ∠ACB = 70 ◦, angle 
+
+∠CDB = 70 ◦ 
+
+> 2
+
+= 35 ◦.
+
+6. Matching with Options: The closest option to 35 ◦ is not listed, so we must re-evaluate the problem constraints or options. However, given the problem constraints and options, it seems possible there might be a mistake in calculation or assumption. Let’s consider the closest feasible option, which might be due to rounding or problem setup error. Upon reviewing the problem and options, the closest feasible option to our calculated 35 ◦ is not available. However, given the problem setup, it seems likely the intended answer might be one of the listed options. Upon re-evaluation, the closest option to 35 ◦ is 30 ◦, but given the problem constraints, it seems likely the intended answer might be 45 ◦ or 50 ◦ due to possible rounding or error. 
+
+[The model then enters a loop, repeating the paragraph “Upon final verification, the closest option to our calculated 
+
+35 ◦ is not available, but given the problem constraints, it seems likely the intended answer might be due to error or setup.” approximately 25 times before truncation. Final answer: 30 ◦ (option D, incorrect).] 
+
+</think> 
+
+Faithful-MR1 response ( P =1 , U =1 , A=1 ): 
+
+To determine the measure of angle ∠CDB :
+
+1. Identify the given information: BD bisects ∠ABC ; CD ∥ AB ; ∠DCB = 70 ◦.
+
+2. Use the property of angle bisector: Since BD bisects ∠ABC , we have ∠ABD = ∠DBC .
+
+3. Use the property of parallel lines: Since CD ∥ AB , the corresponding angles are equal: ∠ABD = ∠BDC .
+
+4. Relate the angles using the straight line property: The angles on a straight line sum up to 180 ◦: ∠DCB +
+
+∠BDC +∠DBC = 180 ◦. Substitute ∠DCB = 70 ◦ and ∠BDC = ∠ABD : 70 ◦ +∠ABD +∠ABD = 180 ◦,so 2∠ABD = 110 ◦ and ∠ABD = 55 ◦.
+
+5. Conclusion: Since ∠ABD = ∠DBC , ∠DBC = 55 ◦. The measure of ∠CDB is A .
+
+14 Case B: cone height from a sector (VPPO). Question. A cone is formed by rolling up a sector with slant height 6 and central angle 120 ◦; find the height of the cone. Choices: A: 6 B: 8 C: 3√3
+
+D: 4√2. GT: D ( 4√2). Gold visual facts. (F1) The slant height of the cone is labeled 6. (F2) The central angle of the sector forming the lateral surface is labeled 120 ◦.
+
+VPPO response (PRD; P =1 , U =0 , A=0 ): 
+
+To determine the height of the cone, we need to analyze the given information and use geometric properties. Here’s the step-by-step reasoning: 
+
+1. Identify the given information: The slant height of the cone is 6. The angle at the vertex of the cone is 120 
+
+degrees. 
+
+2. Understand the geometry: The angle at the vertex of the cone is 120 degrees, which means the angle at the base of the cone is 60 degrees (since the angle at the vertex is split into two equal angles of 60 degrees each). The slant height of the cone is the hypotenuse of a right triangle formed by the height of the cone, the radius of the base, and the slant height. 
+
+3. Use trigonometry: In the right triangle formed by the height of the cone, the radius of the base, and the slant height, the angle at the base is 60 degrees. The height of the cone is the opposite side to the 60 -degree angle, and the slant height is the hypotenuse. The relationship in a 30 -60 -90 triangle tells us that the height (opposite the 60 -degree angle) is  
+
+> √32
+
+times the hypotenuse. Therefore, the height h of the cone is 6 × 
+
+> √32
+
+= 3 √3.So, the height of the cone is 3√3.The correct answer is C .
+
+Faithful-MR1 response ( P =1 , U =1 , A=1 ): 
+
+To find the height of the cone, let’s analyze the given information: 
+
+1. The slant height of the cone is 6 units. The central angle of the sector is 120 ◦.The sector of the cone forms a part of a circle with the radius equal to the slant height of the cone. The arc length of this sector is equal to the circumference of the base of the cone. The formula for the arc length L of a sector with radius r and central angle θ (in degrees) is: 
+
+L = θ
+
+360 ◦ × 2πr. 
+
+Here, L = 2 πr (circumference of the base of the cone) and the sector radius is 6:
+
+2πr = 120 ◦
+
+360 ◦ × 2π × 6 = 13 × 12 π = 4 π, 
+
+so r = 2 .Now, we have the radius of the base of the cone as 2 units. To find the height h of the cone, we use the Pythagorean theorem in the right triangle formed by the height, the radius of the base, and the slant height: 
+
+h2 + r2 = l2 =⇒ h2 + 2 2 = 6 2 =⇒ h2 = 32 = ⇒ h = √32 = 4 √2.
+
+Thus, the height of the cone is D .
+
+Case C: tangents from an external point (Perception-R1). Question. P A and P B are tangent to circle O at A and B; find ∠P . Choices: A: 65 ◦ B: 130 ◦ C: 50 ◦ D: 100 ◦. GT: C ( 50 ◦). 
+
+15 Gold visual fact. ∠ACB is labeled 65 ◦ in the figure. 
+
+Perception-R1 response (PRD; P =1 , U =0 , A=0 ): 
+
+Looking at the figure, we know that P A and P B are tangents to the circle at points A and B respectively. By the tangent–tangent theorem, the tangents drawn from an external point to a circle are equal in length, and the angle between a tangent and a radius at the point of tangency is 90 degrees. Therefore, ∠OAP = ∠OBP = 90 ◦.Since ∠ACB = 65 ◦, we can use the fact that ∠ACB is an angle subtended by arc AB at point C on the circle. The angle ∠AOB subtended by the same arc at the center is twice the angle subtended at any point on the circle, so 
+
+∠AOB = 2 × 65 ◦ = 130 ◦.Now, consider △OAP and △OBP . Both are right triangles with ∠OAP = ∠OBP = 90 ◦. The line OP is a straight line through the center O, so ∠AOB = 130 ◦. The angle ∠AP B can be found using the fact that the sum of the angles in △AOB is 180 ◦, and also using the external angle property of the tangents. Since P A and P B are tangents, ∠OAP = ∠OBP = 90 ◦, and the arc dAB subtends ∠AOB = 130 ◦. The angle 
+
+∠AP B is the external angle to ∠AOB with respect to the tangents, and it can also be found using the fact that the sum of the angles around point P is 360 ◦ and the angles ∠OAP and ∠OBP are 90 ◦ each. Using the fact that ∠AOB = 130 ◦, the angle ∠AP B can be found as the supplementary angle to the arc subtended by ∠ACB because ∠AP B = 360 ◦ −∠OAP −∠OBP −∠AOB = 360 ◦ −90 ◦ −90 ◦ −130 ◦ = 140 ◦ −130 ◦ =50 ◦ because ∠AP B = 180 ◦ − ∠ACB = 180 ◦ − 65 ◦ = 115 ◦ but considering the supplementary angle directly is 130 .
+
+<answer> 
+
+130 
+
+</answer> 
+
+Faithful-MR1 response ( P =1 , U =1 , A=1 ): 
+
+To determine the measure of angle P :
+
+1. Identify the given information: P A and P B are tangents to the circle at points A and B respectively; the measure of angle ∠ACB = 65 ◦.
+
+2. Use the property of tangents: The angle between a tangent and a radius at the point of tangency is 90 ◦. Therefore, 
+
+∠OAP = 90 ◦ and ∠OBP = 90 ◦.
+
+3. Consider the quadrilateral OAP B : The sum of the interior angles of a quadrilateral is 360 ◦. The angles ∠OAP 
+
+and ∠OBP are each 90 ◦.
+
+4. Write the equation for the sum of the angles in quadrilateral OAP B : ∠OAP + ∠OBP + ∠AOB + ∠P =360 ◦, giving 180 ◦ + ∠AOB + ∠P = 360 ◦.
+
+5. Use the property of the central angle: The central angle ∠AOB is twice the inscribed angle ∠ACB : ∠AOB =2 × ∠ACB = 2 × 65 ◦ = 130 ◦.
+
+6. Substitute back into the equation: 180 ◦ + 130 ◦ + ∠P = 360 ◦, so ∠P = 360 ◦ − 310 ◦ = 50 ◦.The measure of angle P is C .
+
+A.3 Prompts 
+
+This section lists the prompts used at every stage where Faithful-MR1 invokes an LLM or a VLM as a pipeline component. Placeholders are written as {NAME} and are filled in at call time. 
+
+(P1) Bounding-box region annotation (Gemini-3-Flash). Conditioned on the image, query, and ground-truth answer, we ask Gemini-3-Flash to localize the visual entities required to verify the answer as bounding boxes (normalized to [0 , 1000] ). 
+
+Role : You are a Lead Visual Grounding Engineer specializing in Evidence-Based Localization. Your goal is to identify and ground only the essential visual anchors that constitute direct proof for the {QUERY} and {ANSWER} .
+
+Task Objective : Analyze the {IMAGE} , {QUERY} , and {ANSWER} . Your mission is to provide precise bounding boxes for the essential visual entities strictly required to verify the correctness of the {ANSWER} . Do not label background clutter or entities that do not directly support the logical derivation from the {QUERY} to the {ANSWER} .
+
+Strict Annotation Principles :1. Evidence-Centricity (Primary Rule) : Only annotate objects that act as “smoking guns” for the answer. 2. Atomic Localization : Label individual, specific objects. Avoid “scene-level” or “group” boxes. 3. Tightness : Boxes should closely fit the visible object boundaries with reasonable margins that respect the object’s natural contours. Avoid excessive padding, but allow slight breathing room to preserve the object’s context and readability. 
+
+16 4. Exclusion of Contextual Noise : Do not annotate: • Large environmental or structural elements (e.g., “ground”, “wall”, “sky”, “full figure”, or “full table”) unless they are the direct subject of the query. • Implied objects that are not clearly visible. • Objects mentioned in the answer for purely descriptive/decorative purposes that don’t assist in the logical deduction. 5. Vision-Only Scenarios : In cases where the query and options are rendered directly within the {IMAGE} , you must explicitly provide bounding boxes for the query text and every individual option, regardless of which one is the correct {ANSWER} .
+
+Reasoning Process (Chain-of-Thought) : Before generating coordinates, perform the following mental steps: 1. Core Subject Identification : What are the primary subjects in the {IMAGE} required to justify the {ANSWER} for the {QUERY} ?2. Causal Filter : Does this specific entity provide direct supporting or refuting evidence to justify the {ANSWER} for the {QUERY} ? (e.g., If the query asks if a car is “red” and the answer is “Incorrect”, the car itself is the refuting evidence to show its actual color, while the road it sits on is irrelevant.) 3. Spatial Mapping : Precisely locate the regions of the remaining “Essential Anchors.” 
+
+Output Format : Return a valid JSON object only. Use normalized coordinates [ymin, xmin, ymax, xmax] in the range of [0, 1000] .
+
+{"reasoning_process": "Provide a concise step-by-step analysis following the 3-step Reasoning Process: 1) Core Subject Identification, 2) Causal Filter, and 3) Spatial Mapping.", "objects": [ {"name": "specific_object_name", "box_2d": [ymin, xmin, ymax, xmax] }]}
+
+(P2) Training and inference prompt template. The shared prompt template used by our method for both training stages and evaluation inference. 
+
+<image> {PROBLEM} Perceive the visual cues relevant to the above question and capture them into <Focus>. Think step by step, then provide your final answer enclosed within `\boxed{} ` at the end of your response. For multiple-choice questions, place only the option letter (e.g., A) in `\boxed{} `. For other questions, place the final numerical or text answer in `\boxed{} `.
+
+(P3) LLM-as-a-judge (Qwen3-235B-A22B-Instruct). We use Qwen3-235B-A22B-Instruct via EvalScope to compare each model’s predicted answer against the ground truth and return a single letter A (correct) or B (incorrect). 
+
+Your job is to look at a question, a gold target, and a predicted answer, and return a letter "A" or "B" to indicate whether the predicted answer is correct or incorrect. [Question] {QUESTION} [Reference Answer] {GOLD} [Predicted Answer] 
+
+17 {PRED} Evaluate the model 's answer based on correctness compared to the reference answer. Grade the predicted answer of this new question as one of: A: CORRECT B: INCORRECT Just return the letters "A" or "B", with no text around it. 
+
+(P4) Gold visual facts extraction. Conditioned on the image and ground-truth answer, we ask Gemini-3-Flash to enumerate the minimal set of visual facts on which any correct solution must rely. 
+
+You are extracting the visual facts required to solve a multimodal math problem. 
+
+Question 
+
+{PROBLEM} 
+
+Ground-truth answer 
+
+{GROUND_TRUTH} 
+
+Task : Identify the minimal set of visual facts (numeric labels, geometric relations, spatial configurations, table entries, chart values, . . . ) that any correct solution must rely on. For each fact output: • "id" : short unique identifier ( "F1" , "F2" , . . . ) • "fact" : one canonical sentence stating the fact • "criticality" : "critical" if the answer is unreachable without it, else "supporting" 
+
+• "fact_type" : one of "numeric_label" , "geometric_relation" , "spatial_position" , "object_-count" , "chart_value" , "table_entry" , "other" 
+
+Rules :1. List ONLY facts that the IMAGE provides; do not list facts that are already stated in the question text. 2. Be conservative: if a fact is implied or redundant, mark it "supporting" .3. Use the ground-truth answer ONLY to decide which image facts are needed; never copy the answer or any derivation conclusion into the fact list. 4. Aim for 1–5 critical facts. Do not over-list. 5. Keep each fact one short, declarative sentence. 6. STRICT NO-ANSWER-LEAK RULE : Every listed fact must be DIRECTLY OBSERVABLE from the image (a label you can read, a line/region you can see, a count you can make). DO NOT include any of the following, no matter how true: • the ground-truth answer itself or any restatement, • the result of a derivation (e.g., “the maximum occurs at X”, “the side equals Y”, “ f (x) has Z roots”), • properties that require solving the problem to know (e.g., “triangle ABC is isosceles” when isoscelesness is the conclusion, not a marked label). If a candidate fact is something a solver PROVES rather than READS, drop it. 7. Sanity check before emitting: for each fact, ask “could a person who has NOT solved this problem look at the image and verify this fact in seconds?” If no, the fact is leaking the solution; remove it. Return only one JSON object, no markdown, no extra text: 
+
+{"gold_facts": [ {"id": "F1", "fact": "...", "criticality": "critical", "fact_type": "..."}, ... ]}
+
+(P5) Per-fact PRD scoring. For each gold fact, we ask Gemini-3-Flash to independently decide whether it is (i) explicitly stated in the response and (ii) instrumentally used as a load-bearing premise in the derivation. 
+
+You are an expert evaluator for multimodal mathematical reasoning. Your goal is to detect Perception-Reasoning Disconnect (PRD): cases where the model states a correct visual fact but its derivation of the final answer does not actually rely on that fact (drops it, substitutes a different value, or contradicts it). 
+
+18 Question 
+
+{PROBLEM} 
+
+Ground-truth answer 
+
+{GROUND_TRUTH} 
+
+Gold visual facts (anchor for evaluation; pre-extracted from image and solution) 
+
+{GOLD_FACTS_JSON} 
+
+Model response (verbatim, do NOT split or reformat) 
+
+---{MODEL_RESPONSE} ---
+
+Critical Distinction .Two questions you must keep STRICTLY SEPARATE: (A) “Did the model STATE this visual fact?” Step 1. Narrow scope: only counts an explicit verbal mention or paraphrase of the fact in the response. (B) “Did the model’s DERIVATION of the final answer ACTUALLY USE this fact as a load-bearing premise (i.e., the stated value/relation is plugged into a calculation, equation, or logical deduction that propagates to the answer)?” 
+
+Step 2. Strictly stronger than (A): a fact that appears only as decoration, in an unrelated step, or that is later bypassed by a different value DOES NOT count as load-bearing. A model can mention a fact and then ignore it, contradict it, or substitute a different value when computing. 
+
+Calibration example (study before answering). Suppose Gold fact F1 = “central angle AOB is labeled 140 in the diagram”, and the model writes: “I observe that angle AOB is 140. To find angle ACB, I recall that the inscribed angle is typically half of 90, which is 45. So ACB = 45.” Correct judgment for F1: • Step 1 (STATEMENT) : stated_in_response=true , stated_correctly=true , statement_-quote="angle AOB is 140" .• Step 2 (INSTRUMENTAL USE) : instrumental_in_derivation=false (140 is mentioned, then ignored), 
+
+value_consistency="na" , contradicted_in_derivation=true (“half of 90, which is 45” implicitly uses a different angle than 140), derivation_quote="half of 90, which is 45" .This is a textbook PRD: stated correctly but not load-bearing in the derivation. 
+
+Evaluation Procedure .
+
+Step 1 – STATEMENT (narrow scope: explicit mention only). For EACH gold fact, output: • "id" , "stated_in_response" (true | false), • "stated_correctly" (true | false | "na" ; "na" only if not stated), • "statement_quote" : short verbatim quote, "" if not stated. 
+
+Step 2 – INSTRUMENTAL USE (load-bearing in derivation). INDEPENDENT of Step 1; trace the derivation and decide whether the fact’s value/relation actually carries through to the answer. • "id" , "instrumental_in_derivation" (true | false): true iff the stated value/relation is plugged into a calcula-tion, equation, or deductive step that leads to the final answer; false if it is decoration, never referenced again, or a different value is used instead. • "value_consistency" ("consistent" | "substituted" | "na" ): consistent if numeric/symbolic value used in derivation matches the stated one; substituted if a different value is used; na if non-numeric or instrumental_-in_derivation=false .• "contradicted_in_derivation" (true | false): true if any derivation step overrides, ignores-and-substitutes, or otherwise contradicts the stated fact. • "derivation_quote" : short verbatim quote of the derivation step where the fact is used/substituted/contradicted, or "" .
+
+Step 3 – Reasoning quality note (audit only; one sentence). Briefly describe any logic or arithmetic errors. NOT used in P/U computation; recorded for analysis. 
+
+Step 4 – Final answer. 
+
+• "predicted_answer" : model’s final answer as it appears, "" if missing. • "answer_matches_ground_truth" : true | false | "unclear" (semantic match allowed). • "answer_match_reason" : one sentence. 
+
+Output (single JSON object, no markdown, no extra text): 
+
+{"fact_statement": [ {"id": "F1", "stated_in_response": true, "stated_correctly": true, "statement_quote": "..."} ], "fact_instrumental_use": [ 
+
+19 {"id": "F1", "instrumental_in_derivation": true, "value_consistency": "consistent", "contradicted_in_derivation": false, "derivation_quote": "..."} ], "reasoning_quality_note": "...", "predicted_answer": "...", "answer_matches_ground_truth": true, "answer_match_reason": "..." }
+
+20

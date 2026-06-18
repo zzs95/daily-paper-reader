@@ -1,0 +1,628 @@
+Title: Adaptive Reinforcement for Open-ended Medical Reasoning via Semantic-Guided Reward Collapse Mitigation
+
+URL Source: https://openaccess.thecvf.com/content/CVPR2026F/papers/Liu_Adaptive_Reinforcement_for_Open-ended_Medical_Reasoning_via_Semantic-Guided_Reward_Collapse_CVPRF_2026_paper.pdf
+
+Published Time: Sat, 16 May 2026 17:07:55 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# Adaptive Reinforcement for Open-ended Medical Reasoning via Semantic-Guided Reward Collapse Mitigation 
+
+## Yizhou Liu 1,2,∗,§ Dingkang Yang 1,2,∗ Zizhi Chen 1,2 Minghao Han 1,2
+
+## Xukun Zhang 1 Keliang Liu 1,2 Jingwei Wei 3,† Lihua Zhang 1,2, † 
+
+> ∗equal contribution †corresponding authors
+> 1
+
+## College of Intelligent Robotics and Advanced Manufacturing, Fudan University 
+
+> 2
+
+## Fysics Intelligence Technologies Co., Ltd. (Fysics AI) 
+
+> 3
+
+## Institute of Automation, Chinese Academy of Sciences    
+
+> liuyz25@m.fudan.edu.cn, dicken@fysics.ai, weijingwei2014@ia.ac.cn, lihuazhang@fudan.edu.cn
+
+## Abstract 
+
+Reinforcement learning (RL) with rule-based reward func-tions has recently shown great promise in enhancing the reasoning depth and generalization ability of vision-language models (VLMs), while maintaining computational efficiency. In spite of these advances, its adoption in med-ical imaging remains limited. Current reinforcement fine-tuning (RFT) efforts in this field mainly focus on closed-ended visual question answering (VQA), restricting their applicability to realistic clinical reasoning. However, open-ended medical VQA better mirrors clinical diagnostic work-flows but remains underexplored. Although several stud-ies have attempted to bridge the two formats through se-mantically guided RL, model-driven semantic rewards often suffer from reward collapse, where responses with distinct semantics yield nearly identical scores. To overcome this limitation, we introduce Adaptive Reinforcement for Med-ical Reasoning (ARMed), a novel RL framework tailored for open-ended medical VQA. ARMed first injects domain expertise through supervised fine-tuning (SFT) on chain-of-thought annotations, followed by reinforcement optimiza-tion using textual correctness and adaptive semantic re-wards to refine reasoning consistency and factual accu-racy. Extensive experiments on six challenging medical VQA benchmarks demonstrate that ARMed substantially improves both accuracy and generalization. These find-ings underscore the importance of reward discriminability in medical RL and highlight the potential of adaptive se-mantic rewards for building robust, clinically reliable mul-timodal reasoning systems. The code is publicly available at https://github.com/KevinClaint/ARM ed .
+
+> §Work done during the collaboration with the Institute of Automation.
+
+## 1. Introduction 
+
+Open-ended medical visual question answering (VQA) mimics how clinicians integrate multimodal information for complex, high-stakes, and real-world diagnostic reasoning. Unlike multiple-choice tasks, it demands highly demanding responses that are both accurate and explanatory, reflecting real clinical complexity. Although recent vision-language models (VLMs) such as GPT-4o [1], InternVL3 [45], and Qwen2.5-VL [2] have advanced multimodal reasoning, most medical VQA systems still rely on supervised fine-tuning (SFT), which depends on costly expert annotations and often encourages shallow pattern imitation instead of genuine semantic understanding—limitations that are par-ticularly critical in clinical settings. Reinforcement learning (RL), particularly reinforcement fine-tuning (RFT) with rule-based reward functions, has emerged as a promising alternative to conventional super-vised approaches [11, 34]. By explicitly guiding the op-timization process through reward signals, RFT enhances the reasoning and generalization capabilities of vision-language models while simultaneously reducing reliance on expensive human supervision. As illustrated in Figure 1(a) and Figure 1(b) , open-ended medical VQA better reflects real-world clinical scenarios, where responses must be flex-ible, context-aware, and explanatory rather than restricted to fixed choices. However, vanilla RL frameworks are not in-herently designed to handle open-ended responses, as they rely on discrete or well-defined reward structures. This lim-itation makes it challenging to design clinically meaningful and reliable reward functions that can accurately assess the quality of medical reasoning and expression. Traditional scores like BLEU [27] and ROUGE [19] de-pend on simple surface word overlap. In medical settings, even minor lexical differences can imply drastically differ-This CVPR Findings paper is the Open Access version, provided by the Computer Vision Foundation. Except for this watermark, it is identical to the accepted version; the final published version of the proceedings is available on IEEE Xplore. 8651 Test                         
+
+> What?
+> Reality V.S
+> Open-Ended
+> a
+> Reward
+> Model
+> Reward
+> Mode l
+> S2S1
+> S3SN
+> S2S1
+> S3SN
+> R2R1
+> R3RN
+> Generate Update
+> Semantic
+> GRPO
+> Reinforce Learning c
+> Close-Ended Reward
+> Model
+> Reward
+> Mode l
+> S2S1
+> S3SN
+> S2S1
+> S3SN
+> R2R1
+> R3RN
+> R2R1
+> R3RN
+> Generate Update
+> Vanilla GRPO Reinforce Learning b
+> Question:
+> What/How/
+> Why/ Do...
+> Answer
+> (Open-Ended):
+> It ’s .....
+> Answer
+> (Close-Ended):
+> A. B. C.
+> VQA
+> A? B?
+> Question:
+> What/How/
+> Why/ Do...
+> Answer
+> (Open-Ended):
+> It ’s .....
+> Answer
+> (Close-Ended):
+> A. B. C.
+> VQA dOurs
+> Qustion:
+> What/How/
+> Why/ Do...
+> Answer
+> (Open-Ended):
+> It ’s .....
+> Answer
+> (Close-Ended):
+> A. B. C.
+> VQA Reward Collapse Adaptive
+> R2R1
+> R3RN
+> r2r1
+> r3rN
+> r’2r’1
+> r’3r’N
+> r2r1
+> r3rN
+> 00
+> 00
+> A2A1
+> A3AN
+> Reward
+> Advantage Omit ！
+> R2R1
+> R3RN
+> r’’ 2r’’ 1
+> r’’ 3r’’ N
+> It makes
+> sense !
+
+Figure 1. Illustration of the reward collapse issue caused by continuous semantic rewards and comparison among different GRPO variants. The upper part shows the vanilla GRPO trained in closed-ended settings, while real-world tasks are often open-ended. The lower part depicts how semantic-based GRPO can suffer from reward collapse due to the continuity of semantic rewards. Our proposed ARMed method adaptively mitigates this problem, aligning learning between open- and closed-ended scenarios. 
+
+ent meanings, risking the reward of incorrect but superfi-cially similar responses [14]. Semantic-based metrics like BERTScore [41] and cosine similarity better capture mean-ing [28], but when used statically, they suffer from reward collapse [31], where semantically distinct answers receive similar scores. As shown in Figure 1(c), this results in flat-tened reward distributions, weak gradients, and reduced op-timization efficiency, hindering learning and leading to sub-optimal optimization paths. To address these issues, we propose Adaptive 
+
+Reinforcement for Med ical Reasoning (ARMed ), acomprehensive reinforcement learning framework for enhancing open-ended medical reasoning. ARMed in-corporates domain-specific diagnostic knowledge via chain-of-thought supervision [35], enabling interpretable, step-by-step reasoning instead of shallow pattern match-ing. Building on this, it employs Group Relative Policy Optimization (GRPO) [30] with an adaptive, clinically grounded reward that jointly evaluates textual correctness and semantic alignment. Unlike static metrics that risk re-ward collapse, the adaptive reward dynamically scales with inter-sample variance, highlighting clinically meaningful differences while reducing noisy feedback (Figure 1(d)). Finally, ARMed adopts a three-stage pipeline—reward-driven pretraining, knowledge-augmented fine-tuning, and reward-based refinement—to progressively enhance factual accuracy and reasoning robustness. Overall, this frame-work stabilizes optimization, mitigates semantic reward collapse, and aligns model behavior with authentic clinical reasoning, achieving more consistent and generalizable performance across medical VQA benchmarks. In summary, our main contributions are as follows: • We identify and formalize reward collapse in static se-mantic reward schemes during reinforcement learning. • We propose ARMed , a framework that improves seman-tic reward discriminability through adaptive scaling based on Group Relative Policy Optimization (GRPO). • We perform comprehensive experiments on six bench-marks, demonstrating significant improvements in both accuracy and generalization. 
+
+## 2. Related Work 
+
+Medical Vision-Language Models. Recent progress in vision-language models (VLMs) has sparked growing in-terest in medical adaptation and multimodal clinical rea-soning [6, 7, 12, 15, 37, 38]. Models such as LLaVA-Med [18] and HuatuoGPT-Vision [5] demonstrate strong performance in radiology-focused VQA and diagnostic rea-soning tasks. However, most existing medical VLMs still rely on supervised fine-tuning (SFT) with final-answer an-notations [22, 40]. This paradigm is inherently rigid and resource-intensive: it requires massive, privacy-sensitive datasets, provides no explicit supervision for intermediate reasoning, and often leads to overfitting and weak general-ization to out-of-distribution (OOD) data [33]. These limi-tations underscore the urgent need for more flexible, robust, and interpretable optimization frameworks beyond SFT. 
+
+Reinforcement Learning for General LLMs and VLMs. 
+
+Reinforcement learning (RL) has shown great potential 8652 (b) Adaptive Semantic Reward            
+
+> Quantile Selection
+> Tt
+> Normalize Map
+> Filter
+> 1
+> 2
+> G
+> Gen
+> r1
+> ...
+> Adapt
+> r2
+> rG
+> ...
+> r1
+> ...
+> Raw
+> r2
+> rG
+> r1
+> ...
+> Valid
+> r2
+> rt
+> Reward History
+> r1... r2rLm
+> r1r2rLm+t
+> ...
+> Tt+1 T*
+> (c) Training Process
+> 1
+> VQA ARMed-I
+> GRPO
+> VQA
+> 3
+> 2
+> Answer Frequency
+> High Low K-means
+> Representative Cold-Start
+> CoT
+> Generate
+> Qwen
+> Qwen ARMed-A
+> SFT
+> GRPO
+> ARMed-R
+> (a ) GRPO Process
+> Image
+> Describe the histological
+> features of Wilms tumor
+> that include a blastemal
+> component and
+> interspersed primitive....
+> Question
+> BLUE
+> Reward
+> ROUGE
+> Reward
+> BERTScore
+> Reward
+> CosSim
+> Reward
+> Response
+> ...
+> Reward
+> μ, σ
+> ...
+> VLM
+> VLM VLM
+> r1
+> r2
+> r3
+> rG
+> ...
+> A1
+> A2
+> A3
+> AG
+> ...
+> backward
+> KL G
+> ...
+> KL 3
+> KL 2
+> KL 1
+> backward
+
+Figure 2. Overview of the ARMed framework in a medical QA task. (a) illustrates the GRPO training process; (b) shows how ARMed’s adaptive semantic reward mitigates reward collapse; and (c) outlines the three-stage training pipeline: Reward-driven Pre-training, Knowledge-enhanced Fine-tuning, and Reward-based Refinement. 
+
+in enhancing reasoning, alignment, and controllability for large-scale models. While PPO-based RLHF [29] aligns models with human preferences, it depends on costly prefer-ence data and suffers from unstable critic estimation. Group Relative Policy Optimization (GRPO) [30] effectively ad-dresses these issues through critic-free, comparison-based updates, and DAPO [39] further improves overall training stability via dynamic sampling and token-level reward shap-ing. Taken together, these recent advances suggest that comparison-based RL can achieve more robust and more efficient optimization even under weak supervision. 
+
+Reinforcement Learning in the Medical Domain. Rein-forcement learning (RL) has recently been introduced to en-hance clinical reasoning, factual consistency, and overall ro-bustness in medical LLMs and VLMs [9, 24, 32]. MedRea-son [36] and HuatuoGPT-o1 [4] improve reasoning chains through structured and verifiable supervision. However, most existing medical VLMs rely on limited or static reward designs. For instance, Med-R1 [16] and MedVLM-R1 [26] restrict learning to multiple-choice visual QA, lacking open-ended reasoning capabilities. GEMeX-ThinkVG [21] employs large medical LLMs as reward evaluators, leading to high computational cost and poor interpretability. Med-CCO [28] adopts a static semantic similarity metric as the reward, but ignores the issue of reward collapse caused by insufficient semantic discrimination. Consequently, these methods often fail to capture fine-grained semantic differ-ences between responses, thereby limiting their ability to guide medical reasoning effectively. To overcome these limitations, we adopt a GRPO-based framework with adaptive semantic rewards that explicitly emphasize inter-sample differences and contextual rele-vance. This design substantially enhances reward discrim-inability and effectively mitigates reward collapse, thereby enabling more semantically grounded, reliable, and gener-alizable medical reasoning in VLMs. 
+
+## 3. Methodology 
+
+3.1. Overview 
+
+In this work, we present ARMed , an extension of the GRPO framework specifically tailored to enhance the rea-soning and interpretability of models in open-ended med-ical visual question answering. As shown in Figure 2(c), ARMed employs a three-stage training paradigm: (1) 
+
+Reward-driven Pretraining , where the base model is trained with a designed reward function for open-ended QA to produce the foundational reasoning model ARMed-Init (ARMed-I); (2) Knowledge-enhanced Fine-tuning ,in which ARMed-I generates explicit reasoning chains for knowledge-intensive medical samples, incorporated into a knowledge-augmented dataset used for supervised fine-tuning to obtain the knowledge-injected model ARMed-Augment (ARMed-A); and (3) Reward-based Refine-ment , where ARMed-A undergoes further reward-driven optimization, yielding the expert-level model ARMed-Reasoner (ARMed-R). By integrating reward-based train-ing with explicit knowledge augmentation, ARMed signifi-8653 cantly improves both the reasoning depth and factual relia-bility of models on open-ended medical VQA tasks. 
+
+3.2. Preliminaries 
+
+Group Relative Policy Optimization (GRPO) is a reinforce-ment learning algorithm designed to enhance the model’s reasoning ability, as shown in Figure 2(a). Compared with the traditional proximal policy optimization (PPO) method, GRPO has significant differences in the following two as-pects: First, GRPO implements a value-neutral training mechanism by introducing a generalized advantage estima-tion (GAE) based on group relative rewards; second, its re-ward signal comes from a verifiable rule-based evaluation criterion rather than relying on a pre-trained reward model, thereby improving the interpretability and reliability of the reward. This also allows GPRO to improve computational efficiency while reducing computing resource usage [30]. During each optimization step, the policy πθold produces a batch of G output candidates {oi}Gi=1 . Each output can-didate receives a numerical reward ri calculated according to predefined scoring rules. The advantage Ai is computed by standardizing the rewards within the group, achieved by subtracting the group’s average reward and dividing by the corresponding standard deviation: 
+
+Ai = ri − mean ({rj }Gj=1 )
+
+std ({rj }Gj=1 ) . (1) 
+
+Formally, denote P (Q) as the distribution of questions used during training, with q representing a sampled query at the current iteration. Let πθold and πθnew refer to the pre-vious and updated policies, respectively, and let o denote a complete response drawn from the policy. Additionally, define πθref as a fixed reference policy, which corresponds to the frozen base VLM. Suppose G represents the number of responses sampled per question in each iteration. The objective function for GRPO is then expressed as: 
+
+JGRPO (θ) = Eq∼P (Q), {ol}Gl=1 ∼πθold (O|q)
+
+1
+
+G
+
+> G
+
+X
+
+> i=1
+
+1
+
+|oi|
+
+> |oi|
+
+X
+
+> t=1
+
+"
+
+min πθ (oi,t |qi, o i,<t )
+
+πθold (oi,t |qi, o i,<t ) ˆAi,t ,
+
+clip πθ (oi,t |qi, o i,<t )
+
+πθold (oi,t |qi, o i,<t ) , 1 − ϵ, 1 + ϵ
+
+!
+
+ˆAi,t 
+
+!
+
+− β D KL 
+
+πθ ∥ πref 
+
+#
+
+,
+
+(2) 
+
+where DKL (πθ ∥πref ) serves as a regularization term to pe-nalize divergence from the reference policy πref , with β con-trolling its strength. 
+
+3.3. Adaptive Reward Function Design 
+
+For open-ended medical question answering, we design a reward function consisting of textual correctness reward, adaptive semantic alignment reward, and format reward. Question ：      
+
+> What abnormality is present?
+> Ground Truth ：
+> Bleeding in posteroinferior
+> cerebellum.
+> Active bleeding seen in the posteroinferior
+> cerebellum .
+> No bleeding in the posteroinferior cerebellum.
+> Evidence of bleeding within the
+> posteroinferior cerebellum .
+> With
+> Textual Reward
+> BLEU: 50
+> ROUGE: 72
+> BLEU: 57
+> ROUGE: 80
+> BLEU: 37
+> ROUGE: 54
+> With
+> Semantic Reward
+> BERTS core: 95
+> CosS im: 96
+> BERTS core: 92
+> CosS im: 89
+> BERTS core: 95
+> CosS im: 94
+> With
+> Ours Reward
+> BERTS core: 98
+> CosS im: 98
+> BERTS core: 30
+> CosS im: 29
+> BERTS core: 95
+> CosS im: 97
+> You can ’t
+> treat a
+> patient ’s life
+> like a joke ！
+> I can ’t tell them
+> apart, they look
+> almost identical.
+> You demonstrated
+> admirable clinical
+> judgment.
+
+Figure 3. Example of ARMed in a medical QA task. This illus-trates why textual similarity alone is insufficient, how naive se-mantic rewards can collapse, and how ARMed enables stable and meaningful semantic evaluation for reliable medical reasoning. 
+
+As shown in Figure 3, the example demonstrates how re-lying solely on textual similarity can fail to capture the true semantic alignment in medical reasoning. It highlights that naive semantic rewards often collapse when faced with sub-tle yet clinically significant meaning differences, resulting in unstable or misleading optimization signals. This moti-vates the need for our adaptive semantic reward, which pre-serves meaningful distinctions and ensures stable guidance for policy improvement. From a theoretical perspective, the effectiveness of our adaptive semantic reward lies in its role within the compos-ite reward used by GRPO. Although the advantage Ai in GRPO is computed by normalizing rewards within a sam-pled group ( i.e. Equation 1), the key limitation arises when the semantic reward itself lacks discriminability. In such cases, its signal becomes indistinguishable from other re-ward components and is effectively overshadowed by those with stronger variance, contributing little to the overall pol-icy update. Our adaptive reward mitigates this issue by dy-namically reshaping the semantic reward distribution to en-hance inter-sample distinctions, thereby amplifying its rel-ative contribution to the total reward signal. This adjust-ment improves gradient informativeness while preserving the original reward ranking, thus remaining consistent with the policy invariance principle [25]. 
+
+Textual Correctness Reward . Traditional accuracy and exact match metrics are strict matching methods that reward the generated text only when it exactly matches the refer-ence answer; otherwise, the reward is zero. While this ap-proach can provide effective supervision for closed-ended question answering, it often leads to sparse and unstable re-wards in open-ended settings due to its stringent criteria. To mitigate this issue, especially during early reinforce-ment learning when model predictions deviate consider-ably from references, we adopt BLEU-1 [27] and ROUGE-1 [19]. These n-gram overlap metrics provide graded and 8654 dense feedback, ensuring non-zero rewards even for par-tially correct generations. This alleviates early-stage reward sparsity and facilitates smoother policy optimization while maintaining sensitivity to textual correctness. 
+
+Rc(o, g ) = λ1 · BLEU 1(o, g )+(1 − λ1) · ROUGE 1(o, g ), (3) where o denotes the predicted answer, g is the ground truth answer, and λ1 ∈ [0 , 1] is a weighting factor balancing the contributions of BLEU-1 and ROUGE-1 scores. 
+
+Adaptive Semantic Alignment Reward . A key challenge in medical open-ended QA lies in the diversity of expressions. Se-mantically equivalent responses may differ in wording or syntax, yet overlap metrics ( e.g. , ROUGE, BLEU) fail to capture such equivalence and thus unfairly penalize valid variations. To address this, we define a semantic alignment reward that precisely measures the semantic similarity between the generated answer o and reference g:
+
+Rs(o, g ) = λ2 · BERTScore (o, g )+ (1 − λ2) · CosSim (o, g ), (4) where λ2 ∈ [0 , 1] balances token-level contextual similarity (BERTScore) and sentence-level embedding similarity (CosSim). However, directly using Rs is problematic: (1) scores often cluster within narrow, high-value ranges, making it difficult to dis-tinguish response quality; and (2) reward scales vary across tasks and models, lacking consistent thresholds. Thus, absolute rewards are unstable and weakly discriminative. To address this, we pro-pose an adaptive reward calibration that combines dynamic histor-ical statistics with nonlinear mapping (Fig. 2(a)). Given the histor-ical reward buffer Ht and current batch ri, we retain values above a fraction ρT t of the current threshold: 
+
+Rt = {ri | ri > ρT t}. (5) The buffer is updated (truncated to Lmax ), and a target threshold 
+
+T ∗ is set as the p-th percentile of Ht. The threshold then smoothly adapts with step limit δmax :
+
+Tt+1 = clip   Tt + clip (T ∗ − Tt, −δmax , δ max ),Tmin , T max 
+
+. (6) Each reward is normalized relative to the updated threshold: 
+
+ˆri = clip 
+
+ ri − Tt+1 
+
+1 − Tt+1 + ϵ , −1, 1
+
+
+
+, (7) and passed through an asymmetric S-shaped mapping to enhance sensitivity near the threshold: 
+
+r′ 
+
+> i
+
+= 0 .51 + tanh( αs ˆri), αs =
+
+(
+
+αpos , ˆri ≥ 0,αneg , ˆri < 0. (8) Denoting the above transformation as Adapt (·), the final adaptive semantic alignment reward is given by: 
+
+Ras (o, g ) = λ2 · Adapt (BERTScore (o, g )) + (1 − λ2) · Adapt (CosSim (o, g )) . (9) This adaptive design normalizes reward ranges, improves discrim-ination near semantic boundaries, and ensures stable alignment across tasks and models. 
+
+Format Reward .To ensure a well-structured output, we impose a format reward, denoted as  Rf , which verifies whether the gen-erated content conforms to the required tagging scheme. Specifi-cally, the reasoning process must be enclosed within the <think> ...</think> tags, while the final answer should be contained within the <answer> ...</answer> tags. 
+
+Total Reward .Total reward can be computed as: 
+
+Rtotal = γ1 · Rc + γ2 · Ras + γ3 · Rf
+
+γ1 + γ2 + γ3
+
+, (10) where  γ1, γ 2, and  γ3 are non-negative weighting coefficients that determine the relative importance of each reward component. 
+
+3.4. Medical Thinking Knowledge Injection 
+
+Medical Thinking Knowledge Injection. During reinforcement learning for open-ended question answering, we observe a critical 
+
+reward-driven bias : the model tends to overfit to answer types pre-viously associated with high rewards, even when incorrect. For-mally, given a question–answer pair (xi, y i) and its reward ri, the expected policy gradient is dominated by high-reward samples: 
+
+∇θ J(θ) ∝ X
+
+> i
+
+ri∇θ log πθ (yi|xi), (11) which causes the model to disproportionately reinforce rewarded answers. When encountering semantically similar questions, it of-ten reproduces these biased high-reward responses while ignoring correct alternatives with low historical rewards. In medical do-mains, such behavior is hazardous, as erroneous responses may distort clinical reasoning and jeopardize patient safety. 
+
+Knowledge Construction. To mitigate this bias, we propose a medical thinking knowledge injection mechanism that en-hances knowledge diversity and reasoning robustness. Let D =
+
+{(xi, y i)} denote the QA corpus, and let f (yi) represent the fre-quency of each unique answer. We define the core knowledge set 
+
+as: 
+
+Dcore = {(xi, y i) | f (yi) > τ }, (12) where τ is a frequency threshold. The remaining QA pairs, 
+
+Dsup = {(xi, y i) | f (yi) ≤ τ }, (13) are retained as supplementary knowledge to capture long-tail clin-ical reasoning patterns. Each QA pair serves as a semantic anchor, where answers guide the contextual reasoning process. To ensure diversity, we embed questions using a Sentence Transformer E(xi) and apply K-Means clustering within each high-frequency group: 
+
+C = KMeans  {E(xi) | (xi, y i) ∈ D core }, (14) then select, from each cluster ck ∈ C , the representative QA pair whose question embedding is closest to the centroid μk :
+
+(x∗ 
+
+> k
+
+, y ∗ 
+
+> k
+
+) = arg min 
+
+> (xi,y i)∈ck
+
+∥E(xi) − μk ∥2. (15) 8655 Table 1. Performance comparison among vision–language models on in-domain medical VQA benchmarks. For each metric, bold and underlined entries indicate the best and second-best results, respectively. Gray-shaded columns correspond to dataset-specific averages, while blue-shaded columns correspond to averages across all metrics. 
+
+Model Path-VQA SLAKE VQA-RAD Avg. 
+
+BLEU-1 ROUGE-1 BERTScore CosSim Avg. BLEU-1 ROUGE-1 BERTScore CosSim Avg. BLEU-1 ROUGE-1 BERTScore CosSim Avg. 
+
+General VLM 
+
+Qwen2.5-VL-7B 5.25 8.24 88.45 85.03 46.74 10.50 15.24 91.73 90.13 51.90 10.17 14.77 91.18 89.03 51.29 49.98 LLaVA-v1.6-7B 19.27 20.86 87.12 83.91 52.79 26.30 28.99 91.41 89.78 59.12 26.10 28.12 90.14 88.30 58.17 56.69 LLaVA-v1.6-13B 7.23 10.04 85.55 81.66 46.12 18.49 22.57 90.82 88.86 55.19 14.65 17.73 89.23 87.04 52.16 51.16 InternVL3-2B 28.56 30.38 92.71 88.51 60.04 39.18 43.49 93.59 91.67 66.98 35.92 38.72 92.17 90.01 64.21 63.74 InternVL3-8B 4.53 6.78 80.66 78.29 42.57 17.36 23.62 87.29 85.38 53.41 10.42 14.25 84.50 81.82 47.75 47.91 InternVL3-14B 3.70 6.08 80.37 77.80 41.99 16.87 22.32 88.62 87.02 53.71 10.86 16.18 87.40 85.81 37.62 44.44 
+
+Medical VLM 
+
+LLaVA-Med-7B 2.39 4.50 85.66 84.15 44.18 3.29 7.20 89.25 88.29 47.01 3.18 6.07 89.09 87.95 46.57 45.92 HuatuoGPT-V-7B 6.59 10.12 83.10 80.22 45.01 13.11 20.25 88.23 86.26 51.96 7.16 11.62 83.75 80.90 45.86 47.61 
+
+Fine-tuned VLM 
+
+Qwen2.5-VL-3B 5.30 8.20 86.91 85.10 46.38 13.34 19.09 90.35 89.14 52.98 9.58 13.38 88.46 87.64 49.77 49.71 
+
+w. SFT 55.43 56.62 97.74 94.36 76.04 70.58 71.54 99.10 97.67 84.72 56.58 58.68 98.36 96.27 77.47 79.41 
+
+w. GRPO 52.36 54.28 98.04 95.60 75.07 68.30 69.49 99.13 97.89 83.70 51.43 53.68 97.54 97.28 74.98 77.92 ARMed-R(Ours) 63.61 64.96 98.46 95.81 80.71 76.14 76.65 99.46 98.13 87.60 58.72 61.10 98.69 97.29 78.95 82.42 
+
+This yields a compact yet diverse medical knowledge base for rea-soning injection. 
+
+Knowledge Injection and Training. We leverage the baseline reasoning model trained with our adaptive reward, denoted as 
+
+ARMed-Init (ARMed-I) , to expand chain-of-thought reasoning for Dcore . The resulting augmented dataset Daug = {(xi, ˆyi)} con-tains richer, stepwise reasoning traces. Unlike mathematical rea-soning datasets that mainly encode structural logic, Daug empha-sizes domain-specific clinical knowledge and linguistic conven-tions. We fine-tune the model on Daug to obtain ARMed-Augment (ARMed-A) , and further apply the same reinforcement learning procedure as in ARMed-I to produce the final ARMed-Reasoner (ARMed-R) — capable of robust, knowledge-grounded medical reasoning. Table 2. Performance comparison among vision–language mod-els on out-of-domain medical VQA benchmarks. For each metric, 
+
+bold and underlined entries indicate the best and second-best re-sults, respectively. Gray-shaded columns correspond to dataset-specific averages, while blue-shaded columns correspond to av-erages across all metrics.                                                                                                          
+
+> Model VQA-Med PMC-VQA MedXpert Avg.
+> BLEU-1 ROUGE-1 BERTScore CosSim Avg. (Acc.) (Acc.)
+> General VLM
+> Qwen2.5-VL-7B 6.64 10.40 89.53 87.36 48.48 47.80 15.60 37.29 LLaVA-v1.6-7B 3.76 5.49 84.41 80.22 43.47 33.05 11.25 29.26 LLaVA-v1.6-13B 3.76 5.47 86.08 81.41 44.18 34.30 13.80 30.76 InternVL3-2B 21.44 22.82 94.93 90.43 57.41 40.69 18.95 39.02 InternVL3-8B 14.80 18.16 85.79 82.19 50.24 48.55 21.09 39.96 InternVL3-14B 10.69 14.99 86.18 82.92 48.70 48.75 15.05 37.50
+> Medical VLM
+> LLaVA-Med-7B 2.04 3.93 86.63 84.31 44.23 23.80 20.05 29.36 HuatuoGPT-V-7B 5.70 10.20 82.33 80.73 44.74 50.00 21.65 38.80
+> Fine-tuned VLM
+> Qwen2.5-VL-3B 4.88 6.39 69.47 67.01 36.94 45.70 11.60 31.41
+> w. SFT 22.44 24.55 95.54 90.11 58.16 46.80 18.35 41.10
+> w. GRPO 19.95 20.85 96.32 91.71 57.21 48.10 20.65 41.99 ARMed-R(Ours) 21.51 23.17 96.56 92.36 58.40 48.75 22.30 43.15
+
+## 4. Experiments 
+
+4.1. Datasets 
+
+We use VQA-RAD [17], SLAKE [20], and PathVQA [13] as train-ing datasets and in-domain test datasets, and VQA-Med [3], PMC-VQA [42] and MedXpertQA [46] as out-of-domain test datasets. Following Rui et al., we perform VQA redefinition on the in-domain training and test sets. Please see the Appendix for a de-tailed introduction to the dataset. 
+
+Figure 4. Distribution of model semantic rewards during training. It compares the distributions of non-discriminative (GRPO) and adaptive (ARMed-I) rewards. 8656 Table 3. Ablation study results on a subset of the test sets. Aug denotes augmentation , Text denotes text reward , Sem denotes semantic reward , and Ada denotes adaptive semantic reward . Complete results on all test sets can be found in the Appendix. For each metric column, bold denotes the best performance and underline denotes the second-best. Gray-shaded columns correspond to dataset-specific averages, while blue-shaded columns correspond to averages across all metrics.                                                                                                                                                  
+
+> Model Method Path-VQA SLAKE PMC VQA MedXpert Avg.
+> w. Aug w. Text w. Sem w. Ada BLEU-1 ROUGE-1 BERTScore CosSim Avg. BLEU-1 ROUGE-1 BERTScore CosSim Avg. (Acc.) (Acc.) Qwen2.5-VL-3B
+> ✘✘✘✘5.30 8.20 86.91 85.10 46.38 13.34 19.09 90.35 89.14 52.98 45.70 11.60 46.07
+> ✘✔✘✘49.62 56.07 96.21 93.80 73.93 64.91 68.76 98.48 97.19 82.34 46.40 19.90 68.99
+> ✘✔✔✘52.36 54.28 98.04 95.60 75.07 68.30 69.49 99.13 97.89 83.70 48.10 20.65 70.29
+> ✘✔✘✔54.88 58.77 97.49 94.74 76.47 68.44 70.49 98.91 97.54 83.85 47.30 20.90 70.49
+> ✔✘✘✘40.72 43.06 96.49 94.11 68.60 59.39 60.54 97.76 97.32 78.75 43.40 19.25 65.63
+> ✔✔✘✘61.72 61.92 97.65 95.74 79.26 73.16 74.87 98.85 97.15 86.01 46.60 20.50 72.05
+> ✔✔✔✘61.23 62.53 97.64 96.03 79.36 73.22 73.96 99.15 97.97 86.08 48.05 20.95 72.34
+> ✔✔✘✔63.61 64.96 98.46 95.81 80.71 76.14 76.65 99.46 98.13 87.60 48.75 22.30 73.72
+
+4.2. Model Zoo and Evaluation Metric 
+
+We compare the performance of our ARMed against a range of vision-language models (VLMs), including both general-purpose and medical-specific models. The general VLMs in-clude: (1) the Qwen2.5-VL family [2], including Qwen2.5-VL-3B and Qwen2.5-VL-7B; (2) the InternVL3 family [45], includ-ing InternVL3-2B, InternVL3-8B, and InternVL3-14B; (3) the LLaVA-v1.6 family [23], including LLaVA-v1.6-7B and LLaVA-v1.6-13B. We also evaluate against medical-domain VLMs, in-cluding LLaVA-Med [18] and HuatuoGPT-V [5]. To ensure both accurate evaluation and reliable semantic re-wards in reinforcement learning, we employ PubMedBERT [10] to compute BERTScore and BioBERT-mnli-snli-scinli-scitail-mednli-stsb [8] to calculate cosine similarity, both of which are pretrained on biomedical corpora and thus better aligned with the domain characteristics of medical texts. For multiple-choice questions, we use accuracy (ACC) as the evaluation metric. For open-ended questions, we employ BLEU-1, ROUGE-1, BERTScore, and Cosine Similarity (CosSim) as eval-uation metrics to comprehensively assess answer quality. 
+
+4.3. Implementation Details 
+
+All experiments are trained on 4× H100 GPUs (80GB) with FlashAttention-2. The model is initialized from Qwen2.5-VL-3B-Instruct [2] and fully fine-tuned with a learning rate of 1 × 10 −6.We use a per-GPU batch size of 2 with 2-step gradient accumu-lation (effective batch size 4). Input images are capped at 401k pixels, and the maximum generation length is 1,024 tokens. For GRPO, we use MS-SWIFT [43] for distributed training; each policy samples 8 candidate responses per example with tem-perature τ = 0 .7. The reward weights are λ1 = 0 .5, λ2 = 0 .2,
+
+γ1 = 0 .4, γ2 = 0 .4, and γ3 = 0 .2. Each configuration is trained for one epoch. SFT experiments are conducted with LLaMA Fac-tory [44]. Additional training details are provided in the supple-mentary material. 
+
+## 5. Results and Discussion 
+
+5.1. Overall Performance 
+
+As shown in Table 1 and Table 2, ARMed achieves state-of-the-art results on both in-domain and out-of-domain medical VQA benchmarks, with average scores of 82.42% and 43.15% , respec-PathVQA (Avg.) 
+
+> (46.46-80.7)
+> SLAKE (Avg.)
+> (53.0-87.6)
+> VQA-RAD (Avg.)
+> (49.8-79.0)
+> VQA-Med (Avg.)
+> (36.9-58.4)
+> PMC VQA (A cc.)
+> (43.4-48.8)
+> MedX pert (A cc.)
+> (11.6-22.3)
+
+Figure 5. Ablation study results of different model variants on six medical benchmarks. “Avg.” denotes open-ended QA datasets (av-erage of multiple metrics), and “acc.” represents closed-ended QA datasets (accuracy). The radar chart illustrates the contribution of text, semantic, and adaptive modules, as well as data augmentation strategies, to overall performance. tively. It consistently outperforms both generalist and medical-specific baselines on five of six datasets, demonstrating strong reasoning ability and generalization across domains. On the in-domain test set, ARMed achieves a 20.67% improvement over the best-performing model InternVL3-2B, and a 3.19% gain over InternVL3-8B on the out-of-domain set. Notably, models such as InternVL3-14B and HuatuoGPT-Vision-7B that perform compa-rably possess more than twice the number of parameters, high-lighting ARMed’s efficiency and scalability. These results con-firm the robustness and effectiveness of our adaptive semantic re-ward–guided GRPO reinforcement learning, which enables more stable optimization and enhances clinically reliable reasoning. 
+
+5.2. Ablation Study 
+
+As shown in Table 3 and Figure 5, each component of our method improves performance, with the full configuration achieving the best results across all metrics and datasets. Starting from the vanilla Qwen2.5-VL-3B baseline (46.07%), adding textual super-vision ( w. Text ) boosts performance to 68.99%, confirming the value of explicit text-based reasoning in medical VQA. Incorpo-8657 <think> The image appears to be a histological section, typical of an H&E stain.  
+
+> The tissue on the left consists of polygonal cells with round, central nuclei,
+> arranged in plates or cords; these are characteristic of hepatocytes (liver cells). The
+> central structure is a large channel, likely a component of a portal tract (such as a bile
+> duct or portal vein), surrounded by connective tissue and some inflammatory cells. The
+> presence of both liver parenchyma (hepatocytes) and portal tract structures definitively
+> places this image within the liver. The liver is the key organ of the hepatobiliary system,
+> which also includes the gallbladder and bile ducts. Therefore, the most accurate system
+> represented is the hepatobiliary system. </think>
+> Identify the system
+> or structure that is
+> present in the image.
+
+： ：   
+
+> <answer> hepatobiliary </answer>
+> What specific measures
+> can be taken to prevent
+> the occurrence of disease in
+> the upper right lobe of the lung?
+> <answer> To prevent the occurrence of disease in the upper right lobe of the lung, pay
+> attention to dietary hygiene, strengthen physical fitness, and avoid cold stimulation. </answer>
+> <think> The image provided is an X-ray scan of the chest region.. When
+> considering how to prevent diseases in the upper right lobe of the lung, the
+> focus should be on maintaining the overall health of the respiratory system rather than
+> targeting a specific lobe. The key to prevention lies in improving the body ’s resistance
+> through a healthy lifestyle, enabling it to defend itself against external pathogens. At
+> the same time, it is essential to minimize harmful environmental factors that may irritate
+> the respiratory tract, especially cold exposure, which can lead to upper respiratory
+> inflammation and further spread to the lower tract. Only by combining internal
+> strengthening with external protection can the respiratory system remain healthy and
+> stable. Therefore, the conclusion is that one should pay attention to dietary hygiene,
+> strengthen physical fitness, and avoid cold stimulation. </think>
+
+：：                  
+
+> Question :
+> Describe the location of the opacity in relation to the midline
+> and the right hilum.
+> Ground Truth :
+> The opacity is located right of the midline and under the right
+> hilum .
+> SFT ：
+> The opacity lies to the left of
+> the midline and kind of to the
+> right hilum .
+> Evaluation:
+> BLEU-1: 58.82
+> ROUGE-1: 62.06
+> BERTScore: 94.90
+> CosSim: 77.31
+> Average: 73.27
+> Evaluation:
+> BLEU-1: 58.82
+> ROUGE-1: 62.06
+> BERTScore: 94.39
+> CosSim: 58.28
+> Average: 68.39
+> GRPO ：
+> The opacity is in the left lung
+> away from the midline and near
+> the right hilum .
+> ARMed-A :
+> The opacity is in the right lung,
+> right of the midline and under
+> the right hilum .
+> Evaluation:
+> BLEU-1: 72.22
+> ROUGE-1: 82.75
+> BERTScore: 96.38
+> CosSim: 79.95
+> Average: 82.83
+
+(a) Demo with thinking process (b) Comparison with evaluation Figure 6. Demonstration of the reasoning process and evaluation across different training approaches. (a) shows demos with reasoning process, while (b) compares model outputs and quantitative metrics from various training settings. rating semantic reward modeling ( w. Sem ) and adaptive reward adjustment ( w. Ada ) further enhances comprehension and balance between precision and generalization, yielding additional gains. Data augmentation ( w. Aug ) alone improves performance to 65.63%, and combining it with textual guidance raises the score to 72.05%, showing their complementarity. Integrating all com-ponents achieves the highest overall average of 73.72%, demon-strating that each module contributes uniquely and their synergy results in a robust, semantically aligned medical VQA system. 
+
+5.3. Reward Collapse Mitigation 
+
+From Figure 4, both BERTScore and cosine similarity rewards ex-hibit high means and low variances. Specifically, BERTScore has a mean of 0.986 and variance of 0.029, while cosine similarity shows a mean of 0.903 and variance of 0.045. These narrowly dis-tributed scores indicate the reward model struggles to distinguish responses of varying quality. This low variance can cause reward collapse during reinforcement learning, where the agent lacks suf-ficient gradient signals to optimize behavior. In contrast, our adaptive semantic reward significantly in-creases variance, enhancing discriminative power. In this setting, BERTScore drops to a mean of 0.648 with a variance of 0.104, and cosine similarity to a mean of 0.514 with a variance of 0.112. This broader distribution enables more effective learning by providing richer feedback. As shown in Table 3 and Figure 5, ARMed-I, en-hanced with adaptive semantic rewards, consistently outperforms Qwen2.5-VL-3B trained with GRPO across both in-domain and out-of-domain evaluations. The results demonstrate that dynamic reward modeling improves signal quality and strengthens policy robustness for medical multi-modal QA. 
+
+5.4. Quantification Results 
+
+As shown in Figure 6(a), we present quantitative comparisons of visualized outputs with other models, demonstrating that our model generates more semantically consistent and clinically rea-sonable responses across diverse medical question types. Fig-ure 6(b) further compares different training strategies, showing that our alignment-based approach achieves higher overall consis-tency and better coherence between reasoning and final answers. However, existing quantitative metrics for open-ended med-ical QA are not entirely fair. Metrics ( e.g. , BLEU, ROUGE, BERTScore) fail to fully capture semantic correctness and deep clinical reasoning. This limitation motivates our exploration of more semantically aware and clinically grounded evaluation met-rics for medical VQA. 
+
+## 6. Conclusion and Future Work 
+
+This work presents Adaptive Reinforcement for Medical Rea-soning (ARMed), a reinforcement learning framework for medi-cal visual question answering (VQA). ARMed integrates domain-specific diagnostic knowledge via chain-of-thought supervision and optimizes reasoning through Group Relative Policy Optimiza-tion guided by an adaptive, clinically semantic reward. To over-come limitations of static similarity metrics, we design a dynamic reward mechanism that scales robustly with inter-sample variance, enhancing semantic discriminability, stabilizing policy optimiza-tion, and mitigating reward collapse. This adaptive formulation enables more interpretable and clinically aligned reasoning. Extensive experiments on diverse and comprehensive medi-cal VQA benchmarks show significant improvements in reasoning consistency, factual accuracy, and out-of-domain generalization over both supervised and reinforcement learning baselines. Ab-lation studies confirm the effectiveness of adaptive reward calibra-tion and medical knowledge injection in reducing bias and improv-ing robustness. Looking forward, we plan to extend ARMed to multi-turn and practical report-level reasoning, integrate it within clinical workflows, and develop more semantically grounded eval-uation metrics for assessing open-ended medical reasoning quality. We discuss limitations and ethics in the Appendix .8658 Acknowledgements 
+
+This project was funded by the National Natural Science Founda-tion of China 82090052. 
+
+## References 
+
+[1] Josh Achiam, Steven Adler, Sandhini Agarwal, Lama Ah-mad, Ilge Akkaya, Florencia Leoni Aleman, Diogo Almeida, Janko Altenschmidt, Sam Altman, Shyamal Anadkat, et al. Gpt-4 technical report. arXiv preprint arXiv:2303.08774 ,2023. 1 [2] Shuai Bai, Keqin Chen, Xuejing Liu, Jialin Wang, Wenbin Ge, Sibo Song, Kai Dang, Peng Wang, Shijie Wang, Jun Tang, Humen Zhong, Yuanzhi Zhu, Mingkun Yang, Zhao-hai Li, Jianqiang Wan, Pengfei Wang, Wei Ding, Zheren Fu, Yiheng Xu, Jiabo Ye, Xi Zhang, Tianbao Xie, Zesen Cheng, Hang Zhang, Zhibo Yang, Haiyang Xu, and Jun-yang Lin. Qwen2.5-vl technical report. arXiv preprint arXiv:2502.13923 , 2025. 1, 7 [3] Asma Ben Abacha, Sadid A Hasan, Vivek V Datla, Dina Demner-Fushman, and Henning M¨ uller. Vqa-med: Overview of the medical visual question answering task at imageclef 2019. In Proceedings of CLEF (Conference and Labs of the Evaluation Forum) 2019 Working Notes . 9-12 September 2019, 2019. 6 [4] Junying Chen, Zhenyang Cai, Ke Ji, Xidong Wang, Wan-long Liu, Rongsheng Wang, Jianye Hou, and Benyou Wang. Huatuogpt-o1, towards medical complex reasoning with llms. arXiv preprint arXiv:2412.18925 , 2024. 3 [5] Junying Chen, Chi Gui, Ruyi Ouyang, Anningzhe Gao, Shu-nian Chen, Guiming Hardy Chen, Xidong Wang, Ruifei Zhang, Zhenyang Cai, Ke Ji, et al. Huatuogpt-vision, to-wards injecting medical visual knowledge into multimodal llms at scale. arXiv preprint arXiv:2406.19280 , 2024. 2, 7 [6] Jiawei Chen, Dingkang Yang, Yue Jiang, Mingcheng Li, Jin-jie Wei, Xiaolu Hou, and Lihua Zhang. Efficiency in focus: Layernorm as a catalyst for fine-tuning medical visual lan-guage models. In Proceedings of the 32nd ACM Interna-tional Conference on Multimedia , pages 3122–3130, 2024. 2[7] Zizhi Chen, Yizhen Gao, Minghao Han, Yizhou Liu, Zhaoyu Chen, Dingkang Yang, and Lihua Zhang. Forg-ing a dynamic memory: Retrieval-guided continual learn-ing for generalist medical foundation models. arXiv preprint arXiv:2512.13072 , 2025. 2 [8] Pritam Deka, Anna Jurek-Loughrey, and Deepak P. Evidence extraction to validate medical claims in fake news detection. In International conference on health information science ,pages 3–15. Springer, 2022. 7 [9] Huilin Deng, Ding Zou, Rui Ma, Hongchen Luo, Yang Cao, and Yu Kang. Boosting the generalization and reasoning of vision language models with curriculum reinforcement learning. arXiv preprint arXiv:2503.07065 , 2025. 3 [10] Yu Gu, Robert Tinn, Hao Cheng, Michael Lucas, Naoto Usuyama, Xiaodong Liu, Tristan Naumann, Jianfeng Gao, and Hoifung Poon. Domain-specific language model pre-training for biomedical natural language processing. ACM Transactions on Computing for Healthcare (HEALTH) , 3(1): 1–23, 2021. 7 [11] Daya Guo, Dejian Yang, Haowei Zhang, Junxiao Song, Peiyi Wang, Qihao Zhu, Runxin Xu, Ruoyu Zhang, Shirong Ma, Xiao Bi, et al. Deepseek-r1: Incentivizing reasoning ca-pability in llms via reinforcement learning. arXiv preprint arXiv:2501.12948 , 2025. 1 [12] Minghao Han, YiChen Liu, Yizhou Liu, Zizhi Chen, Jingqun Tang, Xuecheng Wu, Dingkang Yang, and Lihua Zhang. Be-yond pixel simulation: Pathology image generation via diag-nostic semantic tokens and prototype control. arXiv preprint arXiv:2512.21058 , 2025. 2 [13] Xuehai He, Yichen Zhang, Luntian Mou, Eric Xing, and Pengtao Xie. Pathvqa: 30000+ questions for medical visual question answering. arXiv preprint arXiv:2003.10286 , 2020. 6[14] Saahil Jain, Ashwin Agrawal, Adriel Saporta, Steven QH Truong, Du Nguyen Duong, Tan Bui, Pierre Chambon, Yuhao Zhang, Matthew P Lungren, Andrew Y Ng, et al. Rad-graph: Extracting clinical entities and relations from radiol-ogy reports. arXiv preprint arXiv:2106.14463 , 2021. 2 [15] Yue Jiang, Jiawei Chen, Dingkang Yang, Mingcheng Li, Shunli Wang, Tong Wu, Ke Li, and Lihua Zhang. Comt: Chain-of-medical-thought reduces hallucination in medical report generation. In ICASSP 2025-2025 IEEE Interna-tional Conference on Acoustics, Speech and Signal Process-ing (ICASSP) , pages 1–5. IEEE, 2025. 2 [16] Yuxiang Lai, Jike Zhong, Ming Li, Shitian Zhao, Yuheng Li, Konstantinos Psounis, and Xiaofeng Yang. Med-r1: Reinforcement learning for generalizable medical reasoning in vision-language models. IEEE Transactions on Medical Imaging , 2026. 3 [17] Jason J Lau, Soumya Gayen, Asma Ben Abacha, and Dina Demner-Fushman. A dataset of clinically generated visual questions and answers about radiology images. Scientific data , 5(1):1–10, 2018. 6 [18] Chunyuan Li, Cliff Wong, Sheng Zhang, Naoto Usuyama, Haotian Liu, Jianwei Yang, Tristan Naumann, Hoifung Poon, and Jianfeng Gao. Llava-med: Training a large language-and-vision assistant for biomedicine in one day. Advances in Neural Information Processing Systems , 36:28541–28564, 2023. 2, 7 [19] Chin-Yew Lin. Rouge: A package for automatic evaluation of summaries. In Text summarization branches out , pages 74–81, 2004. 1, 4 [20] Bo Liu, Li-Ming Zhan, Li Xu, Lin Ma, Yan Yang, and Xiao-Ming Wu. Slake: A semantically-labeled knowledge-enhanced dataset for medical visual question answering. In 
+
+2021 IEEE 18th international symposium on biomedical imaging (ISBI) , pages 1650–1654. IEEE, 2021. 6 [21] Bo Liu, Xiangyu Zhao, Along He, Yidi Chen, Huazhu Fu, and Xiao-Ming Wu. Gemex-thinkvg: Towards thinking with visual grounding in medical vqa via reinforcement learning. 
+
+arXiv preprint arXiv:2506.17939 , 2025. 3 [22] Fenglin Liu, Hongjian Zhou, Boyang Gu, Xinyu Zou, Jinfa Huang, Jinge Wu, Yiru Li, Sam S Chen, Yining Hua, Peilin Zhou, et al. Application of large language models 8659 in medicine. Nature Reviews Bioengineering , pages 1–20, 2025. 2 [23] Haotian Liu, Chunyuan Li, Yuheng Li, and Yong Jae Lee. Improved baselines with visual instruction tuning. In Pro-ceedings of the IEEE/CVF conference on computer vision and pattern recognition , pages 26296–26306, 2024. 7 [24] Yan Ma, Steffi Chern, Xuyang Shen, Yiran Zhong, and Pengfei Liu. Rethinking rl scaling for vision language mod-els: A transparent, from-scratch framework and comprehen-sive evaluation scheme. arXiv preprint arXiv:2504.02587 ,2025. 3 [25] Andrew Y Ng, Daishi Harada, and Stuart Russell. Policy invariance under reward transformations: Theory and appli-cation to reward shaping. In Icml , pages 278–287. Citeseer, 1999. 4 [26] Jiazhen Pan, Che Liu, Junde Wu, Fenglin Liu, Jiayuan Zhu, Hongwei Bran Li, Chen Chen, Cheng Ouyang, and Daniel Rueckert. Medvlm-r1: Incentivizing medical reasoning ca-pability of vision-language models (vlms) via reinforcement learning. arXiv preprint arXiv:2502.19634 , 2025. 3 [27] Kishore Papineni, Salim Roukos, Todd Ward, and Wei-Jing Zhu. Bleu: a method for automatic evaluation of machine translation. In Proceedings of the 40th annual meeting of the Association for Computational Linguistics , pages 311–318, 2002. 1, 4 [28] Shaohao Rui, Kaitao Chen, Weijie Ma, and Xiaosong Wang. Improving medical reasoning with curriculum-aware rein-forcement learning. arXiv preprint arXiv:2505.19213 , 2025. 2, 3, 6 [29] John Schulman, Filip Wolski, Prafulla Dhariwal, Alec Rad-ford, and Oleg Klimov. Proximal policy optimization algo-rithms. arXiv preprint arXiv:1707.06347 , 2017. 3 [30] Zhihong Shao, Peiyi Wang, Qihao Zhu, Runxin Xu, Junxiao Song, Xiao Bi, Haowei Zhang, Mingchuan Zhang, YK Li, Yang Wu, et al. Deepseekmath: Pushing the limits of math-ematical reasoning in open language models. arXiv preprint arXiv:2402.03300 , 2024. 2, 3, 4 [31] Ziang Song, Tianle Cai, Jason D Lee, and Weijie J Su. Re-ward collapse in aligning large language models. arXiv preprint arXiv:2305.17608 , 2023. 2 [32] Huajie Tan, Yuheng Ji, Xiaoshuai Hao, Minglan Lin, Pengwei Wang, Zhongyuan Wang, and Shanghang Zhang. Reason-rft: Reinforcement fine-tuning for visual reasoning. 
+
+arXiv e-prints , pages arXiv–2503, 2025. 3 [33] Peng Wang, Wenpeng Lu, Chunlin Lu, Ruoxi Zhou, Min Li, and Libo Qin. Large language model for medical images: A survey of taxonomy, systematic review, and future trends. 
+
+Big Data Mining and Analytics , 8(2):496–517, 2025. 2 [34] Weiyun Wang, Zhangwei Gao, Lianjie Chen, Zhe Chen, Jin-guo Zhu, Xiangyu Zhao, Yangzhou Liu, Yue Cao, Sheng-long Ye, Xizhou Zhu, et al. Visualprm: An effective pro-cess reward model for multimodal reasoning. arXiv preprint arXiv:2503.10291 , 2025. 1 [35] Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Fei Xia, Ed Chi, Quoc V Le, Denny Zhou, et al. Chain-of-thought prompting elicits reasoning in large lan-guage models. Advances in neural information processing systems , 35:24824–24837, 2022. 2 [36] Juncheng Wu, Wenlong Deng, Xingxuan Li, Sheng Liu, Tao-mian Mi, Yifan Peng, Ziyang Xu, Yi Liu, Hyunjin Cho, Chang-In Choi, et al. Medreason: Eliciting factual medical reasoning steps in llms via knowledge graphs. arXiv preprint arXiv:2504.00993 , 2025. 3 [37] Dingkang Yang, Jinjie Wei, Dongling Xiao, Shunli Wang, Tong Wu, Gang Li, Mingcheng Li, Shuaibing Wang, Ji-awei Chen, Yue Jiang, et al. Pediatricsgpt: Large language models as chinese medical assistants for pediatric applica-tions. Advances in Neural Information Processing Systems ,37:138632–138662, 2024. 2 [38] Dingkang Yang, Jinjie Wei, Mingcheng Li, Jiyao Liu, Lihao Liu, Ming Hu, Junjun He, Yakun Ju, Wei Zhou, Yang Liu, et al. Medaide: Information fusion and anatomy of medical intents via llm-based agent collaboration. Information Fu-sion , page 103743, 2025. 2 [39] Qiying Yu, Zheng Zhang, Ruofei Zhu, Yufeng Yuan, Xi-aochen Zuo, Yu Yue, Weinan Dai, Tiantian Fan, Gao-hong Liu, Lingjun Liu, et al. Dapo: An open-source llm reinforcement learning system at scale. arXiv preprint arXiv:2503.14476 , 2025. 3 [40] Kai Zhang, Rong Zhou, Eashan Adhikarla, Zhiling Yan, Yixin Liu, Jun Yu, Zhengliang Liu, Xun Chen, Brian D. Davison, Hui Ren, Jing Huang, Chen Chen, Yuyin Zhou, Sunyang Fu, Wei Liu, Tianming Liu, Xiang Li, Yong Chen, Lifang He, James Zou, Quanzheng Li, Hongfang Liu, and Lichao Sun. A generalist vision–language foundation model for diverse biomedical tasks. Nature Medicine , 30(11): 3129–3141, 2024. 2 [41] Tianyi Zhang, Varsha Kishore, Felix Wu, Kilian Q Wein-berger, and Yoav Artzi. Bertscore: Evaluating text genera-tion with bert. arXiv preprint arXiv:1904.09675 , 2019. 2 [42] Xiaoman Zhang, Chaoyi Wu, Ziheng Zhao, Weixiong Lin, Ya Zhang, Yanfeng Wang, and Weidi Xie. Pmc-vqa: Vi-sual instruction tuning for medical visual question answer-ing. arXiv preprint arXiv:2305.10415 , 2023. 6 [43] Yuze Zhao, Jintao Huang, Jinghan Hu, Xingjun Wang, Yun-lin Mao, Daoze Zhang, Zeyinzi Jiang, Zhikai Wu, Baole Ai, Ang Wang, et al. Swift: a scalable lightweight infrastructure for fine-tuning. In Proceedings of the AAAI Conference on Artificial Intelligence , pages 29733–29735, 2025. 7 [44] Yaowei Zheng, Richong Zhang, Junhao Zhang, Yanhan Ye, and Zheyan Luo. Llamafactory: Unified efficient fine-tuning of 100+ language models. In Proceedings of the 62nd an-nual meeting of the association for computational linguistics (volume 3: system demonstrations) , pages 400–410, 2024. 7 [45] Jinguo Zhu, Weiyun Wang, Zhe Chen, Zhaoyang Liu, Shen-glong Ye, Lixin Gu, Hao Tian, Yuchen Duan, Weijie Su, Jie Shao, et al. Internvl3: Exploring advanced training and test-time recipes for open-source multimodal models. arXiv preprint arXiv:2504.10479 , 2025. 1, 7 [46] Yuxin Zuo, Shang Qu, Yifei Li, Zhangren Chen, Xuekai Zhu, Ermo Hua, Kaiyan Zhang, Ning Ding, and Bowen Zhou. Medxpertqa: Benchmarking expert-level medical reasoning and understanding. arXiv preprint arXiv:2501.18362 , 2025. 68660

@@ -1,0 +1,498 @@
+Title: Not All Tokens Matter Equally: Dynamic In-context Vector Distillation with Decisive-Token Supervision for Long-form Medical Report Generation
+
+URL Source: https://arxiv.org/pdf/2605.27194
+
+Published Time: Wed, 27 May 2026 01:39:35 GMT
+
+Number of Pages: 20
+
+Markdown Content:
+# Not All Tokens Matter Equally: Dynamic In-context Vector Distillation with Decisive-Token Supervision for Long-form Medical Report Generation 
+
+Ning Wu 1, Rui Liu 2, Xinkun Lin 1, Weixing Chen 3
+
+Jinxi Xiang 4, Tao Wei 5, Lina Yao 1,∗, Mingjie Li 5,∗
+
+> 1
+
+UNSW Sydney, Sydney, Australia 
+
+> 2
+
+University of Technology Sydney, Sydney, Australia 
+
+> 3
+
+School of Computer Science and Engineering, Sun Yat-sen University, China 
+
+> 4
+
+Stanford University, Palo Alto, United States 
+
+> 5
+
+Shanghai Jiao Tong University, Shanghai, China 
+
+wuning84@outlook.com, rliu0016@gmail.com, xinkun.lin124@gmail.com chenwx228@mail2.sysu.edu.cn, xiangjx@stanford.edu, taowei@sjtu.edu.cn lina.yao@unsw.edu.au, mingjie.li@sjtu.edu.cn 
+
+> ∗
+
+Corresponding authors. 
+
+## Abstract 
+
+Distilling demonstration effects into hidden-space interventions offers a lightweight alternative to full finetuning. However, existing multimodal variants are mostly evaluated on short-form tasks, where outputs end after a few tokens. Extending these methods to long-form generation exposes a fundamental yet underexamined limitation: token-level distillation implicitly treats all output tokens as equally informative, but long-form outputs are dominated by high-frequency template and grammatical tokens, while the tokens that actually determine output quality are sparsely distributed. In medical report generation (MRG), two such decisive tokens stand out: pathology-related tokens that determine diagnostic content, and the end-of-sequence (EOS) event that determines termination. Both receive insufficient supervision under uniform cross-entropy, and autoregressive decoding further compounds the problem by drifting away from teacher-forced trajectories. We propose DIVE, a frozen-backbone distillation framework that addresses long-form report generation through two complementary mechanisms matched to these failures. Decisive-token supervision restores supervision balance by upweighting the cross-entropy contribution of pathology-related tokens and the EOS event, ensuring that content fidelity and termination are learned during training rather than imposed at decoding time. State-conditioned dynamic steering replaces fixed open-loop residuals with hidden-state-dependent adapters, allowing the injected signal to adapt as decoding drifts. Experiments on MIMIC-CXR and CheXpert Plus with two medical VLM backbones show that DIVE consistently ranks among the strongest methods across lexical and clinical-proxy metrics. Our method achieves the best BLEU-4, ROUGE-L, and RadGraph F1 in all dataset–backbone settings, while remaining competitive on coarse label-level CheXbert F1. 
+
+## 1 Introduction 
+
+In-context learning (ICL) enables large models to adapt to new tasks through demonstrations without parameter updates [ 3, 34 , 57 , 12 , 1 , 50 , 11 ]. Recent work further suggests that demonstration-induced behavior can be compressed into latent or parameter-space interventions, including in-context vectors, task arithmetic, activation steering, representation engineering, and multimodal task vectors 
+
+> Preprint.
+> arXiv:2605.27194v1 [cs.CL] 26 May 2026
+
+Figure 1: Why short-form distilled steering does not directly transfer to long-form medical report generation. Static steering is effective for short-form medical VQA because outputs are short and termination is largely template-driven (A). In long-form chest X-ray report generation, sparse pathology-related tokens and the EOS boundary are easily overwhelmed by frequent template tokens, and autoregressive drift further leads to miscalibrated continuation (B). DIVE mitigates these failures through decisive-token supervision and state-conditioned dynamic steering, improving stopping calibration and clinical faithfulness (C). [ 31 , 19 , 48 , 62 , 26 , 44 , 42 , 18 ]. These methods reduce prompt overhead and provide lightweight alternatives to full finetuning, but most multimodal evidence remains concentrated on short-form tasks such as visual question answering, where outputs end after only a few tokens. This raises a basic question for the long-form regime: can a distilled hidden-space intervention remain reliable when generation must be sustained over many tokens and when output quality depends on getting a few decisive tokens right rather than on matching every token equally well? 
+
+We study this question in medical report generation (MRG), a long-form multimodal task where a model generates a multi-sentence radiology report from given medical images [ 52 , 41 , 30 , 14 , 54 , 6 ]. We treat MRG not as a clinical-deployment target, but as a representative long-form multimodal stress test: outputs are long enough for autoregressive errors to accumulate, and, crucially, their quality is highly non-uniform across token positions. A radiology report is dominated by template phrases (“the lungs are clear”, “there is no evidence of”) that are easy to predict from local context, while the tokens that actually determine output quality are sparsely distributed. Two such decisive tokens stand out: pathology-related tokens (e.g., “pneumothorax”, “consolidation”, “cardiomegaly”) that determine the diagnostic content of the report, and the end-of-sequence (EOS) event that determines whether the report terminates at the appropriate boundary. Late termination is particularly costly in this domain, as continuing past the visually supported content can introduce statements that are not grounded in the image. This non-uniform structure exposes a fundamental limitation of token-level distillation: standard cross-entropy weights all output tokens equally, but the value of each token to overall report quality is far from equal. As a result, the gradient signal is dominated by abundant template tokens that are already easy to predict, while the rare but decisive tokens (pathology mentions and the EOS event) receive insufficient supervision. We refer to this phenomenon as decisive-token under-supervision. This issue is related to long-standing issues in sequence generation, including train–test mismatch under teacher forcing, length bias, beam-search degradation, and degeneration in autoregressive decoding [ 2, 43 , 56 , 37 , 7, 33 , 15 , 55 ], but is specifically sharpened in the token-level distillation setting, where supervision density is uniform across positions by construction. At inference time, autoregressive decoding further compounds the problem by moving the student away from teacher-forced hidden-state trajectories, making fixed open-loop steering brittle over long horizons. We propose DIVE , a frozen-backbone distillation framework for long-form MRG that targets these two failure sources with complementary mechanisms. Its primary mechanism, decisive-token su-pervision, explicitly upweights the cross-entropy contribution of the two decisive token classes 2during distillation: pathology-related tokens, identified through a domain-prior vocabulary covering CheXpert disease categories and their common clinical phrasings, and the EOS event. This raises the effective training signal for tokens that actually determine report quality, addressing supervision density imbalance during training rather than imposing it at decoding time. Complementing this, 
+
+state-conditioned dynamic steering replaces fixed open-loop residuals with a hidden-state-dependent intervention, so that the injected signal is computed from the state actually visited at each decoding step rather than from a single offline-estimated direction. The two mechanisms target distinct sources of failure, supervision-density imbalance and trajectory drift, and we find empirically that they contribute to different aspects of the final behavior. We evaluate DIVE on MIMIC-CXR [ 23 ] and CheXpert Plus [ 4] using both lexical and clinical efficacy metrics. Within this scope, DIVE provides a stronger overall trade-off than zero-shot prompting, vanilla ICL [ 3 ], QLoRA finetuning [ 10 ], and static ICV-style steering [ 31 , 42 ], improving long-form report quality while reducing miscalibrated over-generation. Ablations further show a clear separation of roles between the two mechanisms: decisive-token supervision primarily improves clinically salient content and termination behavior, whereas dynamic steering contributes complementary gains in report-level generation quality. Our contributions are threefold: • We identify decisive-token under-supervision as a key bottleneck when token-level distilla-tion is extended from short-form tasks to long-form MRG, and show that diagnostic fidelity and termination calibration are two instances of the same underlying failure. • We propose DIVE, a frozen-backbone distillation framework that combines decisive-token supervision with state-conditioned dynamic steering to address supervision-density imbal-ance and autoregressive trajectory drift. • On MIMIC-CXR and CheXpert Plus, DIVE consistently improves over static ICV-style steering and achieves the strongest BLEU-4, ROUGE-L, and RadGraph F1 across all dataset–backbone settings, while maintaining competitive CheXbert performance. 
+
+## 2 Related Work 
+
+Distilling demonstration effects into lightweight interventions. In-context learning adapts a model through input demonstrations, but retaining demonstrations at inference increases context length and computational cost [ 3, 34 , 57 , 12 , 1, 50 , 11 ]. This has motivated methods that compress task- or demonstration-induced behavior into lightweight interventions, including in-context vectors, task arithmetic, activation steering, inference-time intervention, representation engineering, and multimodal task vectors [ 31 , 19 , 48 , 26 , 62 , 44 , 42 , 18 ]. These approaches are related to parameter-efficient adaptation methods such as adapters, prefix tuning, prompt tuning, LoRA, and QLoRA [ 16 , 27 , 24 , 32 , 17 , 10 , 13 ], but their objective is different: rather than only fitting target-task supervision, they aim to preserve or distill the behavioral effect induced by demonstrations. DIVE follows this line of work, but studies a regime that is largely absent from prior multimodal steering experiments: long-form generation, where the intervention must remain reliable over many decoding steps and where errors in both content selection and sequence termination accumulate over time. 
+
+Long-form generation and salience-aware supervision. Autoregressive sequence models are trained under teacher forcing but decoded from their own histories, leading to exposure bias and compounding errors over long horizons [ 2, 43 ]. Prior work has also analyzed length bias, beam-search degradation, and degeneration in neural generation [ 56 , 37 , 7, 33 , 15 , 55 ]. These issues are particularly relevant to distilled latent steering: a fixed intervention estimated from teacher-forced states may become unreliable when applied to states visited during free-running student decoding. In long-form medical generation, the imbalance is not only temporal but also semantic. The EOS event appears only once per report, and pathology-related finding mentions occupy only a small fraction of the sequence. Uniform token-level distillation can therefore be dominated by generic continuation tokens, while underrepresenting rare but high-impact decisions about which diagnostic findings to preserve and when to stop. DIVE addresses this supervision-density imbalance during distillation through salience-aware supervision, together with state-conditioned steering that adapts the injected signal to the student’s current decoding state. 3Figure 2: Training DIVE with decisive-token supervision and dynamic steering. A demonstration-augmented teacher provides cached token-level supervision for a query-only student. DIVE combines 
+
+decisive-token supervision , which upweights pathology-related tokens and EOS in the cross-entropy loss, with dynamic steering , which injects state-conditioned residuals into the frozen decoder through lightweight MHA/MLP adapters. Training uses weighted token-level CE and top-K KL distillation. At inference time, demonstrations and teacher caches are removed, and only the learned adapters are used. 
+
+Medical report generation and clinical evaluation. Medical report generation is a long-form multimodal task in which a model generates radiology findings from medical images. It has been studied on datasets such as IU X-Ray, ChestX-ray8, CheXpert, CheXpert Plus, and MIMIC-CXR [ 9, 53 , 20 , 4 , 23 ]. Prior work has developed retrieval-augmented, memory-based, transformer-based, contrastive, longitudinal, and multiview report-generation models [ 22 , 28 , 5, 35 , 58 , 51 , 38 ,30 ]. Recent medical vision-language models further broaden the setting to few-shot and generalist biomedical assistants [ 25 , 36 , 47 , 60 ]. Because lexical overlap alone does not determine clinical correctness, evaluation increasingly relies on clinical-label, entity-relation, and error-oriented metrics such as CheXbert, RadGraph, and GREEN [ 46 , 21 , 59 , 45 , 39 ]. We use medical report generation as a stress test for long-form multimodal steering: the output is long enough for decoding drift to accumulate, and continuing beyond visually supported content can introduce unsupported clinical statements. 
+
+## 3 DIVE: Dynamic In-context Vector Distillation with Decisive-token Supervision 
+
+We propose DIVE, short for Dynamic In-context VEctor Distillation, a frozen-backbone framework for long-form multimodal generation. A demonstration-augmented teacher provides token-level supervision for a query-only student, while the base vision-language model remains frozen. DIVE combines two complementary mechanisms: state-conditioned dynamic steering, which adapts the injected intervention to the student’s current decoding state, and decisive-token supervision, which upweights pathology-related target spans and the EOS event during distillation. Implementation details, including norm-clipped injection, teacher-logit caching, and decoding configuration, are provided in Appendix B. 
+
+3.1 Distilled Long-form Steering Setup 
+
+Let fθ denote a frozen vision-language model. Given a query image x and instruction prompt p, the model generates a report y = ( y1, . . . , y T ), where yT = EOS denotes the end-of-sequence token. In standard in-context learning, demonstrations D = {di}Ni=1 are prepended to the query input. DIVE distills this demonstration-augmented behavior into lightweight adapter parameters ϕ, so that the student receives only [p; x] during training and inference: 
+
+pSt = fθ,ϕ (yt | p, x, y <t ).
+
+The teacher receives the demonstration-augmented input and is evaluated under teacher forcing: 
+
+pTt = fθ (yt | D , p, x, y <t ).
+
+Only the adapter parameters ϕ are optimized; all backbone parameters θ remain frozen. 43.2 State-conditioned Dynamic Steering 
+
+Static ICV-style steering applies a fixed residual vector to hidden states, 
+
+˜h(l,b ) 
+
+> t
+
+= h(l,b ) 
+
+> t
+
++ v(l,b ),
+
+where l indexes decoder layers and b ∈ { MHA , MLP } indexes Transformer branches. This open-loop intervention is brittle in long-form generation because the same residual is used even when autoregressive decoding drifts away from the teacher-forced trajectory. DIVE replaces the fixed vector with a state-conditioned residual: 
+
+˜h(l,b ) 
+
+> t
+
+= h(l,b ) 
+
+> t
+
++ δ(l,b ) 
+
+> t
+
+, δ(l,b ) 
+
+> t
+
+= g(l,b ) 
+
+> ϕ
+
+(h(l,b ) 
+
+> t
+
+).
+
+In our implementation, g(l,b ) 
+
+> ϕ
+
+is a bottleneck MLP adapter, 
+
+δ(l,b ) 
+
+> t
+
+= W (l,b )up σ
+
+
+
+W (l,b )down h(l,b )
+
+> t
+
+
+
+,
+
+where W (l,b )down ∈ Rr×d, W (l,b )up ∈ Rd×r , and r ≪ d. Because the residual is computed from the hidden state actually visited at each decoding step, the intervention can adapt to off-trajectory states during long-form generation. 
+
+3.3 Decisive-token Distillation Objective 
+
+Long-form token-level distillation provides dense supervision for high-frequency template tokens but much weaker effective supervision for the tokens that actually determine output quality. We refer to the latter as decisive tokens: target positions that (a) are sparse, either in absolute frequency or in their occurrence within a single output, and (b) disproportionately determine task-relevant content rather than surface fluency. Standard cross-entropy weights all positions equally and therefore allocates most gradient signal to abundant template tokens, leaving decisive positions underrepresented in the effective objective. In MRG, this notion has two natural instances. Pathology-related tokens express the diagnostic findings that determine the clinical content of the report, and the EOS event determines whether the report terminates at the appropriate boundary. Both are sparse — pathology mentions occupy only a small fraction of each report, and EOS occupies a single position per sequence — yet both carry far more weight than the template phrasing that surrounds them. To identify pathology-related tokens during training, we construct a CheXpert-guided phrase vocabulary covering common surface expressions of the 14 finding categories (full lexicon in Appendix C). For each training report, we activate phrase sets corresponding to its CheXpert finding labels and mark matched target-side tokens as pathology-related, yielding a per-example pathology mask. The EOS mask is defined trivially as the indicator of the EOS position. Both masks are used only to weight the distillation loss during training; at inference time, DIVE uses no CheXpert labels, reference reports, pathology masks, teacher logits, or demonstrations. Let mpath  
+
+> t
+
+∈ { 0, 1} denote this pathology-token mask, and let mEOS  
+
+> t
+
+= I[yt = EOS ] denote the EOS mask. DIVE then upweights the cross-entropy contribution of both decisive token types: 
+
+LCE =
+
+PTt=1 wt CE( pSt , y t)
+
+PTt=1 wt
+
+, wt =
+
+
+
+ωEOS , mEOS  
+
+> t
+
+= 1 ,ωpath , mpath  
+
+> t
+
+= 1 ,
+
+1, otherwise .
+
+This changes the training objective rather than applying a decoding-time length penalty or forced stopping rule. It increases supervision on the sparse tokens responsible for diagnostic content and termination while keeping ordinary template and grammatical tokens in the objective. To transfer the demonstration-induced token preferences of the teacher, we also minimize a top-K
+
+KL distillation loss: 
+
+LKL = 1
+
+T
+
+> T
+
+X
+
+> t=1
+
+KL  pTt,K ∥ pSt,K 
+
+ ,
+
+where pTt,K and pSt,K are teacher and student distributions restricted to the teacher’s top-K token support. The final objective is 
+
+L = αLKL + (1 − α)LCE .
+
+At inference time, DIVE discards demonstrations, teacher caches, and the pathology mask used only as a training-time domain prior, relying solely on the query image, instruction prompt, frozen backbone, and learned dynamic adapters. 5Table 1: Performance (%) comparison on the MIMIC-CXR and CheXpert Plus test sets under different medical VLM backbones. BERTScore is reported as F1. Bold and underline indicate the best and second-best results within each dataset–backbone block. Significance markers indicate uncorrected one-sided paired tests against the strongest non-DIVE baseline under the same dataset and backbone: ∗∗∗ p < 0.001 , ∗∗ p < 0.01 , ∗p < 0.05 .                                                                                                                                                        
+
+> Backbone Model BLEU-1 BLEU-4 ROUGE-L CIDEr BERTScore F1-chexbert-14 F1-radgraph
+> MIMIC-CXR
+> QoQ-Med Zero-shot 17.59 1.30 14.60 0.62 84.19 36.49 8.64 32-shot ICL 22.23 2.87 17.37 1.08 85.57 45.97 15.79 QLoRA 19.33 3.89 18.17 7.38 86.51 34.09 14.78 LIVE 24.19 4.39 19.05 2.78 85.75 34.30 18.60 DIVE (Ours) 29.69 ∗∗∗ 5.33 ∗∗∗ 20.18 ∗∗∗ 7.15 86.45 37.91 19.00 ∗∗
+> LLaVA-Med Zero-shot 18.55 1.60 14.89 1.16 84.09 34.22 11.26 8-shot ICL 25.19 3.22 18.06 2.94 85.68 41.86 16.21 QLoRA 18.07 3.31 18.48 5.56 86.76 25.87 16.94 LIVE 21.42 2.26 16.37 2.20 84.39 16.03 15.75 DIVE (Ours) 30.93 ∗∗∗ 4.79 ∗∗∗ 20.49 ∗∗∗ 5.85 87.10 ∗∗∗ 37.42 18.06 ∗∗∗
+> CheXpert Plus
+> QoQ-Med Zero-shot 17.87 1.62 15.46 0.69 84.61 35.33 10.30 32-shot ICL 21.06 2.54 15.87 2.77 84.87 18.43 13.09 QLoRA 15.98 3.02 16.30 1.07 83.18 39.92 13.81 LIVE 20.06 3.23 17.74 3.98 84.60 38.61 15.00 DIVE (Ours) 20.37 3.93 ∗∗∗ 18.76 ∗∗∗ 4.65 ∗85.05 ∗∗∗ 41.28 17.18 ∗∗∗
+> LLaVA-Med Zero-shot 11.69 0.48 10.97 1.44 83.97 24.62 4.84 8-shot ICL 23.04 2.48 15.55 3.49 85.12 32.06 10.81 QLoRA 18.83 3.50 17.21 2.02 83.92 40.15 13.75 LIVE 22.52 2.03 16.85 2.24 85.10 28.36 14.47 DIVE (Ours) 27.79 ∗∗∗ 5.31 ∗∗∗ 18.99 ∗∗∗ 7.49 ∗∗∗ 85.86 ∗∗∗ 43.57 ∗∗∗ 16.88 ∗∗∗
+
+## 4 Experiment 
+
+4.1 Settings and Implementation Details Model and dataset. We evaluate DIVE on two medical vision-language backbones, QoQ-Med3-VL-8B [ 8] and LLaVA-Med v1.5 Mistral-7B [ 25 ], and on two chest X-ray report generation benchmarks, MIMIC-CXR [ 23 ] and CheXpert Plus [ 4 ]. After preprocessing and deduplication, MIMIC-CXR contains 214,996 valid training samples and 3,087 test samples, while CheXpert Plus contains 12,816 valid training samples and 3,663 test samples. For each dataset, we randomly sample 1,000 training instances for adapter distillation and 2,000 instances as the demonstration pool. Final results are reported on the full test set for each dataset-backbone pair. 
+
+Distillation setting. For each query, we construct text-only in-context demonstrations to obtain teacher logits. QoQ-Med uses 32-shot demonstrations, while LLaVA-Med uses 8-shot demonstrations due to its effective context length limitation. Dynamic task vectors are implemented as per-layer bottleneck MLP injectors with rank 16. We train them using a weighted combination of top-K KL distillation and cross-entropy on answer tokens, with pathology-related target spans and EOS explicitly upweighted in the cross-entropy term. Full implementation details, including optimization, temperature scheduling, quantization, and hardware configuration, are deferred to the appendix. 
+
+Evaluation metrics. We evaluate generated reports with standard text-generation metrics, including BLEU-1/4, ROUGE-L, CIDEr, and BERTScore [ 40 , 29 , 49 , 61 ]. To assess clinical content beyond lexical overlap, we also report CheXbert-14 F1 and RadGraph F1 [ 46 , 21 ]. Following recent analyses of radiology report generation, we treat these automatic metrics as clinical proxies rather than clinical validation [59, 45, 39]. 6Table 2: Cumulative ablation of LLaVA-Med on CheXpert Plus and MIMIC-CXR. Starting from the zero-shot baseline, each subsequent row adds one component. 
+
+Setting BLEU-1 BLEU-4 ROUGE-L CIDEr BERTScore F1-CheXbert F1-RadGraph 
+
+CheXpert Plus 
+
+Zero-shot 11.69 0.48 10.97 1.44 83.97 24.62 4.84 + Dynamic TV 19.75 3.89 18.49 6.72 86.09 23.30 15.40 + Pathology-token supervision 21.05 4.15 18.38 6.70 85.89 33.53 15.15 + EOS ( w = 1 ) 23.00 4.73 18.79 7.59 85.97 35.38 15.39 + EOS upweight ( w = 5 ) 27.79 5.31 18.99 7.49 85.86 43.57 16.88 
+
+MIMIC-CXR 
+
+Zero-shot 18.55 1.60 14.89 1.16 84.09 34.22 11.26 + Dynamic TV 22.16 3.07 18.66 1.62 85.53 28.80 19.49 + Pathology-token supervision 24.42 3.89 19.15 2.66 86.02 33.70 22.00 
+
++ EOS ( w = 1 ) 22.88 3.17 18.00 1.84 85.99 32.85 17.90 + EOS upweight ( w = 5 ) 30.93 4.79 20.49 5.85 87.10 37.42 18.06 
+
+Table 3: Length-control behavior of LLaVA-Med ablations. For each example, ∆Len is the generated-reference word-count difference. Avg. ∆Len and MAE report its mean and mean absolute error. U/O/P reports the percentage of examples with ∆Len < −5, ∆Len > 5, and |∆Len | ≤ 5, respec-tively.                                                           
+
+> Model CheXpert Plus MIMIC-CXR Gen Len Avg. ∆Len MAE U/O/P (%) Gen Len Avg. ∆Len MAE U/O/P (%) Zero-shot baseline 29.78 -15.08 20.26 57.77 / 18.10 / 24.13 78.10 +26.79 29.93 7.52 / 85.88 / 6.61 + Dynamic TV 28.38 -16.48 20.22 62.38 / 14.11 / 23.51 83.24 +31.93 34.39 5.77 / 87.24 / 7.00 + Pathology-token supervision 31.69 -13.17 19.42 54.03 / 19.44 / 26.54 74.76 +23.45 27.36 9.10 / 81.60 / 9.30 + EOS ( w= 1 )33.85 -11.01 18.74 49.49 / 23.04 / 27.46 75.00 +23.69 27.70 9.14 / 82.86 / 8.00 + EOS upweight ( w= 5 )45.13 +0.27 18.99 30.49 / 39.99 / 29.51 46.31 -5.00 17.23 44.80 / 31.84 /23.36
+
+4.2 Main Results 
+
+Table 1 compares DIVE with zero-shot prompting, in-context prompting, QLoRA, and LIVE across two datasets and two medical VLM backbones. DIVE shows the most consistent gains over the direct static-steering baseline, outperforming LIVE across all reported metrics in every dataset–backbone setting. The improvements are especially clear on lexical quality and structured clinical fidelity: DIVE achieves the best BLEU-4, ROUGE-L, and RadGraph F1 in all four settings. At the same time, DIVE does not uniformly maximize every clinical proxy. On MIMIC-CXR, ICL obtains the highest CheXbert-14 F1, while DIVE remains second-best and achieves the strongest RadGraph F1. This suggests that DIVE improves the trade-off between report-level quality, structured entity–relation fidelity, and inference efficiency, rather than simply optimizing a single label-level clinical metric. 
+
+4.3 Component Ablation 
+
+Table 2 isolates the contribution of each DIVE component with the LLaVA-Med backbone. Dynamic task-vector injection gives a strong first-stage improvement over zero-shot generation, showing that state-conditioned steering can distill useful demonstration-induced behavior without retaining examples at inference time. Pathology-token supervision provides complementary clinical gains, particularly improving CheXbert F1 on CheXpert Plus and RadGraph F1 on MIMIC-CXR. EOS supervision changes the balance between report quality and clinical coverage. EOS upweighting yields the strongest overall performance on CheXpert Plus and the best text-generation metrics and CheXbert F1 on MIMIC-CXR, while the pathology-weighted variant retains the highest MIMIC-CXR RadGraph F1. Thus, the final DIVE variant should be interpreted as optimizing a balanced quality–clinical-fidelity–stopping trade-off, rather than uniformly maximizing every proxy metric. 
+
+4.4 Stopping Behavior and EOS Calibration 
+
+7Figure 3: EOS probability around the reference report boundary on CheXpert Plus and MIMIC-CXR. Position 0 denotes the reference EOS token. Variants without EOS supervision assign little probability mass near the boundary, whereas EOS supervision produces a localized EOS peak, further strengthened by EOS upweighting. Table 3 evaluates termination behavior across LLaVA-Med ablations. The two datasets exhibit different initial length biases: zero-shot LLaVA-Med tends to under-generate on CheXpert Plus, but substantially over-generates on MIMIC-CXR. Dynamic task-vector injection and pathology-token supervision improve content modeling, yet they do not by themselves reliably place probability mass on the correct stopping boundary. EOS supervision specifically targets this missing termination signal. Adding EOS with unit weight reduces the under-generation bias on CheXpert Plus, while EOS upweighting further shifts the stopping distribution: it brings the mean length difference close to zero on CheXpert Plus and markedly reduces over-generation on MIMIC-CXR. Figure 3 supports this interpretation at the token level. Variants without EOS supervision assign little probability mass near the reference boundary, whereas EOS-supervised variants produce a localized EOS probability peak around the reference EOS position. This indicates that the observed stopping improvements arise from explicit EOS supervision, rather than from generic content steering alone. Importantly, these results show that stopping is a calibration trade-off rather than a simple length-minimization problem. Stronger EOS weighting suppresses late continuation, but can also increase under-generation, especially on MIMIC-CXR. Therefore, the objective should be interpreted as balancing under-generation, over-generation, and proper stopping, rather than simply encouraging shorter reports. 
+
+4.5 Effective Supervision Mass of Decisive Tokens 
+
+Figure 4: Effective CE supervision mass on the LLaVA-Med CheXpert Plus training split. DIVE’s dual supervision ( wpath = 8 , wEOS =5) shifts supervision from high-frequency tem-plate/grammar tokens toward pathology-related tokens and EOS. To quantify the supervision imbalance behind the ablation results, we measure the effective CE mass assigned to template/grammar tokens, pathology-related tokens, and EOS on the LLaVA-Med CheXpert Plus training split. For category 
+
+c, we define M (c) = P 
+
+> t:yt∈c
+
+wt, where wt is the CE weight applied to target token yt.As shown in Figure 4, standard supervision is dom-inated by high-frequency template and grammat-ical tokens, while EOS receives little or no effec-tive mass. DIVE’s dual supervision reallocates training signal toward pathology-related tokens and EOS without removing ordinary language-modeling supervision. This token-level redistribu-tion explains why pathology-token supervision and EOS upweighting provide complementary gains in the ablations and improve stopping cali-bration. 8Figure 5: Relative single-forward cost on QoQ-Med. FLOPs and runtime are normalized by zero-shot inference. DIVE maintains nearly zero-shot cost, while vanilla ICL incurs increasing overhead as the number of demonstrations grows. 
+
+4.6 Forward-Pass Efficiency Analysis 
+
+We further compare DIVE and vanilla ICL under a single forward operation, with FLOPs and runtime normalized by zero-shot inference. Because DIVE uses the same input context as zero-shot inference, it preserves the same FLOPs cost and incurs only a small runtime overhead from task-vector injection. In contrast, vanilla ICL expands the context with demonstrations, causing both FLOPs and runtime to increase steadily as the number of shots grows. Figure 5 shows that DIVE preserves the practical efficiency advantage of distilled adaptation: demon-strations are used to construct the training signal, but they are removed at inference time. This is important for long-form medical report generation, where adding demonstrations to the context increases the cost of each decoding step and can become expensive as the number of shots grows. 
+
+## 5 Limitations and Conclusion 
+
+We studied long-form medical report generation as a challenging setting for distilled multimodal in-context steering. Our analysis shows that transferring hidden-space steering from short-form tasks to long-form reports exposes two coupled failures: the steering signal must remain reliable under autoregressive trajectory drift, and the training objective must represent sparse but high-impact supervision targets. In radiology reports, these targets include both clinically salient pathology-related spans, which determine what content should be preserved, and the EOS boundary, which determines when generation should stop. We proposed DIVE, a frozen-backbone distillation framework that combines state-conditioned dynamic steering with dual salience-aware supervision. The dynamic injector adapts the intervention to the student’s current decoding state, while the salience-aware objective upweights CheXpert-guided clinical spans and the EOS event during distillation. Across MIMIC-CXR and CheXpert Plus with two medical vision-language backbones, DIVE consistently ranks among the strongest methods across report-generation, clinical-fidelity, and stopping metrics. The gains are especially pronounced in structured clinical fidelity and termination calibration, indicating that the method improves the trade-off between what to generate and when to stop, rather than merely increasing output length or applying a decoding-time heuristic. At the same time, DIVE should not be interpreted as a clinically validated report-generation system. Automatic metrics such as CheXbert and RadGraph are useful clinical proxies, but they do not replace expert radiologist evaluation. Our results also show that improving one aspect of clinical fidelity does not uniformly optimize every proxy metric: stronger clinical-span or EOS weighting can shift the balance among recall, unsupported findings, and under-generation. Future work should evaluate DIVE with expert clinical review, stronger factuality objectives, pathology-specific error analysis, and broader long-form multimodal tasks beyond chest X-ray report generation. 9References 
+
+[1] Ekin Akyurek, Dale Schuurmans, Jacob Andreas, Tengyu Ma, and Denny Zhou. What learning algorithm is in-context learning? investigations with linear models. In ICLR , 2023. [2] Samy Bengio, Oriol Vinyals, Navdeep Jaitly, and Noam Shazeer. Scheduled sampling for sequence prediction with recurrent neural networks. In NeurIPS , 2015. [3] Tom B. Brown, Benjamin Mann, Nick Ryder, Melanie Subbiah, Jared D. Kaplan, Prafulla Dhariwal, Arvind Neelakantan, Pranav Shyam, Girish Sastry, Amanda Askell, Sandhini Agar-wal, Ariel Herbert-Voss, Gretchen Krueger, Tom Henighan, Rewon Child, Aditya Ramesh, Daniel M. Ziegler, Jeffrey Wu, Clemens Winter, Christopher Hesse, Mark Chen, Eric Sigler, Mateusz Litwin, Scott Gray, Benjamin Chess, Jack Clark, Christopher Berner, Sam McCandlish, Alec Radford, Ilya Sutskever, and Dario Amodei. Language models are few-shot learners. In 
+
+Advances in Neural Information Processing Systems 33 (NeurIPS 2020) , 2020. [4] Pierre J. Chambon, Jean-Benoit Delbrouck, Thomas Sounack, Shih-Cheng Huang, Zhihong Chen, Maya Varma, Steven Q. H. Truong, Chu The Chuong, and Curtis P. Langlotz. Chexpert plus: Augmenting a large chest x-ray dataset with text radiology reports, patient demographics and additional image formats. arXiv preprint arXiv:2405.19538 , 2024. [5] Zhihong Chen, Yan Song, Tsung-Hui Chang, and Xiang Wan. Generating radiology reports via memory-driven transformer. In Proceedings of the 2020 Conference on Empirical Methods in Natural Language Processing (EMNLP) , pages 1439–1449, 2020. doi: 10.18653/v1/2020. emnlp-main.112. [6] Sheng Cheng and Devika Subramanian. Rethinking radiology report generation: From narrative flow to topic-guided findings. In International Conference on Learning Representations , 2026. [7] Eldan Cohen and Christopher Beck. Empirical analysis of beam search performance degradation in neural sequence models. In Proceedings of the 36th International Conference on Machine Learning , volume 97 of Proceedings of Machine Learning Research , pages 1290–1299, 2019. [8] Wei Dai, Peilin Chen, Chanakya Ekbote, and Paul Pu Liang. QoQ-Med: Building multimodal clinical foundation models with domain-aware GRPO training. arXiv preprint arXiv:2506.00711 ,2025. [9] Dina Demner-Fushman et al. Preparing a collection of radiology examinations for distribution and retrieval. Journal of the American Medical Informatics Association , 2016. [10] Tim Dettmers, Artidoro Pagnoni, Ari Holtzman, and Luke Zettlemoyer. Qlora: Efficient finetuning of quantized llms. In NeurIPS , 2023. [11] Qingxiu Dong et al. A survey on in-context learning. arXiv preprint arXiv:2301.00234 , 2024. [12] Shivam Garg, Dimitris Tsipras, Percy Liang, and Gregory Valiant. What can transformers learn in-context? a case study of simple function classes. In NeurIPS , 2022. [13] Junxian He, Chunting Zhou, Xuezhe Ma, Taylor Berg-Kirkpatrick, and Graham Neubig. To-wards a unified view of parameter-efficient transfer learning. In ICLR , 2022. [14] Alice Heiman, Xiaoman Zhang, Emma Chen, Sung Eun Kim, and Pranav Rajpurkar. FactCheX-cker: Mitigating measurement hallucinations in chest x-ray report generation models. In 
+
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 30787–30796, June 2025. [15] Ari Holtzman et al. The curious case of neural text degeneration. In ICLR , 2020. [16] Neil Houlsby et al. Parameter-efficient transfer learning for nlp. In ICML , 2019. [17] Edward J. Hu et al. Lora: Low-rank adaptation of large language models. In ICLR , 2022. [18] Brandon Huang, Chancharik Mitra, Assaf Arbelle, Leonid Karlinsky, Trevor Darrell, and Roei Herzig. Multimodal task vectors enable many-shot multimodal in-context learning. In Advances in Neural Information Processing Systems 37 (NeurIPS 2024) , 2024. 10 [19] Gabriel Ilharco et al. Editing models with task arithmetic. In ICLR , 2023. [20] Jeremy Irvin et al. Chexpert: A large chest radiograph dataset with uncertainty labels and expert comparison. In AAAI , 2019. [21] Saahil Jain et al. Radgraph: Extracting clinical entities and relations from radiology reports. In 
+
+NeurIPS Datasets and Benchmarks , 2021. [22] Baoyu Jing, Pengtao Xie, and Eric Xing. On the automatic generation of medical imaging reports. In ACL , 2018. [23] Alistair E. W. Johnson, Tom J. Pollard, Seth J. Berkowitz, Nathaniel R. Greenbaum, Matthew P. Lungren, Chih-ying Deng, Roger G. Mark, and Steven Horng. Mimic-cxr, a de-identified publicly available database of chest radiographs with free-text reports. Scientific Data , 6(317), 2019. doi: 10.1038/s41597-019-0322-0. [24] Brian Lester, Rami Al-Rfou, and Noah Constant. The power of scale for parameter-efficient prompt tuning. In EMNLP , 2021. [25] Chunyuan Li et al. Llava-med: Training a large language-and-vision assistant for biomedicine in one day. arXiv preprint arXiv:2306.00890 , 2023. [26] Kenneth Li, Oam Patel, Fernanda Viegas, Hanspeter Pfister, and Martin Wattenberg. Inference-time intervention: Eliciting truthful answers from a language model. In NeurIPS , 2023. [27] Xiang Lisa Li and Percy Liang. Prefix-tuning: Optimizing continuous prompts for generation. In ACL-IJCNLP , 2021. [28] Yuan Li, Xiaodan Liang, Zhiting Hu, and Eric P. Xing. Hybrid retrieval-generation reinforced agent for medical image report generation. In NeurIPS , 2018. [29] Chin-Yew Lin. Rouge: A package for automatic evaluation of summaries. In Text Summarization Branches Out , 2004. [30] Kang Liu, Zhuoqi Ma, Xiaolu Kang, Yunan Li, Kun Xie, Zhicheng Jiao, and Qiguang Miao. Enhanced contrastive learning with multi-view longitudinal data for chest x-ray report genera-tion. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,pages 10348–10359, June 2025. [31] Sheng Liu, Lei Xing, and James Zou. In-context vectors: Making in context learning more effective and controllable through latent space steering. arXiv preprint arXiv:2311.06668 , 2023. [32] Xiao Liu et al. P-tuning v2: Prompt tuning can be comparable to fine-tuning universally across scales and tasks. In ACL , 2022. [33] Clara Meister, Tim Vieira, and Ryan Cotterell. If beam search is the answer, what was the question? In EMNLP , 2020. [34] Sewon Min, Mike Lewis, Luke Zettlemoyer, and Hannaneh Hajishirzi. Rethinking the role of demonstrations: What makes in-context learning work? In EMNLP , 2022. [35] Yasuhide Miura, Yuhao Zhang, Emily Bao Tsai, Curtis P. Langlotz, and Dan Jurafsky. Improving factual completeness and consistency of image-to-text radiology report generation. In NAACL ,2021. [36] Michael Moor et al. Med-flamingo: A multimodal medical few-shot learner. arXiv preprint arXiv:2307.15189 , 2023. [37] Kenton Murray and David Chiang. Correcting length bias in neural machine translation. In 
+
+Proceedings of the Third Conference on Machine Translation: Research Papers , pages 212–223, 2018. doi: 10.18653/v1/W18-6322. [38] Aaron Nicolson, Jason Dowling, and Bevan Koopman. Longitudinal data and a semantic similarity reward for chest x-ray report generation. Artificial Intelligence in Medicine , 2024. 11 [39] Sophie Ostmeier et al. Green: Generative radiology report evaluation and error notation. In 
+
+Findings of EMNLP , 2024. [40] Kishore Papineni, Salim Roukos, Todd Ward, and Wei-Jing Zhu. Bleu: A method for automatic evaluation of machine translation. In ACL , 2002. [41] Sang-Jun Park, Keun-Soo Heo, Dong-Hee Shin, Young-Han Son, Ji-Hye Oh, and Tae-Eui Kam. DART: Disease-aware image-text alignment and self-correcting re-alignment for trustworthy radiology report generation. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 15580–15589, June 2025. [42] Yingzhe Peng, Chenduo Hao, Xu Yang, Jiawei Peng, Xinting Hu, and Xin Geng. Learnable in-context vector for visual question answering. CoRR , abs/2406.13185, 2024. [43] Marc’Aurelio Ranzato, Sumit Chopra, Michael Auli, and Wojciech Zaremba. Sequence level training with recurrent neural networks. In International Conference on Learning Representa-tions , 2016. [44] Nina Rimsky et al. Steering llama 2 via contrastive activation addition. arXiv preprint arXiv:2312.06681 , 2024. [45] Phillip Sloan, Philip Clatworthy, Edwin Simpson, and Majid Mirmehdi. Automated radiology report generation: A review of recent advances. IEEE Reviews in Biomedical Engineering , 18: 368–387, 2025. [46] Akshay Smit et al. Combining automatic labelers and expert annotations for accurate radiology report labeling using bert. In EMNLP , 2020. [47] Tao Tu et al. Towards generalist biomedical ai. NEJM AI , 2024. [48] Alexander Matt Turner et al. Activation addition: Steering language models without optimiza-tion. arXiv preprint arXiv:2308.10248 , 2023. [49] Ramakrishna Vedantam, C. Lawrence Zitnick, and Devi Parikh. Cider: Consensus-based image description evaluation. In CVPR , 2015. [50] Johannes Von Oswald, Eyvind Niklasson, Ettore Randazzo, Joao Sacramento, Alexander Mordvintsev, Andrey Zhmoginov, and Max Vladymyrov. Transformers learn in-context by gradient descent. In ICML , 2023. [51] Jun Wang, Abhir Bhalerao, and Yulan He. Cross-modal memory networks for radiology report generation. In ACL , 2022. [52] Xiao Wang, Fuling Wang, Yuehang Li, Qingchuan Ma, Shiao Wang, Bo Jiang, and Jin Tang. CXPMRG-Bench: Pre-training and benchmarking for x-ray medical report generation on CheXpert Plus dataset. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 5123–5133, June 2025. [53] Xiaosong Wang et al. Chestx-ray8: Hospital-scale chest x-ray database and benchmarks on weakly-supervised classification and localization of common thorax diseases. In CVPR , 2017. [54] Ziao Wang, Sixing Yan, Kejing Yin, Xiaofeng Zhang, and William K. Cheung. CURV: Coherent uncertainty-aware reasoning in vision-language models for x-ray report generation. In Advances in Neural Information Processing Systems , 2025. [55] Sean Welleck et al. Neural text generation with unlikelihood training. In ICLR , 2020. [56] Sam Wiseman and Alexander M. Rush. Sequence-to-sequence learning as beam-search opti-mization. In EMNLP , 2016. [57] Sang Michael Xie, Aditi Raghunathan, Percy Liang, and Tengyu Ma. An explanation of in-context learning as implicit bayesian inference. In ICLR , 2022. [58] An Yan et al. Weakly supervised contrastive learning for chest x-ray report generation. In 
+
+Findings of EMNLP , 2021. 12 [59] Feiyang Yu, Mark Endo, Rayan Krishnan, Ian Pan, Andy Tsai, Eduardo Pontes Reis, Eduardo Kaiser Ururahy Nunes Fonseca, Henrique Min Ho Lee, Zahra Shakeri Hossein Abad, Andrew Y. Ng, Curtis P. Langlotz, Vasantha Kumar Venugopal, and Pranav Rajpurkar. Evaluating progress in automatic chest x-ray radiology report generation. Patterns , 4(9):100802, 2023. [60] Juan Manuel et al. Zambrano Chaves. A clinically accessible small multimodal radiology model and evaluation metric for chest x-ray findings. Nature Communications , 2025. [61] Tianyi Zhang, Varsha Kishore, Felix Wu, Kilian Q. Weinberger, and Yoav Artzi. Bertscore: Evaluating text generation with bert. In ICLR , 2020. [62] Andy Zou et al. Representation engineering: A top-down approach to ai transparency. arXiv preprint arXiv:2310.01405 , 2023. 13 A Implementation Details 
+
+A.1 Datasets and Preprocessing 
+
+We conduct experiments on two chest X-ray report generation benchmarks: MIMIC-CXR-JPG [ 23 ]and CheXpert Plus [ 4]. Both datasets contain chest radiographs paired with corresponding radiology report findings. We convert all samples into a unified chat-style format, where the query case contains an image and the target output is the findings section. We remove samples with missing image paths or empty target reports, and deduplicate the data by study identifier when applicable. Table 4: Dataset statistics and experimental subsets.                
+
+> Dataset Train Adapter Train Demo Pool Validation Test MIMIC-CXR-JPG 214,996 1,000 2,000 200 3,087 CheXpert Plus 12,816 1,000 2,000 200 3,663
+
+For all methods, the target output is the report findings section. Generated reports are capped at 128 new tokens. In-context demonstrations are text-only findings reports sampled from the training demonstration pool; only the query case includes an image. 
+
+A.2 Model Backbones 
+
+We evaluate our method on two medical vision-language backbones, following recent work on medical and radiology vision-language models [25, 36, 47, 60]. Table 5: Backbones used in our experiments.          
+
+> Backbone Base Model Context Setting Demonstrations QoQ-Med QoQ-Med3-VL-8B 4-bit quantized VLM 32-shot ICL LLaVA-Med LLaVA-Med v1.5 Mistral-7B 4-bit quantized VLM 8-shot ICL
+
+QoQ-Med supports a substantially larger context window, so it can accommodate high-shot tex-tual demonstrations. LLaVA-Med has a much shorter effective context after image-token expan-sion. Because each query image is internally expanded into visual patch embeddings, longer full-demonstration prompts can truncate the teacher-forced answer region. Therefore, for LLaVA-Med we restrict all ICL-based experiments to 8-shot demonstrations. 
+
+A.3 Baseline Details 
+
+We compare DIVE with the following baselines: • Zero-shot. The frozen backbone receives only the query image and the report-generation instruction, without demonstrations or adapter injection. • ICL. The frozen backbone receives text-only demonstration findings reports before the query image. QoQ-Med uses the high-shot ICL setting, while LLaVA-Med uses 8-shot ICL due to its effective context limit. • QLoRA [ 10 ]. A parameter-efficient supervised fine-tuning baseline. Low-rank adapters are trained on the same 1,000 training samples while the backbone remains quantized. • LIVE [ 42 ]. A hidden-state shift baseline that learns layer-wise output shifts from an ICL teacher and applies them during single-image student generation. • DIVE. Our method distills the ICL teacher into dynamic task-vector adapters. The student uses only the query image at inference time, while the learned adapters approximate the behavior induced by in-context demonstrations. 14 A.4 Training Hyperparameters 
+
+For DIVE, we cache the top-200 teacher logits for each answer token. The distillation objective combines top-k KL imitation and supervised cross-entropy: 
+
+L = αLKL + (1 − α)LCE ,
+
+Table 6: DIVE-specific training and distillation settings.                          
+
+> Setting QoQ-Med LLaVA-Med Backbone QoQ-Med3-VL-8B LLaVA-Med-v1.5-Mistral-7B Trainable Parameters 9.44M 8.39M ICL demonstrations 32 8Epochs 55Learning rate 1×10 −41×10 −4
+> Distillation weight α0.8 0.8 Temperature 2.0 2.0 Injection mode all tokens all tokens Decode decay rate 0.9 0.9 EOS weight 55Clinical finding CE weight 38
+
+A.5 Statistical Testing and Reproducibility 
+
+For the main result table, significance markers are computed by comparing DIVE with the strongest non-DIVE baseline separately for each metric and backbone. The strongest baseline is selected according to the reported test-set score for that metric. We use paired t-tests over sample-level per-example scores on the MIMIC-CXR and CheXpert Plus, pairing systems by the same test example. The reported markers use uncorrected one-sided p-values for the alternative hypothesis H1:DIVE obtains a higher score than the baseline. We use the thresholds ∗p < 0.05 , ∗∗ p < 0.01 , and 
+
+> ∗∗∗
+
+p < 0.001 .
+
+A.6 The Detailed Inference Speed Experiments 
+
+To complement the relative efficiency comparison, we further report the detailed single-forward cost of DIVE and vanilla ICL on QoQ-Med. This experiment measures the cost of one forward pass over the input context, excluding autoregressive decoding length and evaluation-side overhead. FLOPs are estimated with an attention-adjusted token proxy, and runtime is measured as CUDA forward latency. Table 7: Detailed single-forward inference cost on QoQ-Med. Runtime is measured per forward pass, and relative costs are normalized by zero-shot inference. 
+
+Method Avg. Tokens FLOPs (TFLOPs) FLOPs Ratio Runtime (ms) Runtime Ratio Zero-Shot 413 6.709 1.00 × 373.06 1.00 ×
+
+DIVE 413 6.709 1.00 × 388.83 1.04 ×
+
+4-shot ICL 724 11.898 1.77 × 526.78 1.41 ×
+
+8-shot ICL 1036 17.204 2.56 × 699.43 1.87 ×
+
+16-shot ICL 1665 28.279 4.22 × 1122.48 3.01 ×
+
+32-shot ICL 2913 51.607 7.69 × 2230.32 5.98 ×
+
+A.7 Compute Resources and Inference Cost 
+
+All experiments were conducted on NVIDIA RTX A5000 GPUs with 24GB memory. For DIVE training, the vision-language backbone is kept frozen and loaded in 4-bit precision, and only the task-vector modules are optimized. To quantify practical inference cost, we additionally measure end-to-end generation latency and peak GPU memory on QoQ-Med and LLaVA-Med set. The benchmark uses batch size 4, excludes 15 model-loading time, and reports per-sample latency as batch wall-clock time divided by batch size. Peak memory is measured with CUDA peak allocated memory during generation. Unlike the single-forward analysis in Section 4.6, this benchmark uses actual EOS termination and therefore reflects both computational cost and stopping behavior. Table 8: End-to-end generation latency and peak GPU memory on QoQ-Med and MIMIC-CXR set.                      
+
+> Method Gen. Tokens Latency (s) Peak Mem. (GB) Zero-shot 127.9 5.15 9.80 DIVE 84.8 3.57 9.80 4-shot ICL 127.2 5.52 10.38 8-shot ICL 126.4 5.88 10.97 16-shot ICL 127.5 6.79 12.28 32-shot ICL 127.9 8.65 14.83
+
+As shown in Table 8, DIVE preserves the same prompt length and peak memory footprint as zero-shot inference, while reducing end-to-end generation latency due to earlier EOS termination. In contrast, vanilla ICL increases both latency and memory as demonstrations are added to the context. At 32 shots, ICL requires 8.65 seconds per sample and 14.83GB peak memory, compared with 3.57 seconds and 9.80GB for DIVE. 
+
+A.8 Adapter Architecture and Injection Layers 
+
+DIVE freezes the full vision-language backbone and trains only lightweight dynamic task-vector adapters. For each transformer layer and each branch, the adapter computes a low-rank hidden-state update: 
+
+∆hℓ,b = W up  
+
+> ℓ,b
+
+σ  W down  
+
+> ℓ,b
+
+hℓ,b 
+
+ ,
+
+where b denotes either the self-attention branch or the MLP branch. We use rank-16 bottlenecks, and initialize the up-projection to zero so that the initial model behavior matches the frozen backbone. Table 9: Adapter architectures and injection locations.             
+
+> Method Trainable Module Injection Location Trainable Scope QLoRA Low-rank adapters Attention and FFN projections Selected LM modules LIVE Layer-wise vector shift Decoder layer outputs All decoder layers DIVE Dynamic task vectors Self-attention and MLP outputs All decoder layers
+
+The DIVE residual update is added using a norm-preserving operation to stabilize generation. For LLaVA-Med, we additionally align teacher-forced logits with the expanded multimodal token positions before caching teacher distributions, since the raw text-token positions differ from the internal model positions after image-token expansion. 
+
+A.9 Evaluation Metrics 
+
+We evaluate generated reports with two groups of metrics: • Text generation metrics. We report BLEU-1, BLEU-4, ROUGE-L, CIDEr, and BERTScore-F1 [40, 29, 49, 61]. • Clinical correctness metrics. We report micro-averaged F1 over 14 CheXbert labels and F1-RadGraph to evaluate clinical entity and relation correctness [46, 21]. All metrics are reported as percentages. 16 B Additional Method and Implementation Details 
+
+B.1 Norm-clipped Dynamic Injection 
+
+In the main text, we describe DIVE as adding a state-conditioned residual to the hidden state. In implementation, we use norm-clipped addition to prevent large hidden-state magnitude shifts: 
+
+˜h(l,b ) 
+
+> t
+
+=
+
+
+
+h(l,b ) 
+
+> t
+
++ δ(l,b )
+
+> t
+
+
+
+· min 
+
+1,ρ h(l,b ) 
+
+> t2
+
+h(l,b ) 
+
+> t
+
++ δ(l,b ) 
+
+> t2
+
+ .
+
+Here ρ > 1 controls the maximum allowed norm growth after injection. 
+
+B.2 Teacher Construction and Logit Caching 
+
+For each training example, the teacher receives N text-only report demonstrations, the query image, and the report-generation instruction. The teacher is evaluated under teacher forcing, conditioned on the target prefix y<t at each answer position. For efficiency, we cache the top-K teacher logits at every supervised answer token, including the EOS position. During student training, the query-only student matches the cached teacher distribution over the teacher’s top-K support. 
+
+B.3 Top-K KL Renormalization 
+
+Let VKt denote the teacher’s top-K token set at position t. We restrict both teacher and student distributions to VKt and renormalize them before computing KL divergence: 
+
+pTt,K (v) = pTt (v)
+
+P
+
+> u∈V Kt
+
+pTt (u) , pSt,K (v) = pSt (v)
+
+P
+
+> u∈V Kt
+
+pSt (u) .
+
+The KL loss is then computed over this restricted support. 
+
+B.4 Inference and Decoding Configuration 
+
+At inference time, the demonstration prompt and teacher cache are removed. The model receives only the query image and instruction prompt, with DIVE adapters activated at the selected decoder layers and branches. Unless otherwise specified, DIVE and all baselines use the same decoding configuration, including the same maximum number of new tokens and no post-hoc truncation. 
+
+## C Clinical Finding Lexicon 
+
+Table 10: Clinical finding phrase lexicon used for finding-weighted CE. For each sample, only labels selected by the CheXpert label policy are activated. Each phrase is tokenized with case variants and optional leading-space variants. 
+
+Finding label Matched phrases 
+
+Atelectasis atelectasis; atelectatic; volume loss; low lung volumes; low volume; sub-segmental opacity; dependent atelectasis; plate-like atelectasis; platelike atelectasis Cardiomegaly cardiomegaly; cardiac enlargement; enlarged heart; mild cardiomegaly; mildly enlarged heart; prominent cardiac silhouette; prominent cardiome-diastinal silhouette Consolidation consolidation; airspace disease; focal airspace disease; retrocardiac con-solidation; left basilar consolidation; right basilar consolidation; bibasilar consolidation Edema edema; pulmonary edema; interstitial edema; interstitial pulmonary edema; vascular congestion; pulmonary vascular congestion; pulmonary venous congestion; mild pulmonary edema; congestive heart failure; chf 17 Finding label Matched phrases 
+
+Enlarged Cardiomedi-astinum enlarged cardiomediastinum; enlarged cardiomediastinal silhouette; me-diastinal widening; prominent mediastinum; enlarged mediastinum; prominent cardiomediastinal silhouette Fracture fracture; rib fracture; clavicle fracture; compression fracture; compres-sion deformity; rib deformity Lung Lesion lung lesion; pulmonary nodule; lung nodule; pulmonary mass; lung mass; nodular opacity; pulmonary nodular opacity; spiculated nodule Lung Opacity opacity; opacities; lung opacity; hazy opacity; hazy opacities; bibasilar opacities; basilar opacities; retrocardiac opacity; left basilar opacity; right basilar opacity; airspace opacity; airspace opacities; interstitial opacities; patchy airspace opacity; patchy airspace opacities No Finding no finding; no acute cardiopulmonary abnormality; no acute cardiopul-monary disease; no acute disease; no acute findings; clear lungs Pleural Effusion pleural effusion; effusion; small effusion; small pleural effusion; trace effusion; trace pleural effusion; bilateral pleural effusions; costophrenic angle blunting; blunting of the costophrenic angle Pleural Other pleural other; pleural thickening; pleural scarring; pleural plaque; pleural plaques Pneumonia pneumonia; infectious infiltrate; infection; infectious process; pneumonic infiltrate Pneumothorax pneumothorax; tiny pneumothorax; trace pneumothorax; small pneu-mothorax; apical pleural line Support Devices support device; support devices; endotracheal tube; enteric tube; feeding tube; central venous catheter; central line; line tip; catheter tip; right ij; left ij; right internal jugular; left internal jugular; swan-ganz catheter; swan ganz catheter; port-a-cath; porta cath; right chest port; left chest port; tube tip; ett; et tube Table 10 lists the phrase lexicon used for finding-weighted CE. Each CheXpert-style finding label is associated with a set of surface phrases. During training, we tokenize each phrase with case variants and optional leading-space variants, then upweight ground-truth answer tokens that match phrases from the activated finding categories. 
+
+## D Ablation Study 
+
+D.1 Objective Components 
+
+We further ablate the objective design on the LLaVA-Med backbone to separate the effects of KL distillation, decisive CE, and dynamic adaptation. As shown in Table 11, using KL with uniform CE preserves surface-level report quality but gives substantially weaker clinical correctness, indicating that ordinary teacher-forced CE under-allocates supervision to clinically decisive tokens. Conversely, removing KL and training only with decisive CE improves clinical signal over uniform CE, but degrades text overlap and graph-based factuality, suggesting that KL remains important for preserving the teacher’s report distribution and generation structure. The static-adapter variant also performs worse than full DIVE, even under the same DIVE objective. This indicates that the gain is not merely from token reweighting, but from combining clinically targeted supervision with an input-conditioned dynamic adapter. Overall, full DIVE gives the strongest balance across lexical, semantic, and clinical metrics, supporting the need for both dynamic adaptation and the combined KL plus decisive-CE objective. 
+
+D.2 Weight Sensitivity 
+
+We further examine the sensitivity of DIVE to the two decisive-token weights: the clinical finding CE weight ωpath and the EOS weight ωEOS . For the clinical-weight sweep, we fix ωEOS = 5 and vary 
+
+ωpath . For the EOS-weight sweep, we fix ωpath = 8 and vary ωEOS .18 Table 11: Objective ablation on LLaVA-Med. All metrics are reported on the CheXpert Plus test set. Method B-1 B-4 R-L CIDEr BERTScore CheXbert RadGraph Dynamic + KL + uniform CE 23.92 4.74 18.11 6.07 85.70 30.67 14.68 Dynamic + decisive CE, no KL 14.92 2.89 16.51 5.05 85.61 35.38 14.58 Static + DIVE objective 18.65 3.76 17.82 5.52 85.99 26.77 13.80 DIVE (Ours) 27.79 5.31 18.99 7.49 85.86 43.57 16.88 
+
+Table 12: Weight sensitivity of DIVE with LLaVA-Med on CheXpert Plus. The clinical-weight sweep fixes ωEOS = 5 , and the EOS-weight sweep fixes ωpath = 8 .
+
+Weight setting B-1 B-4 R-L CIDEr BERTScore CheXbert RadGraph 
+
+Clinical finding CE weight sweep ( ωEOS = 5 )
+
+ωpath = 0 14.84 3.11 17.55 4.89 86.16 28.12 14.59 
+
+ωpath = 1 14.82 3.10 17.55 4.90 86.16 27.75 14.58 
+
+ωpath = 3 24.98 5.11 19.27 8.13 86.17 40.46 16.91 
+
+ωpath = 5 27.26 5.35 19.21 8.01 86.03 42.50 17.02 
+
+ωpath = 8 27.79 5.31 18.99 7.49 85.86 43.57 16.88 
+
+ωpath = 10 23.28 4.38 18.21 6.41 85.17 38.97 15.69 
+
+EOS weight sweep ( ωpath = 8 )
+
+ωEOS = 0 22.76 4.69 18.75 7.62 85.98 35.49 15.42 
+
+ωEOS = 1 21.77 4.68 18.73 7.63 85.99 37.77 15.50 
+
+ωEOS = 2 23.56 4.77 19.01 7.85 86.04 36.52 15.59 
+
+ωEOS = 3 26.61 4.99 18.74 7.25 85.67 41.86 16.47 
+
+ωEOS = 5 27.79 5.31 18.99 7.49 85.86 43.57 16.88 
+
+ωEOS = 8 27.01 5.15 19.02 7.88 85.89 43.21 16.28 
+
+Table 12 reports the results on CheXpert Plus with the LLaVA-Med backbone. For clinical finding supervision, very small weights provide limited clinical benefit, while moderate weights improve both lexical and clinical-proxy metrics. The best CheXbert score is obtained at ωpath = 8 , although nearby settings such as ωpath = 5 give comparable BLEU-4 and RadGraph performance. Increasing the weight to ωpath = 10 degrades both lexical and clinical-proxy metrics, suggesting that excessive emphasis on finding tokens can distort generation. EOS weighting shows a similar trade-off. Small EOS weights underperform on clinical-proxy metrics, whereas ωEOS = 5 and ωEOS = 8 form a relatively stable high-performing range. The default setting, 
+
+ωpath = 8 and ωEOS = 5 , achieves the best CheXbert score and competitive RadGraph performance, indicating a balanced choice rather than a highly sensitive optimum. 
+
+## E Qualitative Examples 
+
+Figure 6 provides a qualitative example comparing LIVE and DIVE on a chest X-ray with a large right pleural effusion. The GT report describes a large pleural effusion with a likely loculated component on the right, compressive atelectasis involving major portions of the right lower and middle lobes, no pneumothorax, a clear left lung, normal cardiac size, and normal hilar and mediastinal contours. We annotate each generated report at the phrase level: green highlights denote findings supported by the GT report, orange highlights denote missed GT content, and red highlights denote unsupported additions. LIVE fails to recover the main abnormality in the image. Instead of identifying the large right pleural effusion and associated compressive atelectasis, it generates a largely normal report and introduces many unsupported anatomical-position statements, including statements about the shoulders, clavicles, scapulae, ribs, and sternum. This leads to a large number of unsupported additions and poor finding-level precision and F1. DIVE better captures the clinically salient abnormality by identifying a large right pleural effusion with associated right lower lobe atelectasis. It also preserves several key negative or normal findings, 19 Figure 6: Qualitative case study on a large right pleural effusion. The GT report describes a large right pleural effusion with a likely loculated component and compressive atelectasis of the right lower and middle lobes. LIVE misses the main abnormality and generates many unsupported anatomical-position statements. DIVE captures the large right pleural effusion and associated right lower lobe atelectasis, while still missing finer-grained details such as the loculated component and right middle lobe involvement. Green highlights denote findings supported by the GT report, orange highlights denote missed GT content, and red highlights denote unsupported additions. The summary table reports finding-level matched, missed, and unsupported counts, together with precision, recall, and F1. including no pneumothorax, a clear left lung, and unremarkable mediastinal and hilar contours. However, DIVE still misses finer-grained GT details, including the likely loculated component, right middle lobe involvement, and normal cardiac size. It also introduces unsupported statements such as mild cardiac enlargement and absence of focal consolidation or pulmonary edema. Overall, this example shows that DIVE improves alignment with the major abnormal finding and reduces unsupported over-generation compared with LIVE, while still leaving room for better fine-grained clinical grounding. 20
