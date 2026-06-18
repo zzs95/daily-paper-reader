@@ -1,0 +1,1827 @@
+Title: CardioLens: Revealing the Clinical Reality Gap of MLLMs via Multi-Sequence Cardiac MRI Evaluations
+
+URL Source: https://arxiv.org/pdf/2606.00123
+
+Published Time: Tue, 02 Jun 2026 00:07:47 GMT
+
+Number of Pages: 40
+
+Markdown Content:
+# CardioLens: Revealing the Clinical Reality Gap of MLLMs via Multi-Sequence Cardiac MRI Evaluations 
+
+Zixian Su 1∗ Hongkai Zhang 2∗ Fan Gao 1,3∗ Encheng Su 1 Taiping Qu 1
+
+Jingwei Guo 4 Nan Zhang 2 Hui Wang 2 Zhen Zhou 2 Kairui Bo 2 Yan Chen 2
+
+Yue Ren 2 Shuai Li 3 Lei Xu 2† Henggui Zhang 1†
+
+> 1
+
+Beijing Academy of Artificial Intelligence 
+
+> 2
+
+Beijing Anzhen Hospital 
+
+> 3
+
+Beihang University 
+
+> 4
+
+King Abdullah University of Science and Technology 
+
+zixian12138@163.com, hgzhang@baai.ac.cn 
+
+Abstract 
+
+Multimodal Large Language Models (MLLMs) have shown strong performance on medical public benchmarks, but existing evaluations remain limited as clinically grounded assessments because they often rely on isolated inputs lacking study-level structure and simplified, recognition-style tasks that are far from real diagnostic workflows. We introduce CardioLens , a leakage-resistant evaluation testbed using multi-sequence Cardiovascular Magnetic Resonance (CMR), constructed from private hospital archives via a rigorous report-to-QA construction and verification pipeline. CardioLens is built from 473,896 slices and 13,494 verified QA pairs across 4D Cine, LGE, perfusion, and T2-weighted imaging, and evaluates three stages of CMR interpretation: image understanding, report generation, and disease diagnosis. Across 24 state-of-the-art MLLMs, CardioLens reveals a substantial clinical reality gap. Models perform poorly overall, with performance degrading along the real CMR workflow. Confusion analysis further reveals a category-collapse failure mode: models often default to frequent abnormal categories rather than reliably telling distinct clinical findings. To rule out MLLM-compatible input construction as the failure cause, we compare random, clinically-motivated, and data-driven selection protocols under different slice budgets; performance changes only marginally, typically by about 1%. Explicit reasoning prompts also fail to rescue performance, often driving models toward conservative predictions rather than improving visual evidence use. These results show that current MLLMs remain far from reliable CMR interpretation, where clinical decisions require integrating distributed evidence across sequences, views, and temporal phases. By exposing where and how current MLLMs fall short, CardioLens provides a clinically grounded testbed for developing the next generation of MLLMs toward real-world clinical deployment. 
+
+1 Introduction 
+
+The rapid progress of Multimodal Large Language Models (MLLMs) has been demonstrated by strong results on public medical benchmarks [ 2, 20 , 45 , 48 , 51 ]. However, the evidence provided by existing evaluations remains incomplete for clinical assessments. Most current benchmarks suffer        
+
+> ∗Equal Contributions.
+> †Corresponding author. Preprint.
+> arXiv:2606.00123v1 [cs.CV] 28 May 2026 Super fi cial
+> SLAKE
+> OmniMedVQA
+> Report Generation
+> Disease Diagnosis
+> Coarse-
+> grained
+> Clinically
+> Ambiguous
+> Performance on CardioLens Performance on Existing Benchmarks
+> Level 2
+> Level 3
+
+CardioLens Testbed (Ours)                 
+
+> Image Understanding Level 1
+> Q: What type of image is this?
+> A: X-ray
+> VQA-RAD
+> Q: Does the picture contain Liver?
+> A: No
+> Q: What abnormal fi nding is depicted
+> in the picture ？
+> A: Abnormal entire organ
+> •Question : Clinically de fi ned fi ndings (wall thickness, scar, edema)
+> •Setting : Single-/multi-select from prede fi ned options;
+> •Demand : Fine-grained, sequence-aware visual recognition
+> •Question : Full structured report covering all required fi elds
+> •Setting : Multi-view frames; single coherent clinical paragraph
+> •Demand : Integrate fi ndings across views within each sequence
+> •Question : Etiology classi fi cation + Non-Ischemic subtyping
+> •Setting : Cine + LGE + T2 + Perfusion jointly as input
+> •Demand : Cross-sequence integration of morphology, motion,
+> tissue characterization, perfusion, and cardiac function
+> Score (%)
+> 0
+> 50
+> 100
+> VQA-RAD SLAKE OmniMedVAQ
+> Lingshu-7B
+> Fleming-38B
+> Score (%)
+> 0
+> 50
+> 100
+> Image
+> Understanding
+> Report
+> Generation
+> Patient
+> Diagnosis
+
+Existing Medical VAQ Evaluations 
+
+• Existing benchmarks saturate, 
+
+> (avg. 83.9%)
+
+• CardioLens reveals substantial 
+
+> headroom (avg. 53.3%)
+
+• Accurate Recognition ≠ Reliable           
+
+> Diagnosis
+> Structured
+> Output
+> Report-style
+> Output
+> Clinical
+> Interpretation
+> Anatomy Identi fi cation
+> Modality Recognition
+> Disease Diagnosis
+> 67.9 76.6 83.1 89.8 82.9 87.9 58.5 50.1 47.0 48.4
+> 22.6 24.2
+
+Figure 1: Existing medical VQA benchmarks vs. our CardioLens testbed. Results on VQA-RAD [29], SLAKE [38], and OmniMedVQA [23] are adopted from prior reports [39, 54]. from three limitations. First, many are assembled from publicly available datasets, which may overlap with web-scale pretraining corpora and cause data leakage [ 5, 6, 10 , 19 , 23 , 25 , 26 , 50 , 53 ]. Second, their visual inputs are often simplified into isolated images or single-volume cases, whereas real clinical studies are typically high-dimensional, containing multiple anatomical views, temporal phases, and complementary imaging sequences [ 10 , 23 , 29 , 38 , 53 ]. Third, their tasks are frequently framed as image-level recognition or short-form VQA, which can test visual-textual association but does not sufficiently probe the staged evidence synthesis required for clinical decision-making. As a result, strong benchmark performance does not necessarily establish that an MLLM can reason over the complex evidence structure of real medical studies (see Figure 1). Cardiovascular Magnetic Resonance (CMR) provides a clinically important setting in which these limitations become especially salient. A routine CMR examination combines multiple complemen-tary sequences – Cine for cardiac motion, Late Gadolinium Enhancement (LGE) for myocardial fibrosis and scar, perfusion for microvascular blood flow, and T2-weighted imaging for edema and inflammation – across multiple anatomical views [ 12 , 27 , 30 , 47 , 55 ]. Complete interpretation there-fore requires dynamic motion assessment, three-dimensional localization, cross-sequence evidence integration, and patient-level diagnostic synthesis, rather than recognizing isolated findings in single frames. CMR therefore offers a natural test case for evaluating whether medical MLLMs can move beyond image-level perception toward actionable medical intelligence. In light of this, we introduce CardioLens , a leakage-resistant evaluation testbed for multi-sequence CMR. Developed with private hospitals through a rigorous data construction pipeline, CardioLens is built from 473,896 slices and 13,494 verified report-derived QA pairs from real patient studies, covering 4D Cine, LGE, perfusion, and T2-weighted imaging. It contains three progressively more demanding tiers in real CMR interpretation workflow: fine-grained image understanding for clinical findings, structured report generation for standardized clinical synthesis, and disease diagnosis for patient-level decision-making. This design enables systematic evaluation of MLLMs on data that are private, high-dimensional, multi-sequence, and closely aligned with real diagnostic workflows. Our evaluation reveals a substantial clinical reality gap across 24 state-of-the-art MLLMs. Models perform poorly overall on CardioLens, with performance degrading as tasks move along the CMR workflow (see Section 3.2). This decline indicates that current MLLMs do not reliably translate isolated CMR recognition into clinically meaningful study-level interpretation. Beyond overall performance degradation, our analysis further identifies category collapse as an important failure mode. Confusion matrices show that models often default to frequent abnormal categories rather than reliably distinguishing distinct clinical findings. Such behavior suggests that current MLLMs are overly influenced by frequent-category bias rather than grounded evidence in multi-sequence CMR, making their predictions unreliable for clinical decision-making. We further examine whether the observed clinical performance gap is influenced by the way complete CMR studies are adapted to MLLM input constraints. Because most current models cannot directly 2Table 1: CardioLens statistics. Image understanding subtasks are single-label (S) or multi-label (M) with different classes(#C). Full per-sequence clinical roles are described in Appendix A.1                                                                                                                                                    
+
+> Cine (5,223) LGE (3,264) Perfusion (985) T2 (928)
+> Subtask T#C #QA Subtask T#C #QA Subtask T#C #QA Subtask T#C #QA Wall Thickness M5580 Enhance. Status S2581 Perf. Status S2565 T2 Signal S4507 Special Signs M6580 Special Findings M4581 Signal Char. S3129 Abn. Regions M6144 Pericardial Eff. S2580 Abn. Signal S2468 Abn. Regions M6116 Abn. Segments M4127 Pleural Eff. S2580 High-Sig Pattern M5412 Abn. Segments M491 Sig. Distrib. M5109 Mitral Valve S2579 High-Sig Layer M5384 Myo. Layer M584 Myo. Layer M541 Tricuspid Valve S2579 High-Sig Region M6382 Aortic Valve S2570 High-Sig Segment M4378 Motion Ampl. M5435 Low-Sig Pattern M540 Systolic Func. S3398 Low-Sig Region M618 Motion Coord. S2195 Low-Sig Segment M414 Diastolic Func. S2147 Low-Sig Layer M56
+> Report Generation (2,246): Cine 584 |LGE 581 |Perfusion 570 |T2 511
+> Diagnosis (848): Etiology (553): NH 102 / IHD 156 / NICM 295 |NICM Subtype (295): HCM 107 / Myocarditis 101 / DCM 72 / RCM 13 / ACM 2
+
+incorporate complete 3D/4D examinations, CMR data must be represented by selected subsets during evaluation. CardioLens therefore compares multiple input-selection strategies – random sampling, clinically-motivated heuristic sampling, and data-driven sampling – under different slice budgets. We observe that varying input-construction choices only marginally alters performance, typically by about 1% (see Section 3.3). This pattern further confirms that current MLLMs struggle to organize distributed CMR cues into clinically grounded predictions. We also use explicit clinical reasoning prompts as a probe to better understand model behavior. Keeping the same visual inputs fixed, we compare standard visual prompts against variants that ask models to analyze CMR evidence step by step. This intervention does not produce consistent gains; instead, performance often decreases due to reduced recall, indicating an elevated threshold for positive predictions and a tendency to suppress abnormal findings (see Section 3.4). These results reveal a deeper instability in current MLLMs: they do not reliably bind CMR visual cues to the clinical concepts for prediction. Under explicit reasoning instructions, this limitation becomes more visible, as models tend to shift toward conservative decisions rather than recovering visual evidence. Our findings reveal a clear mismatch between current benchmark performance and clinically grounded CMR interpretation. Strong results on conventional public benchmarks do not guarantee reliable performance in multi-sequence, dynamic CMR setting. Through the lens of multi-sequence Cardiac MRI, we reveal these limitations and provide a controlled testbed for guiding future medical MLLM evaluation from isolated, simplified recognition toward real-world clinical utility. 
+
+2 CardioLens 
+
+CardioLens is constructed from private hospital archives comprising multi-sequence cardiovascular MRI studies from 585 patients. It covers four clinically essential CMR sequences – Cine, Late Gadolinium Enhancement (LGE), Perfusion, and T2-weighted imaging – and is built from 5,969 imaging files, 473,896 slices, and 13,494 expert-verified question-answer pairs derived from authentic clinical reports. Detailed statistics and an overview are provided in Table 1 and Figure 2, respectively. 
+
+2.1 Task Definitions 
+
+We design a three-tier evaluation – image understanding , report generation , and disease diagnosis 
+
+– that follows the real CMR interpretation workflow from low-level visual perception to high-level clinical diagnosis. The tiers are designed to build on one another: image understanding detects per-sequence perception, report generation tests within-sequence synthesis into structured language, and disease diagnosis demands cross-sequence integration into patient-level conclusions. 
+
+Image Understanding (32 subtasks, 10,400 QA pairs). Image understanding tasks extract structured clinical findings from single-sequence inputs (11 Cine, 11 LGE, 5 T2, 5 Perfusion subtasks), each formulated as single- or multi-label classification. The taxonomy mirrors how radiologists structure their reading: Cine covers motion, wall thickness, ventricular function, valvular regurgitation, and effusions; LGE follows an explicit decision tree from enhancement presence to signal type, 313,494 
+
+Veri fi ed  QA  pairs 
+
+473K 
+
+Slices 
+
+4
+
+Multi-sequences 
+
+585 
+
+Patients 
+
+> Radiologist
+> experience:
+> 1~10 years
+> Radiologist
+> experience:
+> > 10 years
+
+Senior review 
+
+& sign-o ff 
+
+Clinically 
+
+report 
+
+Initial report 
+
+drafting 
+
+Flag uncertain 
+
+cases 
+
+Re-examination 
+
+& adjudication 
+
+Cross-check 
+
+(source report) 
+
+Structured 
+
+labels 
+
+Original report 
+
+(free text) 
+
+Rule-based 
+
+extraction 
+
+Source  Provenance Step 1  Label  Extraction Step 2  Veri fi cation Step 3        
+
+> Wall Thickness
+> Abnormal Signal
+> Perfusion
+> Distribution Seg
+> Wall Thickness Normal
+> Abnormal Signal High
+> Perfusion Present
+> Distribution Segment Apex
+
+III. Data Pipeline 
+
+Image  Understanding Level 1 
+
+32 subtasks | 10,400 QA pairs 
+
+Goal: Extract structured  fi ndings from multi-
+
+view images within each sequence 
+
+Fine-grained  Findings 
+
+Level 3  Disease  Diagnosis 
+
+2 levels | 848 QA pairs 
+
+Goal: Make patient-level diagnosis via 
+
+cross-sequence integration 
+
+Cross-sequence  Integration 
+
+Cine  LGE  T2  Perfusion 
+
+Patient-Level  Diagnosis 
+
+Level 2  Report  Generation 
+
+4 subtasks | 2,246 QA pairs 
+
+Goal: Summarize overall multi-view content 
+
+of each sequence in a report 
+
+Multi-view  Summary 
+
+SAX  2CH 3CH  4CH 
+
+II.Task Design 
+
+Sequence-speci fi c Image  Understanding 
+
+> motion
+
+Testbed  Highlights 
+
+Perfusion 
+
+SAX  4CH 
+
+3D (2D+dynamic) 
+
+A. Reduced Perfusion C. Perfusion Defect 
+
+B. Delayed Perfusion 
+
+3D (multi-slice) 
+
+Diagnostic  signal:  Reveals  fi brosis, scar tissue 
+
+LGE 
+
+SAX  2CH 4CH 
+
+LGE : Which segments show high-signal 
+
+abnormal enhancement? 
+
+A. Base Segment 
+
+B. Mid Segment 
+
+C. Apical Segment 
+
+D. Apex 
+
+E. Papillary Muscle 
+
+Answer(s): A, B, C A
+
+> Q
+
+Perfusion: Classify the visual type of 
+
+abnormality. 
+
+> Q
+
+Diagnostic  signal:  Reveals microvascular 
+
+perfusion  
+
+> A
+
+Answer(s): C 
+
+4D (spatial + temporal) 
+
+Diagnostic  signal:  Reveals wall motion, 
+
+ventricular function 
+
+Cine 
+
+SAX  3CH 2CH 4CH  
+
+> Q
+
+Cine: Which statement best describes 
+
+the LV systolic function? 
+
+A. Normal 
+
+B. Reduced 
+
+C. Enhanced 
+
+T2-weighted 
+
+SAX  4CH 
+
+Diagnostic  signal:  Reveals edema, acute 
+
+in fl ammation 
+
+A. Normal 
+
+B. High Signal 
+
+C. Low Signal D. Mixed Signal 
+
+3D (multi-slice) 
+
+T2: Classify the overall myocardial T2 
+
+signal appearance.  
+
+> Q
+> A
+
+Answer(s): D  
+
+> A
+
+Answer(s): B 
+
+✅ Private, leakage-resistant data 
+
+✅ High-dimensional studies 
+
+Temporal Multi-view Multi-sequence ⋅ ⋅
+
+✅ Clinically grounded tasks 
+
+I.Testbed Overview Figure 2: Overview of CardioLens. CardioLens is a private multi-sequence CMR evaluation testbed constructed via a radiologist-guided report-to-QA pipeline and organized into three clinical tasks. then segmental, regional, distributional, and laminar characteristics; T2 and Perfusion progress analogously from signal status to spatial localization and distribution. This isolates per-sequence perceptual grounding before any cross-sequence or patient-level interpretation. 
+
+Report Generation (4 subtasks, 2,246 QA pairs). For each patient, one sequence-level report is generated for Cine, LGE, Perfusion, and T2. Reference reports are constructed by rule-based concatenation of structured image-understanding labels using predefined templates, ensuring logical consistency between report text and structured annotations. This task evaluates whether models can convert distributed visual findings into clinically structured narrative reports. 
+
+Disease Diagnosis (2 subtasks, 848 QA pairs). Diagnosis requires cross-sequence integration at the patient level and is organized as two tasks of increasing specificity. The etiology classification task distinguishes Normal Heart (NH), Ischemic Heart Disease (IHD), and Non-Ischemic Cardiomyopathy (NICM) – the most fundamental differential framework in CMR practice; the NICM subtyping task further resolves NICM into HCM, DCM, RCM, ACM, and Myocarditis (Appendix A.3). Each subtype shows a characteristic multi-sequence phenotype, demanding full-sequence pattern matching. 42.2 Data Construction Pipeline 
+
+• Source provenance. Each report is first drafted by a radiologist with 1–10 years of cardiac imaging experience and then reviewed and signed off by a senior radiologist with more than 10 years of experience. The finalized clinical report serves as the authoritative source for image-understanding and report-generation targets. • Label extraction. Free-text reports are converted into structured subtask labels using rule-based extraction with regular expressions and subtask-specific clinical vocabularies. These labels define the answers for image-understanding tasks and provide the structured basis for report-generation references (diagnosis labels are taken from discharge records to reflect clinical conclusions). • Verification. Extracted labels are manually checked against the source reports. Uncertain or ambiguous cases are flagged, re-examined, and adjudicated to improve consistency between the structured annotations and the original clinical reports. 
+
+2.3 Slice Selection Protocols 
+
+Because current MLLMs cannot process the full 3D/4D CMR examination directly, each sequence must be represented by a subset of slices before inference. CardioLens therefore varies two input-construction factors: the slice-selection protocol and the slice budget K. By comparing random, clinically-motivated, and data-driven selection under different budgets, we examine whether the performance gap can be reduced by providing either better-selected slices or more visual evidence. • Random Sampling. Random sampling uniformly selects K slices from the available slices of a given sequence without using clinical prior knowledge. This provides an uninformed baseline for estimating what a model can extract from an arbitrary subset of the study. • Clinically-motivated Heuristic Sampling. Heuristic sampling uses radiologist-defined task-to-view priors to select slices that are clinically most relevant to each subtask. For example, Cine short-axis views are prioritized for wall thickness, long-axis views for motion, valvular and functional assessment, and LGE short-axis views for regional enhancement localization. Full details are provided in Appendix B. • Data-driven MIL Sampling. As a data-driven counterpart to random and heuristic selection, we train a Multiple Instance Learning (MIL) model with sequence-level image-understanding labels, treating each CMR sequence as a bag of slices. The trained model assigns task-specific scores to slices, and the top-K are selected as model inputs. We use this protocol to test whether more label-relevant visual evidence improves MLLM performance. See details in Appendix C. Together, these protocols allow us to observe how evaluation results vary when a full 3D/4D CMR examination is approximated by selected slices, reducing the influence of current MLLMs’ inability to absorb complete CMR studies on our evaluation (See Section 3.3). 
+
+2.4 Data Governance and Public Release 
+
+All CMR studies were collected under IRB approval and de-identified prior to use. Due to institutional data-sharing constraints, only 100 of the 585 patients are permitted for public release. The released subset preserves the same multi-sequence structure, task definitions, and evaluation protocols as the full benchmark. Detailed statistics and analysis can be found in Appendix H. 
+
+3 Experiments and Analysis 
+
+In this section, we design experiments to answer the following research: (RQ1) How do current MLLMs perform across the CMR interpretation workflow, from image understanding to report generation and disease diagnosis? (RQ2) Does adapting high-dimensional 3D/4D CMR studies into sparse, MLLM-compatible inputs introduce evaluation bias? (RQ3) Can clinical reasoning instructions improve the performance of MLLMs on our CardioLens, and how do they affect models’ prediction behavior? 50 20 40 60              
+
+> F1 scores (%)
+> InternVL3.5-38B
+> Gemma-3-27B
+> InternVL3.5-8B
+> Qwen3-VL-32B
+> Gemma-4-31B
+> Qwen3-VL-8B
+> GPT-5
+> Gemma-4-4B
+> Claude-Opus-4.6
+> Gemini-3.1-Pro
+> Llama-3.2-11B
+> Mistral-Small-24B
+> 56.5
+> 20.6
+> 22.6
+> 54.4
+> 50.3
+> 19.2
+> 53.2
+> 12.0 18.2
+> 52.0 59.1
+> 19.4
+> 51.8 59.5
+> 27.7
+> 51.7
+> 51.0
+> 19.5
+> 49.8
+> 47.2
+> 16.0
+> 47.4
+> 45.9
+> 18.1
+> 45.6 51.3
+> 24.8
+> 45.2
+> 47.6
+> 22.7
+> 40.7 52.4
+> 8.2
+> 38.7
+> 5.2
+> 4.6
+> General
+> 020 40 60
+> F1 scores (%)
+> QoQMed-7B
+> Lingshu-7B
+> MedGemma-27B
+> MedGemma-4B
+> Lingshu-32B
+> Fleming-38B
+> Fleming-8B
+> Hulu-30B
+> HuluMed-7B
+> 58.8
+> 49.7
+> 20.5
+> 58.5
+> 47.0
+> 22.6
+> 53.8
+> 48.0
+> 12.7
+> 52.3
+> 46.4
+> 19.6
+> 50.4
+> 52.2
+> 23.2
+> 50.1
+> 48.4
+> 24.2
+> 49.7
+> 45.2
+> 21.4
+> 48.3
+> 47.4
+> 19.3
+> 45.6
+> 42.2
+> 18.0
+> Medical
+> Level-1
+> Level-2
+> Level-3 38 40 45 50 55 60
+> Level 1 - Image Understanding (F1, %)
+> 567
+> 10
+> 20
+> 30
+> 40
+> 50
+> 60
+> Level 3 - Disease Diagnosis (F1, %)
+> MedGemma-4B Lingshu-7B
+> Fleming-8B
+> HuluMed-7B
+> QoQMed-7B
+> Gemma-4-4B InternVL3.5-8B
+> Qwen3-VL-8B
+> MedGemma-27B
+> Hulu-30B
+> Lingshu-32B
+> Fleming-38B
+> Llama-3.2-11B
+> Mistral-Small-24B
+> Gemma-3-27B
+> Gemma-4-31B Qwen3-VL-32B
+> InternVL3.5-38B
+> GPT-5
+> Gemini-3.1-Pro
+> Claude-Opus-4.6
+> Open-source bubble size is proportional to model scale;
+> closed-source models are shown as stars.
+> 4B
+> 8B
+> 16B
+> 32B
+> Gemma family
+> Qwen family
+> InternVL family
+> Other open-source
+> Closed-source (size unknown)
+
+Figure 3: Three-tier performance landscape across evaluated MLLMs. Values are averaged across the three slice-selection strategies. Performance consistently declines from image understanding to report generation and disease diagnosis, indicating that competence on isolated CMR findings does not reliably translate into higher-level clinical results. The right panel further highlights this disconnect: models with stronger Level 1 performance do not show a corresponding gain on Level 3, and most remain below 30% for disease diagnosis. Open-source bubble size is proportional to parameter scale; closed-source models are shown as stars. 
+
+3.1 Experimental Setup Models. We benchmark a diverse set of state-of-the-art MLLMs covering three axes: closed- vs. open-source , general-purpose vs. medical-specialized , and model scale (∼4B to ∼38B parameters). Closed-source systems include GPT-5 [ 46 ], Gemini-3.1-Pro [ 17 ], and Claude-Opus-4.6 [ 4 ]. Open-source models include Qwen3-VL [ 8], InternVL3.5 [ 49 ], Deepseek-VL2 [ 52 ] and Gemma3 [ 15 ]; medical-specialized models include MedGemma [ 45 ], Lingshu [ 54 ], and other domain-adapted variants [13, 24, 39]. Complete list is provided in Appendix E.1. 
+
+Evaluation Protocol. All models are evaluated in a strict zero-shot setting – no task-specific fine-tuning, no in-context examples – reflecting the intended deployment scenario of MLLMs as general-purpose clinical assistants. Each instance provides the selected slices and a task-specific textual prompt, and the model must produce a structured response. Full prompt templates are provided in Appendix E.2, and all the metric definitions are provided in Appendix E.3. 
+
+3.2 RQ1. A Three-Layered Clinical Reality Gap 
+
+We evaluate MLLMs along the full CardioLens pipeline. The overall results are summarized in Figure 3. In the main text, we only report detailed image-understanding results in Table 2, while the full numerical breakdowns for report generation and disease diagnosis are provided in Appendix G.1. 
+
+Competence Collapses Along the Clinical Pipeline. Figure 3 reveals a consistent degradation as evaluation moves from sequence-level finding recognition to clinically grounded synthesis and diagnosis. Taking QoQMed-7B as an illustrative example, the model achieves a moderate 58.8% F1 on image understanding, but this apparent recognition ability does not reliably carry over to downstream clinical tasks. Its performance drops to 49.7% on report generation, where multiple findings must be organized into a coherent clinical summary, and further declines to 20.5% on disease diagnosis, where evidence must be integrated across sequences and mapped to patient-level disease categories. This indicates that the breakdown begins before the final diagnostic stage: current MLLMs can partially recognize isolated CMR findings, but struggle to organize and integrate them into clinically consistent reports and patient-level diagnosis. Besides, we also observe that, within the same model family, larger models do not consistently achieve better performance: Lingshu-7B outperforms Lingshu-32B on image understanding (58.5% vs. 50.4% F1), MedGemma improves by less than 2% F1 from 4B to 27B, and closed-source frontier models such as GPT-5, Gemini-3.1-Pro, and Claude-Opus-4.6 do not dominate the open-source ≤ 10 B medical models. These results suggest that parameter scaling does not prevent degradation along the clinical pipeline. 6Table 2: Image understanding performance on CardioLens (Level 1). Accuracy, Precision, Recall, and F1 (%) under three slice-selection strategies (Random / Heuristic / MIL). Values are mean±std over three independent inference runs (Heuristic is deterministic and reports a single run). 
+
+Model Accuracy (%) Precision (%) Recall (%) F1 Score (%) 
+
+Random Heuristic MIL Random Heuristic MIL Random Heuristic MIL Random Heuristic MIL 
+
+Open-Source Models ( ≤10B) 
+
+> Medical
+
+MedGemma-4B 58.72 ±0.15 59.54 ±0.00 59.45 ±0.86 41.83 ±0.05 43.28 ±0.00 43.39 ±0.70 67.44 ±0.16 67.48 ±0.00 68.09 ±0.43 51.53 ±0.08 52.54 ±0.00 52.84 ±0.65 
+
+Lingshu-7B 65.22 ±0.07 66.75 ±0.00 67.52 ±0.08 50.76 ±0.06 54.67 ±0.00 55.08 ±0.37 63.43 ±0.05 65.58 ±0.00 65.98 ±0.17 56.22 ±0.04 59.34 ±0.00 59.82 ±0.15 
+
+Fleming-8B 64.72 ±0.05 64.62 ±0.00 62.96 ±0.40 53.18 ±0.09 53.15 ±0.00 51.78 ±0.60 47.93 ±0.09 47.71 ±0.00 46.55 ±0.54 50.21 ±0.09 50.05 ±0.00 48.79 ±0.57 
+
+HuluMed-7B 50.60 ±0.25 51.44 ±0.00 52.58 ±1.35 37.30 ±0.15 38.16 ±0.00 38.72 ±0.73 57.16 ±0.20 57.87 ±0.00 59.22 ±1.00 44.81 ±0.16 45.67 ±0.00 46.47 ±0.84 
+
+QoQMed-7B 58.96 ±0.11 59.18 ±0.00 59.31 ±0.67 49.54 ±0.16 50.19 ±0.00 49.67 ±0.34 74.00 ±0.19 74.05 ±0.00 72.92 ±0.59 58.72 ±0.17 59.11 ±0.00 58.63 ±0.43 
+
+> General
+
+Gemma-4-4B 49.59 ±0.26 55.23 ±0.00 57.69 ±1.60 38.22 ±0.18 44.79 ±0.00 47.78 ±1.56 47.25 ±0.22 53.41 ±0.00 55.61 ±1.80 42.19 ±0.19 48.64 ±0.00 51.24 ±1.61 
+
+InternVL3.5-8B 60.84 ±0.07 61.88 ±0.00 61.95 ±0.92 49.27 ±0.10 50.15 ±0.00 51.48 ±0.92 56.27 ±0.11 56.81 ±0.00 56.53 ±0.44 52.51 ±0.11 53.23 ±0.00 53.87 ±0.71 
+
+Qwen3-VL-8B 53.94 ±0.18 59.02 ±0.00 61.78 ±1.08 40.90 ±0.20 48.04 ±0.00 51.90 ±1.37 54.38 ±0.23 59.13 ±0.00 60.27 ±0.51 46.67 ±0.21 52.91 ±0.00 55.66 ±0.69 
+
+Open-Source Models ( >10B) 
+
+> Medical
+
+MedGemma-27B 63.06 ±0.09 65.24 ±0.00 62.87 ±0.40 48.74 ±0.07 52.33 ±0.00 50.52 ±0.24 58.24 ±0.20 58.68 ±0.00 58.84 ±0.22 52.69 ±0.12 54.76 ±0.00 53.89 ±0.19 
+
+Hulu-30B 58.14 ±0.05 58.81 ±0.00 59.82 ±0.89 43.18 ±0.06 43.74 ±0.00 44.53 ±0.72 53.69 ±0.10 53.45 ±0.00 54.85 ±0.63 47.82 ±0.07 48.08 ±0.00 49.11 ±0.68 
+
+Lingshu-32B 65.74 ±0.23 65.78 ±0.00 65.45 ±0.32 54.63 ±0.32 55.02 ±0.00 54.37 ±0.42 47.28 ±0.26 47.70 ±0.00 47.17 ±0.36 50.34 ±0.28 50.74 ±0.00 50.16 ±0.38 
+
+Fleming-38B 63.17 ±0.17 62.68 ±0.00 61.98 ±0.42 50.02 ±0.15 49.23 ±0.00 48.96 ±0.77 51.83 ±0.18 50.18 ±0.00 50.96 ±0.75 50.85 ±0.16 49.62 ±0.00 49.89 ±0.76 
+
+> General
+
+Llama-3.2-11B 38.33 ±0.07 38.17 ±0.00 38.44 ±0.06 31.42 ±0.10 31.01 ±0.00 31.20 ±0.19 60.20 ±0.15 59.10 ±0.00 59.58 ±0.19 41.01 ±0.11 40.45 ±0.00 40.74 ±0.06 
+
+Phi-4-14B 39.66 ±0.18 39.98 ±0.00 39.31 ±0.61 29.09 ±0.11 29.19 ±0.00 29.03 ±0.26 48.87 ±0.18 48.88 ±0.00 48.88 ±0.36 36.40 ±0.14 36.49 ±0.00 36.37 ±0.30 
+
+DeepSeek-VL2-16B 46.49 ±0.27 46.98 ±0.00 46.58 ±0.92 35.27 ±0.24 35.79 ±0.00 36.18 ±1.53 56.98 ±0.37 58.02 ±0.00 59.50 ±1.57 43.50 ±0.29 44.22 ±0.00 44.87 ±1.54 
+
+Mistral-Small-24B 39.32 ±0.35 39.15 ±0.00 39.08 ±5.16 31.17 ±0.28 30.95 ±0.00 31.79 ±3.27 52.38 ±0.30 52.57 ±0.00 54.14 ±1.26 38.50 ±0.11 38.32 ±0.00 39.40 ±2.08 
+
+DeepSeek-VL2-27B 51.09 ±0.04 51.27 ±0.00 51.63 ±0.08 37.88 ±0.01 38.22 ±0.00 39.03 ±0.10 49.71 ±0.03 49.47 ±0.00 51.42 ±0.20 42.87 ±0.01 42.94 ±0.00 44.26 ±0.10 
+
+Gemma-3-27B 56.03 ±0.13 57.10 ±0.00 59.59 ±0.76 43.70 ±0.06 47.29 ±0.00 48.83 ±0.58 64.16 ±0.06 67.28 ±0.00 67.34 ±0.66 51.77 ±0.06 55.21 ±0.00 56.36 ±0.61 
+
+Gemma-4-31B 61.83 ±0.31 61.53 ±0.00 62.56 ±0.27 46.62 ±0.26 46.47 ±0.00 47.75 ±0.22 57.86 ±0.31 57.26 ±0.00 58.12 ±0.47 51.61 ±0.28 51.29 ±0.00 52.40 ±0.32 
+
+Qwen3-VL-32B 59.31 ±0.05 58.59 ±0.00 61.25 ±1.03 45.98 ±0.09 45.51 ±0.00 48.03 ±0.64 60.29 ±0.11 58.52 ±0.00 60.44 ±0.66 51.94 ±0.10 50.91 ±0.00 53.28 ±0.63 
+
+InternVL3.5-38B 63.97 ±0.28 64.72 ±0.00 65.29 ±1.30 51.09 ±0.18 52.67 ±0.00 53.73 ±0.94 60.27 ±0.33 62.46 ±0.00 60.98 ±0.96 55.25 ±0.25 57.09 ±0.00 57.08 ±0.96 
+
+Closed-Source Models †
+
+GPT-5 60.92 ±0.55 62.11 ±0.00 61.15 ±0.98 48.56 ±1.04 49.97 ±0.00 48.81 ±0.99 49.93 ±1.04 52.03 ±0.00 49.41 ±1.46 49.21 ±1.04 50.95 ±0.00 49.09 ±1.17 
+
+Gemini-3.1-Pro 57.02 ±0.86 58.47 ±0.00 57.59 ±0.85 43.29 ±0.58 44.88 ±0.00 43.46 ±1.04 45.61 ±0.59 48.04 ±0.00 46.26 ±0.48 44.41 ±0.53 46.39 ±0.00 44.77 ±0.76 
+
+Claude-Opus-4.6 56.50 ±0.35 56.19 ±0.00 56.80 ±1.25 42.15 ±0.35 42.52 ±0.00 42.81 ±1.27 49.61 ±0.31 49.08 ±0.00 49.37 ±1.61 45.55 ±0.33 45.54 ±0.00 45.84 ±1.41 
+
+† Open-source: full 585-patient cohort. Closed-source: 100-patient public subset. 0 10 20 30 40 50 
+
+Score (%) 
+
+Gemma-4-31B 
+
+Lingshu-7B 
+
+InternVL3.5-38B 
+
+MedGemma-4B 
+
+Qwen3-VL-32B 
+
+27.7 
+
+50.8 
+
+22.6 
+
+39.1 
+
+22.6 
+
+41.0 
+
+19.6 
+
+40.3 
+
+19.4 
+
+42.0 
+
+Diagnosis Results 
+
+Metric 
+
+F1 
+
+Accuracy NH IHD NICM 
+
+Prediction 
+
+NH 
+
+IHD 
+
+NICM 
+
+> Ground Truth
+
+0.46 0.01 0.53 
+
+0.10 0.01 0.88 
+
+0.12 0.01 0.88 
+
+Diagnosis - Main Category 
+
+HCM DCM Myoc. RCM ACM 
+
+Prediction 
+
+HCM 
+
+DCM 
+
+Myoc. 
+
+RCM 
+
+ACM 
+
+0.82 0.18 0.00 0.00 0.00 
+
+0.38 0.61 0.01 0.00 0.00 
+
+0.87 0.13 0.00 0.00 0.00 
+
+0.77 0.23 0.00 0.00 0.00 
+
+1.00 0.00 0.00 0.00 0.00 
+
+Diagnosis - Sub Category 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+Figure 4: Diagnosis-stage failure analysis. Left : Accuracy and F1 of representative open-source models on the disease diagnosis. Right : Confusion matrices of Gemma-4-31B for etiology classifica-tion and NICM subtyping. Predictions collapse heavily onto the most prevalent category — NICM at the etiology level and HCM at the subtype level. 
+
+Category Collapse Drives Poor Clinical Performance. Aggregating metrics alone can obscure how current MLLMs fail: a model may achieve moderate accuracy while still failing to distinguish diseases in a meaningful way. For example, as shown in the left panel of Figure 4, Gemma-4-31B achieves an F1 score of only 27.7% on disease diagnosis, while its accuracy reaches 50.8%, resulting in a gap of more than 20%. This gap suggests that the model can achieve seemingly reasonable accuracy by favoring common categories, rather than by making reliable diagnostic distinctions. The confusion matrices in the right panel of Figure 4 make this failure mode explicit. In the etiology classification task, Gemma-4-31B predicts NICM – the most prevalent category in the cohort – for 88% of IHD cases and 88% of NICM cases, and even assigns 53% of normal hearts to NICM. A similar collapse appears in the NICM subtyping task, where predictions are concentrated almost entirely on HCM, the most frequent NICM subtype. Specifically, 77% of RCM cases, 87% of myocarditis cases, and 100% of ACM cases are misclassified as HCM. These patterns show that the model is not performing robust diagnosis, but instead defaults to frequent abnormal categories. This behavior is clinically concerning: current MLLMs appear to rely on dataset priors rather than evidence grounded in multi-sequence CMR, making their predictions unreliable for clinical decision-making. 7Table 3: Effect of input size K on classification performance with random selection. For each model, results are reported at K ∈ { 8, 32 , 128 }. The trend column visualizes the trajectory across the three values, and the colored number gives ∆ = K=128 − K=8 . All values are in percentage (%).                                                                                                    
+
+> Model Accuracy (%) Precision (%) Recall (%) F1 Score (%)
+> K=8 K=32 K=128 Trend K=8 K=32 K=128 Trend K=8 K=32 K=128 Trend K=8 K=32 K=128 Trend MedGemma-4B 58.79 57.79 56.78 −2.00 41.82 40.79 40.85 −0.97 67.54 70.28 70.95 +3 .42 51.55 51.56 51.80 +0 .25
+> Lingshu-7B 65.29 64.92 65.58 +0 .29 50.69 51.92 54.45 +3 .76 63.48 61.45 61.50 −1.98 56.22 56.06 57.54 +1 .33
+> Gemma-4-31B 61.55 60.02 59.71 −1.84 46.35 45.08 44.98 −1.36 57.57 58.68 58.70 +1 .12 51.34 50.94 50.88 −0.46
+> Qwen3-VL-32B 59.25 59.36 61.14 +1 .88 45.87 44.04 47.57 +1 .70 60.16 59.76 61.02 +0 .86 51.83 50.54 53.16 +1 .33
+> InternVL3.5-38B 64.29 65.35 65.48 +1 .19 51.30 52.14 52.18 +0 .88 60.65 61.22 61.77 +1 .13 55.53 56.26 56.47 +0 .94
+
+Table 4: Effect of reasoning on image understanding performance with random selection. “R” denotes reasoning; “w/o R” refers to the standard visual prompt, while “w/ R” indicates a reasoning-structured prompt that explicitly asks the model to analyze CMR evidence step by step. ∆ = w/ R − w/o R.                                                                            
+
+> Model Accuracy (%) Precision (%) Recall (%) F1 Score (%)
+> w/o R w/ R ∆w/o R w/ R ∆w/o R w/ R ∆w/o R w/ R ∆
+> MedGemma-4B 58.72 47.17 −11 .55 41.83 37.76 −4.07 67.44 53.77 −13 .67 51.53 44.24 −7.29
+> Lingshu-7B 65.22 64.95 −0.27 50.76 53.08 +2 .32 63.43 52.86 −10 .57 56.22 52.95 −3.27
+> Gemma-4-31B 61.83 64.80 +2 .97 46.62 52.42 +5 .80 57.86 57.81 −0.05 51.61 54.95 +3 .34
+> Qwen3-VL-32B 59.31 49.19 −10 .12 45.98 36.57 −9.41 60.29 60.26 −0.03 51.94 45.13 −6.81
+> InternVL3.5-38B 63.97 60.35 −3.62 51.09 46.38 −4.71 60.27 48.96 −11 .31 55.25 47.53 −7.72
+
+Medical Knowledge Improves Abnormality Sensitivity but Not Clinical Reliability. We next examine whether additional medical knowledge can alleviate these clinical failures. From Table 2, medical fine-tuning partially helps at the image-understanding level: among ≤ 10B open-source models, Lingshu-7B achieves 58.5% F1, outperforming all closed-source frontier systems such as GPT-5 (49.8% F1). This suggests that CMR-relevant visual knowledge is underrepresented in general web-scale training data but can be partially recovered through domain adaptation. However, this improvement does not translate into reliable clinical discrimination. Across medical-tuned model families, we observe a consistent 15–25 % recall-over-precision gap, such as MedGemma-4B (68.1% recall / 43.4% precision) and QoQMed-7B (72.9% recall / 49.7% precision), whereas closed-source models exhibit more balanced precision–recall behavior. This pattern suggests that medical adaptation helps models recognize a broader range of possible CMR findings, but does not teach them to decide reliably whether each finding is truly supported by the visual evidence. We call this failure mode enumeration bias : medical-tuned models tend to over-predict plausible abnormalities without sufficient visual evidence. Therefore, additional medical knowledge can improve prediction coverage, but it does not resolve the deeper clinical failure mechanisms revealed by CardioLens. 
+
+3.3 RQ2. Input Construction Does Not Explain the Performance Gap 
+
+A natural concern for CardioLens is whether converting high-dimensional 3D/4D CMR studies into sparse inputs unfairly biases the evaluation of clinical task performance. Since current MLLMs cannot directly process full CMR studies, their inputs must be constructed by selecting a limited number of slices from multi-view, multi-sequence, and temporally resolved imaging data. We therefore examine whether model performance is influenced by this input-construction step. 
+
+Slice-selection Strategy. We first compare Random, Heuristic, and MIL-based slice selection in Table 2. Across most models, the maximum F1 spread among the three strategies is ≤ 2% , suggesting that performance is relatively insensitive to how slices are selected. Smaller models, such as Gemma-4-4B and Qwen3-VL-8B, benefit more from informed selection, with gains up to 9% F1, indicating that sparse input construction have a larger impact on models with limited capacity. However, these improvements remain insufficient to close the overall clinical performance gap. 
+
+Slice Budget. We next test whether providing more visual evidence alleviates the clinical gap. Table 3 ablates K ∈ { 8, 32 , 128 } under random selection across five representative models. Increasing K
+
+from 8 to 128 changes F1 by at most 1.3% for Lingshu-7B and Qwen3-VL-32B, while other models show flat or even slightly negative trends. Accuracy and recall often trade off rather than improve jointly. Thus, a 16 × expansion of the visual context does not produce meaningful performance gains. 8These results suggest that sparse input construction introduces limited evaluation bias. Performance remains largely stable across different slice-selection strategies and slice budgets, and model scales, indicating that the observed clinical failures cannot be explained away as artifacts of input construction. These findings further confirm current MLLMs’ difficulty in using distributed evidence across views, sequences, and temporal phases for clinical prediction. 
+
+3.4 RQ3. Reasoning Prompts Make Models More Conservative, Not More Visually Grounded 
+
+We further ask whether enriching prompts with explicit clinical reasoning instructions can improve MLLM performance on CMR tasks. Table 4 compares the standard visual prompt with a reasoning-structured prompt, where the same visual inputs are retained but the model is additionally instructed to analyze CMR evidence step by step (see prompt comparison in Appendix E.2). Overall, adding reasoning instructions does not produce consistent gains. Instead, performance often decreases. For example, recall decreases from 67.44% to 53.77% for MedGemma-4B, from 63.43% to 52.86% for Lingshu-7B, and from 60.27% to 48.96% for InternVL3.5-38B. Although precision increases for some models, such as Lingshu-7B and Gemma-4-31B, these gains come at the cost of reduced sensitivity to abnormal findings. This pattern further exposes the instability of current MLLMs: their clinical predictions are not stably grounded in CMR visual evidence. When asked to provide step-by-step clinical justification, models become less willing to issue positive predictions, leading to lower recall and a more conservative answer. Detailed case study can be found in Appendix I. 
+
+4 Related Work 
+
+Advances and Open Challenges in Medical MLLMs. Recent multimodal large language models (MLLMs) have achieved strong visual-language understanding and instruction following, with general-domain systems such as Qwen-VL, LLaVA, and InternVL [ 7, 11 , 32 ] forming the basis for many medical variants. Medical MLLMs, including LLaVA-Med, Lingshu, and other radiology-oriented models [ 22 , 31 , 50 , 54 ], further adapt these capabilities to medical VQA, report generation, and diagnostic assistance. However, most progress is still evaluated under a static image-text alignment paradigm, where clinical competence is approximated by recognizing findings from isolated images [ 3 , 31 , 44 ]. This leaves open whether medical MLLMs can handle clinical studies in which evidence is distributed across views, temporal phases, and complementary sequences. CardioLens directly probes this capability, requiring MLLMs to integrate distributed evidence across multi-sequence CMR studies rather than recognize findings from individually presented images. 
+
+Progress and Evaluation Limitations in Medical Benchmarks. Medical MLLM benchmarks have expanded from single-image VQA datasets like VQA-RAD and SLAKE to more diverse evaluations such as OmniMedVQA, GMAI-MMBench, CARES, M3D-Bench [ 6, 10 , 23 , 29 , 38 , 53 ] (see more details in Appendix F.2). Despite this progress, existing benchmarks remain insufficient for supporting claims of clinical competence, as they often rely on leakage-prone public data , isolated inputs , and 
+
+clinically over-simplified tasks . As a result, strong benchmark performance may not translate into clinical utility for physicians. CardioLens is designed against all three pitfalls—drawn from a private hospital archive to limit leakage, preserving study-level multi-sequence inputs rather than isolated slices, and framing tasks along the actual diagnostic workflow rather than recognition shortcuts. 
+
+Cardiac MRI for High-Dimensional Clinical Evaluation. Cardiac MRI provides a natural clinical context for evaluating MLLMs beyond isolated image recognition, as CMR interpretation requires integrating dynamic function, tissue characterization, perfusion, and edema information across anatomical views and temporal phases [ 12 , 27 , 47 , 55 ]. Existing datasets have advanced cardiac image analysis, but they mainly target segmentation or task-specific quantification, including Cine-based ventricular segmentation, LGE-based scar analysis, atrial analysis, and multi-sequence myocardial segmentation [ 9, 28 , 36 , 37 , 40 ]. These resources are valuable for specialized CMR algorithms, but they target component-level tasks rather than the full clinical interpretation pipeline. CardioLens repurposes multi-sequence CMR as a clinically grounded testbed for MLLMs, with tasks spanning image understanding, report generation, and disease diagnosis. 95 Conclusion 
+
+We introduced CardioLens, a leakage-resistant multi-sequence CMR testbed for evaluating Multi-modal Large Language Models (MLLMs) beyond conventional medical VQA. By covering image understanding, report generation, and disease diagnosis, CardioLens shows that success on isolated, recognition-style benchmarks does not justify clinical readiness. Current MLLMs exhibit a clear clinical reality gap: they struggle to integrate high-dimensional CMR evidence across views, temporal phases, and sequences into structured reports and discharge-grounded diagnoses. These failures reveal a structural mismatch between existing evaluation practice and clinically deployable interpretation. By aligning evaluation with real-world medical workflow, CardioLens provides a controlled testbed for redefining the clinical capability boundary of MLLMs. 
+
+References 
+
+[1] Marah Abdin, Jyoti Aneja, Harkirat Behl, Sébastien Bubeck, Ronen Eldan, Suriya Gunasekar, Michael Harrison, Russell J Hewett, Mojan Javaheripi, Piero Kauffmann, et al. Phi-4 technical report. arXiv preprint arXiv:2412.08905 , 2024. [2] Josh Achiam, Steven Adler, Sandhini Agarwal, Lama Ahmad, Ilge Akkaya, Florencia Leoni Aleman, Diogo Almeida, Janko Altenschmidt, Sam Altman, Shyamal Anadkat, et al. Gpt-4 technical report. arXiv preprint arXiv:2303.08774 , 2023. [3] Jean-Baptiste Alayrac, Jeff Donahue, Pauline Luc, Antoine Miech, Iain Barr, Yana Hasson, Karel Lenc, Arthur Mensch, Katherine Millican, Malcolm Reynolds, et al. Flamingo: a visual language model for few-shot learning. Advances in neural information processing systems , 35: 23716–23736, 2022. [4] Anthropic. System card:claude opus 4.6. https://www.anthropic.com/news/ claude-opus-4-6 , 2026. [5] Mohammad Asadi, Jack W O’Sullivan, Fang Cao, Tahoura Nedaee, Kamyar Fardi, Fei-Fei Li, Ehsan Adeli, and Euan Ashley. Mirage the illusion of visual understanding. arXiv preprint arXiv:2603.21687 , 2026. [6] Fan Bai, Yuxin Du, Tiejun Huang, Max Q-H Meng, and Bo Zhao. M3d: Advancing 3d medical image analysis with multi-modal large language models. arXiv preprint arXiv:2404.00578 ,2024. [7] Jinze Bai, Shuai Bai, Shusheng Yang, Shijie Wang, Sinan Tan, Peng Wang, Junyang Lin, Chang Zhou, and Jingren Zhou. Qwen-vl: A frontier large vision-language model with versatile abilities. arXiv preprint arXiv:2308.12966 , 1(2):3, 2023. [8] Shuai Bai, Yuxuan Cai, Ruizhe Chen, Keqin Chen, Xionghui Chen, Zesen Cheng, Lianghao Deng, Wei Ding, Chang Gao, Chunjiang Ge, et al. Qwen3-vl technical report. arXiv preprint arXiv:2511.21631 , 2025. [9] Olivier Bernard, Alain Lalande, Clement Zotti, Frederick Cervenansky, Xin Yang, Pheng-Ann Heng, Irem Cetin, Karim Lekadir, Oscar Camara, Miguel Angel Gonzalez Ballester, et al. Deep learning techniques for automatic mri cardiac multi-structures segmentation and diagnosis: Is the problem solved? IEEE Transactions on Medical Imaging , 37(11):2514–2525, 2018. [10] Pengcheng Chen, Jin Ye, Guoan Wang, Yanjun Li, Zhongying Deng, Wei Li, Tianbin Li, Haodong Duan, Ziyan Huang, Yanzhou Su, et al. Gmai-mmbench: A comprehensive multimodal evaluation benchmark towards general medical ai. Advances in Neural Information Processing Systems , 37:94327–94427, 2024. [11] Zhe Chen, Jiannan Wu, Wenhai Wang, Weijie Su, Guo Chen, Sen Xing, Muyan Zhong, Qinglong Zhang, Xizhou Zhu, Lewei Lu, et al. Internvl: Scaling up vision foundation models and aligning for generic visual-linguistic tasks. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pages 24185–24198, 2024. 10 [12] Amedeo Chiribiri, Andrew E Arai, Edward DiBella, Li-Yueh Hsu, Masaki Ishida, Michael Jerosch-Herold, Sebastian Kozerke, Xenios Milidonis, Reza Nezafat, Sven Plein, et al. Society for cardiovascular magnetic resonance expert consensus statement on quantitative myocardial perfusion cardiovascular magnetic resonance imaging. Journal of Cardiovascular Magnetic Resonance , 27(2):101940, 2025. [13] Wei Dai, Peilin Chen, Chanakya Ekbote, and Paul Pu Liang. Qoq-med: Building multimodal clinical foundation models with domain-aware grpo training. arXiv preprint arXiv:2506.00711 ,2025. [14] Wangbin Ding, Lei Li, Junyi Qiu, Sihan Wang, Liqin Huang, Yinyin Chen, Shan Yang, and Xiahai Zhuang. Aligning multi-sequence cmr towards fully automated myocardial pathology segmentation. IEEE Transactions on Medical Imaging , 2023. [15] Gemma Team. Gemma 3 technical report. arXiv preprint arXiv:2503.19786 , 2025. [16] Google. google/gemma-4-31B-it. https://huggingface.co/google/gemma-4-31B-it ,2026. Hugging Face model card. [17] Google DeepMind. Gemini 3.1 pro model card. https://deepmind.google/models/ model-cards/gemini-3-1-pro , 2026. [18] Aaron Grattafiori, Abhimanyu Dubey, Abhinav Jauhri, Abhinav Pandey, Abhishek Kadian, Ahmad Al-Dahle, Aiesha Letman, Akhil Mathur, Alan Schelten, Alex Vaughan, et al. The llama 3 herd of models. arXiv preprint arXiv:2407.21783 , 2024. [19] Yu Gu, Jingjing Fu, Xiaodong Liu, Jeya Maria Jose Valanarasu, Noel Codella, Reuben Tan, Qianchu Liu, Ying Jin, Sheng Zhang, Jinyu Wang, et al. The illusion of readiness: Stress testing large frontier models on multimodal medical benchmarks. arXiv e-prints , pages arXiv–2509, 2025. [20] Daya Guo, Dejian Yang, Haowei Zhang, Junxiao Song, Peiyi Wang, Qihao Zhu, Runxin Xu, Ruoyu Zhang, Shirong Ma, Xiao Bi, et al. Deepseek-r1: Incentivizing reasoning capability in llms via reinforcement learning. arXiv preprint arXiv:2501.12948 , 2025. [21] Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun. Deep residual learning for image recognition. In Proceedings of the IEEE conference on computer vision and pattern recognition ,pages 770–778, 2016. [22] Sunan He, Yuxiang Nie, Zhixuan Chen, Zhiyuan Cai, Hongmei Wang, Shu Yang, and Hao Chen. Meddr: Diagnosis-guided bootstrapping for large-scale medical vision-language learning. arXiv preprint arXiv:2404.15127 , 1(3):6, 2024. [23] Yutao Hu, Tianbin Li, Quanfeng Lu, Wenqi Shao, Junjun He, Yu Qiao, and Ping Luo. Omnimed-vqa: A new large-scale comprehensive evaluation benchmark for medical lvlm. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 22170–22183, 2024. [24] Songtao Jiang, Yuan Wang, Sibo Song, Tianxiang Hu, Chenyi Zhou, Bin Pu, Yan Zhang, Zhibo Yang, Yang Feng, Joey Tianyi Zhou, et al. Hulu-med: A transparent generalist model towards holistic medical vision-language understanding. arXiv preprint arXiv:2510.08668 , 2025. [25] Di Jin, Eileen Pan, Nassim Oufattole, Wei-Hung Weng, Hanyi Fang, and Peter Szolovits. What disease does this patient have? a large-scale open domain question answering dataset from medical exams. arXiv preprint arXiv:2009.13081 , 2020. [26] Qiao Jin, Bhuwan Dhingra, Zhengping Liu, William Cohen, and Xinghua Lu. Pubmedqa: A dataset for biomedical research question answering. In Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing and the 9th International Joint Conference on Natural Language Processing (EMNLP-IJCNLP) , pages 2567–2577, 2019. [27] Sven Koehler, Julian Kuhm, Tyler Huffaker, Daniel Young, Animesh Tandon, Florian André, Norbert Frey, Gerald Greil, Tarique Hussain, and Sandy Engelhardt. Deep learning–based aligned strain from cine cardiac mri for detection of fibrotic myocardial tissue in patients with duchenne muscular dystrophy. Radiology: Artificial Intelligence , 7(3):e240303, 2025. 11 [28] Alain Lalande, Zhihao Chen, Thomas Decourselle, Abdul Qayyum, Thibaut Pommier, Luc Lor-gis, Ezequiel de La Rosa, Alexandre Cochet, Yves Cottin, Dominique Ginhac, et al. Emidec: A database usable for the automatic evaluation of myocardial infarction from delayed-enhancement cardiac mri. Data , 5(4):89, 2020. [29] Jason J Lau, Soumya Gayen, Asma Ben Abacha, and Dina Demner-Fushman. A dataset of clinically generated visual questions and answers about radiology images. Scientific data , 5(1): 180251, 2018. [30] Jukka Lehtonen, Valtteri Uusitalo, Pauli Pöyhönen, Mikko I Mäyränpää, and Markku Kupari. Cardiac sarcoidosis: phenotypes, diagnosis, treatment, and prognosis. European heart journal ,44(17):1495–1510, 2023. [31] Chunyuan Li, Cliff Wong, Sheng Zhang, Naoto Usuyama, Haotian Liu, Jianwei Yang, Tristan Naumann, Hoifung Poon, and Jianfeng Gao. Llava-med: Training a large language-and-vision assistant for biomedicine in one day. Advances in Neural Information Processing Systems , 36: 28541–28564, 2023. [32] Feng Li, Renrui Zhang, Hao Zhang, Yuanhan Zhang, Bo Li, Wei Li, Zejun Ma, and Chunyuan Li. Llava-next-interleave: Tackling multi-image, video, and 3d in large multimodal models. 
+
+arXiv preprint arXiv:2407.07895 , 2024. [33] Lei Li, Fuping Wu, Guang Yang, Lingchao Xu, Tom Wong, Raad Mohiaddin, David Firmin, Jennifer Keegan, and Xiahai Zhuang. Atrial scar quantification via multi-scale cnn in the graph-cuts framework. Medical Image Analysis , 60:101595, 2020. [34] Lei Li, Veronika A. Zimmer, Julia A. Schnabel, and Xiahai Zhuang. Atrialgeneral: Domain generalization for left atrial segmentation of multi-center lge mris. In Medical Image Computing and Computer Assisted Intervention (MICCAI) , pages 557–566, 2021. [35] Lei Li, Veronika A. Zimmer, Julia A. Schnabel, and Xiahai Zhuang. Atrialjsqnet: A new framework for joint segmentation and quantification of left atrium and scars incorporating spatial and shape information. Medical Image Analysis , 76:102303, 2022. [36] Lei Li, Veronika A. Zimmer, Julia A. Schnabel, and Xiahai Zhuang. Medical image analysis on left atrial lge mri for atrial fibrillation studies: A review. Medical Image Analysis , 77:102360, 2022. [37] Lei Li, Fuping Wu, Sihan Wang, Xinzhe Luo, Carlos Martín-Isla, Shuwei Zhai, Jianpeng Zhang, Yanfei Liu, Zhen Zhang, Markus J Ankenbrand, et al. Myops: A benchmark of myocardial pathology segmentation combining three-sequence cardiac magnetic resonance images. Medical Image Analysis , 87:102808, 2023. [38] Bo Liu, Li-Ming Zhan, Li Xu, Lin Ma, Yan Yang, and Xiao-Ming Wu. Slake: A semantically-labeled knowledge-enhanced dataset for medical visual question answering. In 2021 IEEE 18th international symposium on biomedical imaging (ISBI) , pages 1650–1654. IEEE, 2021. [39] Chi Liu, Derek Li, Yan Shu, Robin Chen, Derek Duan, Teng Fang, and Bryan Dai. Fleming-r1: Toward expert-level medical reasoning via reinforcement learning. arXiv preprint arXiv:2509.15279 , 2025. [40] Carlos Martín-Isla, Víctor M Campello, Cristian Izquierdo, Kaisar Kushibar, Carla Sendra-Balcells, Polyxeni Gkontra, Alireza Sojoudi, Mitchell J Fulton, Tewodros Weldebirhan Arega, Kumaradevan Punithakumar, et al. Deep learning segmentation of the right ventricle in cardiac mri: the m&ms challenge. IEEE Journal of Biomedical and Health Informatics , 27(7):3302– 3313, 2023. [41] Mistral AI. mistralai/Mistral-Small-3.1-24B-Instruct-2503. https://huggingface.co/ mistralai/Mistral-Small-3.1-24B-Instruct-2503 , 2025. Hugging Face model card. [42] Danielle F. Pace, Hannah T. M. Contreras, Jennifer Romanowicz, Shruti Ghelani, Imon Ra-haman, Yue Zhang, Patricia Gao, Mohammad Imrul Jubair, Tom Yeh, Polina Golland, et al. Hvsmr-2.0: A 3d cardiovascular mr dataset for whole-heart segmentation in congenital heart disease. Scientific Data , 11(1):721, 2024. 12 [43] Junyi Qiu, Lei Li, Sihan Wang, Ke Zhang, Yinyin Chen, Shan Yang, and Xiahai Zhuang. Myops-net: Myocardial pathology segmentation with flexible combination of multi-sequence cmr images. Medical image analysis , 84:102694, 2023. [44] Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya Ramesh, Gabriel Goh, Sandhini Agarwal, Girish Sastry, Amanda Askell, Pamela Mishkin, Jack Clark, et al. Learning transferable visual models from natural language supervision. In International conference on machine learning ,pages 8748–8763. PmLR, 2021. [45] Andrew Sellergren, Sahar Kazemzadeh, Tiam Jaroensri, Atilla Kiraly, Madeleine Traverse, Timo Kohlberger, Shawn Xu, Fayaz Jamil, Cían Hughes, Charles Lau, et al. Medgemma technical report. arXiv preprint arXiv:2507.05201 , 2025. [46] Aaditya Singh, Adam Fry, Adam Perelman, Adam Tart, Adi Ganesh, Ahmed El-Kishky, Aidan McLaughlin, Aiden Low, AJ Ostrow, Akhila Ananthram, et al. Openai gpt-5 system card. arXiv preprint arXiv:2601.03267 , 2025. [47] Neda Tavakoli, Amir Ali Rahsepar, Brandon C Benefield, Daming Shen, Santiago López-Tapia, Florian Schiffers, Jeffrey J Goldberger, Christine M Albert, Edwin Wu, Aggelos K Katsaggelos, et al. Scarnet: a novel foundation model for automated myocardial scar quantification from late gadolinium-enhancement images. Journal of Cardiovascular Magnetic Resonance , page 101945, 2025. [48] Peng Wang, Shuai Bai, Sinan Tan, Shijie Wang, Zhihao Fan, Jinze Bai, Keqin Chen, Xuejing Liu, Jialin Wang, Wenbin Ge, et al. Qwen2-vl: Enhancing vision-language model’s perception of the world at any resolution. arXiv preprint arXiv:2409.12191 , 2024. [49] Weiyun Wang, Zhangwei Gao, Lixin Gu, Hengjun Pu, Long Cui, Xingguang Wei, Zhaoyang Liu, Linglin Jing, Shenglong Ye, Jie Shao, et al. Internvl3. 5: Advancing open-source multimodal models in versatility, reasoning, and efficiency. arXiv preprint arXiv:2508.18265 , 2025. [50] Chaoyi Wu, Xiaoman Zhang, Ya Zhang, Hui Hui, Yanfeng Wang, and Weidi Xie. Towards generalist foundation model for radiology by leveraging web-scale 2d&3d medical data. Nature Communications , 16(1):7866, 2025. [51] Chenfei Wu, Jiahao Li, Jingren Zhou, Junyang Lin, Kaiyuan Gao, Kun Yan, Sheng-ming Yin, Shuai Bai, Xiao Xu, Yilei Chen, et al. Qwen-image technical report. arXiv preprint arXiv:2508.02324 , 2025. [52] Zhiyu Wu, Xiaokang Chen, Zizheng Pan, Xingchao Liu, Wen Liu, Damai Dai, Huazuo Gao, Yiyang Ma, Chengyue Wu, Bingxuan Wang, et al. Deepseek-vl2: Mixture-of-experts vision-language models for advanced multimodal understanding. arXiv preprint arXiv:2412.10302 ,2024. [53] Peng Xia, Ze Chen, Juanxi Tian, Yangrui Gong, Ruibo Hou, Yue Xu, Zhenbang Wu, Zhiyuan Fan, Yiyang Zhou, Kangyu Zhu, et al. Cares: A comprehensive benchmark of trustworthiness in medical vision language models. Advances in Neural Information Processing Systems , 37: 140334–140365, 2024. [54] Weiwen Xu, Hou Pong Chan, Long Li, Mahani Aljunied, Ruifeng Yuan, Jianyu Wang, Cheng-hao Xiao, Guizhen Chen, Chaoqun Liu, Zhaodonghui Li, et al. Lingshu: A generalist foun-dation model for unified multimodal medical understanding and reasoning. arXiv preprint arXiv:2506.07044 , 2025. [55] Meng Ye, Bingyu Xin, Leon Axel, and Dimitris Metaxas. Continuous spatio-temporal memory networks for 4d cardiac cine mri segmentation. In 2025 IEEE/CVF Winter Conference on Applications of Computer Vision (WACV) , pages 9532–9542. IEEE, 2025. [56] J Zhao, F Xu, and F Feng. Miccai mbas 2024-multi-class bi-atrial segmentation challenge, 2024. 13 A Task and Sequence Specifications in CardioLens 
+
+This appendix provides the complete per-subtask and per-sequence specifications deferred from Section 2.1. Section A.1 details the clinical role of each CMR sequence. Section A.2 enumerates the 32 image understanding subtasks with full class definitions and clinical rationale. Section A.3 describes the disease diagnosis task along with their clinically grounded multi-sequence phenotypes. 
+
+A.1 Per-Sequence Clinical Roles Cine sequence. Cine MRI acquires 4D data (three spatial dimensions plus time), capturing complete cardiac motion throughout the cardiac cycle. It serves as the foundational sequence for assessing ventricular wall motion, systolic and diastolic function, and valvular activity. Each patient study typically includes a short-axis (SAX) stack providing cross-sectional coverage from base to apex, together with long-axis views – principally 2 chamber(CH), 3CH, and 4CH orientations – each capturing complementary anatomical information. The SAX stack is the primary substrate for segmental wall thickness and motion assessment, while 3CH and 4CH long-axis views are specifically required for evaluating valvular activity, left ventricular outflow tract (LVOT) pathology, and whole-chamber dynamics. Because a single Cine view contributes tens to hundreds of slices (spatial ×
+
+temporal), Cine is both the richest and the most view-sensitive sequence in the benchmark. 
+
+LGE sequence. Late gadolinium enhancement imaging reveals the distribution of myocardial fibrosis and scar tissue through delayed contrast accumulation, serving as the gold standard for differentiating ischemic from non-ischemic cardiomyopathy. Each LGE study provides a SAX stack for transmural and circumferential characterization of enhancement patterns, together with long-axis views – principally 4CH and 2CH. Different LGE sub-findings (e.g., layer vs. segment vs. circumferential region) are best assessed from different views. 
+
+Perfusion sequence. First-pass perfusion imaging dynamically captures contrast agent transit through the myocardium, enabling assessment of myocardial microvascular perfusion and serving as a critical tool for functional evaluation of ischemic heart disease. Unlike Cine and LGE, perfusion studies typically consist of multiple 2D+t acquisitions, commonly including short-axis (SAX) and four-chamber (4CH) views rather than a single static stack. The large slice count relative to file count reflects the combination of multiple view acquisitions and the dense temporal sampling inherent to first-pass imaging. 
+
+T2-weighted sequence. T2-weighted imaging is highly sensitive to tissue water content, primarily used to detect myocardial edema and acute inflammatory responses. It provides irreplaceable diagnostic value in the early detection of myocarditis and acute myocardial infarction. In CardioLens, T2 is acquired with fat suppression (T2-STIR) to suppress epicardial fat signal and enhance edema conspicuity, predominantly as a SAX stack, with 4CH available in a subset of patients. 
+
+A.2 Image Understanding Subtasks 
+
+We define 32 image understanding subtasks by structuring recurrent, clinically meaningful observa-tions commonly described in routine radiology reports into standardized prediction targets. Each task is formulated as either single-label (exactly one category applies) or multi-label (multiple findings may co-exist) classification. The multi-label formulation matches the clinical reality that diagnostic observations at a given anatomical location can be multifaceted (e.g., different myocardial segments may simultaneously exhibit distinct abnormalities). 
+
+A.2.1 Cine Sequence (11 subtasks) 
+
+The Cine sequence is central to cardiac functional assessment. These tasks require the model to extract comprehensive information about myocardial motion, ventricular function, and valvular status from dynamic 4D sequences, directly challenging the model’s temporal understanding capability – since a single static frame is insufficient for complete functional evaluation. • Myocardial wall thickness : Multi-label, 5 classes – normal, thinning, heterogeneous thickness, thickening, and bulging. Thinning is commonly observed in dilated cardiomyopathy or myocardial 14 atrophy. Thickening may suggest hypertrophic cardiomyopathy (HCM) or hypertensive heart disease; aneurysmal bulging indicates ventricular aneurysm formation. Different segments may simultaneously exhibit distinct thickness abnormalities. • Wall motion coordination : Single-label, 2 classes – coordinated and uncoordinated. Determines whether wall segments contract synchronously during systole. Uncoordination may be observed in conduction abnormalities, cardiomyopathy, or post-infarction remodeling, requiring the model to understand temporal synchronization relationships across multiple segments. • Wall motion amplitude : Multi-label, 5 classes – normal, reduced, absent, paradoxical motion, and enhanced. This task assesses regional LV contraction amplitude on cine MRI, ranging from preserved motion to reduced or absent motion, paradoxical systolic displacement, and enhanced or compensatory contraction. • Left ventricular systolic function : Single-label, 3 classes – normal, reduced, and enhanced. Reduced systolic function is the cardinal manifestation of heart failure; enhanced systolic function may be observed in early-stage HCM or hyperdynamic circulatory states. • Diastolic function : Single-label, 2 classes – normal and restricted. Restricted diastolic function indicates reduced ventricular compliance, commonly seen in restrictive cardiomyopathy, myocardial fibrosis, and constrictive pericarditis. • Mitral valve regurgitation : Single-label, 2 classes – regurgitation, no regurgitation. Mitral regurgitation may result from ventricular dilation or primary valvular disease. • Tricuspid valve regurgitation : Single-label, 2 classes – regurgitation, no regurgitation. Reflects right ventricular function and pulmonary arterial pressure. • Aortic valve regurgitation : Single-label, 2 classes – regurgitation, no regurgitation. Critical for diagnosing aortic valvular disease and aortic root pathology. • Special signs : Multi-label, 6 classes – SAM sign positive, LVOT obstruction, “ace of spades” sign, aortic stenosis, pulmonary artery dilation, and no special signs present. These findings carry important diagnostic value: SAM sign and LVOT obstruction are commonly associated with obstructive HCM; the “ace of spades” sign is classically associated with apical HCM; aortic stenosis identification directly impacts valve intervention planning and clinical management. • Pericardial effusion : Single-label, 2 classes – present, absent. Routinely assessed in CMR examinations; can accompany a wide range of disease states. • Pleural effusion : Single-label, 2 classes – present, absent. Often indicates heart failure or systemic disease; important incidental finding. 
+
+A.2.2 LGE Sequence (11 subtasks) 
+
+LGE is the gold standard for myocardial tissue characterization. The interpretive logic is inherently hierarchical: the radiologist first determines whether abnormal enhancement is present; if so, subse-quent analysis characterizes signal nature, affected segments and regions, morphological distribution pattern, and involved myocardial layers. Our subtask design directly mirrors this structured workflow. • Enhancement status : Single-label, 2 classes – no abnormal enhancement, abnormal enhancement present. The primary gating question for all downstream LGE subtasks; abnormal enhancement signifies myocardial fibrosis, necrosis, or infiltrative disease. • Abnormal signal characteristics : Single-label, 2 classes – High, mixed. Pure high signal typically reflects relatively homogeneous fibrosis or scar. Mixed signal refers to hyperenhancement containing internal low-signal components, which may indicate heterogeneous tissue injury such as microvascular obstruction and can be associated with more severe myocardial damage. • High/low signal segments : Multi-label, 4 classes – basal, mid-ventricular, apical, apex. Longitudi-nal extent of enhancement distribution based on the AHA 17-segment model. • High/low signal regions : Multi-label, 6 classes – anterior, anteroseptal, inferoseptal, inferior, inferolateral, anterolateral walls. Circumferential localization; correspondence with coronary artery perfusion territories distinguishes ischemic from non-ischemic etiologies. • High/low signal pattern : Multi-label, 5 classes – diffuse, linear, patchy, transmural, speckled. Transmural enhancement suggests coronary-related ischemic injury; mid-wall linear enhancement 15 characterizes Dilated Cardiomyopathy (DCM); subepicardial speckled enhancement is typical of myocarditis. • High/low signal layer : Multi-label, 5 classes – subendocardial, mid-myocardial, subepicardial, transmural, papillary muscle. Layer involvement is among the most important discriminators for differential diagnosis: subendocardial-to-transmural enhancement in a coronary perfusion territory is the hallmark of ischemic injury; mid-myocardial enhancement suggests non-ischemic etiologies, classically DCM, sarcoidosis, or chronic myocarditis. • Special findings : Multi-label, 4 classes – No special findings, pericardial abnormality, hyperinten-sity at interventricular septal insertion points, right ventricular hyperintensity. Septal insertion point hyperintensity indirectly signals pulmonary hypertension or right ventricular pressure overload; right ventricular hyperintensity may indicate arrhythmogenic cardiomyopathy (ACM) and HCM. 
+
+A.2.3 T2-Weighted Sequence (5 subtasks) 
+
+The clinical value of T2-weighted imaging lies in detecting myocardial edema and acute inflammation. The interpretive workflow parallels LGE: initial assessment of signal characteristics, followed by spatial localization and distribution pattern characterization. • T2 signal status : Single-label, 4 classes – normal, high, low, and mixed. High T2 signal generally indicates increased myocardial water content and is commonly associated with edema or acute inflammatory injury, whereas low T2 signal may reflect shortened relaxation effects related to iron deposition, hemorrhagic products, or chronic residual changes. Mixed T2 signal denotes a heterogeneous pattern in which high- and low-signal components coexist within the myocardium. • Abnormal signal segments : Multi-label, 4 classes – basal, mid-ventricular, apical, apex. Longitu-dinal distribution of T2 abnormalities. • Abnormal signal regions : Multi-label, 6 classes (same as LGE circumferential scheme). Circum-ferential localization of T2 abnormalities. • Signal distribution pattern : Multi-label, 5 classes (same as LGE pattern scheme). Diffuse edema suggests systemic involvement or widespread viral myocarditis; segmental distribution indicates acute injury within a specific coronary territory. • Affected myocardial layer : Multi-label, 5 classes (same as LGE layer scheme). Layer distribution of T2 abnormalities carries etiological significance analogous to LGE. 
+
+A.2.4 Perfusion Sequence (5 subtasks) 
+
+Perfusion imaging assesses myocardial microvascular functional status. Interpretation centers on the presence, spatial distribution, and severity of perfusion abnormalities. • Perfusion status : Single-label, 2 classes – normal, abnormal. Gating criterion for subsequent detailed analysis. • Perfusion signal characteristics : Single-label, 3 classes – reduced perfusion, delayed perfusion, and perfusion defect. This task characterizes abnormal first-pass myocardial contrast dynamics. Reduced perfusion denotes decreased myocardial enhancement, delayed perfusion captures a temporal delay in contrast wash-in, and perfusion defect refers to a focal region of absent or markedly reduced contrast uptake. These patterns may reflect impaired myocardial blood flow, reduced perfusion reserve, or microvascular dysfunction. • Abnormal perfusion segments : Multi-label, 4 classes – basal, mid-ventricular, apical, apex. • Abnormal perfusion regions : Multi-label, 6 classes (same circumferential scheme as LGE/T2). The correspondence between perfusion abnormality regions and coronary perfusion territories is a cornerstone of coronary artery disease diagnosis. • Affected myocardial layer : Multi-label, 5 classes (same layer scheme as LGE/T2). Subendocardial perfusion abnormality is an early and sensitive marker of ischemia; transmural defect indicates severe supply-demand mismatch. 16 Table 5: Task-to-view assignments under the heuristic protocol. Each subtask is routed to the view conventionally used in clinical reading practice.                       
+
+> Sequence View Subtasks Cine SAX thickening
+> 4CH motion_coordination ,motion_amplitude ,
+> systolic_function ,diastolic_function ,
+> pericardial_effusion ,pleural_effusion ,
+> mitral_valve ,tricuspid_valve
+> 3CH aortic_valve ,special_signs
+> LGE 4CH high_seg ,low_seg ,special_findings
+> SAX enhancement_status ,abnormal_signal ,
+> high/low_region ,high/low_pattern ,high/low_layer
+> T2 SAX all five T2 subtasks Perfusion Dynamic all five perfusion subtasks
+
+A.3 Diagnosis Subtasks 
+
+Unlike image understanding tasks that focus on single-sequence interpretation, disease diagnosis requires cross-sequence integration and patient-level interpretation. The ground-truth labels are aligned with clinical discharge diagnoses rather than purely imaging-derived interpretations, reflecting real-world clinical decision-making. Etiology classification is a three-class classification task (Normal Heart (NH), Ischemic Heart Disease (IHD), Non-Ischemic Cardiomyopathy (NICM)), corresponding to the most fundamental differential diagnostic framework in CMR practice. It captures the primary separation between the absence of structural disease, ischemic etiologies, and non-ischemic myocardial disorders. NICM subtyping task further subcategorizes non-ischemic cardiomyopathy (NICM) into five phe-notypes: Hypertrophic Cardiomyopathy (HCM), Dilated Cardiomyopathy (DCM), Restrictive Car-diomyopathy (RCM), Arrhythmogenic Cardiomyopathy (ACM), and Myocarditis. Each subtype is characterized by a distinct multi-sequence imaging phenotype, including patterns of myocardial hypertrophy or dilation, wall motion abnormalities, T2 signal abnormalities, and LGE distribution patterns. This requires the model to perform integrative inference across all available sequences rather than relying on isolated findings. • Hypertrophic Cardiomyopathy (HCM) : asymmetric or focal myocardial hypertrophy, usually preserved systolic function, and non-ischemic LGE, often involving hypertrophied segments or right ventricular insertion points. Additional phenotype-specific signs may include systolic anterior motion (SAM) in obstructive HCM and the “ace-of-spades” configuration in apical HCM. • Dilated Cardiomyopathy (DCM) : left ventricular or biventricular chamber dilation, global wall motion reduction, reduced systolic function, and non-ischemic mid-wall linear LGE, particularly in the interventricular septum. • Restrictive Cardiomyopathy (RCM) : restrictive ventricular filling or impaired diastolic function, typically accompanied by biatrial enlargement, with normal or near-normal ventricular cavity size and relatively preserved systolic function. • Arrhythmogenic Cardiomyopathy (ACM) : right ventricular or biventricular dilation, regional wall motion abnormalities, and myocardial fibrofatty replacement or fibrosis, often affecting the right ventricle but potentially involving the left ventricle. • Myocarditis : myocardial edema reflected by T2 hyperintensity or elevated T2-based markers, often accompanied by non-ischemic injury patterns such as subepicardial or mid-myocardial LGE. 
+
+B Heuristic Slice Selection Details 
+
+This appendix details the implementation of the heuristic slice selection protocol described in Section 2.3. We first describe the overall extraction framework (Section B.1), then give per-sequence 17 allocation rules (Section B.2–B.5), and finally describe how the protocol adapts to small and large slice budgets (Section B.6). 
+
+B.1 Overall Framework 
+
+Given a patient case, a target clinical subtask, and a total slice budget K, the heuristic protocol produces an ordered list of K 2D grayscale PNG slices that will be fed to the MLLM as the visual context for that question. The extraction proceeds in two steps: 1. View routing. The subtask is mapped to one or more canonical views (sequence, orientation) according to Table 5. This mapping was elicited from practicing cardiac radiologists and reflects how each subtask is read in clinical practice (e.g., wall thickening from Cine SAX, valvular motion from Cine 4CH, scar localization from LGE SAX). 2. Per-view slice extraction. For each routed view, we apply a view-specific extraction rule that exploits the known acquisition structure of that sequence (spatial stacks, cardiac-cycle frames, or 2D+t dynamic series). The rules are detailed per sequence below. 
+
+Storage. All sequences are stored as 3D NIfTI volumes of shape (H, W, Z ). For Cine sequences, the Z axis interleaves Ns spatial slices with T cardiac-phase frames (so Z = Ns · T with typically 
+
+T ∈ { 25 , 30 }); frames [kT, (k+1) T −1] correspond to the k-th spatial slice imaged over one full cardiac cycle. For LGE and T2, Z is purely spatial. For Perfusion, Z corresponds to the dynamic (2D+t) time axis through a single spatial plane. 
+
+B.2 Cine Sequence 
+
+Cine acquisitions are the richest sequence in the benchmark because they carry both spatial and temporal structure: the same anatomy is imaged across an entire cardiac cycle. The extraction rules differ by view as different views are used for fundamentally different clinical questions. 
+
+Cine SAX. We recover the spatial structure by detecting the temporal period from the total frame count Z: if Z mod 25 = 0 we use T = 25 ; else if Z mod 30 = 0 we use T = 30 . This yields 
+
+Ns = Z/T spatial slices. From each spatial slice, only the first temporal frame (end-diastolic phase) is retained, and Ksax slices are uniformly subsampled from these Ns candidates. This ensures consistent anatomical coverage from base to apex at end-diastole, where myocardial wall thickness is most reliably measured due to maximal ventricular filling, following standard clinical practice for structural assessment. 
+
+Cine 4CH and 3CH. Long-axis Cine acquisitions typically contain multiple spatial slices (com-monly 3 slices for 2CH and 4CH views while 1 for 3CH view), each imaged over one full cardiac cycle of T ∈ { 25 , 30 } frames. To obtain a clinically representative view, we extract the central spatial slice – conventionally the anatomically best-aligned plane through the mitral/aortic annulus – and uniformly sample Klong frames from its full cardiac cycle. This yields Klong frames spanning a complete systole–diastole cycle through the most diagnostically representative long-axis plane. 
+
+B.3 LGE Sequence 
+
+LGE volumes are purely 3D (without an explicit temporal axis), which simplifies extraction compared to Cine but introduces a different design consideration. The SAX stack provides contiguous ventricular coverage and serves as the main source for regional assessment, while long-axis views (4CH and 2CH, when available) offer complementary perspectives for anatomical localization. Our allocation is guided by coverage and complementarity. 
+
+LGE SAX. For subtasks routed to SAX, we uniformly sample K slices along the spatial dimension, yielding anatomical coverage from base to apex. 
+
+LGE 4CH. For subtasks routed to 4CH, all available 4CH slices are used when the count is ≤ K4ch ;otherwise K4ch slices are uniformly subsampled. The 4CH budget is capped rather than scaled with 18 K because 4CH is used primarily for global orientation, with detailed regional assessment deferred to SAX. 
+
+B.4 T2-Weighted Sequence 
+
+For T2 we exclusively sample from the SAX acquisition, as it provides comprehensive spatial coverage for detecting regional edema. K slices are uniformly extracted along the spatial dimension. When T2 SAX is unavailable for a patient, we fall back to T2 4CH rather than dropping the case. 
+
+B.5 Perfusion Sequence 
+
+Perfusion is stored as a 2D+t dynamic volume through a single spatial plane. K slices are uniformly extracted along the temporal dimension, capturing the first-pass contrast dynamics from baseline through peak myocardial enhancement to washout. 
+
+B.6 Adapting to the Slice Budget K
+
+The rules above describe which candidate slices are considered for each view; the total budget K
+
+determines how these candidates are allocated. 
+
+Small-K regime ( K = 8 ). At small budgets, the protocol uses a fixed per-view allocation that concentrates the budget on the most diagnostically relevant view for each subtask. For K = 8 , the budget is distributed according to the routed views of the subtasks (e.g., SAX-, 4CH-, or 3CH-based). LGE uses K4ch = 3 fixed with the remaining K − 3 drawn from SAX; T2 uses all K slices from SAX; Perfusion uses all K frames from the dynamic series. In this regime, each view’s budget fits comfortably within its candidate pool (e.g., 4 SAX slices out of Ns ≈ 9−12 , or 2 long-axis frames out of 25–30), so the extraction is purely subsampling with no cross-view fallback. 
+
+Large-K regime ( K = 32 /128 ). At larger budgets, fixed per-view splits become wasteful: a view’s candidate pool can be exhausted (e.g., Klong = 16 frames fills an entire 25-frame cardiac cycle, and Klong = 64 exceeds it) while other views still have untapped diagnostic content. We therefore use a cascading multi-phase allocation that fills slices in order of diagnostic priority and only moves to the next source when the current one is exhausted. For Cine SAX, the cascade is: 1. Phase 1 (spatial coverage): the end-diastolic frame from every spatial slice ( Ns frames, matching the small-K rule). 2. Phase 2 (key-layer dynamics): additional temporal frames from three clinically key layers – basal, mid, and apical – sampled uniformly per layer. These layers are chosen to match the conventional three-slice reporting convention (basal, mid, apical short-axis) used in both clinical reads and AHA 17-segment analysis. 3. Phase 3 (remaining-layer dynamics): if the budget is still not filled, temporal frames from the remaining spatial layers, uniformly distributed across layers and cardiac phases. 4. Phase 4 (cross-view fallback): if all Cine SAX content is exhausted and the budget is still not filled, we draw additional frames from Cine 4CH, starting with the central spatial layer’s cardiac cycle and expanding outward. Cine 3CH and Cine 4CH use analogous cascades, falling back to each other as the final phase. LGE switches from the fixed small-K split to an all-long-axis-first policy: 4CH and 2CH (when available) are taken in full, and SAX fills the remainder uniformly. In practice, for K ≥ 32 , the entire LGE volume is typically covered (SAX ≈ 8–12 slices; 4CH/2CH ≈ 3 each), so the allocation becomes effectively exhaustive rather than selective. T2 and Perfusion retain their small-K rules since they draw from a single view. 
+
+View unavailability. Across all budgets, if a required view is entirely missing for a patient, the corresponding budget is redirected to the next view in the cascade (e.g., missing 3CH → extra 4CH; missing T2 SAX → T2 4CH). 19 C Data-driven MIL Framework 
+
+This section provides a complete description of the Data-driven Multiple Instance Learning (MIL) framework introduced in Section 2.3, which serves as the backbone of our data-driven slice selection protocol. We detail the model architecture (Section C.1), training objective (Section C.2), imple-mentation specifics (Section C.5), and empirical validation of the learned attention (Section C.6). The purpose of this framework is not to serve as a diagnostic model in itself, but to approximate near-optimal view selection under multi-task supervision, thereby providing a data-driven upper bound against which MLLM performance can be benchmarked. 
+
+C.1 Architecture C.1.1 Problem Formulation 
+
+Let S = {s1, . . . , s N } denote a bag of N 2D slices from a single cardiac MRI sequence of a given patient, where each si ∈ RH×W is a single-channel image. Associated with the sequence is a set of clinical tasks T = {t1, . . . , t M }, each with a label yj and a validity mask mj ∈ { 0, 1} indicating whether the label is available for the current patient (labels may be partially missing due to clinical reporting conventions). The objective is to jointly (i) learn per-slice, per-task importance weights 
+
+wj,i ∈ [0 , 1] and (ii) predict ˆyj for all valid tasks, using only bag-level supervision. 
+
+C.1.2 Shared Slice Encoder 
+
+All slices, across all four sequences (Cine, LGE, T2, Perfusion), are encoded by a single shared backbone fθ , instantiated as a ResNet-18 [ 21 ] pretrained on ImageNet. The first convolutional layer is replaced with a 7 × 7 kernel accepting single-channel input. Each slice is encoded independently: 
+
+hi = fθ (si) ∈ RD , i = 1 , . . . , N, (1) with D = 512 . The per-bag feature matrix is H = [ h1, . . . , hN ]⊤ ∈ RN ×D . Sharing the encoder across sequences encourages the backbone to learn sequence-agnostic low-level cardiac features, which we find empirically stabilizes training under severe multi-task label imbalance. 
+
+C.1.3 Learnable Positional Encoding 
+
+Because cardiac MRI slices carry intrinsic spatial (base →apex) and temporal (cardiac phase) ordering that is informative for diagnosis, we inject ordinal information via a learnable positional encoding 
+
+P ∈ RNmax ×D (with Nmax = 1000 ): 
+
+˜H = H + P1: N . (2) 
+
+P is initialized from N (0 , 1) and trained jointly with the rest of the model. 
+
+C.1.4 Task-aware Transformer Attention 
+
+For each clinical task tj , we instantiate an independent attention module Aj comprising three stages. 
+
+Stage 1 – Self-Attention Among Slices. A multi-head self-attention (MHSA) layer contextualizes each slice feature with respect to the global bag: 
+
+Hsa = LayerNorm 
+
+ ˜H + Dropout 
+
+
+
+MHSA ( ˜H, ˜H, ˜H)
+
+ 
+
+, (3) with nh = 4 heads and dropout p = 0 .1. This step captures inter-slice dependencies essential for cardiac prediction (e.g., “a slice shows basal hypertrophy relative to the mid-ventricular slices”). 
+
+Stage 2 – Task Query Cross-Attention. Each task maintains an independent learnable query vector 
+
+qj ∈ R1×D , initialized from N (0 , 1) . The query attends over the contextualized bag: 
+
+cj = CrossAttn (qj , Hsa , Hsa ), (4) followed by a residual feed-forward block: 
+
+rj = LayerNorm (cj + Dropout (FFN (cj ))) , (5) where FFN (x) = W2 ReLU (W1x) with hidden dimension 2D. The resulting rj encodes the task-conditioned global summary. 20 Stage 3 – Slice Importance Scoring. The task representation is broadcast and additively fused with the contextualized slice features to form task-enhanced per-slice representations: 
+
+ˆHj = Hsa + rj ∈ RN ×D . (6) A lightweight two-layer MLP scorer ϕj : RD → R produces scalar importance logits, which are passed through an element-wise sigmoid rather than softmax: 
+
+wj,i = σ
+
+
+
+ϕj (ˆhj,i )
+
+
+
+∈ (0 , 1) . (7) 
+
+Why sigmoid rather than softmax? Softmax normalizes slice weights onto a probability simplex, introducing a competitive allocation in which increasing the weight of one slice necessarily reduces the relative mass assigned to others. This assumption is poorly aligned with cardiac MRI, where diagnostic evidence is often sparse yet distributed across multiple non-adjacent slices, views, or cardiac phases (e.g., fibrosis may appear in both basal and apical segments). Sigmoid activation instead assigns each slice an independent relevance score, allowing multiple diagnostically informative slices to receive high weights simultaneously. 
+
+C.1.5 Weighted Aggregation and Classification 
+
+The bag-level representation for task tj is a weighted sum over the task-enhanced slice features: 
+
+zj =
+
+> N
+
+X
+
+> i=1
+
+wj,i ˆhj,i . (8) A task-specific two-layer MLP head gj produces the final prediction ˆyj = gj (zj ). Single-label tasks are optimized with cross-entropy loss; multi-label tasks with per-class binary cross-entropy. 
+
+C.2 Training Objective C.2.1 Sparsity Regularization Toward Target-K Selection 
+
+To induce the model to concentrate attention on exactly K informative slices – matching the down-stream MLLM slice budget – we impose two complementary regularizers on each task’s weight vector wj :
+
+L(j) 
+
+> sum
+
+=
+
+> N
+
+X
+
+> i=1
+
+wj,i − K , (9) 
+
+L(j) 
+
+> bin
+
+=
+
+> N
+
+X
+
+> i=1
+
+wj,i (1 − wj,i ). (10) Together, these two terms softly enforce the constraint “select roughly K slices with near-binary confidence,” while keeping the entire pipeline differentiable. 
+
+C.2.2 Full Objective 
+
+Let Tvalid = {j : mj = 1 } denote the set of tasks with available labels in the current bag. The total loss is: 
+
+L = Ltask + λ1
+
+|T valid |
+
+X
+
+> j∈T valid
+
+L(j) 
+
+> sum
+
++ λ2
+
+|T valid |
+
+X
+
+> j∈T valid
+
+L(j) 
+
+> bin
+
+. (11) We set λ1 = λ2 = 1 .0.
+
+C.3 Training Data and Splits C.3.1 Data Source and Relation to the Benchmark 
+
+The MIL framework is trained on the same patient cohort and same structured labels as the CardioLens image understanding tasks (Section A.2). Specifically, the 32 sequence-level classification tasks used by the MIL (11 Cine, 11 LGE, 5 T2, 5 Perfusion) are identical to the 32 image understanding subtasks in the benchmark. Importantly, we clarify the methodological status of this framework: 21 • The MIL is not a diagnostic model under evaluation . Its only role is to produce per-slice importance scores that serve as the data-driven slice selection protocol in Section 2.3. • We therefore do not maintain a held-out MIL test set. The MIL’s learned attention weights are applied to the full benchmark cohort to extract the slice subset supplied to the downstream MLLMs; MLLM evaluation itself is zero-shot and does not use any MIL-trained predictor. • The framework represents a nearly data-driven upper bound on what view selection alone can achieve – it is supervised with full task labels, whereas MLLMs receive no task-specific fine-tuning. This asymmetry is intentional: if even an informed, fully supervised importance ranking cannot close the gap in MLLM performance, the bottleneck cannot lie in input construction. 
+
+C.3.2 Label Construction 
+
+All 32 task labels are parsed from the same structured clinical reports that underlie the benchmark’s image understanding QA pairs. Single-label tasks produce a one-hot vector; multi-label tasks produce a binary vector over the task’s choice set. 
+
+Label granularity. Labels are sequence-level , not slice-level. That is, for a given patient and a given sequence, a single set of labels applies to the entire bag of slices from that sequence. This reflects the reality that clinical reports describe findings at the level of anatomical regions and sequences, not individual slices. Consequently, the MIL must learn slice importance purely from the aggregate supervision signal – no slice-level ground truth is ever provided. 
+
+Validity masks. Not every task is annotated for every patient: some tasks are conditional (e.g., 
+
+lge_high_region is meaningful only when abnormal enhancement is present), and some findings are not documented in the report. For each task tj and each patient, a binary validity mask mj indicates whether a label is available. Tasks with mj = 0 are excluded from both the supervised loss and the sparsity regularization for that bag. 
+
+C.3.3 Data Augmentation and Class Balancing 
+
+We do not apply data augmentation in the current implementation. To address class imbalance, we adopt a patient-level oversampling strategy during training, where patients associated with under-represented classes are sampled more frequently. This increases exposure to rare findings without modifying the original labels or introducing synthetic data. A moderate oversampling ratio (0.5) is used to partially balance the class distribution while avoiding overfitting. 
+
+C.3.4 Bag Construction 
+
+Each training example is a (patient, sequence) bag containing all slices from the sequence’s task-relevant views, concatenated in a fixed (view, slice-index) order. The raw bag size N is highly variable across the cohort, spanning [3 , 1500] depending on the sequence and the number of available views. To bound GPU memory, bags exceeding 512 slices are uniformly subsampled along the slice index down to 512 before being fed to the model. Because N remains variable even after capping, we set the batch size to one bag and simulate a larger effective batch via gradient accumulation. 
+
+C.3.5 Splits 
+
+We randomly partition the cohort at the patient level into training and validation subsets with an 80%/20% ratio. The validation split serves for model selection . We retain the checkpoint that achieves the best validation metric as the final model for importance extraction. 
+
+C.4 Algorithm Summary 
+
+We summarize the full training and inference procedure of the Data-driven MIL framework in Algorithms 1 and 2, respectively. The training loop (Algorithm 1) processes one patient bag at a time, randomly sampling an available sequence per step to handle heterogeneous sequence availability across patients. The inference procedure (Algorithm 2) extracts task-level importance scores and 22 Algorithm 1 Data-driven MIL Training (one epoch) 
+
+Require: Training set D = {(S(p) 
+
+> s
+
+, y(p) 
+
+> s
+
+, m(p) 
+
+> s
+
+)} indexed by patient p and sequence s ∈{Cine, LGE, T2, Perfusion }
+
+Require: Shared encoder fθ , positional encoding P, per-task attention modules {A j }, classifiers 
+
+{gj }
+
+Require: Target selection K, sparsity weights λ1, λ 2, accumulation steps A, learning rate η 
+
+> 1:
+
+grad_count ← 0 
+
+> 2:
+
+for each patient bag p in D do  
+
+> 3:
+
+Sample sequence s ∼ Uniform (available sequences of p) 
+
+> 4:
+
+Load slices S = {s1, . . . , s N }, labels {yj }, masks {mj } for sequence s 
+
+> 5:
+
+if P 
+
+> j
+
+mj = 0 then ▷ skip bags with no valid labels  
+
+> 6:
+
+continue  
+
+> 7:
+
+end if  
+
+> 8:
+
+// Shared feature extraction  
+
+> 9:
+
+hi ← fθ (si) for i = 1 , . . . , N  
+
+> 10:
+
+˜H ← [h1; . . . ; hN ] + P1: N 
+
+> 11:
+
+// Self-attention contextualization  
+
+> 12:
+
+Hsa ← LayerNorm ( ˜H + MHSA ( ˜H, ˜H, ˜H))  
+
+> 13:
+
+Ltask ← 0, Lsum ← 0, Lbin ← 0 
+
+> 14:
+
+Tvalid ← { j : mj = 1 } 
+
+> 15:
+
+for each valid task j ∈ T valid do  
+
+> 16:
+
+// Task query cross-attention  
+
+> 17:
+
+cj ← CrossAttn (qj , Hsa , Hsa ) 
+
+> 18:
+
+rj ← LayerNorm (cj + FFN (cj ))  
+
+> 19:
+
+// Slice importance scoring  
+
+> 20:
+
+ˆHj ← Hsa + rj 
+
+> 21:
+
+wj,i ← σ(ϕj (ˆhj,i )) for i = 1 , . . . , N  
+
+> 22:
+
+// Weighted aggregation and prediction  
+
+> 23:
+
+zj ← PNi=1 wj,i ˆhj,i  
+
+> 24:
+
+ˆyj ← gj (zj ) 
+
+> 25:
+
+// Accumulate losses  
+
+> 26:
+
+Ltask += ℓtask ,j (ˆ yj , y j ) ▷ CE for single-label, BCE for multi-label  
+
+> 27:
+
+Lsum += | P 
+
+> i
+
+wj,i − K| 
+
+> 28:
+
+Lbin += P 
+
+> i
+
+wj,i (1 − wj,i ) 
+
+> 29:
+
+end for  
+
+> 30:
+
+L ← L task + λ1
+
+|T valid | Lsum + λ2
+
+|T valid | Lbin  
+
+> 31:
+
+L ← L /A  
+
+> 32:
+
+Backpropagate L 
+
+> 33:
+
+grad_count += 1  
+
+> 34:
+
+if grad_count mod A = 0 then  
+
+> 35:
+
+Clip gradients to max-norm 1.0  
+
+> 36:
+
+Update parameters: θ ← θ − η∇θ L 
+
+> 37:
+
+Zero gradients  
+
+> 38:
+
+end if  
+
+> 39:
+
+end for 
+
+selects the top-K slices that are subsequently passed to the downstream MLLM as the importance-based protocol described in Section 2.3. 
+
+C.5 Implementation Details 
+
+Hyperparameters are summarized in Table 6. 23 Algorithm 2 Importance-Based Slice Selection (Inference) 
+
+Require: Trained MIL model ( fθ , P, {A j })
+
+Require: Patient p with sequence s of N slices, sequence-associated tasks Ts
+
+Require: Target budget K, mode ∈ { PER -TASK , TASK -AVERAGED }
+
+Ensure: Per-task selections {I ∗ 
+
+> j
+
+}j∈T s , or shared selection I∗ 
+
+> 1:
+
+hi ← fθ (si) for i = 1 , . . . , N  
+
+> 2:
+
+˜H ← [h1; . . . ; hN ] + P1: N 
+
+> 3:
+
+Hsa ← LayerNorm ( ˜H + MHSA ( ˜H, ˜H, ˜H))  
+
+> 4:
+
+for each task j ∈ T s do  
+
+> 5:
+
+cj ← CrossAttn (qj , Hsa , Hsa ) 
+
+> 6:
+
+rj ← LayerNorm (cj + FFN (cj ))  
+
+> 7:
+
+wj,i ← σ(ϕj (Hsa  
+
+> i
+
++ rj )) for i = 1 , . . . , N  
+
+> 8:
+
+end for  
+
+> 9:
+
+if mode = PER -TASK then ▷ Image understanding  
+
+> 10:
+
+I∗ 
+
+> j
+
+← TopK ({wj,i }Ni=1 , K ) for each j ∈ T s 
+
+> 11:
+
+return {I ∗ 
+
+> j
+
+}j∈T s 
+
+> 12:
+
+else ▷ Report generation / disease diagnosis  
+
+> 13:
+
+¯wi ← 1
+
+> |T s|
+
+P 
+
+> j∈T s
+
+wj,i for i = 1 , . . . , N  
+
+> 14:
+
+I∗ ← TopK ({ ¯wi}Ni=1 , K ) 
+
+> 15:
+
+return I∗ 
+
+> 16:
+
+end if 
+
+Table 6: MIL framework training configuration. 
+
+Hyperparameter Value Backbone ResNet-18 (ImageNet pretrained, 1-channel adapted) Feature dimension D 512 Attention heads nh 4Target selection K 8Positional encoding Learnable, max length 1000 Dropout 0.1 Optimizer Adam Learning rate 1 × 10 −5
+
+Batch size 1 patient-sequence bag Gradient accumulation 64 steps Gradient clipping max-norm 1.0 Training epochs 50 Sparsity weights λ1, λ 2 1.0, 1.0 Hardware Single NVIDIA 4090 GPU ( ∼24 GB) 
+
+C.6 Model Behavior and Validation 
+
+Before using the learned attention weights as input to the MLLM evaluation pipeline, we validate that the MIL model itself has learned meaningful slice importance. We report three pieces of evidence. 
+
+C.6.1 Task Prediction Performance 
+
+Table 7 reports the MIL model’s own task accuracy on the held-out test set, averaged over three independent inference runs. The overall accuracy of 83.6% confirms that the framework successfully extracts clinically meaningful signal. We emphasize that this number is not the ceiling we claim for the benchmark; it is a sanity check ensuring that the slice importance weights fed to the MLLM encode genuine classification relevance rather than arbitrary noise. The MIL is a fully supervised specialist with direct task-label access, and is therefore not directly comparable to zero-shot MLLMs. 
+
+C.6.2 Sparsity Regularization Behavior 
+
+Table 8 reports the empirical behavior of the learned attention weights across runs. The learned weight sums concentrate near the target K = 8 , confirming that Lsum effectively anchors the attention 24 Table 7: MIL model validation performance per MRI sequence (mean ± std over 3 independent runs). Accuracy, Precision, Recall, and F1 are micro-averaged over all QA pairs; Exact-match reports the fraction of samples where all predicted labels match the ground truth set. 
+
+Sequence Accuracy Precision Recall F1 Exact-match Cine 0.831 ± 0.010 0.780 ± 0.012 0.791 ± 0.010 0.786 ± 0.010 0.778 ± 0.011 LGE 0.875 ± 0.003 0.816 ± 0.015 0.854 ± 0.018 0.834 ± 0.004 0.682 ± 0.009 T2 0.715 ± 0.059 0.657 ± 0.047 0.722 ± 0.067 0.688 ± 0.052 0.575 ± 0.066 Perfusion 0.871 ± 0.005 0.840 ± 0.013 0.845 ± 0.007 0.842 ± 0.008 0.794 ± 0.008 
+
+Overall 0.836 ± 0.006 0.786 ± 0.004 0.812 ± 0.014 0.798 ± 0.004 0.734 ± 0.002 
+
+Table 8: Learned attention weight statistics averaged across three runs. 
+
+Statistic Weight sum P 
+
+> i
+
+wi Weight mean ¯wi Weight max Weight min Mean 8.10 0.179 0.685 0.014 
+
+mass at the desired budget. The large spread between max ( ≈ 0.69 ) and min ( ≈ 0.01 ) values further indicates that Lbin successfully polarizes the distribution, yielding near-hard selection as intended. 
+
+C.6.3 Component Ablation 
+
+To verify that each architectural choice contributes meaningfully to slice importance estimation, we ablate four components of the MIL model. As shown in Table 9, removing self-attention causes the largest F1 drop ( −0.089 ), indicating that inter-slice contextual modeling is essential. Positional information is also clearly beneficial: removing it entirely drops F1 by 0.057 , while merely replacing the learnable PE with a fixed sinusoidal variant incurs a smaller drop ( −0.022 ), suggesting that most of the gain comes from injecting position at all, with learnability providing an additional refinement. Finally, replacing sigmoid with softmax leads to a modest overall drop ( −0.020 F1). This suggests that enforcing a normalized, competitive attention distribution is suboptimal for CMR slice selection. Table 9: Ablation study of the Data-driven MIL model on the validation set. We report overall performance across all MRI sequences and QA pairs. Values in parentheses denote the absolute performance drop compared to the full model.                                                     
+
+> Variant Accuracy Precision Recall F1 Exact-match
+> Full model 0.836 0.786 0.812 0.798 0.734
+> w/o self-attention 0.802 (−0.034 )0.697 (−0.089 )0.722 (−0.090 )0.709 (−0.089 )0.675 (−0.059 )
+> w/o positional encoding 0.795 (−0.041 )0.730 (−0.056 )0.753 (−0.059 )0.741 (−0.057 )0.671 (−0.063 )
+> w/o learnable PE (fixed sinusoidal) 0.821 (−0.015 )0.775 (−0.011 )0.777 (−0.035 )0.776 (−0.022 )0.717 (−0.017 )
+> sigmoid →softmax 0.807 (−0.029 )0.775 (−0.011 )0.780 (−0.032 )0.778 (−0.020 )0.720 (−0.014 )
+
+D Slice Selection Usage Across Task Tiers 
+
+The three slice selection protocols introduced in Section 2.3 were defined for the image understanding 
+
+setting, where each question is tied to a single sequence and a single clinical subtask. Applying them to the other two task tiers requires adapting to (i) multi-subtask aggregation within a sequence (report generation) and (ii) multi-sequence concatenation across sequences (disease diagnosis). This section specifies those adaptations; the protocols themselves are unchanged. 
+
+Image understanding (baseline case). Each image understanding question concerns a single sequence and a single subtask. The K slices selected by the active protocol for that (sequence, subtask) pair are supplied directly as the visual input, along with the question and answer options. 
+
+Report generation (per-sequence, multi-subtask). Report generation is still per-sequence – one report per sequence per patient – but a single report covers all subtasks defined for that sequence. 25 The three protocols therefore need to produce a single K-slice input shared across subtasks, rather than a separate selection per subtask. The adaptation differs per protocol: • Random. The protocol is already subtask-agnostic: K slices are sampled uniformly at random from the pool of all available slices across all views of the sequence. No change from the image understanding setting. • Heuristic. We partition the K-slice budget across the sequence’s canonical views: Cine uses 
+
+(Ksax , K 4ch , K 3ch ) = (4 , 2, 2) , with the 4 SAX slices drawn as end-diastolic (ED) frame uniformly spanning base to apex, and the 2 frames in each of 4CH and 3CH covering one ED and one end-systolic (ES) frame; LGE (K4ch , K sax ) = (3 , K −3) ; T2 draws all K slices from SAX; Perfusion draws all K frames from the dynamic series. Missing views have their budget redistributed to the remaining available views to preserve the total budget of K.• MIL. The trained MIL model produces task-specific attention weights {wj,i } for every subtask 
+
+tj associated with the sequence. Since report generation needs a single slice set shared across subtasks, we fuse the per-subtask weights into a single task-averaged importance score per slice: 
+
+¯wi = 1
+
+|T s|
+
+X
+
+> j∈T s
+
+wj,i , i = 1 , . . . , N, (12) where Ts is the set of subtasks defined for sequence s and N is the total number of slices in the patient’s bag. The K slices with the highest ¯wi form the MLLM input. All three adaptations produce a single K-slice input per (patient, sequence), which is then paired with the sequence’s report prompt. 
+
+Disease diagnosis (cross-sequence concatenation). Diagnosis requires integrating information across all four sequences simultaneously. For each diagnosis question, we reuse the K-slice selection already computed for each sequence’s report generation task under the active protocol, and con-catenate them into a single 4K-slice input. At the default K = 8 this yields 4K = 32 slices per patient. 
+
+E Experimental Setup Details 
+
+E.1 Complete Model List 
+
+Table 10 summarizes all MLLMs evaluated in this work, grouped by openness, specialization, and scale. Table 10: Complete list of evaluated MLLMs.               
+
+> Category Scale Models Closed-source –GPT-5 [46] –Gemini-3.1-Pro [17] –Claude-Opus-4.6 [4] Open-source, general
+> ≤10B Gemma-4-4B [16], InternVL3.5-8B [49], Qwen3-VL-8B [8]
+> >10B Llama-3.2-11B [ 18 ], Phi-4-14B [ 1], DeepSeek-VL2-16B [ 52 ], Mistral-Small-24B [ 41 ], DeepSeek-VL2-27B [ 52 ], Gemma-3-27B [ 15 ], Gemma-4-31B [ 16 ], Qwen3-VL-32B [8], InternVL3.5-38B [49] Open-source, medical
+> ≤10B MedGemma-4B [ 45 ], Lingshu-7B [ 54 ], Fleming-8B [ 39 ], HuluMed-7B [ 24 ], QoQMed-7B [13]
+> >10B MedGemma-27B [ 45 ], Hulu-30B [ 24 ], Lingshu-32B [ 54 ], Fleming-38B [ 39 ]
+
+All open-source models are accessed via their official HuggingFace checkpoints and evaluated on NVIDIA H100 80GB GPUs; closed-source models are accessed through their respective official APIs with default sampling parameters (temperature=0 where configurable) to ensure reproducibility. 26 E.2 Prompt Templates 
+
+All evaluation prompts follow a standardized template per task tier. Each prompt establishes the assistant as a cardiac MRI VLM, describes the task, and enforces strict output formatting rules to enable deterministic parsing and fair comparison across models. We deliberately forbid free-form reasoning, uncertainty statements, and extra characters so that the only output variability across models is the answer content itself. Complete templates are given below. 
+
+Image Understanding. For each image understanding question, the prompt specifies (i) the imaging sequence, (ii) the clinical subtask, (iii) the answer options (single-select or multi-select depending on the subtask), and (iv) the output format. Template and one concrete instantiation ( wall_thickness ,multi-select) shown below; all other subtasks follow the same structure with different options and single/multi-select rules. 
+
+You are a Vision-Language Model (VLM) for cardiac {sequence} MRI. Task: using the provided image frames, answer the {subtask_description} ({single-select | multi-select}). Strict rules: - Select only from {option_letters}; one or multiple choices allowed. (or: exactly one choice) - Output MUST be letters only; use English commas for multiple selections. - Do NOT output explanations, reasoning, descriptions, confidence, or any extra characters (commas allowed). - Even if uncertain, you must output the most likely choice(s); do not answer "cannot determine/uncertain". Options: {options} 
+
+Concrete example (Cine, wall_thickness , multi-select): 
+
+You are a Vision-Language Model (VLM) for cardiac cine MRI. Task: using the provided image frames, answer the LV wall thickness characteristic (multi-select). Strict rules: - Select only from A/B/C/D/E; one or multiple choices allowed. - Output MUST be letters only; use English commas for multiple selections. - Do NOT output explanations, reasoning, descriptions, confidence, or any extra characters (commas allowed). - Even if uncertain, you must output the most likely choice(s); do not answer "cannot determine/uncertain". Options: A. Normal B. Thinned C. Heterogeneous thickness D. Thickened E. Bulging 
+
+Reasoning Template (Image Understanding). We extend the image understanding prompt with a field-specific reasoning template that elicits a structured chain-of-thought before the model commits to a final answer. Concretely, the “no explanation” rule is lifted and replaced with a two-line output contract: line one contains the option letter(s), and line two begins with Reason: followed by a short justification. The reasoning framework itself enumerates the visual evidence a radiologist would cross-check for that specific subtask – e.g., segment-wise thickness for wall_thickness , jet detection in the appropriate cardiac phase for valvular regurgitation, or temporal persistence checks 27 for perfusion abnormalities. This design preserves a deterministic, parser-friendly answer field while (i) aligning model reasoning with clinical decision-making and (ii) enabling post-hoc inspection of 
+
+why a model arrived at a given choice. Each image understanding subtask across cine, LGE, T2, and perfusion sequences has its own framework; the template for the wall_thickness subtask used above is shown below. 
+
+- After providing your answer, you must provide a reason for your choice. - Output format: - Line 1: Answer letter(s) only (e.g., A or A,B) - Line 2: "Reason: [your explanation]" When providing your reason, please follow this analysis framework: Your reason should include: 1. Wall thickness assessment: Describe the overall thickness of the LV myocardium across different segments (anterior, inferior, septal, lateral). 2. Uniformity analysis: Note whether thickness is uniform or heterogeneous across segments. 3. Specific observations: Identify any segments showing thinning, thickening, or bulging. 4. Frame-by-frame consistency: Describe if thickness characteristics remain consistent across cardiac cycle frames. 5. Comparison to normal: Compare observed thickness patterns to what would be expected in normal myocardium. Example structure: "The LV myocardium shows [uniform/heterogeneous] thickness. [Specific segment observations]. [Comparison across frames]. This pattern indicates [normal/thinned/thickened/bulging] characteristics." 
+
+Report Generation. Report generation prompts request a single coherent paragraph covering all clinical fields required for the target sequence. We constrain the output format (single paragraph, clinical style) and require that every listed field be addressed, so that evaluation metrics can score field-wise coverage without parser ambiguity. 
+
+You are a Vision-Language Model (VLM) for cardiac cine MRI. Task: Using the provided image frames, generate a structured clinical report as a single coherent paragraph. Your report must include: - LV wall thickness and morphology - LV Wall motion coordination and amplitude - LV systolic and diastolic function - Valve assessment: mitral, tricuspid, and aortic regurgitation - Pericardial and pleural effusion status - Any additional findings (e.g., Positive SAM sign / LVOT obstruction / Spade sign / Aortic stenosis / Pulmonary artery dilatation) Strict rules: - Write as a single coherent paragraph in clinical report style. - Base all findings strictly on visual image evidence. - Cover all listed items; do not omit any category. 
+
+LGE, T2, and Perfusion use the same template with the field list replaced by the corresponding sequence-specific items (scar location and pattern for LGE, edema distribution for T2, perfusion defect location and extent for Perfusion). 28 Disease Diagnosis. Diagnosis prompts take all four cardiac sequences jointly as visual input and require a single categorical answer. The instruction explicitly directs the model to integrate morphology, wall motion, enhancement patterns, and overall function before answering – mirroring how a radiologist cross-references sequences in clinical practice. 
+
+You are a Vision-Language Model (VLM) for cardiac MRI diagnostic classification. Task: Using the provided cardiac MRI image frames, classify this case into the most appropriate diagnostic category. Choose exactly one from the following options: A. Normal Heart B. Ischemic Heart Disease C. Non-Ischemic Cardiomyopathy Strict rules: - Consider LV morphology, wall motion, enhancement patterns, and overall cardiac function. - Base all findings strictly on visual image evidence. - Provide only the letter and label of the selected option. No explanations,reasoning, descriptions, confidence, or extra symbols. - Even if uncertain, choose the most likely answer. 
+
+E.3 Evaluation Metric Details Image Understanding. For each subtask, accuracy is defined by question type. For single-label 
+
+questions, accuracy is the fraction of instances where the predicted label exactly matches the ground truth ( exact match ). For multi-label questions, we treat each candidate option as an independent binary label: given the option set U, the ground-truth set Y , and the predicted set ˆY , the per-instance accuracy is Acc = |{ o∈U :1[o∈ ˆY ]= 1[o∈Y ]}| |U| , i.e. the fraction of options correctly included or excluded. For example, with options {A, B, C, D }, Y = {A, C } and ˆY = {A, D }, options A and B are correct while C and D are wrong, giving Acc = 2 /4 = 0 .5.
+
+Precision , recall , and F1 are computed by micro-averaging across all instances in the subtask: true positives, false positives, and false negatives are accumulated across all instances, then combined into 
+
+P , R, and F1 = 2 P R/ (P + R).
+
+Report Generation. Report generation evaluates whether a model can synthesize visual evidence from a single CMR sequence into a structured and clinically meaningful report. Since CMR reports require accurate clinical findings, abnormality status, anatomical localization, and tissue-level at-tributes, we use five complementary metrics: Clinical Findings F1, Checklist Graph-F1, Clinical BERTScore, ROUGE-L, and CIDEr-lite. 
+
+Sequence-specific Checklist Extraction. Before metric computation, both ground-truth and gener-ated reports are parsed into a unified sequence-specific checklist representation. Cine focuses on morphology, motion, and function; LGE on delayed enhancement and its distribution; Perfusion on perfusion defects; and T2 on edema, inflammation, and abnormal signal. The parser extracts finding status, labels, and attributes from natural-language reports, normalizes synonymous expressions, and handles negation before assigning positive findings. The checklist scope is summarized in Table 11. Localization attributes are normalized into four categories: segment, wall region, myocardial layer, and distribution pattern. 
+
+Clinical Findings F1. Clinical Findings F1 measures finding-level factual consistency between the generated and ground-truth reports. After checklist extraction, each report is represented as a set of clinical atoms A, including status and label facts, e.g., 29 Table 11: Sequence-specific checklist scope for report generation evaluation. 
+
+Sequence Extracted findings and attributes 
+
+Cine LV wall morphology, wall motion, systolic/diastolic function, valvular regurgitation, pericardial/pleural effusion, SAM sign, and LVOT obstruction. LGE Delayed enhancement status, signal characteristics, high-/low-signal abnormality locations, pericardial abnormality, and abnormal signals at septal insertion points or the right ventricle. Perfusion Perfusion status, reduced/delayed perfusion, perfusion defect, affected segment, and myocardial layer. T2 High-/low-/mixed-signal abnormality, edema/inflammation-related findings, location, myocardial layer, and distribution pattern. 
+
+lv_systolic_function:status=normal perfusion_status:status=abnormal cine_additional_findings:label=LVOT obstruction lge_signal_characteristics:label=high signal 
+
+Given the atom sets A(i)gt and A(i)pred for the i-th sample, we compute the corpus-level micro F1 as 
+
+F 1clinical = 2 PNi=1 |A(i)pred ∩ A(i)gt |
+
+PNi=1 |A(i)pred | + PNi=1 |A(i)gt | + ϵ . (13) This metric evaluates whether key clinical findings, normal/abnormal status, and additional findings are correctly reported, without requiring identical wording. 
+
+Checklist Graph-F1. Checklist Graph-F1 evaluates relations between findings and attributes. Each report is converted into graph triples G = {(s, r, o )}, where s is a checklist finding, r is a relation type, and o is a status, label, or attribute value. The relation types include: 
+
+has_status has_label located_in_segment located_at_wall involves_layer has_distribution 
+
+For example, “patchy subepicardial high signal in the basal inferolateral wall” yields triples such as: 
+
+(lge_high_signal_location, located_in_segment, basal) (lge_high_signal_location, located_at_wall, inferolateral) (lge_high_signal_location, involves_layer, subepicardial) (lge_high_signal_location, has_distribution, patchy) 
+
+Given G(i)gt and G(i)pred for the i-th sample, we compute 
+
+F 1graph = 2 PNi=1 |G(i)pred ∩ G(i)gt |
+
+PNi=1 |G(i)pred | + PNi=1 |G(i)gt | + ϵ . (14) Compared with Clinical Findings F1, this metric more strongly emphasizes structural completeness, such as whether an abnormality is assigned to the correct segment, wall region, myocardial layer, and distribution pattern. 
+
+Clinical BERTScore. Clinical BERTScore measures contextual semantic similarity between generated and ground-truth reports. Let the ground-truth and generated token sequences be X = {xj }mj=1 and 30 ˆX = {ˆxi}ni=1 , with contextual embeddings hj and ˆhi. We compute 
+
+PBERT = 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+max  
+
+> j
+
+cos( ˆhi, h j ), RBERT = 1
+
+m
+
+> m
+
+X
+
+> j=1
+
+max  
+
+> i
+
+cos( ˆhi, h j ), (15) 
+
+F 1BERT = 2PBERT RBERT 
+
+PBERT + RBERT + ϵ , F 1BERT = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+F 1(i)BERT . (16) This metric reduces penalties for semantically equivalent wording, but does not explicitly model negation, abnormality status, or attribute grounding. 
+
+ROUGE-L. ROUGE-L measures lexical sequence overlap using the longest common subsequence. Let m and n be the lengths of the ground-truth and generated reports, and L = LCS( X, ˆX). We compute 
+
+F 1ROUGE −L = 2 · Ln+ϵ · Lm+ϵLn+ϵ + Lm+ϵ + ϵ , F 1ROUGE −L = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+F 1(i)ROUGE −L. (17) ROUGE-L captures surface-form similarity and ordering, but does not explicitly assess medical entities, negation, or attribute grounding. 
+
+CIDEr-lite. CIDEr-lite measures TF-IDF-weighted n-gram similarity between generated and ground-truth reports. For the k-th n-gram with document frequency df k in a corpus of size D, its inverse document frequency is 
+
+idf k = log D + 1 
+
+df k + 1 . (18) Let wn(s) denote the TF-IDF vector for n-grams of order n. CIDEr-lite is computed as 
+
+CIDEr -lite = 14
+
+> 4
+
+X
+
+> n=1
+
+cos ( wn(spred ), wn(sgt )) , CIDEr -lite = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+CIDEr -lite (i). (19) CIDEr-lite gives higher weight to less frequent but clinically specific phrases. Together with ROUGE-L and Clinical BERTScore, it provides complementary text-quality assessment, while clinical factual correctness is mainly captured by Clinical Findings F1 and Checklist Graph-F1. 
+
+Disease Diagnosis. Disease diagnosis is evaluated as a single-label multi-class classification task. Accuracy follows the same exact-match definition as the single-label setting in Image Understanding. For precision, recall, and F1, we report macro-averaged scores. In single-label multi-class classifica-tion, micro-F1 is largely aligned with overall accuracy, so it provides limited additional information beyond exact-match accuracy. Macro-averaging instead computes the metric separately for each disease category and then averages across categories, giving each category equal weight. This makes the evaluation more sensitive to model performance on minority disease categories and reduces the chance that rare diseases are masked by larger categories. For M ∈ { P, R, F 1}, the reported macro score is 
+
+Mmacro = 1
+
+|C| 
+
+X
+
+> c∈C
+
+Mc, (20) where C denotes the set of diagnosis categories. For each category c, Pc, Rc, and F 1c are computed in a one-vs-rest manner: samples of category c are treated as positives, all other categories are treated as negatives, and the resulting category-level precision, recall, and F1 are then averaged across categories. 
+
+F Related Benchmarks and Datasets 
+
+F.1 Datasets of Cardiac Images 
+
+Compared with representative cardiac MRI datasets, CardioLens is designed to cover a broader and more clinically realistic spectrum of cardiac characteristics. As shown in Table 12, widely-used public 31 Table 12: Comparison with representative cardiac MRI datasets. Each dataset is characterized by six binary attributes and two quantitative attributes. The binary attributes are: Multi-Seq. – provides more than one MRI sequence; Multi-View – provides multiple acquisition views (e.g., short-axis, 2-/3-/4-chamber long-axis); Reports – provides paired radiology reports; Diagnosis – provides patient-level diagnostic labels; Temporal – provides time-resolved imaging across the cardiac cycle (e.g., cine sequences or first-pass perfusion dynamics) rather than only static snapshots. Sequences lists the MRI sequences included, and Scale reports the number of unique patients and the total number of imaging volumes. A red ✓ indicates the attribute is supported; ✗ indicates it is not.                                                         
+
+> Dataset Multi-Seq Multi-View Reports Diagnosis Temporal Sequences †Scale (Patients / Volumes)
+> ACDC ✗✗✗✓✓Cine 150 / 150 EMIDEC ✗✗✗✓✗LGE 150 / 150 CARE MyoPS++ ✓✗✗✗✗bSSFP, LGE, T2 250 / 564 LAScarQS++ ✗✗✗✓✗LGE 194 / 194 MBAS 2024 ✗✗✗✗✗LGE 200 / 200 HVSMR-2.0 ✗✗✗✗✗bSSFP 60 / 60
+> CardioLens (Ours) ✓✓✓✓✓Cine, LGE, T2, Perfusion 585 / 5969 †
+
+Cine denotes dynamic cine imaging acquired with a balanced SSFP (bSSFP) sequence at multiple time points across the cardiac cycle; bSSFP alone denotes a single-phase (static) bSSFP acquisition. LGE = late gadolinium enhancement; T2 =T2-weighted imaging; Perfusion = first-pass perfusion imaging. 
+
+Table 13: Comparison with representative medical LLM/MLLM benchmarks. Data : input modality and dimensionality. Source : Pub. (public repositories), Priv. (private hospital archives). Scale :number of evaluation items (QA pairs, reports, or rationales). Integration : the level of multi-source information a task requires the model to jointly reason over—e.g., multiple views, imaging sequences, or temporal frames of the same patient. Perception : image-level understanding tasks (VQA, modality/anatomy recognition). Reporting : free-form long report or rationale generation. 
+
+Slice Protocol : standardized slice-selection protocol that disentangles input-construction effects from intrinsic competence.                                                                       
+
+> Benchmark Data Source Scale Integration Percep. Report. Slice Protocol
+> Text-only medical benchmarks
+> MedQA Text Pub. 61K –✗✗✗
+> PubMedQA Text Pub. 273K –✗✗✗
+> Multimodal medical benchmarks (static 2D / 3D)
+> VQA-RAD Text + 2D Pub. 3.5K Single image ✓✗✗
+> SLAKE Text + 2D Pub. 14K Single image ✓✗✗
+> OmniMedVQA Text + 2D Pub. 118K Single image ✓✗✗
+> GMAI-MMBench Text + 2D Pub. 26K Single image ✓✗✗
+> CARES Text + 2D Pub. 41K Single image ✓✓✗
+> M3D Text + 3D Pub. 120K Single volume ✓✓✗
+> CardioLens Text + 3D / 4D Priv. 15K Views, Seqs., Phases ✓✓✓
+
+benchmarks such as ACDC [ 9 ], EMIDEC [ 28 ], CARE MyoPS++ [ 14 , 37 , 43 ], LAScarQS++ [ 33 – 36 ], MBAS 2024 [ 56 ], and HVSMR-2.0 [ 42 ] collectively cover cine-based cardiac function assessment, LGE-based myocardial infarction evaluation, whole-heart segmentation, multi-sequence characteri-zation, atrial segmentation, and congenital heart disease assessment. However, these resources are still typically centered on a specific modality, sequence, anatomical target, or task, and most do not jointly provide multi-sequence cardiac MRI, dynamic cine information, multiple clinical views, paired reports, and patient-level diagnostic labels within a unified benchmark. In contrast, CardioLens integrates Cine, LGE, Perfusion, and T2-weighted examinations from real clinical archives, together with report-aligned annotations and diagnosis-oriented evaluation, thereby offering a more complete representation of the real cardiac MRI diagnostic workflow. 
+
+F.2 Datasets of Medical Benchmarks 
+
+Compared with representative medical LLM/MLLM benchmarks, CardioLens is designed not as another multimodal QA resource, but as a clinically grounded stress test for high-dimensional cardiac prediction. As summarized in Table 13, text-only benchmarks such as MedQA [ 25 ] and 32 Table 14: Detailed report generation performance (Level 2). Clinical Findings F1, Checklist Graph-F1, Clinical BERTScore, ROUGE-L, and CIDEr-lite (%) under three slice-selection strategies. Metrics are defined in Appendix E.3. 
+
+Model Clinical Findings F1 (%) Checklist Graph-F1 (%) Clinical BERTScore (%) ROUGE-L (%) CIDEr-lite (%) 
+
+Random Heuristic MIL Random Heuristic MIL Random Heuristic MIL Random Heuristic MIL Random Heuristic MIL 
+
+Open-Source Models ( ≤10B) 
+
+> Medical
+
+MedGemma-4B 45.03 45.88 48.25 35.07 35.58 37.54 93.47 93.52 93.62 18.47 18.77 19.27 11.03 11.45 11.32 Lingshu-7B 47.04 46.21 47.80 37.30 36.21 37.31 93.08 93.06 93.06 14.87 15.12 14.95 11.32 11.38 11.34 Fleming-8B 44.99 45.22 45.50 35.85 35.69 35.92 93.25 93.24 93.23 15.84 15.74 15.66 11.74 11.44 11.23 HuluMed-7B 42.30 42.04 42.36 32.99 32.66 32.96 93.44 93.47 93.44 17.26 17.31 17.69 12.39 12.39 12.61 
+
+QoQMed-7B 50.22 49.10 49.90 39.80 38.84 39.48 92.66 92.68 92.71 12.02 12.23 12.52 11.09 11.20 11.16 
+
+> General
+
+Gemma-4-4B 43.27 45.77 48.68 34.61 36.57 39.23 93.11 93.18 93.22 16.36 16.78 17.74 10.41 10.39 12.10 InternVL3.5-8B 11.57 11.02 13.39 7.40 7.12 8.62 92.93 92.94 92.93 14.98 15.44 14.97 8.41 8.64 8.62 Qwen3-VL-8B 51.39 50.70 50.94 40.29 39.70 40.73 93.21 93.23 93.29 14.61 14.87 15.00 12.35 12.49 12.80 
+
+Open-Source Models ( >10B) 
+
+> Medical
+
+MedGemma-27B 48.29 48.05 47.76 40.37 39.94 39.75 93.43 93.36 93.40 19.66 19.50 19.32 13.01 13.06 12.71 
+
+Hulu-30B 46.93 46.80 48.41 35.68 35.07 37.17 93.07 93.10 93.07 15.23 15.48 15.12 11.35 11.28 11.09 Lingshu-32B 52.36 52.66 51.50 40.30 39.63 40.25 93.12 93.09 93.18 14.65 14.74 15.02 11.27 11.11 11.78 Fleming-38B 49.56 47.16 48.38 39.51 36.15 37.81 92.95 92.95 92.92 13.97 14.05 13.77 9.89 10.03 9.75 
+
+> General
+
+Llama-3.2-11B 54.97 52.50 49.64 41.30 39.20 37.32 92.84 92.81 92.80 16.41 16.34 16.35 13.69 13.69 13.19 Phi-4-14B 41.67 40.68 41.12 32.47 31.46 32.02 93.33 93.33 93.33 17.40 17.48 17.33 12.31 12.46 12.22 DeepSeek-VL2-16B 44.10 43.05 42.35 34.15 33.37 32.65 93.26 93.28 93.32 17.65 18.04 18.46 11.45 11.37 11.61 Mistral-Small-24B 4.49 6.02 5.00 3.05 4.04 3.30 87.97 88.09 87.86 9.08 9.06 9.03 6.66 6.88 6.84 DeepSeek-VL2-27B 44.98 45.35 44.48 33.96 34.19 33.53 93.48 93.47 93.44 17.87 18.03 17.88 13.30 13.39 13.28 
+
+Gemma-3-27B 50.25 49.84 50.82 39.14 38.81 40.36 93.28 93.28 93.36 17.21 17.28 17.31 11.10 11.59 11.40 Gemma-4-31B 59.40 59.54 59.62 47.13 47.31 46.65 93.55 93.58 93.49 17.26 17.41 17.36 13.12 13.22 12.55 Qwen3-VL-32B 59.58 59.14 58.46 45.55 45.10 44.95 93.08 93.07 93.14 13.67 13.73 13.89 12.36 12.35 12.57 InternVL3.5-38B 20.34 20.05 21.34 13.62 13.36 14.31 93.26 93.30 93.27 13.89 13.91 13.91 7.96 8.04 7.94 
+
+Closed-Source Models 
+
+GPT-5 46.34 48.65 46.53 34.30 37.05 35.13 93.06 93.04 93.04 15.64 15.38 15.44 12.56 12.54 12.53 Gemini-3.1-Pro 46.60 48.13 48.16 35.88 36.91 37.46 93.12 93.09 93.26 15.59 15.50 16.84 11.47 11.58 11.75 Claude-Opus-4.6 50.37 52.11 51.33 40.70 42.28 42.56 92.71 92.75 92.87 12.51 12.96 13.66 13.83 13.51 14.18 
+
+> †
+
+Open-source: full 585-patient cohort. Closed-source: 100-patient public subset. 
+
+PubMedQA [ 26 ] evaluate knowledge recall but provide no visual grounding. Multimodal benchmarks including SLAKE [ 38 ], VQA-RAD [ 29 ], OmniMedVQA [ 23 ], GMAI-MMBench [ 10 ], CARES [ 53 ], and M3D-Bench [ 6 ] have substantially advanced the field in scale and modality coverage, yet remain confined to static or single-volume inputs. Moreover, existing benchmarks rely exclusively on public data and leave input construction (e.g., which slices to feed to the model) as an uncontrolled confound, entangling input-quality effects with intrinsic limitations. CardioLens addresses these gaps along three axes: (i) it is built from private hospital archives of 585 patients across four paired cardiac MRI sequences, spanning 2D, 3D, 4D, and multi-sequence inputs within a single unified resource; (ii) it covers the full clinical workflow from image perception to free-form report generation and diagnosis; and (iii) it introduces controlled slice-selection protocols (random / heuristic / data-driven) to explicitly disentangle input-construction effects from a model’s intrinsic capacity. 
+
+G Detailed Evaluation Results in CardioLens 
+
+This appendix complements Section 3: Section G.1 provides the per-model breakdowns for Levels 2– 3 underlying the pipeline-collapse claims; Section G.2 quantifies the gap to a radiologist baseline under matched visual information access. 
+
+G.1 Detailed Results of Report Generation and Diagnosis. Clinical correctness and text quality decouple in report generation. The five metrics in Table 14 probe two distinct aspects of report quality. Two observations stand out. First, Clinical BERTScore saturates at 92–94% for nearly every model—including near-degenerate cases such as Mistral-Small-24B (88%) whose Clinical Findings F1 collapses to 5%—indicating that contextual-embedding similarity is too coarse to discriminate clinically meaningful differences. Second, the rankings induced by clinical-factual and surface-form metrics are not concordant: MedGemma-4B achieves the highest ROUGE-L under MIL (19.27%) but only mid-tier Clinical Findings F1 (48.25%), while Qwen3-VL-32B leads Clinical Findings F1 ( ≈59%) yet score 4–5 points lower on ROUGE-L. This 33 Table 15: Detailed disease diagnosis performance (Level 3). Accuracy, Precision, Recall, and F1 (%) under three slice-selection strategies, averaged over the etiology classification and NICM subtyping tasks.                                                                                                                                                                                                                                                                                        
+
+> Model Accuracy (%) Precision (%) Recall (%) F1 Score (%)
+> Random Heuristic MIL Random Heuristic MIL Random Heuristic MIL Random Heuristic MIL
+> Open-Source Models ( ≤10B)
+> Medical
+> MedGemma-4B 41.71 42.38 36.87 21.56 22.16 20.81 21.23 21.15 20.65 19.73 18.73 20.31 Lingshu-7B 38.84 39.74 38.72 23.04 23.50 24.01 22.05 22.37 22.70 22.35 22.75 22.84
+> Fleming-8B 39.35 42.50 26.97 24.60 25.89 23.09 22.48 23.15 18.34 23.31 23.99 16.80 HuluMed-7B 43.28 43.33 43.44 15.55 15.57 35.58 21.21 21.24 21.34 17.94 17.96 18.21 QoQMed-7B 36.32 41.39 35.57 20.10 21.84 21.09 20.21 21.66 20.70 20.03 20.88 20.48
+> General  Gemma-4-4B 43.24 43.33 43.24 15.55 15.57 20.03 21.20 21.24 21.30 17.94 17.96 18.37 InternVL3.5-8B 43.16 43.21 43.16 15.99 15.93 15.99 21.16 21.19 21.16 18.22 18.19 18.22 Qwen3-VL-8B 43.16 43.40 42.65 26.00 27.49 24.38 21.24 21.45 21.98 18.50 18.97 21.02
+> Open-Source Models ( >10B)
+> Medical  MedGemma-27B 21.03 23.85 21.46 21.67 23.49 21.90 16.16 17.20 16.42 11.73 14.24 12.02 Hulu-30B 44.58 45.22 44.03 30.40 35.89 25.93 21.74 21.95 22.17 18.66 18.68 20.44 Lingshu-32B 47.29 46.52 46.27 25.78 26.35 25.34 24.27 23.56 24.21 23.48 22.60 23.54
+> Fleming-38B 43.83 43.80 39.66 27.00 26.75 24.88 23.98 23.66 22.95 24.79 24.32 23.44
+> General
+> Llama-3.2-11B 24.69 24.68 24.69 12.15 4.95 10.59 20.02 20.00 20.01 8.08 7.94 8.44 Phi-4-14B 25.79 26.21 24.65 8.68 8.52 7.41 19.34 19.69 18.43 10.70 10.65 9.78 Mistral-Small-24B 17.80 16.11 18.86 8.76 10.96 8.77 5.99 6.06 5.82 4.69 4.56 4.57 Gemma-3-27B 42.57 41.09 38.05 19.65 20.01 20.03 21.06 20.92 20.43 18.30 19.43 19.91 Gemma-4-31B 51.42 51.24 49.80 31.39 32.71 29.54 29.71 29.28 28.64 28.07 27.43 27.48
+> Qwen3-VL-32B 43.00 42.38 40.76 21.07 21.20 21.65 21.22 21.25 21.52 18.35 19.15 20.63 InternVL3.5-38B 42.92 41.20 38.88 23.61 22.93 22.99 23.05 22.81 22.58 22.80 22.73 22.31
+> Closed-Source Models
+> GPT-5 27.91 30.77 28.24 20.06 23.93 18.69 38.54 20.23 17.87 16.10 15.24 16.56 Gemini-3.1-Pro 39.83 42.50 32.77 23.53 25.98 19.29 25.04 25.73 19.34 23.82 25.67 18.48 Claude-Opus-4.6 43.51 38.93 45.80 25.30 21.41 26.34 25.83 22.94 27.20 25.45 22.12 26.73
+
+Note. DeepSeek-VL2 models are excluded from the diagnosis evaluation because their maximum sequence length is limited to 4096 tokens, which is insufficient to accommodate the patient-level diagnosis with 32 images input together with the textual prompt and output budget; see DeepSeek-VL2. Open-source: full 585-patient cohort. Closed-source: 100-patient public subset. 
+
+decoupling supports our broader thesis: textual fluency is largely solved, and the actual bottleneck is generating reports that are clinically faithful. 
+
+A clear ceiling on clinical reporting. Even the strongest models cap at ≈60% Clinical Findings F1 and ≈47% Checklist Graph-F1. The Graph-F1 deficit is particularly diagnostic: it requires correctly grounding each abnormality to its segment, wall region, layer, and distribution pattern, indicating that current MLLMs can name findings more reliably than they can localize them. Several mid-and large-sized general models (InternVL3.5-8B, InternVL3.5-38B, Mistral-Small-24B) exhibit catastrophic behavior on clinical-factual metrics (4–21% Clinical Findings F1), which we attribute to failure to follow the structured-report format rather than to visual misperception per se—their Level-1 image understanding scores are competitive (Table 2). 
+
+Diagnosis: scaling does not help, and category collapse dominates. Table 15 reveals two patterns absent from the main-text figure. First, within every model family, scaling provides no consistent diagnostic gain: Lingshu-7B (F1 22.35) and Lingshu-32B (F1 23.48) are essentially tied, MedGemma actually regresses from 4B to 27B (F1 19.73 → 11.73 under random selection). Second, the precision–recall structure exposes that several models reach their headline accuracy through prevalence-following rather than through genuine discrimination: HuluMed-7B reports 43.4% accuracy with only 17.9% F1, and Gemma-4-4B and InternVL3.5-8B show similar gaps, consistent with the confusion-matrix evidence in Section 3.2. Among closed-source systems, Claude-Opus-4.6 is a clear outlier (F1 25.45 / 22.12 / 26.73), almost doubling GPT-5 (F1 15–16) and exceeding Gemini-3.1-Pro (F1 18–26). Even this best score, however, remains below 30 F1, leaving a substantial gap to clinically usable diagnostic performance. 34 Table 16: Implicit radiologist baseline on LGE and T2 image understanding. F1 (%) under random selection at K ∈ { 8, 32 , 128 }. K=32 and K=128 typically exceed the per-study slice count for LGE and T2, so the model has access to at least as much visual evidence as the reporting radiologist. Because ground-truth labels are derived from radiologist-finalized reports, a radiologist achieves 100% F1 by construction; the gap to 100% is therefore an information-matched comparison.                                              
+
+> Model LGE F1 (%) T2 F1 (%)
+> K=8 K=32 K=128 K=8 K=32 K=128
+> MedGemma-4B 51.7 50.8 50.8 57.5 55.2 54.9 Lingshu-7B 56.8 54.4 54.4 50.8 46.0 45.2 Gemma-4-31B 48.3 49.0 49.0 53.6 51.9 50.2 Qwen3-VL-32B 49.5 47.8 47.7 50.1 44.1 39.9 InternVL3.5-38B 54.8 56.0 56.0 44.9 44.2 44.5
+> Best −Radiologist −43 .2−44 .0−44 .0−42 .5−44 .8−45 .1
+
+Slice selection has limited leverage at higher tiers. Consistent with the Level-1 finding in Section 3.3, slice-selection strategy affects Levels 2–3 only marginally: across all models in Table 14, the maximum spread of Clinical Findings F1 across the three strategies stays below 3 points, and the same holds for diagnosis F1 in Table 15 (with isolated exceptions such as Fleming-8B, whose F1 drops from 23.31 to 16.80 under MIL due to instability on small NICM subtypes). MIL selection slightly favors smaller models (e.g., Qwen3-VL-8B gains ≈2.5 F1 on diagnosis), but it does not lift any model into a clinically useful operating regime. 
+
+G.2 Implicit Radiologist Baseline under Matched Information Access 
+
+A natural question is how MLLMs compare with radiologists. Although independent re-annotation at this scale is impractical, CardioLens admits an implicit radiologist baseline by construction: since ground-truth labels are derived from radiologist-finalized reports, radiologists achieve 100% F1 on image-understanding tasks by definition. This comparison is most meaningful when models are given comparable visual evidence. For LGE and T2, this condition is approximated at large slice budgets: their typical per-study slice counts ( ≈15–18 for LGE across SAX/4CH/2CH and ≈10 for T2 SAX 3)are covered by K=32 and certainly by K=128 .Table 16 reports this matched-information comparison for five representative models. Even with complete slice access, the best LGE model reaches only 56 .0 F1, leaving a 44 .0-point gap to the radiologist; on T2, the best score is 57 .5 F1, leaving a 42 .5-point gap. Moreover, performance changes little across K ∈ { 8, 32 , 128 }, and several models even decline on T2 as K increases. These results show that the main bottleneck is not visual evidence availability, but the ability to interpret and integrate study-level CMR evidence into clinically faithful findings. 
+
+H Public Subset Details and Consistency 
+
+H.1 Public Subset Statistics 
+
+The public subset is built from 78,722 slices and 2,298 verified QA pairs. Table 17 summarizes the public subset. All four imaging sequences (Cine, LGE, Perfusion, T2) and all 32 image-understanding subtasks are retained, with both single- and multi-label formulations preserved. The three task tiers are sized proportionally to the full cohort (1,806 image-understanding QA pairs, 361 reports, 131 diagnosis cases), and the diagnosis hierarchy preserves all three etiology classes (NH/IHD/NICM) and all five NICM subtypes (HCM/DCM/RCM/ACM/Myocarditis). Upon publication, we will release all NIfTI volumes together with their constructed reports and patient-level diagnostic labels, as well as the VQA JSON files for the image-understanding, report-generation, and diagnosis tasks.   
+
+> 3Clinical T2 assessment is primarily based on T2 SAX images. T2 4CH images, whose slice/frame counts vary across studies, are included in our input construction as auxiliary visual context. Therefore, at larger budgets such as K=32 and
+> K=128 , the additional inclusion of T2 4CH content may affect model performance even though the T2 SAX view itself is already largely covered.
+
+35 Table 17: CardioLens public subset statistics: 2,298 QA pairs from 100 patients. Image understanding subtasks are single-label (S) or multi-label (M) with different classes(#C).                                                                                                                                                    
+
+> Cine (889) LGE (549) Perfusion (190) T2 (178)
+> Subtask T#C #QA Subtask T#C #QA Subtask T#C #QA Subtask T#C #QA Wall Thickness M599 Enhance. Status S298 Perf. Status S296 T2 Signal S491 Special Signs M699 Special Findings M499 Signal Char. S329 Abn. Regions M625 Pericardial Eff. S2100 Abn. Signal S279 Abn. Regions M629 Abn. Segments M424 Pleural Eff. S2100 High-Sig Pattern M566 Abn. Segments M419 Sig. Distrib. M525 Mitral Valve S2100 High-Sig Layer M557 Myo. Layer M517 Myo. Layer M513 Tricuspid Valve S2100 High-Sig Region M665 Aortic Valve S299 High-Sig Segment M463 Motion Ampl. M571 Low-Sig Pattern M59Systolic Func. S361 Low-Sig Region M65Motion Coord. S236 Low-Sig Segment M45Diastolic Func. S224 Low-Sig Layer M53
+> Report Generation (361): Cine 99 |LGE 99 |Perfusion 96 |T2 67
+> Diagnosis (131): Etiology (98): NH 20 / IHD 45 / NICM 33 |NICM Subtype (33): HCM 20 / Myocarditis 6 / DCM 5 / RCM 1 / ACM 1
+
+H.2 Consistency Between the Full Cohort and Public Subset 
+
+To validate that the subset is a faithful proxy for the full cohort, we examine whether model perfor-mance transfers between the two. Tables 18(a)–(c) report the absolute gap |∆| between full-cohort and subset performance for three representative open-source models across the three evaluation levels. 
+
+Level 1 and Level 2 show strong subset-to-full consistency. For image understanding (panel a), gaps are uniformly small: across all 36 model ×strategy ×metric combinations, the mean |∆| on F1 is 1.20 points and the maximum is 1.86 (InternVL3.5-38B, Random); accuracy and precision gaps are similarly bounded. Report generation (panel b) is even tighter: Clinical BERTScore differs by at most 0.05 points and Clinical Findings F1 by at most 1.43 across all 45 cells. Beyond aggregate gaps, two structural properties of the benchmark are preserved on the subset: (i) the relative ordering of models is unchanged – Gemma-4-31B remains the strongest report generator and Lingshu-7B remains the strongest at image understanding on both sources; and (ii) the direction of the slice-strategy effect (which strategy benefits a given model) is preserved for every model. Together, these indicate that conclusions on Level 1 and Level 2 drawn on the public subset transfer reliably to the full benchmark. 
+
+Level 3 gaps reflect class-prevalence shift rather than changed model behavior. Diagnostic gaps in panel (c) are noticeably larger ( |∆| on F1 up to 7.65), which at first glance appears to break the subset-to-full consistency. The explanation is that all three models converge to the same failure mode on both cohorts – predicting the dominant class – but the dominant class is differently represented in the two label distributions, so the same predictions earn very different macro-F1 scores. We unpack this in two steps. Step 1: the label prior shifts between the two cohorts. At the etiology level, NICM accounts for 53.3% (295/553) of the full cohort but only 33.7% (33/98) of the subset, where IHD instead becomes the largest class (45.9%). Step 2: model behavior is essentially unchanged across cohorts. Figure 5 shows that Gemma-4-31B’s confusion matrices are nearly identical on the two sources: IHD →NICM misclassification is 0.89 (subset) vs. 0.88 (full), NICM is correctly retained at 0.85 vs. 0.88, and non-HCM subtypes (Myocarditis, RCM, ACM) collapse onto HCM at similar rates. Combining the two steps explains the apparent gap. The model commits the same NICM-collapse on both cohorts, but on the full cohort that collapse aligns with the majority class and is rewarded by macro-F1, whereas on the subset NICM is no longer the majority class and the same predictions are penalized. Macro-averaging over a small, clinically imbalanced label set (ACM n=2 , RCM n=13 
+
+at the subtype level) amplifies this effect. The Level 3 gap is therefore a metric-level artefact of the prevalence shift, and the diagnostic conclusion emphasized in the main text – that current MLLMs collapse onto majority cardiac etiology and subtype classes – holds equally on the subset. 36 Table 18: Consistency between the full cohort and the 100-patient public subset across all three evaluation levels. For three representative open-source models (Lingshu-7B, Gemma-4-31B, InternVL3.5-38B) we report performance under three slice-selection strategies (Random, Heuristic, MIL) on the full cohort ( Full ) and on the public subset ( Sub. ); |∆| is the absolute gap. 
+
+(a) Level 1: Image Understanding Accuracy (%) Precision (%) Recall (%) F1 Score (%) Model Source Rand. Heur. MIL Rand. Heur. MIL Rand. Heur. MIL Rand. Heur. MIL Lingshu-7B Full 65.22 66.75 67.52 50.76 54.67 55.08 63.43 65.58 65.98 56.22 59.34 59.82 Sub. 66.71 68.53 68.74 52.30 56.27 56.94 64.52 66.76 66.75 57.56 60.70 61.16 
+
+|∆| 1.49 1.78 1.22 1.54 1.60 1.86 1.09 1.18 0.77 1.34 1.36 1.34 Gemma-4-31B Full 61.83 61.53 62.56 46.62 46.47 47.75 57.86 57.26 58.12 51.61 51.29 52.40 Sub. 62.57 62.01 63.56 47.23 46.72 48.40 58.75 58.10 59.07 52.35 51.79 53.17 
+
+|∆| 0.74 0.48 1.00 0.61 0.25 0.65 0.89 0.84 0.95 0.74 0.50 0.77 InternVL3.5-38B Full 63.97 64.72 65.29 51.09 52.67 53.73 60.27 62.46 60.98 55.25 57.09 57.08 Sub. 65.40 65.80 66.29 52.77 54.01 54.94 62.19 63.37 62.50 57.04 58.24 58.41 
+
+|∆| 1.43 1.08 1.00 1.68 1.34 1.21 1.92 0.91 1.52 1.79 1.15 1.33 
+
+(b) Level 2: Report Generation Clinical Findings F1 (%) Checklist Graph-F1 (%) Clinical BERTScore (%) ROUGE-L (%) CIDEr-lite (%) Model Source Rand. Heur. MIL Rand. Heur. MIL Rand. Heur. MIL Rand. Heur. MIL Rand. Heur. MIL Lingshu-7B Full 47.04 46.21 47.80 37.30 36.21 37.31 93.08 93.06 93.06 14.87 15.12 14.95 11.32 11.38 11.34 Sub. 46.56 45.48 47.91 36.00 34.89 36.26 93.04 93.03 93.02 15.06 15.35 15.22 12.16 11.97 11.99 
+
+|∆| 0.48 0.73 0.11 1.30 1.32 1.05 0.04 0.03 0.04 0.19 0.23 0.27 0.84 0.59 0.65 Gemma-4-31B Full 59.40 59.54 59.62 47.13 47.31 46.65 93.55 93.58 93.49 17.26 17.41 17.36 13.12 13.22 12.55 Sub. 59.60 60.06 60.68 46.34 47.05 47.03 93.50 93.56 93.48 17.33 17.65 17.50 13.95 14.05 13.37 
+
+|∆| 0.20 0.52 1.06 0.79 0.26 0.38 0.05 0.02 0.01 0.07 0.24 0.14 0.83 0.83 0.82 InternVL3.5-38B Full 20.34 20.05 21.34 13.62 13.36 14.31 93.26 93.30 93.27 13.89 13.91 13.91 7.96 8.04 7.94 Sub. 19.47 18.62 20.32 12.71 12.07 13.27 93.24 93.28 93.24 13.77 13.93 13.73 8.04 8.21 8.04 
+
+|∆| 0.87 1.43 1.02 0.91 1.29 1.04 0.02 0.02 0.03 0.12 0.02 0.18 0.08 0.17 0.10 
+
+(c) Level 3: Disease Diagnosis Accuracy (%) Precision (%) Recall (%) F1 Score (%) Model Source Rand. Heur. MIL Rand. Heur. MIL Rand. Heur. MIL Rand. Heur. MIL Lingshu-7B Full 38.84 39.74 38.72 23.04 23.50 24.01 22.05 22.37 22.70 22.35 22.75 22.84 Sub. 28.75 29.77 29.77 17.30 18.09 18.74 18.61 19.29 19.22 17.63 18.31 18.66 
+
+|∆| 10.09 9.97 8.95 5.74 5.41 5.27 3.44 3.08 3.48 4.72 4.44 4.18 Gemma-4-31B Full 51.42 51.24 49.80 31.39 32.71 29.54 29.71 29.28 28.64 28.07 27.43 27.48 Sub. 45.04 42.75 41.73 32.00 30.68 25.47 29.41 27.97 27.40 25.24 23.39 22.94 
+
+|∆| 6.38 8.49 8.07 0.61 2.03 4.07 0.30 1.31 1.24 2.83 4.04 4.54 InternVL3.5-38B Full 42.92 41.20 38.88 23.61 22.93 22.99 23.05 22.81 22.58 22.80 22.73 22.31 Sub. 29.77 31.30 29.77 15.71 16.53 17.05 19.38 20.36 19.26 15.15 17.77 17.51 
+
+|∆| 13.15 9.90 9.11 7.90 6.40 5.94 3.67 2.45 3.32 7.65 4.96 4.80 NH IHD NICM       
+
+> Prediction
+> NH
+> IHD
+> NICM
+> Ground Truth
+> 0.46 0.01 0.53
+> 0.10 0.01 0.88
+> 0.12 0.01 0.88
+
+Diagnosis - Main Category                         
+
+> HCM DCM Myoc. RCM ACM
+> Prediction
+> HCM
+> DCM
+> Myoc.
+> RCM
+> ACM
+> 0.82 0.18 0.00 0.00 0.00
+> 0.38 0.61 0.01 0.00 0.00
+> 0.87 0.13 0.00 0.00 0.00
+> 0.77 0.23 0.00 0.00 0.00
+> 1.00 0.00 0.00 0.00 0.00
+
+Diagnosis - Sub Category         
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0 NH IHD NICM
+> Prediction
+> NH
+> IHD
+> NICM
+> Ground Truth
+> 0.55 0.00 0.45
+> 0.11 0.00 0.89
+> 0.15 0.00 0.85
+
+Diagnosis - Main Category                         
+
+> HCM DCM Myoc. RCM ACM
+> Prediction
+> HCM
+> DCM
+> Myoc.
+> RCM
+> ACM
+> 0.80 0.20 0.00 0.00 0.00
+> 0.00 1.00 0.00 0.00 0.00
+> 1.00 0.00 0.00 0.00 0.00
+> 1.00 0.00 0.00 0.00 0.00
+> 1.00 0.00 0.00 0.00 0.00
+
+Diagnosis - Sub Category 
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+
+Figure 5: Full v.s. Sub cohort performance on Level-3 task for Gemma-4-31B. Left: Confusion matrices for etiology classification and NICM subtyping on full cohort . Right : Confusion matrices for etiology classification and NICM subtyping on public subset . Predictions show similar collapse heavily onto the most prevalent category — NICM at the etiology level and HCM at the subtype level. 37 (a) (b) (c) (d)    
+
+> (e) (f) (g) (h)
+
+Figure 6: LGE frames provided to the model in the case study. Myocardial late enhancement is visible in the basal and mid segments across multiple slices; the apical segment, apex, and papillary muscles are spared. Ground truth: A (Basal), B (Mid). 
+
+I Case Study of Clinical Reasoning Prompt 
+
+To complement the aggregate trends in Section 3.4, we examine a representative LGE multi-segment-selection case in which adding a reasoning prompt converts a recoverable answer into a confident misdiagnosis. Figure 6 shows eight LGE frames from a single patient, with high-signal enhancement confirmed in the basal and mid segments (ground truth: A, B ). We query the same MLLM with identical visual inputs under two prompt conditions. 
+
+Standard prompt: 
+
+You are a Vision-Language Model (VLM) for cardiac LGE MRI. Task: Using the provided image frames, select which segments show high-signal abnormal enhancement (multi-select). Strict rules: - Select one or more from A/B/C/D/E. - Output letters only; use English commas for multiple selections (e.g., B,C,D). - No explanations, reasoning, descriptions, confidence, or extra characters. Options: A. Basal Segment B. Mid Segment C. Apical Segment D. Apex E. Papillary Muscle 
+
+Model output: 
+
+A,B,C,D,E 
+
+Reasoning prompt: 
+
+38 You are a Vision-Language Model (VLM) for cardiac LGE MRI. Task: Using the provided image frames, select which segments show high-signal abnormal enhancement (multi-select). Strict rules: - Select one or more from A/B/C/D/E. - After providing your answer, you must provide a reason for your choice. - Output format: - Line 1: Answer letter(s) only (e.g., A or A,B) - Line 2: "Reason: [your explanation]" When providing your reason, please follow this analysis framework (image-based): 1) Segment identification: which parts of LV are visible. 2) Enhancement presence by segment: basal / mid / apical / apex / Papillary Muscle. 3) Distribution along long axis: where it starts and ends. 4) Consistency across frames: persists vs transient artifact. 5) Final selected segments. Options: A. Basal Segment B. Mid Segment C. Apical Segment D. Apex E. Papillary Muscle 
+
+Model output: 
+
+B,C,D 
+
+Reason: 
+
+1) Segment identification: the images show short- and long-axis views of the left ventricle. 2) Enhancement presence by segment: a prominent high-signal region of late gadolinium enhancement is visible in the mid-ventricular and apical myocardium. 3) Distribution along long axis: the high-signal area begins in the mid segment and extends through the apical segment, involving the apex itself; the basal segment appears relatively spared .4) Consistency across frames: the enhancement is consistent across multiple slices, confirming a real myocardial finding rather than a transient artifact. 5) Final selected segments: Mid (B), Apical (C), Apex (D).                    
+
+> Prompt Prediction TP FP FN P / R / F1 (%) Standard A,B,C,D,E {A,B} {C,D,E} ∅40.0 / 100.0 / 57.1 Reasoning B,C,D {B} {C,D} {A} 33.3 / 50.0 / 40.0
+
+Analysis. The reasoning response reads as a coherent radiology note, yet it commits a decisive visual error: it asserts that “the basal segment appears relatively spared,” contradicting the imaging evidence and discarding a true-positive segment. The standard prompt, by contrast, retains both ground-truth segments through an over-inclusive safe-bet strategy. Three observations make this case diagnostic of the population-level pattern in Section 3.4. First, recall collapses ( 100% → 50% ) without any compensating precision gain ( 40% → 33% ), mirroring the recall losses observed across MedGemma-4B, Lingshu-7B, and InternVL3.5-38B in Table 4. Second, the threshold shift is asymmetric : the model removes a true positive (A) while preserving false positives (C, D), indicating that the reasoning chain is not anchored to the underlying anatomy but to a heuristic story about disease distribution. Third, the failure is delivered in confident clinical prose, suggesting that explicit reasoning can 39 rationalise the suppression of real findings rather than recover missing evidence. In clinical context Clinically, this is a consequential error: missing basal LGE can alter lesion-distribution assessment and affect ischemic versus non-ischemic differentiation as well as downstream risk stratification. 
+
+J Broader Impacts and Limitations 
+
+CardioLens is intended as an evaluation instrument, not a deployable clinical system. We discuss its potential societal impacts and current scope boundaries below. 
+
+Positive impacts. CardioLens provides a clinically grounded, leakage-resistant testbed for measur-ing whether medical MLLMs can move beyond static perception toward the study-level interpretation that real cardiac diagnosis requires. By exposing the gap between image-level recognition and patient-level diagnosis, the benchmark can (i) help the community calibrate claims about “clinical readiness” of frontier medical MLLMs, (ii) guide architectural research toward models that natively represent 3D anatomy, 4D temporal learning, and multi-modality synthesis, and (iii) provide a reproducible reference point for tracking progress as MLLMs that natively ingest 3D/4D medical data emerge. 
+
+Risks and mitigations. Two risks merit explicit discussion. (i) Premature clinical reliance: current MLLMs collapse on patient-level diagnosis and frequently default to frequent abnormal categories rather than reliably distinguishing distinct findings; high scores on simpler public benchmarks should not be interpreted as clinical competence, and CardioLens must not be used to certify clinical deployment of any model. (ii) Data privacy: all data were collected under IRB approval and fully de-identified prior to benchmark construction; the public release is restricted to a 100-patient subset and will be distributed under a data-use agreement that prohibits re-identification and downstream clinical deployment without independent regulatory clearance. 
+
+Intended use. CardioLens is released for research purposes – evaluation of medical MLLMs, development of high-dimensional medical interpretation architectures, and methodological studies of input construction and clinical evaluation – and is not intended for clinical decision-making, patient triage, or any form of automated diagnosis. 
+
+Scope and limitations. CardioLens has several scope boundaries that we view as opportunities for future extension. (i) Single-institution sourcing: the benchmark is built from one hospital’s archives, which ensures consistent reporting conventions but leaves cross-site generalization untested; we expect the qualitative findings (pipeline-wise competence collapse and category-level mode collapse) to transfer, but quantitative scores may shift under different scanner vendors or reporting styles. 
+
+(ii) Sequence and disease coverage: we focus on the four core CMR sequences (Cine, LGE, T2, Perfusion) and the principal ischemic / non-ischemic differential; specialized sequences (T1 mapping, T2 mapping, 4D flow) and rare entities (ACM, RCM) remain under-represented. (iii) Implicit human baseline: ground-truth labels are derived from radiologist-finalized reports, yielding a 100% ceiling under matched information access (Appendix G.2); a prospective study with multiple independent readers would further characterize inter-observer variability. (iv) sparse-selected inputs: CardioLens evaluates current MLLMs under the dimensionality reduction step they require, and we explicitly ablate this step – as MLLMs that natively ingest 3D/4D data emerge, CardioLens can be further used to track progress. (v) Public release scope: institutional data-governance constraints limit the public release to a de-identified 100-patient subset; Appendix H.2 shows the consistency between the subset and the full cohort. 40

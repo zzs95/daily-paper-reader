@@ -6,209 +6,287 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：📧 2026-05-23 ~ 2026-05-31
-- 运行时间：2026-06-18 04:54:20 UTC
+- 最新运行日期：📧 2026-06-01 ~ 2026-06-17
+- 运行时间：2026-06-18 15:43:02 UTC
 - 运行状态：成功
-- 本次总论文数：95
-- 精读区：95
+- 本次总论文数：134
+- 精读区：134
 - 速读区：0
 
 ### 今日简报（AI）
-本周深度研读 95 篇前沿文献，聚焦医疗影像分割在数据合成与少样本学习上的重大突破。
-扩散模型已能通过表型条件精准合成病灶数据，而对抗性配准-分割框架则为极少样本场景提供了极强的鲁棒性。
-建议关注生成式 AI 解决医疗标注稀缺的方案，并尝试将配准技术融入现有的分割工作流以提升稳定性。
-- 详情：[/20260523-20260531/README](/20260523-20260531/README)
+本期精选 134 篇前沿论文，深度聚焦医疗影像 AI 在病理分割与癌症预测中的关键突破。
+重点关注分层提示对比学习在弱监督病理分割的应用，以及利用 PET/CT 影像组学精准预测结直肠癌 RAS 突变与生存期。
+建议关注弱监督学习如何降低医疗标注成本，并探索多模态影像在临床预后中的实战价值。
+- 详情：[/20260601-20260617/README](/20260601-20260617/README)
 
 ### 精读区论文标签
-1. [Enhancing Lesion Segmentation via Medical Image-Mask Pair Synthesis using Phenotype-Conditioned Diffusion Models](/20260523-20260531/enhancing-lesion-segmentation-via-medical-image-mask-pair-synthesis-using-phenotype-conditioned-diffusion-models)  
+1. [Hierarchical Prompt Contrastive Learning for Weakly Supervised Histopathology Segmentation](/20260601-20260617/hierarchical-prompt-contrastive-learning-for-weakly-supervised-histopathology-segmentation)  
    标签：无标签
-2. [Enhancing Robustness in Few-Shot Medical Image Segmentation: An Adversarial Registration-Segmentation Joint Learning Framework](/20260523-20260531/enhancing-robustness-in-few-shot-medical-image-segmentation-an-adversarial-registration-segmentation-joint-learning-framework)  
+2. [18F-FDG-PET/CT radiomics-based machine learning for RAS mutation and survival prediction in colorectal cancer](/20260601-20260617/18f-fdg-petct-radiomics-based-machine-learning-for-ras-mutation-and-survival-prediction-in-colorectal-cancer)  
    标签：无标签
-3. [Perceiving Symmetry and Variability: A Probabilistic Vision–Language Framework for Medical Image Segmentation](/20260523-20260531/perceiving-symmetry-and-variability-a-probabilistic-visionlanguage-framework-for-medical-image-segmentation)  
+3. [Dual-stage 3D medical image segmentation integrating learnable prompt generation and memory attention](/20260601-20260617/dual-stage-3d-medical-image-segmentation-integrating-learnable-prompt-generation-and-memory-attention)  
    标签：无标签
-4. [Risk-Aware Prompt-Guided Framework for Brain MRI Diagnostic Report Generation with Radiologist Feedback Integration](/20260523-20260531/risk-aware-prompt-guided-framework-for-brain-mri-diagnostic-report-generation-with-radiologist-feedback-integration)  
+4. [Baseline and interim 18F-FDG PET/CT imaging in outcome prediction in adult patients with Hodgkins lymphoma](/20260601-20260617/baseline-and-interim-18f-fdg-petct-imaging-in-outcome-prediction-in-adult-patients-with-hodgkins-lymphoma)  
    标签：无标签
-5. [AI Based Medical Diagnosis for Early Detection of Tuberculosis Using Chest X Ray Images](/20260523-20260531/ai-based-medical-diagnosis-for-early-detection-of-tuberculosis-using-chest-x-ray-images)  
+5. [Weakly supervised pleural plaque segmentation using global patient-level diagnostic cues](/20260601-20260617/weakly-supervised-pleural-plaque-segmentation-using-global-patient-level-diagnostic-cues)  
    标签：无标签
-6. [MRI radiomics-based approach to predict pituitary neuroendocrine tumor invasiveness](/20260523-20260531/mri-radiomics-based-approach-to-predict-pituitary-neuroendocrine-tumor-invasiveness)  
+6. [A Fairness Audit of Medical Imaging Foundation Models on a Multimodal Structured Clinical Benchmark](/20260601-20260617/a-fairness-audit-of-medical-imaging-foundation-models-on-a-multimodal-structured-clinical-benchmark)  
    标签：无标签
-7. [Mo1844 ACUTE PANCREATITIS OUTCOME PREDICTION WITH DEEP LEARNING AND RADIOMICS](/20260523-20260531/mo1844-acute-pancreatitis-outcome-prediction-with-deep-learning-and-radiomics)  
+7. [SegReg-Rep: Region-Aware Vision-Language Alignment for Fine-Grained Radiology Report Generation from 3D Medical Images](/20260601-20260617/segreg-rep-region-aware-vision-language-alignment-for-fine-grained-radiology-report-generation-from-3d-medical-images)  
    标签：无标签
-8. [AAMN: cross-modal fusion network with association alignment matrix for radiological report generation](/20260523-20260531/aamn-cross-modal-fusion-network-with-association-alignment-matrix-for-radiological-report-generation)  
+8. [Cerebral blood flow alterations and machine learning classification in chronic low back pain using multi-PLD ASL radiomics](/20260601-20260617/cerebral-blood-flow-alterations-and-machine-learning-classification-in-chronic-low-back-pain-using-multi-pld-asl-radiomics)  
    标签：无标签
-9. [A Predictive MRI Radiomics Model for Histologic Differentiation in Soft Tissue Sarcomas](/20260523-20260531/a-predictive-mri-radiomics-model-for-histologic-differentiation-in-soft-tissue-sarcomas)  
+9. [Refine Then Fusion: Robust 3D Brain MRI Synthesis via Vision–Language Collaboration](/20260601-20260617/refine-then-fusion-robust-3d-brain-mri-synthesis-via-visionlanguage-collaboration)  
    标签：无标签
-10. [Deep learning and radiomics models in patients with advanced non-small cell lung cancer treated with immunotherapy combined with stereotactic radiotherapy](/20260523-20260531/deep-learning-and-radiomics-models-in-patients-with-advanced-non-small-cell-lung-cancer-treated-with-immunotherapy-combined-with-stereotactic-radiotherapy)  
+10. [AI-Based Supervised Approach for Tumor Segmentation in Multiple PET/CT Radiotracers](/20260601-20260617/ai-based-supervised-approach-for-tumor-segmentation-in-multiple-petct-radiotracers)  
    标签：无标签
-11. [Deep learning-based Wilms tumor segmentation to create 3D models for surgical planning: Implementation in the clinical workflow](/20260523-20260531/deep-learning-based-wilms-tumor-segmentation-to-create-3d-models-for-surgical-planning-implementation-in-the-clinical-workflow)  
+11. [Safety and survival outcomes of 223Radium-dichloride in patients with metastatic castration-resistant prostate Cancer with prior [177Lu] Lu-PSMA radioligand therapy …](/20260601-20260617/safety-and-survival-outcomes-of-223radium-dichloride-in-patients-with-metastatic-castration-resistant-prostate-cancer-with-prior-177lu-lu-psma-radioligand-therapy-)  
    标签：无标签
-12. [CausalCompNet: Causal intervention meets vision-language priors for robust CXR diagnosis](/20260523-20260531/causalcompnet-causal-intervention-meets-vision-language-priors-for-robust-cxr-diagnosis)  
+12. [Mix-to-Max: Optimizing Data Mixtures for Peak Vision-Language Efficiency](/20260601-20260617/mix-to-max-optimizing-data-mixtures-for-peak-vision-language-efficiency)  
    标签：无标签
-13. [Region–patch aware soft-attention network for hepatocellular carcinoma histopathology: context-guided multi-view fusion with deep ROI supervision](/20260523-20260531/regionpatch-aware-soft-attention-network-for-hepatocellular-carcinoma-histopathology-context-guided-multi-view-fusion-with-deep-roi-supervision)  
+13. [Dynamic Important Example Mining for Reinforcement Finetuning](/20260601-20260617/dynamic-important-example-mining-for-reinforcement-finetuning)  
    标签：无标签
-14. [Habitat-informed MRI Radiomics and Deep Learning Fusion for Short-Term Survival Prediction in Patients with Glioblastoma: Exploratory Radiogenomic and Immune …](/20260523-20260531/habitat-informed-mri-radiomics-and-deep-learning-fusion-for-short-term-survival-prediction-in-patients-with-glioblastoma-exploratory-radiogenomic-and-immune-)  
+14. [Beyond Accuracy: An Empirical Study of Perception Stability in Multimodal Large Language Models](/20260601-20260617/beyond-accuracy-an-empirical-study-of-perception-stability-in-multimodal-large-language-models)  
    标签：无标签
-15. [Comparison of Foundation Models MedSAM and DINOv3 with the nnU-Net Framework for Bone Metastasis Segmentation in Computed Tomography Scans](/20260523-20260531/comparison-of-foundation-models-medsam-and-dinov3-with-the-nnu-net-framework-for-bone-metastasis-segmentation-in-computed-tomography-scans)  
+15. [A clinical–radiomics model based on multiparametric MRI for discriminating solitary primary spinal tumors from solitary spinal metastases](/20260601-20260617/a-clinicalradiomics-model-based-on-multiparametric-mri-for-discriminating-solitary-primary-spinal-tumors-from-solitary-spinal-metastases)  
    标签：无标签
-16. [CT Texture Analysis of Acute Ischemic Stroke: Prediction of Hemorrhagic Transformation After Thrombolysis](/20260523-20260531/ct-texture-analysis-of-acute-ischemic-stroke-prediction-of-hemorrhagic-transformation-after-thrombolysis)  
+16. [Turning Pre-Trained Vision Transformers into End-to-End Histopathology Whole Slide Image Models for Survival Prediction](/20260601-20260617/turning-pre-trained-vision-transformers-into-end-to-end-histopathology-whole-slide-image-models-for-survival-prediction)  
    标签：无标签
-17. [Beyond gross total resection (GTR): Deep peritumoral radiomics for predicting overall survival (OS) and O6-methylguanine-DNA-methyltransferase promoter …](/20260523-20260531/beyond-gross-total-resection-gtr-deep-peritumoral-radiomics-for-predicting-overall-survival-os-and-o6-methylguanine-dna-methyltransferase-promoter-)  
+17. [Development and external validation of a multicenter radiomics-based machine learning model for differentiating metastatic and non-metastatic bone uptakes on [18F] …](/20260601-20260617/development-and-external-validation-of-a-multicenter-radiomics-based-machine-learning-model-for-differentiating-metastatic-and-non-metastatic-bone-uptakes-on-18f-)  
    标签：无标签
-18. [CancerVerse: A Fully Open Longitudinal and Multimodal Dataset for Multicancer Screening](/20260523-20260531/cancerverse-a-fully-open-longitudinal-and-multimodal-dataset-for-multicancer-screening)  
+18. [External validation of new prostate cancer risk groups by PSMA-PET (PPP3).](/20260601-20260617/external-validation-of-new-prostate-cancer-risk-groups-by-psma-pet-ppp3)  
    标签：无标签
-19. [Do Language Models Know What Not to Say? Causal Evidence for Statistical Preemption in LLMs](/20260523-20260531/do-language-models-know-what-not-to-say-causal-evidence-for-statistical-preemption-in-llms)  
+19. [SAT-RRG: LLM-Guided Self-Adaptive Training for Radiology Report Generation with Token-Level Push-Pull Optimization](/20260601-20260617/sat-rrg-llm-guided-self-adaptive-training-for-radiology-report-generation-with-token-level-push-pull-optimization)  
    标签：无标签
-20. [SegReg-Rep: Region-Aware Vision-Language Alignment for Fine-Grained Radiology Report Generation from 3D Medical Images](/20260523-20260531/segreg-rep-region-aware-vision-language-alignment-for-fine-grained-radiology-report-generation-from-3d-medical-images)  
+20. [From Infusion to Assimilation Distillation for Medical Image Segmentation](/20260601-20260617/from-infusion-to-assimilation-distillation-for-medical-image-segmentation)  
    标签：无标签
-21. [Training language models to be warm can reduce accuracy and increase sycophancy](/20260523-20260531/training-language-models-to-be-warm-can-reduce-accuracy-and-increase-sycophancy)  
+21. [Supplementary Material of OraPO: Oracle-educated Reinforcement Learning for Data-efficient and Factual Radiology Report Generation](/20260601-20260617/supplementary-material-of-orapo-oracle-educated-reinforcement-learning-for-data-efficient-and-factual-radiology-report-generation)  
    标签：无标签
-22. [Multi-Institutional Annotated Multiparametric MRI Dataset of Pediatric High-Grade Gliomas](/20260523-20260531/multi-institutional-annotated-multiparametric-mri-dataset-of-pediatric-high-grade-gliomas)  
+22. [Risk-Aware Prompt-Guided Framework for Brain MRI Diagnostic Report Generation with Radiologist Feedback Integration](/20260601-20260617/risk-aware-prompt-guided-framework-for-brain-mri-diagnostic-report-generation-with-radiologist-feedback-integration)  
    标签：无标签
-23. [Jacques Fadhili Bake 1, 2✉ Phone+ 243999488594 Email fadhilibake@ gmail. com Justin Kambale Tsandiraki 1, 2 Céline Kavira Malengera 1 Fabrice Gulimwentuga …](/20260523-20260531/jacques-fadhili-bake-1-2-phone-243999488594-email-fadhilibake-gmail-com-justin-kambale-tsandiraki-1-2-cline-kavira-malengera-1-fabrice-gulimwentuga-)  
+23. [F $^ 2$-Assist: Multi-Phase Fetal Growth Forecast and Report Generation from Ultrasound Examination](/20260601-20260617/f--2-assist-multi-phase-fetal-growth-forecast-and-report-generation-from-ultrasound-examination)  
    标签：无标签
-24. [Radiomics model integrating MRI and ECV enhances prediction accuracy for progression in high-grade glioma](/20260523-20260531/radiomics-model-integrating-mri-and-ecv-enhances-prediction-accuracy-for-progression-in-high-grade-glioma)  
+24. [Beyond Single Images: A Comprehensive Benchmark for Album-Level Vision-Language Understanding](/20260601-20260617/beyond-single-images-a-comprehensive-benchmark-for-album-level-vision-language-understanding)  
    标签：无标签
-25. [HCA-Net: Hierarchical Coordinate Attention Network for Medical Image Segmentation](/20260523-20260531/hca-net-hierarchical-coordinate-attention-network-for-medical-image-segmentation)  
+25. [SIA-Net: spatial-and intensity-aware network with AlsEMA for semi-supervised 3D medical image segmentation](/20260601-20260617/sia-net-spatial-and-intensity-aware-network-with-alsema-for-semi-supervised-3d-medical-image-segmentation)  
    标签：无标签
-26. [Automated Lesion Segmentation in Medical Imaging via Integration of nnU-Net Optimization and SAM Approach](/20260523-20260531/automated-lesion-segmentation-in-medical-imaging-via-integration-of-nnu-net-optimization-and-sam-approach)  
+26. [Multiparametric Free‐Breathing 3D Whole‐Heart Cardiac MR for Anatomical Bright‐and Black‐Blood Imaging With Co‐Registered T 1/T 2 T _1/T _2 Myocardial …](/20260601-20260617/multiparametric-freebreathing-3d-wholeheart-cardiac-mr-for-anatomical-brightand-blackblood-imaging-with-coregistered-t-1t-2-t-1t-2-myocardial-)  
    标签：无标签
-27. [Cerebral blood flow alterations and machine learning classification in chronic low back pain using multi-PLD ASL radiomics](/20260523-20260531/cerebral-blood-flow-alterations-and-machine-learning-classification-in-chronic-low-back-pain-using-multi-pld-asl-radiomics)  
+27. [Independent head-to-head comparison of commercial artificial intelligence devices for lung cancer detection on chest radiographs](/20260601-20260617/independent-head-to-head-comparison-of-commercial-artificial-intelligence-devices-for-lung-cancer-detection-on-chest-radiographs)  
    标签：无标签
-28. [Prediction of mRECIST tumor response at firstfollow-up after DEB-TACE using a combined radiomics-clinical model and explainability methods](/20260523-20260531/prediction-of-mrecist-tumor-response-at-firstfollow-up-after-deb-tace-using-a-combined-radiomics-clinical-model-and-explainability-methods)  
+28. [Development and Validation of a Coronary Computed Tomography Angiography‐Based Radiomics‐Integrated Model for Noninvasive Detection of Left Atrial …](/20260601-20260617/development-and-validation-of-a-coronary-computed-tomography-angiographybased-radiomicsintegrated-model-for-noninvasive-detection-of-left-atrial-)  
    标签：无标签
-29. [Analyzing and Enhancing Visual Learning in LLM-based Radiology Report Generation](/20260523-20260531/analyzing-and-enhancing-visual-learning-in-llm-based-radiology-report-generation)  
+29. [Evaluation of 2D and 3D nnU-Net models with two-label and three-label strategies for automatic segmentation and total metabolic tumor volume estimation of …](/20260601-20260617/evaluation-of-2d-and-3d-nnu-net-models-with-two-label-and-three-label-strategies-for-automatic-segmentation-and-total-metabolic-tumor-volume-estimation-of-)  
    标签：无标签
-30. [LlamaRG: A Multi-View Large Language Model for Radiology Report Generation](/20260523-20260531/llamarg-a-multi-view-large-language-model-for-radiology-report-generation)  
+30. [Exploring Foundation Model Adaptations for 3D Medical Imaging: Prompt-Based](/20260601-20260617/exploring-foundation-model-adaptations-for-3d-medical-imaging-prompt-based)  
    标签：无标签
-31. [A Denoising-Enhanced Multimodal Learning Framework for Robust Nasal Endoscopy Report Generation](/20260523-20260531/a-denoising-enhanced-multimodal-learning-framework-for-robust-nasal-endoscopy-report-generation)  
+31. [RNED: Rotary Number Encoding and Decoding for Medical VLMs](/20260601-20260617/rned-rotary-number-encoding-and-decoding-for-medical-vlms)  
    标签：无标签
-32. [Phrase-grounded APO for Improving Chest X-ray Report Generation](/20260523-20260531/phrase-grounded-apo-for-improving-chest-x-ray-report-generation)  
+32. [Frequency disentanglement with State space gating network for medical image segmentation](/20260601-20260617/frequency-disentanglement-with-state-space-gating-network-for-medical-image-segmentation)  
    标签：无标签
-33. [BiOTPrompt: Bidirectional Optimal Transport Guided Prompting for Disease Evolution-aware Radiology Report Generation](/20260523-20260531/biotprompt-bidirectional-optimal-transport-guided-prompting-for-disease-evolution-aware-radiology-report-generation)  
+33. [A Promptable 3D-CT Foundation Model-Based Approach for Pulmonary Embolism: K. Floch et al.: A Promptable 3D-CT Foundation Model-Based Approach for …](/20260601-20260617/a-promptable-3d-ct-foundation-model-based-approach-for-pulmonary-embolism-k-floch-et-al-a-promptable-3d-ct-foundation-model-based-approach-for-)  
    标签：无标签
-34. [Teresa: Uncertainty-Aware Generalizable Chest X-ray Report Generation and Disease Classification](/20260523-20260531/teresa-uncertainty-aware-generalizable-chest-x-ray-report-generation-and-disease-classification)  
+34. [Interpretable MRI Radiomics for Preoperative Meningioma Consistency Prediction](/20260601-20260617/interpretable-mri-radiomics-for-preoperative-meningioma-consistency-prediction)  
    标签：无标签
-35. [Bridging the image–text gap: Reinforced Cross-modal Abnormality Driven Transformer for automatic chest X-ray report generation](/20260523-20260531/bridging-the-imagetext-gap-reinforced-cross-modal-abnormality-driven-transformer-for-automatic-chest-x-ray-report-generation)  
+35. [Multi-dimensional MRI representation and privileged learning approaches to functional outcome prediction for ischemic stroke patients](/20260601-20260617/multi-dimensional-mri-representation-and-privileged-learning-approaches-to-functional-outcome-prediction-for-ischemic-stroke-patients)  
    标签：无标签
-36. [Source‐free domain adaptation for multi‐institutional chest X‐ray images](/20260523-20260531/sourcefree-domain-adaptation-for-multiinstitutional-chest-xray-images)  
+36. [MIMIC-CXR-VQA: A Large-Scale LLM-Annotated Dataset and Comparative Benchmark for Medical Visual Question Answering](/20260601-20260617/mimic-cxr-vqa-a-large-scale-llm-annotated-dataset-and-comparative-benchmark-for-medical-visual-question-answering)  
    标签：无标签
-37. [Multiphase enhanced computed tomography features captured by delta radiomics reveal prognosis and tumor heterogeneity in patients with hepatocellular carcinoma …](/20260523-20260531/multiphase-enhanced-computed-tomography-features-captured-by-delta-radiomics-reveal-prognosis-and-tumor-heterogeneity-in-patients-with-hepatocellular-carcinoma-)  
+37. [Performance of Vision-Language Models for Zero-Shot Lung Nodule Detection on Chest Radiographs](/20260601-20260617/performance-of-vision-language-models-for-zero-shot-lung-nodule-detection-on-chest-radiographs)  
    标签：无标签
-38. [MDCS-MoAME: Multi-directional Composite Scanning with Mixture of Attention and Mamba Experts for Cancer Survival Prediction](/20260523-20260531/mdcs-moame-multi-directional-composite-scanning-with-mixture-of-attention-and-mamba-experts-for-cancer-survival-prediction)  
+38. [Dedicated Breast PET-Based Deep Learning Radiomics for Prediction of Pathologic Complete Response to Neoadjuvant Chemotherapy in HER2-Positive Breast …](/20260601-20260617/dedicated-breast-pet-based-deep-learning-radiomics-for-prediction-of-pathologic-complete-response-to-neoadjuvant-chemotherapy-in-her2-positive-breast-)  
    标签：无标签
-39. [Progression-free Survival Following Primary Staging with [18F] PSMA-1007-PET/ceCT Versus Na [18F] F-PET/ceCT in Prostate Cancer: Results from the PRISMA-PET …](/20260523-20260531/progression-free-survival-following-primary-staging-with-18f-psma-1007-petcect-versus-na-18f-f-petcect-in-prostate-cancer-results-from-the-prisma-pet-)  
+39. [Machine learning of multiparametric MRI radiomics preoperatively distinguishes testicular seminoma from non-seminoma: a multicenter study](/20260601-20260617/machine-learning-of-multiparametric-mri-radiomics-preoperatively-distinguishes-testicular-seminoma-from-non-seminoma-a-multicenter-study)  
    标签：无标签
-40. [MeMix: Multi-Encoder Mixture Framework for Medical Report Generation](/20260523-20260531/memix-multi-encoder-mixture-framework-for-medical-report-generation)  
+40. [A universal foundation model for grounded biomedical image interpretation](/20260601-20260617/a-universal-foundation-model-for-grounded-biomedical-image-interpretation)  
    标签：无标签
-41. [Adaptive Reinforcement for Open-ended Medical Reasoning via Semantic-Guided Reward Collapse Mitigation](/20260523-20260531/adaptive-reinforcement-for-open-ended-medical-reasoning-via-semantic-guided-reward-collapse-mitigation)  
+41. [Multiphase enhanced computed tomography features captured by delta radiomics reveal prognosis and tumor heterogeneity in patients with hepatocellular carcinoma …](/20260601-20260617/multiphase-enhanced-computed-tomography-features-captured-by-delta-radiomics-reveal-prognosis-and-tumor-heterogeneity-in-patients-with-hepatocellular-carcinoma-)  
    标签：无标签
-42. [MIMIC-CXR-VQA: A Large-Scale LLM-Annotated Dataset and Comparative Benchmark for Medical Visual Question Answering](/20260523-20260531/mimic-cxr-vqa-a-large-scale-llm-annotated-dataset-and-comparative-benchmark-for-medical-visual-question-answering)  
+42. [Novel Unsupervised Machine Learning Model Using Multi-Parametric Radiomics for Prognostic Stratification of Bifocal Hepatocellular Carcinoma](/20260601-20260617/novel-unsupervised-machine-learning-model-using-multi-parametric-radiomics-for-prognostic-stratification-of-bifocal-hepatocellular-carcinoma)  
    标签：无标签
-43. [Mix-to-Max: Optimizing Data Mixtures for Peak Vision-Language Efficiency](/20260523-20260531/mix-to-max-optimizing-data-mixtures-for-peak-vision-language-efficiency)  
+43. [An optimized radiomic approach to breast ultrasound for lesion localization and malignancy classification](/20260601-20260617/an-optimized-radiomic-approach-to-breast-ultrasound-for-lesion-localization-and-malignancy-classification)  
    标签：无标签
-44. [Supplementary Material—LLaDA-MedV: Exploring Large Language Diffusion Models for Biomedical Image Understanding](/20260523-20260531/supplementary-materialllada-medv-exploring-large-language-diffusion-models-for-biomedical-image-understanding)  
+44. [Toward reproducible metabolic tumor volume quantification in endometrial cancer: optimizing [¹⁸F] FDG PET/CT tumor segmentation methods](/20260601-20260617/toward-reproducible-metabolic-tumor-volume-quantification-in-endometrial-cancer-optimizing-f-fdg-petct-tumor-segmentation-methods)  
    标签：无标签
-45. [Seeing Helps Reasoning in Language Models](/20260523-20260531/seeing-helps-reasoning-in-language-models)  
+45. [DB-SAM: Boundary-aware and domain-adaptive SAM for generalizable few-shot medical image segmentation](/20260601-20260617/db-sam-boundary-aware-and-domain-adaptive-sam-for-generalizable-few-shot-medical-image-segmentation)  
    标签：无标签
-46. [Bridging Facial Understanding and Animation via Language Models](/20260523-20260531/bridging-facial-understanding-and-animation-via-language-models)  
+46. [T2-FLAIR digital subtraction radiomics versus neuroradiologist visual assessment for differentiating IDH-mutant astrocytomas from other non-enhancing low-grade …](/20260601-20260617/t2-flair-digital-subtraction-radiomics-versus-neuroradiologist-visual-assessment-for-differentiating-idh-mutant-astrocytomas-from-other-non-enhancing-low-grade-)  
    标签：无标签
-47. [Evaluating large language models for diagnostic reasoning from unstructured clinical narratives in epilepsy](/20260523-20260531/2407.03004v3-evaluating-large-language-models-for-diagnostic-reasoning-from-unstructured-clinical-narratives-in-epilepsy)  
+47. [Revisiting multi-nodal radiomics with advanced feature learning for lymphoma classification: a multi-center study](/20260601-20260617/revisiting-multi-nodal-radiomics-with-advanced-feature-learning-for-lymphoma-classification-a-multi-center-study)  
    标签：无标签
-48. [Large Language Models for Medical Report Generation](/20260523-20260531/2506.15477v1-large-language-models-for-medical-report-generation)  
+48. [Enhancing foundation model transfer for prostate cancer detection with patch-level contrastive learning](/20260601-20260617/enhancing-foundation-model-transfer-for-prostate-cancer-detection-with-patch-level-contrastive-learning)  
    标签：无标签
-49. [EXACT: an explainable anomaly-aware vision foundation model for analysis of 3D chest CT](/20260523-20260531/2604.24146-exact-an-explainable-anomaly-aware-vision-foundation-model-for-analysis-of-3d-chest-ct)  
+49. [3D Deep Learning for Brain Tumor Segmentation and Survival Prediction: A Comprehensive Multi-Modal Analysis Using the BraTS2020 Dataset](/20260601-20260617/3d-deep-learning-for-brain-tumor-segmentation-and-survival-prediction-a-comprehensive-multi-modal-analysis-using-the-brats2020-dataset)  
    标签：无标签
-50. [Contextual Linear Activation Steering of Language Models](/20260523-20260531/2604.24693-contextual-linear-activation-steering-of-language-models)  
+50. [Image Mask-Guided Cross-modal Network for Radiology Report Generation](/20260601-20260617/image-mask-guided-cross-modal-network-for-radiology-report-generation)  
    标签：无标签
-51. [Marco-MoE: Open Multilingual Mixture-of-Expert Language Models with Efficient Upcycling](/20260523-20260531/2604.25578-marco-moe-open-multilingual-mixture-of-expert-language-models-with-efficient-upcycling)  
+51. [Multi-view Chest X-Ray Vision-Language Pre-training via Semantic-Aware Masked Language Modeling and High-order Alignment](/20260601-20260617/multi-view-chest-x-ray-vision-language-pre-training-via-semantic-aware-masked-language-modeling-and-high-order-alignment)  
    标签：无标签
-52. [GIFT: Guided Fine-Tuning and Transfer for Enhancing Instruction-Tuned Language Models](/20260523-20260531/2605.01256-gift-guided-fine-tuning-and-transfer-for-enhancing-instruction-tuned-language-models)  
+52. [Vision Inference Former: Sustaining Visual Consistency in Multimodal Large Language Models](/20260601-20260617/vision-inference-former-sustaining-visual-consistency-in-multimodal-large-language-models)  
    标签：无标签
-53. [PhysicianBench: Evaluating LLM Agents in Real-World EHR Environments](/20260523-20260531/2605.02240-physicianbench-evaluating-llm-agents-in-real-world-ehr-environments)  
+53. [Rubric-Grounded Reinforcement Learning: Structured Judge Rewards for Generalizable Reasoning in Language Models](/20260601-20260617/rubric-grounded-reinforcement-learning-structured-judge-rewards-for-generalizable-reasoning-in-language-models)  
    标签：无标签
-54. [InfoLaw: Information Scaling Laws for Large Language Models with Quality-Weighted Mixture Data and Repetition](/20260523-20260531/2605.02364-infolaw-information-scaling-laws-for-large-language-models-with-quality-weighted-mixture-data-and-repetition)  
+54. [Combining preoperative clinical and ultrasound radiomic features to predict the predominant component of combined hepatocellular carcinoma-cholangiocarcinoma](/20260601-20260617/combining-preoperative-clinical-and-ultrasound-radiomic-features-to-predict-the-predominant-component-of-combined-hepatocellular-carcinoma-cholangiocarcinoma)  
    标签：无标签
-55. [Dante: An Open Source Model Pre-Training and Fine-Tuning Tool for the Dafne Federated Framework for Medical Image Segmentation](/20260523-20260531/2605.03602-dante-an-open-source-model-pre-training-and-fine-tuning-tool-for-the-dafne-federated-framework-for-medical-image-segmentation)  
+55. [Voxel-wise Adjustment of Single-Time-Point Dosimetry Using Deep Learning for 177Lu-PSMA Radiopharmaceutical Therapy](/20260601-20260617/voxel-wise-adjustment-of-single-time-point-dosimetry-using-deep-learning-for-177lu-psma-radiopharmaceutical-therapy)  
    标签：无标签
-56. [Safety and accuracy follow different scaling laws in clinical large language models](/20260523-20260531/2605.04039-safety-and-accuracy-follow-different-scaling-laws-in-clinical-large-language-models)  
+56. [MDCS-MoAME: Multi-directional Composite Scanning with Mixture of Attention and Mamba Experts for Cancer Survival Prediction](/20260601-20260617/mdcs-moame-multi-directional-composite-scanning-with-mixture-of-attention-and-mamba-experts-for-cancer-survival-prediction)  
    标签：无标签
-57. [Disentangled Learning Improves Implicit Neural Representations for Medical Reconstruction](/20260523-20260531/2605.04234-disentangled-learning-improves-implicit-neural-representations-for-medical-reconstruction)  
+57. [Fully automatic left ventricle segmentation in $$^{82} $$ Rb PET/CT Using a semi-supervised nnU-net](/20260601-20260617/fully-automatic-left-ventricle-segmentation-in-82--rb-petct-using-a-semi-supervised-nnu-net)  
    标签：无标签
-58. [Teaching Language Models to Think in Code](/20260523-20260531/2605.07237-teaching-language-models-to-think-in-code)  
+58. [An efficient channel attention–based lightweight network for tuberculosis screening from chest X-ray images](/20260601-20260617/an-efficient-channel-attentionbased-lightweight-network-for-tuberculosis-screening-from-chest-x-ray-images)  
    标签：无标签
-59. [Experience Sharing in Mutual Reinforcement Learning for Heterogeneous Language Models](/20260523-20260531/2605.07244-experience-sharing-in-mutual-reinforcement-learning-for-heterogeneous-language-models)  
+59. [Anatomy-Guided Spatiotemporal Affinity Learning for Unsupervised Domain Adaptation in Echocardiography Segmentation](/20260601-20260617/anatomy-guided-spatiotemporal-affinity-learning-for-unsupervised-domain-adaptation-in-echocardiography-segmentation)  
    标签：无标签
-60. [STARFlow2: Bridging Language Models and Normalizing Flows for Unified Multimodal Generation](/20260523-20260531/2605.08029-starflow2-bridging-language-models-and-normalizing-flows-for-unified-multimodal-generation)  
+60. [PDCR: Perception-Decomposed Confidence Reward for Vision-Language Reasoning](/20260601-20260617/pdcr-perception-decomposed-confidence-reward-for-vision-language-reasoning)  
    标签：无标签
-61. [Mid-Training with Self-Generated Data Improves Reinforcement Learning in Language Models](/20260523-20260531/2605.08472-mid-training-with-self-generated-data-improves-reinforcement-learning-in-language-models)  
+61. [An Effective Retraining Strategy for Unsupervised Domain Adaptive Medical Image Segmentation](/20260601-20260617/an-effective-retraining-strategy-for-unsupervised-domain-adaptive-medical-image-segmentation)  
    标签：无标签
-62. [Sparse Layers are Critical to Scaling Looped Language Models](/20260523-20260531/2605.09165-sparse-layers-are-critical-to-scaling-looped-language-models)  
+62. [Explainability of Tuberculosis Diagnosis based on Chest X-Ray Images with Vision Transformer](/20260601-20260617/explainability-of-tuberculosis-diagnosis-based-on-chest-x-ray-images-with-vision-transformer)  
    标签：无标签
-63. [Edit-Based Refinement for Parallel Masked Diffusion Language Models](/20260523-20260531/2605.09603-edit-based-refinement-for-parallel-masked-diffusion-language-models)  
+63. [G-RAGent: Dynamic Reasoning on Hypergraphs for Retrieval-Augmented Language Models](/20260601-20260617/g-ragent-dynamic-reasoning-on-hypergraphs-for-retrieval-augmented-language-models)  
    标签：无标签
-64. [Scratchpad Patching: Decoupling Compute from Patch Size in Byte-Level Language Models](/20260523-20260531/2605.09630-scratchpad-patching-decoupling-compute-from-patch-size-in-byte-level-language-models)  
+64. [Revisiting InternVL: A Systematic Technical Framework for Building Powerful Open-Source Vision-Language Models](/20260601-20260617/revisiting-internvl-a-systematic-technical-framework-for-building-powerful-open-source-vision-language-models)  
    标签：无标签
-65. [Multi-Stream LLMs: Unblocking Language Models with Parallel Streams of Thoughts, Inputs and Outputs](/20260523-20260531/2605.12460-multi-stream-llms-unblocking-language-models-with-parallel-streams-of-thoughts-inputs-and-outputs)  
+65. [COMPARATIVE ANALYSIS OF MACHINE LEARNING ALGORITHMS FOR CLASSIFYING CHEST X-RAY IMAGES OF COVID-19](/20260601-20260617/comparative-analysis-of-machine-learning-algorithms-for-classifying-chest-x-ray-images-of-covid-19)  
    标签：无标签
-66. [Learning to See What You Need: Gaze Attention for Multimodal Large Language Models](/20260523-20260531/2605.13080-learning-to-see-what-you-need-gaze-attention-for-multimodal-large-language-models)  
+66. [Discriminating HFrEF vs HFpEF from chest radiographs: Mitigating demographic performance gaps via augmentation and multimodal fusion](/20260601-20260617/discriminating-hfref-vs-hfpef-from-chest-radiographs-mitigating-demographic-performance-gaps-via-augmentation-and-multimodal-fusion)  
    标签：无标签
-67. [Teacher-Guided Policy Optimization for LLM Distillation](/20260523-20260531/2605.13230-teacher-guided-policy-optimization-for-llm-distillation)  
+67. [From Radiomics to TI-RADS: A Stability-Aware Clinically-Interpretable Dictionary for Explainable Thyroid Nodule Classification on Ultrasound](/20260601-20260617/from-radiomics-to-ti-rads-a-stability-aware-clinically-interpretable-dictionary-for-explainable-thyroid-nodule-classification-on-ultrasound)  
    标签：无标签
-68. [Query-Conditioned Test-Time Self-Training for Large Language Models](/20260523-20260531/2605.13369-query-conditioned-test-time-self-training-for-large-language-models)  
+68. [Misplaced Central Venous Catheters and Retained Guidewires: A “Never Event” Pictorial Review and Case Series Analysis](/20260601-20260617/misplaced-central-venous-catheters-and-retained-guidewires-a-never-event-pictorial-review-and-case-series-analysis)  
    标签：无标签
-69. [PDCR: Perception-Decomposed Confidence Reward for Vision-Language Reasoning](/20260523-20260531/2605.13467-pdcr-perception-decomposed-confidence-reward-for-vision-language-reasoning)  
+69. [Gossypiboma‐Induced Acute Abdomen Highlighting the Importance of Surgical Safety Protocols: A Case Report](/20260601-20260617/gossypibomainduced-acute-abdomen-highlighting-the-importance-of-surgical-safety-protocols-a-case-report)  
    标签：无标签
-70. [PersonalAI 2.0: Enhancing knowledge graph traversal/retrieval with planning mechanism for Personalized LLM Agents](/20260523-20260531/2605.13481-personalai-20-enhancing-knowledge-graph-traversalretrieval-with-planning-mechanism-for-personalized-llm-agents)  
+70. [Evaluating large language models for diagnostic reasoning from unstructured clinical narratives in epilepsy](/20260601-20260617/2407.03004v3-evaluating-large-language-models-for-diagnostic-reasoning-from-unstructured-clinical-narratives-in-epilepsy)  
    标签：无标签
-71. [DT-Transformer: A Foundation Model for Disease Trajectory Prediction on a Real-world Health System](/20260523-20260531/2605.14227-dt-transformer-a-foundation-model-for-disease-trajectory-prediction-on-a-real-world-health-system)  
+71. [Understanding Temporal Logic Consistency in Video-Language Models through Cross-Modal Attention Discriminability](/20260601-20260617/2510.08138v2-understanding-temporal-logic-consistency-in-video-language-models-through-cross-modal-attention-discriminability)  
    标签：无标签
-72. [RxEval: A Prescription-Level Benchmark for Evaluating LLM Medication Recommendation](/20260523-20260531/2605.14543-rxeval-a-prescription-level-benchmark-for-evaluating-llm-medication-recommendation)  
+72. [When Are Experts Misrouted? Counterfactual Routing Analysis in Mixture-of-Experts Language Models](/20260601-20260617/2605.07260-when-are-experts-misrouted-counterfactual-routing-analysis-in-mixture-of-experts-language-models)  
    标签：无标签
-73. [Self-Supervised On-Policy Distillation for Reasoning Language Models](/20260523-20260531/2605.17497-self-supervised-on-policy-distillation-for-reasoning-language-models)  
+73. [CollabVR: Collaborative Video Reasoning with Vision-Language and Video Generation Models](/20260601-20260617/2605.08735-collabvr-collaborative-video-reasoning-with-vision-language-and-video-generation-models)  
    标签：无标签
-74. [Language models struggle with compartmentalization](/20260523-20260531/2605.19284-language-models-struggle-with-compartmentalization)  
+74. [A Comparative Analysis of CT Degradation for LDCT Nodule Classification using Radiomics](/20260601-20260617/2605.12164-a-comparative-analysis-of-ct-degradation-for-ldct-nodule-classification-using-radiomics)  
    标签：无标签
-75. [Concept-Guided Noisy Negative Suppression for Zero-Shot Classification and Grounding of Chest X-Ray Findings](/20260523-20260531/2605.19374-concept-guided-noisy-negative-suppression-for-zero-shot-classification-and-grounding-of-chest-x-ray-findings)  
+75. [Multi-Stream LLMs: Unblocking Language Models with Parallel Streams of Thoughts, Inputs and Outputs](/20260601-20260617/2605.12460-multi-stream-llms-unblocking-language-models-with-parallel-streams-of-thoughts-inputs-and-outputs)  
    标签：无标签
-76. [LambdaPO: A Lambda Style Policy Optimization for Reasoning Language Models](/20260523-20260531/2605.19416-lambdapo-a-lambda-style-policy-optimization-for-reasoning-language-models)  
+76. [Query-Conditioned Test-Time Self-Training for Large Language Models](/20260601-20260617/2605.13369-query-conditioned-test-time-self-training-for-large-language-models)  
    标签：无标签
-77. [FullFlow: Upgrading Text-to-Image Flow Matching Models for Bidirectional Vision--Language Generation](/20260523-20260531/2605.20316-fullflow-upgrading-text-to-image-flow-matching-models-for-bidirectional-vision--language-generation)  
+77. [RxEval: A Prescription-Level Benchmark for Evaluating LLM Medication Recommendation](/20260601-20260617/2605.14543-rxeval-a-prescription-level-benchmark-for-evaluating-llm-medication-recommendation)  
    标签：无标签
-78. [NeuroQA: A Large-Scale Image-Grounded Benchmark for 3D Brain MRI Understanding](/20260523-20260531/2605.20525-neuroqa-a-large-scale-image-grounded-benchmark-for-3d-brain-mri-understanding)  
+78. [Agentifying Patient Dynamics within LLMs through Interacting with Clinical World Model](/20260601-20260617/2605.14723-agentifying-patient-dynamics-within-llms-through-interacting-with-clinical-world-model)  
    标签：无标签
-79. [RISE: Reliable Improvement in Self-Evolving Vision-Language Models](/20260523-20260531/2605.20914-rise-reliable-improvement-in-self-evolving-vision-language-models)  
+79. [RoiMAM: Region-of-Interest Medical Attention Model for Efficient Vision-Language Understanding](/20260601-20260617/2605.15561-roimam-region-of-interest-medical-attention-model-for-efficient-vision-language-understanding)  
    标签：无标签
-80. [An Open Multi-Center Whole-Body FDG PET/CT Foundation Model for Tumor Segmentation](/20260523-20260531/2605.21835-an-open-multi-center-whole-body-fdg-petct-foundation-model-for-tumor-segmentation)  
+80. [OmniVL-Guard Pro: A Tool-Augmented Agent for Omnibus Vision-Language Forensics](/20260601-20260617/2605.16962-omnivl-guard-pro-a-tool-augmented-agent-for-omnibus-vision-language-forensics)  
    标签：无标签
-81. [Faithful-MR1: Faithful Multimodal Reasoning via Anchoring and Reinforcing Visual Attention](/20260523-20260531/2605.22072-faithful-mr1-faithful-multimodal-reasoning-via-anchoring-and-reinforcing-visual-attention)  
+81. [Self-Supervised On-Policy Distillation for Reasoning Language Models](/20260601-20260617/2605.17497-self-supervised-on-policy-distillation-for-reasoning-language-models)  
    标签：无标签
-82. [Enhancing Visual Token Representations for Video Large Language Models via Training-Free Spatial-Temporal Pooling and Gridding](/20260523-20260531/2605.22078-enhancing-visual-token-representations-for-video-large-language-models-via-training-free-spatial-temporal-pooling-and-gridding)  
+82. [Harnessing LLM Agents with Skill Programs](/20260601-20260617/2605.17734-harnessing-llm-agents-with-skill-programs)  
    标签：无标签
-83. [SegGuidedNet: Sub-Region-Aware Attention Supervision for Interpretable Brain Tumor Segmentation](/20260523-20260531/2605.22572-segguidednet-sub-region-aware-attention-supervision-for-interpretable-brain-tumor-segmentation)  
+83. [Backdooring Masked Diffusion Language Models](/20260601-20260617/2605.19262-backdooring-masked-diffusion-language-models)  
    标签：无标签
-84. [MedExpMem: Adapting Experience Memory for Differential Diagnosis](/20260523-20260531/2605.22872-medexpmem-adapting-experience-memory-for-differential-diagnosis)  
+84. [Language models struggle with compartmentalization](/20260601-20260617/2605.19284-language-models-struggle-with-compartmentalization)  
    标签：无标签
-85. [Do Language Models Know What Not to Say? Causal Evidence for Statistical Preemption in LLMs](/20260523-20260531/2605.23039-do-language-models-know-what-not-to-say-causal-evidence-for-statistical-preemption-in-llms)  
+85. [MAM-CLIP: Vision-Language Pretraining on Mammography Atlases for BI-RADS Classification](/20260601-20260617/2605.19359-mam-clip-vision-language-pretraining-on-mammography-atlases-for-bi-rads-classification)  
    标签：无标签
-86. [DDX-TRACE: A Benchmark for Medical Diagnostic Trajectories in VLMs](/20260523-20260531/2605.23629-ddx-trace-a-benchmark-for-medical-diagnostic-trajectories-in-vlms)  
+86. [LambdaPO: A Lambda Style Policy Optimization for Reasoning Language Models](/20260601-20260617/2605.19416-lambdapo-a-lambda-style-policy-optimization-for-reasoning-language-models)  
    标签：无标签
-87. [SliceWorld: A Predictive and Controllable World-State Model for CT Report Generation](/20260523-20260531/2605.24371-sliceworld-a-predictive-and-controllable-world-state-model-for-ct-report-generation)  
+87. [FullFlow: Upgrading Text-to-Image Flow Matching Models for Bidirectional Vision--Language Generation](/20260601-20260617/2605.20316-fullflow-upgrading-text-to-image-flow-matching-models-for-bidirectional-vision--language-generation)  
    标签：无标签
-88. [SurgRFO: Foundation Model Based Compositional Synthesis of Critical Retained Foreign Objects in Intraoperative Chest X-rays](/20260523-20260531/2605.24787-surgrfo-foundation-model-based-compositional-synthesis-of-critical-retained-foreign-objects-in-intraoperative-chest-x-rays)  
+88. [UniVL: Unified Vision-Language Embedding for Spatially Grounded Contextual Image Generation](/20260601-20260617/2605.21611-univl-unified-vision-language-embedding-for-spatially-grounded-contextual-image-generation)  
    标签：无标签
-89. [Universal Boosts, Specific Suppressors: Sparse Autoencoder Steering of Medical Vision-Language Models](/20260523-20260531/2605.24977-universal-boosts-specific-suppressors-sparse-autoencoder-steering-of-medical-vision-language-models)  
+89. [An Open Multi-Center Whole-Body FDG PET/CT Foundation Model for Tumor Segmentation](/20260601-20260617/2605.21835-an-open-multi-center-whole-body-fdg-petct-foundation-model-for-tumor-segmentation)  
    标签：无标签
-90. [Looped Diffusion Language Models](/20260523-20260531/2605.26106-looped-diffusion-language-models)  
+90. [Enhancing Visual Token Representations for Video Large Language Models via Training-Free Spatial-Temporal Pooling and Gridding](/20260601-20260617/2605.22078-enhancing-visual-token-representations-for-video-large-language-models-via-training-free-spatial-temporal-pooling-and-gridding)  
    标签：无标签
-91. [BioFact-MoE: Biologically Factorized Mixture of Experts for Vision-Language Prognostic Modeling in Hepatocellular Carcinoma](/20260523-20260531/2605.26376-biofact-moe-biologically-factorized-mixture-of-experts-for-vision-language-prognostic-modeling-in-hepatocellular-carcinoma)  
+91. [Precise: SDE-Consistent Stochastic Sampling for RL Post-Training of Flow-Matching Models](/20260601-20260617/2605.23522-precise-sde-consistent-stochastic-sampling-for-rl-post-training-of-flow-matching-models)  
    标签：无标签
-92. [Mind the Tool Failures: Achieving Synergistic Tool Gains for Medical Agents](/20260523-20260531/2605.26691-mind-the-tool-failures-achieving-synergistic-tool-gains-for-medical-agents)  
+92. [Strong Teacher Not Needed? On Distillation in LLM Pretraining](/20260601-20260617/2605.23857-strong-teacher-not-needed-on-distillation-in-llm-pretraining)  
    标签：无标签
-93. [Stabilizing Recurrent Dynamics for Test-Time Scalable Latent Reasoning in Looped Language Models](/20260523-20260531/2605.26733-stabilizing-recurrent-dynamics-for-test-time-scalable-latent-reasoning-in-looped-language-models)  
+93. [Looped Diffusion Language Models](/20260601-20260617/2605.26106-looped-diffusion-language-models)  
    标签：无标签
-94. [Not All Tokens Matter Equally: Dynamic In-context Vector Distillation with Decisive-Token Supervision for Long-form Medical Report Generation](/20260523-20260531/2605.27194-not-all-tokens-matter-equally-dynamic-in-context-vector-distillation-with-decisive-token-supervision-for-long-form-medical-report-generation)  
+94. [Stabilizing Recurrent Dynamics for Test-Time Scalable Latent Reasoning in Looped Language Models](/20260601-20260617/2605.26733-stabilizing-recurrent-dynamics-for-test-time-scalable-latent-reasoning-in-looped-language-models)  
    标签：无标签
-95. [OphIn-500K: Curating Web-Scale Visual Instructions for Scaling Ophthalmic Multimodal Large Language Models](/20260523-20260531/2605.27916-ophin-500k-curating-web-scale-visual-instructions-for-scaling-ophthalmic-multimodal-large-language-models)  
+95. [Rethinking Agentic RAG: Toward LLM-Driven Logical Retrieval Beyond Embeddings](/20260601-20260617/2605.27123-rethinking-agentic-rag-toward-llm-driven-logical-retrieval-beyond-embeddings)  
+   标签：无标签
+96. [LocateAnything: Fast and High-Quality Vision-Language Grounding with Parallel Box Decoding](/20260601-20260617/2605.27365-locateanything-fast-and-high-quality-vision-language-grounding-with-parallel-box-decoding)  
+   标签：无标签
+97. [OphIn-500K: Curating Web-Scale Visual Instructions for Scaling Ophthalmic Multimodal Large Language Models](/20260601-20260617/2605.27916-ophin-500k-curating-web-scale-visual-instructions-for-scaling-ophthalmic-multimodal-large-language-models)  
+   标签：无标签
+98. [CosmicFish-HRM: Adaptive Reasoning via Hierarchical Recurrent Mechanisms in Compact Language Models](/20260601-20260617/2605.28919-cosmicfish-hrm-adaptive-reasoning-via-hierarchical-recurrent-mechanisms-in-compact-language-models)  
+   标签：无标签
+99. [CCS: Clinical Consensus Selection for Radiology Report Generation](/20260601-20260617/2605.30131-ccs-clinical-consensus-selection-for-radiology-report-generation)  
+   标签：无标签
+100. [LoMo: Local Modality Substitution for Deeper Vision-Language Fusion](/20260601-20260617/2605.30265-lomo-local-modality-substitution-for-deeper-vision-language-fusion)  
+   标签：无标签
+101. [DARTS: Distribution-Aware Active Rollout Trajectory Shaping for Accelerating LLM Reinforcement Learning](/20260601-20260617/2605.30859-darts-distribution-aware-active-rollout-trajectory-shaping-for-accelerating-llm-reinforcement-learning)  
+   标签：无标签
+102. [Generating Reports or Repeating Templates? Measuring and Mitigating Template Collapse in 3D CT Report Generation](/20260601-20260617/2605.30984-generating-reports-or-repeating-templates-measuring-and-mitigating-template-collapse-in-3d-ct-report-generation)  
+   标签：无标签
+103. [Cross-Modal Clinical Knowledge Integration for Mammography Report Generation](/20260601-20260617/2605.31093-cross-modal-clinical-knowledge-integration-for-mammography-report-generation)  
+   标签：无标签
+104. [Shared Doubt: Zero-shot Cross-Lingual Confidence Estimation for Language Models](/20260601-20260617/2605.31220-shared-doubt-zero-shot-cross-lingual-confidence-estimation-for-language-models)  
+   标签：无标签
+105. [CardioLens: Revealing the Clinical Reality Gap of MLLMs via Multi-Sequence Cardiac MRI Evaluations](/20260601-20260617/2606.00123-cardiolens-revealing-the-clinical-reality-gap-of-mllms-via-multi-sequence-cardiac-mri-evaluations)  
+   标签：无标签
+106. [SDR: Set-Distance Rewards for Radiology Report Generation](/20260601-20260617/2606.00440-sdr-set-distance-rewards-for-radiology-report-generation)  
+   标签：无标签
+107. [Decomposed On-Policy Distillation for Vision-Language Reasoning: Steering Gradients for Visual Grounding](/20260601-20260617/2606.00564-decomposed-on-policy-distillation-for-vision-language-reasoning-steering-gradients-for-visual-grounding)  
+   标签：无标签
+108. [ASAP: Advancing Medical Volumetric Representation Learning with Anatomy-aware Semantically-adaptive Pre-training](/20260601-20260617/2606.00602-asap-advancing-medical-volumetric-representation-learning-with-anatomy-aware-semantically-adaptive-pre-training)  
+   标签：无标签
+109. [The Paradox of Outcome Optimization: A Causal Information-Theoretic Bound on Reasoning Shortcuts in LLMs](/20260601-20260617/2606.00674-the-paradox-of-outcome-optimization-a-causal-information-theoretic-bound-on-reasoning-shortcuts-in-llms)  
+   标签：无标签
+110. [Towards understanding modality interaction in multimodal language models via partial information decomposition](/20260601-20260617/2606.00959-towards-understanding-modality-interaction-in-multimodal-language-models-via-partial-information-decomposition)  
+   标签：无标签
+111. [Ask4VG: Risk-Aware Question Selection for Reducing Prior-Driven Answers in Medical VQA](/20260601-20260617/2606.01044-ask4vg-risk-aware-question-selection-for-reducing-prior-driven-answers-in-medical-vqa)  
+   标签：无标签
+112. [Cross-lingual Self-Consistency for Multilingual Reasoning with Language Models](/20260601-20260617/2606.01464-cross-lingual-self-consistency-for-multilingual-reasoning-with-language-models)  
+   标签：无标签
+113. [TRON: Targeted Rule-Verifiable Online Environments for Visual Reasoning RL](/20260601-20260617/2606.01599-tron-targeted-rule-verifiable-online-environments-for-visual-reasoning-rl)  
+   标签：无标签
+114. [RL-ACRGNet: Reinforcement Learning-Based Chest Radiology Report Generation Network](/20260601-20260617/2606.02035-rl-acrgnet-reinforcement-learning-based-chest-radiology-report-generation-network)  
+   标签：无标签
+115. [VLMs are Good Teachers for Video Reasoning via Adaptive Test-Time Optimization](/20260601-20260617/2606.02564-vlms-are-good-teachers-for-video-reasoning-via-adaptive-test-time-optimization)  
+   标签：无标签
+116. [Cross-Modal Contrastive Learning of ECG and Angiography Representations for Severe Stenosis Classification](/20260601-20260617/2606.02605-cross-modal-contrastive-learning-of-ecg-and-angiography-representations-for-severe-stenosis-classification)  
+   标签：无标签
+117. [Automated Report-Derived Oncology VQA Benchmark for Evaluating Vision-Language Models on 3D Medical Imaging](/20260601-20260617/2606.02809-automated-report-derived-oncology-vqa-benchmark-for-evaluating-vision-language-models-on-3d-medical-imaging)  
+   标签：无标签
+118. [Pretraining Language Models on Historical Text](/20260601-20260617/2606.02991-pretraining-language-models-on-historical-text)  
+   标签：无标签
+119. [ClinicalMC: A Benchmark for Multi-Course Clinical Decision-Making with Large Language Models](/20260601-20260617/2606.03157-clinicalmc-a-benchmark-for-multi-course-clinical-decision-making-with-large-language-models)  
+   标签：无标签
+120. [GLINT: Sparsely Gated Vision-Language Alignment for Fine-Grained Radiology Representations](/20260601-20260617/2606.03180-glint-sparsely-gated-vision-language-alignment-for-fine-grained-radiology-representations)  
+   标签：无标签
+121. [CoralBay: A Self-Supervised CT Foundation Model](/20260601-20260617/2606.03888-coralbay-a-self-supervised-ct-foundation-model)  
+   标签：无标签
+122. [RL Excursions during Pre-Training: Re-examining Policy Optimization for LLM training](/20260601-20260617/2606.04272-rl-excursions-during-pre-training-re-examining-policy-optimization-for-llm-training)  
+   标签：无标签
+123. [ORACLE-CT: Anatomy-Aware Support Pooling for CT Classification](/20260601-20260617/2606.05460-oracle-ct-anatomy-aware-support-pooling-for-ct-classification)  
+   标签：无标签
+124. [EasyLens: A Training-Free Plug-and-Play Subtle-Lesion Representation Amplifier for Medical Vision-Language Models](/20260601-20260617/2606.06379-easylens-a-training-free-plug-and-play-subtle-lesion-representation-amplifier-for-medical-vision-language-models)  
+   标签：无标签
+125. [A Vision-language Framework for Comparative Reasoning in Radiology](/20260601-20260617/2606.06407-a-vision-language-framework-for-comparative-reasoning-in-radiology)  
+   标签：无标签
+126. [Data-Efficient Autoregressive-to-Diffusion Language Models via On-Policy Distillation](/20260601-20260617/2606.06712-data-efficient-autoregressive-to-diffusion-language-models-via-on-policy-distillation)  
+   标签：无标签
+127. [CheXanatomy: Anatomy-Aware Vision-Language Modeling for Chest Radiographs](/20260601-20260617/2606.08420-chexanatomy-anatomy-aware-vision-language-modeling-for-chest-radiographs)  
+   标签：无标签
+128. [Active Source-free Domain Adaptation in Open-set Medical Image Segmentation via Decomposed Uncertainty and Prototype Discrepancy](/20260601-20260617/2606.08749-active-source-free-domain-adaptation-in-open-set-medical-image-segmentation-via-decomposed-uncertainty-and-prototype-discrepancy)  
+   标签：无标签
+129. [RadOT-Eval: Auditable Structured-Evidence Transport for Radiology Report Evaluation](/20260601-20260617/2606.08769-radot-eval-auditable-structured-evidence-transport-for-radiology-report-evaluation)  
+   标签：无标签
+130. [CapRL++: Unified Reinforcement Learning with Verifiable Rewards for Dense Image and Video Captioning](/20260601-20260617/2606.09393-caprl-unified-reinforcement-learning-with-verifiable-rewards-for-dense-image-and-video-captioning)  
+   标签：无标签
+131. [Frozen Foundation-Model Embeddings Discard Small-Lesion Signal in Chest Radiography: Implications for Pre-Deployment Evaluation](/20260601-20260617/2606.11606-frozen-foundation-model-embeddings-discard-small-lesion-signal-in-chest-radiography-implications-for-pre-deployment-evaluation)  
+   标签：无标签
+132. [MedCTA: A Benchmark for Clinical Tool Agents](/20260601-20260617/2606.11702-medcta-a-benchmark-for-clinical-tool-agents)  
+   标签：无标签
+133. [OpenMedReason: Scientific Reasoning Supervision for Medical Vision-Language Models](/20260601-20260617/2606.12169-openmedreason-scientific-reasoning-supervision-for-medical-vision-language-models)  
+   标签：无标签
+134. [Detecting Functional Memorization in Code Language Models](/20260601-20260617/2606.12764-detecting-functional-memorization-in-code-language-models)  
    标签：无标签
 
 ### 速读区论文标签

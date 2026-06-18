@@ -1,0 +1,179 @@
+Title: CoralBay: A Self-Supervised CT Foundation Model
+
+URL Source: https://arxiv.org/pdf/2606.03888
+
+Published Time: Wed, 03 Jun 2026 01:28:49 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# CoralBay : A Self-Supervised CT Foundation Model 
+
+Ioannis Gatopoulos, Nicolas Känzig, Sebastian Otálora, and Fei Tang 
+
+kaiko.ai 
+
+{ioannis,nicolas,sebastian,fei}@kaiko.ai 
+
+Abstract. Self-supervised learning has enabled large-scale pre-training on 2D natural images, producing general-purpose visual representations that transfer effectively across tasks. However, many medical imaging modalities, such as CT scans, are inherently three-dimensional and dif-fer fundamentally from natural images in both structure and semantics. Volumetric modalities capture spatial continuity, organ anatomy, and intensity-based tissue properties (e.g., Hounsfield Units), which are not adequately modeled by 2D pre-training. To bridge this gap, we introduce 
+
+CoralBay , a self-distillation framework that extends DINO by using a hierarchical 3D Swin backbone and applying self-distillation to concate-nated multi-scale features, enabling data-efficient self-supervised learn-ing of rich spatial representations that encode both global semantics and fine-grained local structure. As a result, CoralBay transfers effectively to a wide range of downstream radiological tasks, demonstrating strong and consistent performance across diverse anatomical targets. In addition, we contribute to the open-source eva framework by introducing a public, re-producible 3D radiology leaderboard that unifies multiple datasets and establishes a standardized benchmark for evaluating volumetric repre-sentation learning methods. 
+
+Keywords: foundation models · self-supervised learning · vision trans-formers · 3D medical imaging · radiology · medical image segmentation 
+
+1 Introduction 
+
+Despite the success [7,1,13] of vision foundation models (FMs), their adoption in 3D medical imaging remains limited due to fundamental differences between natural images and volumetric radiological data, as illustrated in Fig. 1. Un-like 2D RGB images, CT and MRI modalities consist of high-resolution three-dimensional volumes that encode physical tissue properties. This introduces sev-eral domain-specific hurdles: 
+
+– Intensity Variability and Windowing: Voxel intensities are measured in Hounsfield Units (HU), representing physical density rather than color. As shown in Fig. 1 (left), different HU windows are required to visualize specific tissues; a window optimized for the lungs will completely obscure soft-tissue details in the neck, creating a challenge for models to learn consistent features across varied visualization protocols. 
+
+> arXiv:2606.03888v1 [cs.CV] 2 Jun 2026
+
+2 Ioannis Gatopoulos, Nicolas Känzig, Sebastian Otálora, and Fei Tang Head & Neck  Chest / thorax              
+
+> (-1024 ,1024 )(-175 ,250 )(-21 ,189 )
+> Slice thickness Hounsfield Unit windows Spatial scan views
+> Coronal Axial Sagittal
+> 3mm
+> 5mm
+
+Fig. 1: Challenges in 3D CT Data Representation. Left: The impact of HU windowing on anatomical visibility; narrow windows enhance soft tissue but clip high-density information. Center: Variability in slice thickness leads to the partial volume effect, where thinner slices provide higher spatial resolution while thicker slices increase the signal-to-noise ratio at the cost of blurring. Right: The three standard orthogonal planes which require the model to learn spatially consistent 3D representations across high-dimensional volumes. 
+
+– Anisotropy and Slice Thickness: Medical volumes are often non-isometric. Variations in slice thickness (e.g., 3mm vs. 5mm in Fig. 1, center) exacerbate partial volume effects; thicker slices blur anatomical boundaries and reduce spatial resolution, despite increasing signal-to-noise ratio, potentially introducing systematic bias rather than random noise into the learning process. 
+
+– Spatial Complexity: The transition from 2D frames to 3D spatial scan views (Axial, Sagittal, Coronal in Fig. 1, right) requires architectures capable of modeling long-range dependencies across planes while managing a massive memory footprint and severe class imbalances, such as tiny nodules within a vast anatomical volume. To bridge this gap, we propose CoralBay , a self-supervised framework that natively operates on 3D medical volumes. Building on the self-distillation princi-ples of DINO [2], our approach extends them to volumetric data through hierar-chical Swin Transformers [11], multi-resolution feature learning, and 3D-specific augmentation strategies. Crucially, our training pipeline is tailored to the phys-ical properties of CT imaging, exposing the model to diverse HU windows and realistic intensity shifts to ensure robustness against acquisition variability. To support reproducibility and benchmarking, we further extend the eva open-source framework [4] with a public 3D radiology leaderboard. 
+
+2 Related Work 
+
+Self-supervised and weakly supervised learning have emerged as central paradigms for visual representation learning, enabling models to leverage large-scale unlabeled data through carefully designed pretext objectives [8]. This approach is especially valuable in medical imaging, where expert annotations CoralBay : A Self-Supervised CT Foundation Model 3
+
+are costly, time-consuming, and constrained by privacy regulations, while vast amounts of unlabeled data are routinely generated in clinical workflows [14]. In natural images, effective self-supervised representation learning relies on objectives that derive supervision directly from the data itself. Cross-modal contrastive methods align visual features with language semantics using paired image-text data, yielding highly transferable embeddings, like Universal Model [10]and SuPreM [9], but are constrained by the scale of paired data. In con-trast, vision-only approaches learn from intrinsic image structure, either by con-trasting augmented views of the same instance [7,3] or through prototype-level objectives based on clustering and teacher-student self-distillation without ex-plicit negatives [2,5,12]. This work aligns with the latter category. Extending these ideas to 3D medical imaging presents additional challenges, including vol-umetric structure, anisotropic resolution, and modality-specific intensity distri-butions. Early efforts such as Models Genesis explored context restoration for 3D volumes [19], while later methods introduced tailored 3D pretext tasks like view-based or region-based objectives [15,18,16]. VoCo [17] proposed a volume contrastive learning framework with geometric context priors by contrasting aug-mented views of the same 3D volume. Despite strong performance, it relies on heuristic view design and may be limited in capturing high-level semantics. Ap-proaches using Swin Transformers as backbones are particularly relevant: MoBY combined MoCo v2 and BYOL on Swin Transformers, and achieved promising results on 2D natural images, especially on dense prediction tasks [16], while Swin UNETR introduced hierarchical Swin-based pre-training on proxy tasks, leading to state-of-the-art performance on CT and MRI segmentation [16,6]. 
+
+3 Methodology 
+
+We introduce CoralBay , a self-supervised learning framework that extends the highly effective yet simple DINO self-distillation paradigm from 2D natural im-ages to native 3D volumetric data [2]. Our design preserves the simplicity and stability of the original DINO formulation while enabling the learning of rich, hi-erarchical, and spatially coherent representations from volumetric medical scans. This property is particularly critical for dense prediction tasks in medical imag-ing, such as organ and lesion segmentation, where both global anatomical context and fine-grained local structure must be captured. 
+
+Swin Transformer backbone and multi-resolution features. We adopt a hierarchical Swin Transformer encoder [11] following the design principles of Swin UNETR [6] (figure 2). The shifted-window self-attention mechanism is well suited to volumetric inputs, as it enables efficient modeling of long-range spatial dependencies while maintaining manageable computational and memory costs. Progressive patch merging produces a multi-scale feature hierarchy that naturally captures fine anatomical details—such as vessel boundaries or tumor margins—alongside coarse structural context, including organ shape and spatial relationships. 4 Ioannis Gatopoulos, Nicolas Känzig, Sebastian Otálora, and Fei Tang upscale                      
+
+> concat
+> upscale
+> concat
+> student backbone
+> ema
+> centering
+> sg
+> softmax  softmax
+> teacher
+> head
+> student
+> head
+> cross -entropy loss
+> −p!log p"
+> global views
+> 96x96x96
+> local views
+> 48x48x48
+> CT scan: ~512x512x 30 −200 slides
+> Subvolume :115 x115 x115
+> pooling
+> (768 ,)
+> (38 4,)
+> concat
+> aggregated
+> feature vector
+> (1152 ,)
+> …
+> teacher backbone
+> …
+> pooling
+> (768 ,)
+> (384 ,)
+> concat
+> aggregated
+> feature vector
+> (1152 ,)
+> Segmentation Classification Inference
+> Training
+> CT Scan: 192 x192x 96
+> Pooling merges features across scan blocks
+> into a fixed -size aggregated vector.
+> The input 192x 192x 96 scan is split into four 96x96x96 blocks, each
+> encoded independently into downsampled intermediate features maps.
+> The spatially aligned downsampled features are progressively
+> up -sampled to produce the full -resolution segmentation mask.
+
+Fig. 2: Self-supervised training and downstream inference pipeline. Top (Training): A DINO-based distillation framework processes global ( 96 3) and local (48 3) crops through student and EMA-updated teacher 3D SwinTransformer back-bones to minimize distribution cross-entropy loss. Bottom (Inference): A sliding window technique processes 96 3 ROI crops of the scan through the encoder. These downsampled intermediate features are stitched to preserve spatial alignment with the input scan. For Classification , a pooling operation merges features into a rich aggre-gated vector of consistent shape. For Segmentation , features are passed to a Swin UNETR decoder with skip connections and upscaling for voxel-wise masks. 
+
+For each stage, we apply 3D adaptive average pooling to obtain a fixed-length representation for each resolution, which is then concatenated across resolutions. The resulting feature vector encodes both global anatomical semantics and fine-grained local structure, enabling the standard DINO loss to supervise a scale-aware representation. This design allows us to avoid the compute-intensive iBOT loss component in DINOv2[12], while still learning high-resolution local details. 
+
+3D volumetric crops and radiology-specific augmentations. To support native 3D processing, CoralBay extends the concept of views from 2D to 3D. Following the local-to-global principle introduced in DINO [2], in each training epoch, from a ct-scan we extract a random volume of size 115 ×115 ×115 (padded if needed), from which we sample two global crops ( 96 × 96 × 96 ) and six local crops ( 48 ×48 ×48 ). We design an augmentation pipeline tailored to CT imaging, incorporating random contrast adjustments, Gaussian smoothing, and histogram shifts that realistically simulate acquisition variability and reconstruction arti-facts [19]. A key component of the augmentation pipeline is the random HU windowing: for each crop we randomly sample from multiple clinically relevant HU windows spanning soft tissue, lung, abdomen, liver, brain, and full-range CT views (Table 1). This strategy encourages the encoder to learn representations that are invariant to windowing choices and robust across anatomical regions, enabling adaptation to diverse downstream tasks without fine-tuning. CoralBay : A Self-Supervised CT Foundation Model 5Table 1: HU ranges for pre-training data augmentation.          
+
+> HU Range Applicable for:
+> (-1024, 1024) Full CT Range (air, soft tissue, bone, metal, etc.) (-1000, 1000) Whole Body (excluding high-density bone/metal) (-1024, 300) Soft Tissues + Lungs (air, lungs, fat, muscle, some soft tissues) (-1000, 600) Soft Tissues + Partial Bone (air, fat, muscle, partial bone) (-175, 250) Chest / Lung Window (lung parenchyma, soft tissues, blood vessels) (-125, 275) Abdomen / Soft Tissue (fat, organs, muscle) (-57, 164) Liver / Soft Tissue Focus (liver, spleen, kidney, muscle) (-21, 189) Brain / Soft Tissue (gray/white matter, cerebrospinal fluid)
+
+Scan level inference. While the Swin transformer backbone is trained to work with crops of size around 96 × 96 × 96 , we apply the sliding window technique at inference to obtain scan level features. A scan is divided into crops of the shape 96 × 96 × 96 , which are encoded by the backbone independently. The crop level representations are further stitched (and pooled) together as the scan level representation for downstream tasks. 
+
+Data. To develop a robust and generalizable model, we constructed from multi-ple publicly available sources a large-scale, balanced collection of medical imaging volumes that adequately represents all major anatomical regions, termed CORID 
+
+(Combination Of Radiology Image Data). The collection proportionally repre-sents all major anatomical regions, such as the chest, abdomen, lung, and head & neck, was proportionally represented, minimizing potential biases towards any single modality or anatomical area. Table 2 summarizes the included datasets. 
+
+Training configuration. Using the CoralBay framework, we trained two mod-els of different sizes: CoralBayU96B with 53 .2M parameters and CoralBayU96H 
+
+with 847 M parameters. Both were trained for 2,000 epochs on the CORID dataset using the AdamW optimizer with a cosine learning-rate schedule. The learning rate was scaled linearly with the effective batch size, using a base learning rate of 5 × 10 −4 for batch size 6. We used a multi-crop strategy with 6 local views per sample, global crops of size 96 ×96 ×96 frames, and local crops of size 48 ×48 ×48 
+
+Table 2: Summary of pre-training datasets; Later versions are supersets of earlier versions.                                 
+
+> Dataset Volumes Region CORID Description
+> AbdomenAtlas Mini 1.0 5,195 Abdomen v1 Multi-organ Segmentation HNSCC 627 Head & Neck v2 Radiotherapy Planning LUNA16 888 Lung v2 Lung Nodule Analysis STOIC 2021 ∼2,000 Chest v2 COVID-19 Severity LIDC-IDRI 1,018 Lung v3 Lung Nodule Detection Stony Brook 1,384 Chest v3 COVID-19 (Pos. Cases) TCGA-HNSC 227 Head & Neck v3 Genomic/Radiomic Analysis
+
+6 Ioannis Gatopoulos, Nicolas Känzig, Sebastian Otálora, and Fei Tang Table 3: Quantitative performance across classification (Multiclass Accuracy/Binary AUROC) and segmentation (Dice score) tasks, as evaluated via the eva framework.                                                                                                                
+
+> Model # pre-trained data NoduleMNIST OrganMNIST CC-CCII LUNA25 BTCV WORD FLARE22 CHAOS LiTs17 KiTs23 MSD Pancreas Classification Segmentation
+> SwinUNETR —.83 .99 .90 .81 .74 .85 .90 .96 .82 .74 .72 nnUNetV2 —————.85 ———.84 .81 .75 Universal Model [10] 2.1k .78 .96 .77 .72 .81 .83 .91 .97 .81 .74 .67 SuPreM [9] 2.1k .71 .98 .83 .74 .81 .85 .91 .97 .81 .80 .72
+> VoCo-B [17] 160k .74 .96 .71 .72 .83 .86 .92 .97 .81 .78 .71 VoCo-H [17] 160k .76 .92 .83 .70 .83 .85 .92 .97 .82 .82 .72
+> CoralBayU96B 11k .79 .99 .76 .72 .81 .85 .91 .97 .78 .79 .65 CoralBayU96H 11k .80 .99 .90 .74 .82 .85 .91 .97 .81 .81 .67 CoralBayU96H (FT) 11k .91 1.0 .91 .82 .83 .86 .91 .97 .84 .82 .73
+
+frames. Pre-training included a 50 -epoch learning rate warmup period, during which the last layer of the DINO projection head were frozen for the first 3
+
+epochs. For the DINO loss, we used a teacher temperature of 0.03 .
+
+4 Results 
+
+To evaluate the efficacy of the CoralBay framework, we benchmark 
+
+CoralBayU96B and CoralBayU96H on 11 diverse datasets spanning both global and fine-grained tasks. We assess scan-level classification to measure holistic understanding, alongside multi-organ and small-lesion segmenta-tion across multiple anatomical regions to evaluate precise localization and delineation capabilities. Quantitative results are reported in Table 3. 1
+
+4.1 Classification 
+
+We evaluate scan-level representation quality through linear probing across four 3D CT benchmarks: multiclass organ identification (OrganMNIST3D), lung nod-ule malignancy prediction (NoduleMNIST3D, LUNA25), and COVID-19 pathol-ogy classification (CC-CCII). We report Multiclass Accuracy and Binary AU-ROC to account for class imbalances. Across the four classification benchmarks, CoralBay demonstrates consis-tently strong performance, with CoralBayU96H achieving the best or tied-best results. Notably, it matches or exceeds large-scale SSL models despite substan-tially fewer pretraining samples, indicating improved linear separability and   
+
+> 1https://github.com/kaiko-ai/eva CoralBay : A Self-Supervised CT Foundation Model 7
+
+enhanced sensitivity to fine-grained pathological features. These results sug-gest that CoralBay ’s representations preserve discriminative cues critical for pathology-centric tasks, rather than encoding task-irrelevant anatomical bias, leading to robust generalization across diverse classification settings. The model’s high-resolution feature extraction is further validated by its strong performance on the LUNA25 malignancy prediction task and its competitive 0.93 AUROC on the official open development leaderboard 2, achieved without the need for task-specific fine-tuning or complex ensembling strategies. 
+
+4.2 Segmentation 
+
+Unless stated otherwise, we evaluate segmentation performance using the average sample-wise macro-Dice score. To evaluate representation quality, we adopt a segmentation analogue of linear probing by freezing the pretrained encoder and training only the Swin UNETR decoder [6], adding 3D 1 × 1 × 1 convolutions to downsample encoder features and reduce the decoder size from 313M to 22.8M parameters, ensuring a lightweight and consistent capacity across variants. As shown in Table 3, CoralBay exhibits strong data efficiency, performing comparably to VoCo despite using < 7% of its label-free pretraining data. Unlike Universal Model and SuPreM which use labeled pretraining, CoralBay excels at fine-grained features on challenging tumor datasets (LiTS17: 0.81 , KiTS23: 0.81 ). With a frozen encoder it already rivals heavily tuned nnU-NetV2, which typi-cally relies on exhaustive, task-specific heuristics, highlighting robust capture of low-contrast and small lesions. Finaly the full fine-tuning of CoralBayU96H consistently outperforms SwinUNETR and closely matches the nnU-NetV2, val-idating the proposed pretraining for complex anatomy and pathology. 
+
+4.3 Ablation studies Scaling Model & Data We evaluate CoralBay on LiTS17 after pre-training on progressively larger CORID subsets. Segmentation performance improves con-sistently with dataset size (Figure 3a), showing that the framework scales effec-tively to larger data and model capacities. These results indicate that increasing both dataset size and model scale enhances downstream segmentation and that pre-training on a balanced dataset promotes strong generalization. 
+
+Label Efficiency We assess label efficiency by training all models on progres-sively smaller subsets across three segmentation tasks of increasing difficulty: BTCV (organ), LiTS17 (liver tumor), and MSD Pancreas Tumor (Figure 3c–e). On the simpler organ task, foundation models show no clear advantage over nnU-Net, which remains highly label-efficient due to extensive augmentations. For the more challenging tumor tasks, both CoralBayU96B and VoCo-B outperform nnU-Net in low-data settings, demonstrating that self-supervised pre-training provides a stronger prior for small, low-contrast pathological structures.           
+
+> 2https://luna25.grand-challenge.org/evaluation/open-development-phase/leaderboard/ 8Ioannis Gatopoulos, Nicolas Känzig, Sebastian Otálora, and Fei Tang
+> Fig. 3: Ablation studies. Top Left: Scaling model & pre-training dataset size. Top right: 2D vs. 3D encoder-decoder configurations (frozen encoder). Bottom: Label efficiency across tasks of increasing difficulty (from left →right).
+
+2D vs 3D Modelling Replacing the standard DINO ViT-B/16 2D encoder with a Swin UNETR-B 2D backbone pretrained using DINO within the Coral-Bay framework yields only a marginal gain when paired with a simple Conv2D decoder ( 0.66 → 0.67 ). However, switching to the matching Swin UNETR 3D decoder brings a substantial jump to 0.74 Dice, demonstrating that most of the benefit arises from 3D spatial reasoning rather than the choice of 2D pre-training alone. The fully 3D-native CoralBayU96B model, pretrained exclusively on the abdominal atlas dataset, further improves performance to 0.80 , highlighting the advantage of consistent 3D inductive biases and volumetric pre-training for ab-dominal multi-organ segmentation. 
+
+5 Conclusion 
+
+We introduced CoralBay , a self-supervised framework for 3D medical volumes that extends DINO to hierarchical 3D Swin Transformers with multi-resolution features and radiology-specific augmentations. CoralBayU96B (53 .2M params) and CoralBayU96H (847 M params) trained with CoralBay with significantly less data achieved strong performance across diverse classification and segmenta-tion tasks. Ablations confirm the benefits of native 3D modeling and multi-scale feature learning. By integrating with the eva framework and a public 3D seg-mentation leaderboard, CoralBay provides a reproducible benchmark for future research in volumetric medical imaging. CoralBay : A Self-Supervised CT Foundation Model 9
+
+References 
+
+1. Bommasani, R., Hudson, D.A., Adeli, E., et al.: On the opportunities and risks of foundation models. arXiv preprint arXiv:2108.07258 (2021) 2. Caron, M., Touvron, H., Misra, I., et al.: Emerging properties in self-supervised vision transformers. Proceedings of the IEEE/CVF International Conference on Computer Vision (2021) 3. Chen, T., Kornblith, S., Norouzi, M., Hinton, G.: A simple framework for con-trastive learning of visual representations. In: International Conference on Machine Learning (ICML) (2020) 4. Gatopoulos, I., Känzig, N., Moser, R., Otálora, S., et al.: eva: Evaluation framework for pathology foundation models. In: Medical Imaging with Deep Learning (2024) 5. Grill, J.B., Strub, F., Altché, F., et al.: Bootstrap your own latent: A new approach to self-supervised learning. Advances in Neural Information Processing Systems (NeurIPS) (2020) 6. Hatamizadeh, A., Tang, Y., Nath, V., et al.: Swin unetr: Swin transformers for se-mantic segmentation of brain tumors in mri images. Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) (2022) 7. He, K., Fan, H., Wu, Y., Xie, S., Girshick, R.: Momentum contrast for unsupervised visual representation learning. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition. pp. 9729–9738 (2020) 8. Jing, L., Tian, Y.: Self-supervised visual feature learning with deep neural net-works: A survey. IEEE Transactions on Pattern Analysis and Machine Intelligence 
+
+43 (11), 4037–4058 (2020) 9. Li, W., Yuille, A., Zhou, Z.: How well do supervised 3d models transfer to medical imaging tasks? (2025), https://arxiv.org/abs/2501.11253 
+
+10. Liu, J., Zhang, Y., Chen, J.N., Xiao, J., Lu, Y., Landman, B.A., Yuan, Y., Yuille, A., Tang, Y., Zhou, Z.: Clip-driven universal model for organ segmentation and tumor detection. In: 2023 IEEE/CVF International Conference on Computer Vi-sion (ICCV). pp. 21095–21107. IEEE (Oct 2023). https://doi.org/10.1109/ iccv51070.2023.01934 , http://dx.doi.org/10.1109/ICCV51070.2023.01934 
+
+11. Liu, Z., Lin, Y., Cao, Y., Hu, H., Wei, Y., Zhang, Z., Lin, S., Guo, B.: Swin trans-former: Hierarchical vision transformer using shifted windows. In: Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV). pp. 10012– 10022 (2021) 12. Oquab, M., et al.: Dinov2: Learning robust visual features without supervision (2024) 13. Radford, A., Kim, J.W., Hallacy, C., et al.: Learning transferable visual models from natural language supervision. In: International Conference on Machine Learn-ing (ICML). pp. 8748–8763 (2021) 14. Shen, D., Wu, G., Suk, H.I.: Deep learning in medical image analysis. Annual Review of Biomedical Engineering 19 , 221–248 (2017) 15. Taleb, A., Lippert, C., Klein, T., Nabi, M.: 3d self-supervised methods for medical imaging. Advances in Neural Information Processing Systems (NeurIPS) (2021) 16. Tang, Y., Yang, D., Li, W., Roth, H.R., Landman, B.A., Xu, D., Nath, V., Hatamizadeh, A.: Self-supervised pre-training of swin transformers for 3d medi-cal image analysis. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR). pp. 20730–20740 (2022) 17. Wu, L., Zhuang, J., Chen, H.: Large-scale 3d medical image pre-training with geometric context priors. IEEE Transactions on Pattern Analysis and Machine Intelligence (2025) 10 Ioannis Gatopoulos, Nicolas Känzig, Sebastian Otálora, and Fei Tang 18. Zhang, Y., et al.: Self-supervised pretraining of 3d medical image models by learn-ing region-aware representations. Medical Image Analysis (2022) 19. Zhou, Z., Sodha, V., Pang, J., Gotway, M.B., Liang, J.: Models genesis: Generic autodidactic models for 3d medical image analysis. Medical Image Analysis 67 ,101840 (2021)
