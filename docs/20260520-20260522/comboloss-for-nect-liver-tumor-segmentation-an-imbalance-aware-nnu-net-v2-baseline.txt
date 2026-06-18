@@ -1,0 +1,818 @@
+Title: EL0046_Final_Paper.pdf
+
+URL Source: https://scholar.xjtlu.edu.cn/files/64425234/EL0046_Final_Paper.pdf
+
+Number of Pages: 12
+
+Markdown Content:
+* These authors contributed equally to this work. 
+
+† Corresponding author 
+
+# ComboLoss for NECT Liver Tumor Segmentation: An Imbalance-Aware 
+
+# nnU-Net v2 Baseline 
+
+# Xuyue Cai 
+
+School of AI and Advanced Computing , Xi ’an Jiaotong-Liverpool University ,
+
+Xuyue.Cai22@student.xjtlu.edu.cn 
+
+# Tong Qiu 
+
+School of AI and Advanced Computing , Xi ’an Jiaotong-Liverpool University ,
+
+Tong.Qiu23@student.xjtlu.edu.cn 
+
+# Qide Li *
+
+School of AI and Advanced Computing , Xi ’an Jiaotong-Liverpool University ,
+
+Qide.Li22@student.xjtlu.edu.cn 
+
+# Minghao Zhang *
+
+School of AI and Advanced Computing, Xi ’an Jiaotong-Liverpool University, 
+
+Minghao.Zhang22@student.xjtlu.edu.cn 
+
+# Jianfeng Wang 
+
+School of AI and Advanced Computing, Xi ’an Jiaotong-Liverpool University ,
+
+Jianfeng.Wang17@student.xjtlu.edu.cn 
+
+# Pengjing Xu †
+
+School of AI and Advanced Computing, Xi ’an Jiaotong-Liverpool University ,
+
+Pengjing.Xu@xjtlu.edu.cn 
+
+Non-enhanced CT (NECT) liver tumor segmentation remains challenging due to weak lesion –parenchyma contrast, severe 
+
+foreground – background imbalance, and the prevalence of very small lesions. To provide a compact and reproducible 
+
+baseline under small-data conditions, we build on nnU-Net v2 (3D full-resolution) and introduce ComboLoss, a weighted 
+
+combination of Dice loss and focal loss that increases emphasis on hard positive voxels while remaining fully compatible 
+
+with nnU-Net training mechanics such as deep supervision and ignore-label masking. Experiments are conducted on an 
+
+institute-provided NECT dataset consisting of 40 volumes with a fixed split of 28 training and 12 test cases. Performance is 
+
+evaluated using overlap metrics (DSC, IoU, precision, recall), a boundary metric (HD95), and a detection-oriented lesion-
+
+level recall metric where a ground-truth lesion is considered detected if any predicted component overlaps it with IoU ≥ 0.1. 
+
+Compared with the default Dice+CE objective, ComboLoss improves segmentation overlap and lesion detectability, 2                                                                                                    
+
+> achieving DSC 0.624 ±0.365 and lesion-level recall@0.1 of 0.694 ±0.440 on the test set. However, the results also show
+> that overlap improvement may be accompanied by larger HD95 values when isolated false-positive components are
+> produced. To address this issue, we further evaluate connected-component post-processing, which reduces boundary
+> outliers while preserving comparable overlap and lesion-level detection performance. We also compare imbalance-aware
+> objectives including Tversky Loss and Focal Tversky Loss under the same nnU-Net v2 configuration, providing acontrolled
+> analysis of loss design under severe class imbalance. The proposed setup offers atransparent and reproducible reference
+> pipeline for NECT liver tumor segmentation in small-data scenarios.
+> CCS CONCEPTS
+
+• Computing methodologies • Artificial intelligence • Computer vision     
+
+> Additional Keywords and Phrases:
+
+non-enhanced CT , liver tumor segmentation , nnU-Net v2 , class imbalance ,
+
+focal loss, medical image segmentation .
+
+1 INTRODUCTION 
+
+Liver cancer remains one of the leading causes of cancer-related mortality worldwide. Accurate segmentation 
+
+of liver tumors from medical images plays a crucial role in clinical diagnosis, treatment planning, and disease 
+
+monitoring. While contrast-enhanced CT (CECT) improves lesion visibility and is widely used in clinical 
+
+practice, non-enhanced CT (NECT) is often preferred in certain scenarios because it is safer, more 
+
+economical, and suitable for patients for whom contrast agents are contraindicated [9] . However, the absence 
+
+of contrast enhancement significantly reduces lesion – parenchyma contrast, making automatic tumor 
+
+segmentation from NECT images considerably more challenging. 
+
+Recent advances in deep learning have substantially improved the performance of medical image 
+
+segmentation. In particular, encoder –decoder architectures such as U-Net and its variants have become the 
+
+dominant paradigm [1], [2] . More recently, the nnU-Net framework has demonstrated strong and consistent 
+
+performance across a wide range of biomedical segmentation tasks by automatically configuring 
+
+preprocessing strategies, network architectures, and training pipelines based on dataset characteristics [3] .
+
+Despite these advances, segmentation of liver tumors in NECT images remains difficult due to several 
+
+inherent challenges. 
+
+First, severe foreground –background class imbalance exists, as tumor voxels typically occupy only a small 
+
+fraction of the entire image volume. Standard loss functions may therefore be dominated by background 
+
+regions, leading to insufficient learning of small or low-contrast lesions. Second, boundary ambiguity caused 
+
+by low contrast and intensity inhomogeneity makes accurate delineation difficult. In practice, segmentation 
+
+models may achieve reasonable overlap metrics while still producing large boundary errors due to a small 
+
+number of distant false-positive regions, which can disproportionately affect boundary-based metrics such as 
+
+the 95th percentile Hausdorff distance (HD95). These challenges highlight the importance of designing 
+
+training objectives and evaluation protocols that are robust to class imbalance and sensitive to clinically 
+
+meaningful detection performance. 
+
+To address these issues under small-data conditions, this work presents a compact and reproducible 
+
+baseline based on nnU-Net v2 (3D full-resolution). We introduce ComboLoss, a weighted combination of Dice 
+
+loss and focal loss that emphasizes difficult foreground voxels while remaining fully compatible with nnU-Net 
+
+training mechanisms, including deep supervision and ignore-label masking. In addition, we adopt a
+
+standardized evaluation protocol that incorporates both voxel-level metrics and lesion-level detection 
+
+performance in order to provide a more comprehensive assessment of model behavior. 3
+
+The main contributions of this work are summarized as follows: 
+
+1. An imbalance-aware training objective. 
+
+We propose ComboLoss, a simple Dice-plus-Focal objective that improves learning of rare tumor voxels 
+
+without modifying the nnU-Net architecture. 
+
+2. A controlled comparison of loss functions. 
+
+We evaluate Dice+CE, ComboLoss, and Focal Tversky Loss under an identical nnU-Net v2 configuration, 
+
+enabling a fair analysis of loss design under severe class imbalance. 
+
+3. A reproducible NECT segmentation baseline. 
+
+We provide a compact and standardized training and evaluation pipeline for small-data NECT liver tumor 
+
+segmentation. 
+
+2 RELATED WORK 
+
+2.1 Loss Functions for Class Imbalance 
+
+Class imbalance is a fundamental challenge in medical image segmentation, particularly in tumor detection 
+
+tasks where foreground voxels typically occupy only a very small fraction of the total image volume. Under 
+
+such conditions, standard pixel-wise loss functions such as cross-entropy tend to be dominated by easy 
+
+background samples, leading to suboptimal learning of rare and clinically important structures. 
+
+To mitigate this issue, Dice-based losses have been widely adopted because they directly optimize region 
+
+overlap between prediction and ground truth. Variants such as soft Dice loss and generalized Dice loss 
+
+improve robustness to class imbalance by reducing the influence of background-dominated gradients [12] .
+
+However, Dice-based objectives alone may still be insufficient to emphasize hard examples, especially for 
+
+very small or low-contrast lesions. 
+
+Focal loss was originally introduced to address class imbalance in dense object detection by down-
+
+weighting easy samples and focusing on difficult examples [5] . This idea has been extended to medical image 
+
+segmentation to improve sensitivity to small lesions. In addition, the Tversky loss introduces asymmetric 
+
+weighting of false positives and false negatives, enabling explicit control over precision –recall trade-offs [6] .
+
+Focal Tversky loss further combines focal weighting with Tversky imbalance modeling to enhance 
+
+performance under extreme class imbalance [7] .
+
+In this work, we adopt a simple yet effective strategy by combining Dice loss and focal loss into a unified 
+
+objective, referred to as ComboLoss. Compared with more complex formulations, this design maintains 
+
+compatibility with standard training pipelines while improving learning of difficult foreground voxels. 
+
+2.2 Deep Learning for Liver Tumor Segmentation 
+
+Deep learning has significantly advanced automatic liver and tumor segmentation in recent years. Encoder –
+
+decoder architectures, particularly U-Net and its variants, have become the dominant paradigm due to their 
+
+ability to capture both local and global contextual information [1] . Extensions such as 3D U-Net further 
+
+improve volumetric feature representation [2] , while attention mechanisms have been introduced to enhance 
+
+focus on relevant anatomical structures. Public liver tumor segmentation benchmarks such as LiTS have 
+
+substantially advanced algorithm development in CT imaging [8]. 4
+
+More recently, transformer-based architectures have been explored to model long-range dependencies in 
+
+medical images. Although these approaches can improve representation capacity, they often require large-
+
+scale datasets and careful tuning, which may limit their effectiveness in small-data scenarios. 
+
+Despite these advances, segmentation of liver tumors from non-enhanced CT images remains challenging. 
+
+The absence of contrast enhancement reduces lesion visibility and increases ambiguity in tumor boundaries. 
+
+In addition, small lesions are particularly difficult to detect, making the segmentation task highly sensitive to 
+
+training objectives and evaluation strategies. 
+
+2.3 nnU-Net as a Reproducible Baseline 
+
+The nnU-Net framework has emerged as a strong and widely adopted baseline for medical image 
+
+segmentation [3] . It automatically configures preprocessing, network architecture, training schedules, and 
+
+inference procedures based on dataset-specific characteristics, enabling consistent and reproducible 
+
+performance across a wide range of tasks. 
+
+Because nnU-Net standardizes most components of the segmentation pipeline, it provides an ideal 
+
+platform for controlled comparisons of different training objectives. In this work, we adopt nnU-Net v2 (3D full-
+
+resolution) as the backbone and focus on improving loss design under severe class imbalance without 
+
+modifying the network architecture. This allows us to isolate the impact of loss functions while maintaining a
+
+consistent and reproducible experimental setup. 
+
+3 METHODS 
+
+3.1 Backbone and Pre-processing 
+
+We adopt nnU-Net v2 (3D full-resolution) as the backbone for liver tumor segmentation , following the self-
+
+configuring nnU-Net paradigm [3] . nnU-Net provides a self-configuring framework that automatically 
+
+determines preprocessing strategies, network architecture, and training configurations according to dataset 
+
+properties such as voxel spacing, image resolution, and intensity distribution. 
+
+The preprocessing pipeline includes resampling to a target spacing, foreground cropping, and z-score 
+
+intensity normalization. During training, standard nnU-Net data augmentation is applied, including spatial 
+
+transformations and intensity scaling. The network architecture follows a 3D encoder –decoder design with 
+
+skip connections, and deep supervision is introduced at multiple decoder stages. 
+
+In this work, we keep the nnU-Net architecture and training pipeline unchanged, and focus only on 
+
+improving the loss design to address severe foreground –background imbalance in NECT liver tumor 
+
+segmentation. The overall framework, including nnU-Net v2 preprocessing, ComboLoss-based training, and 
+
+optional connected-component post-processing, is illustrated in Fig. 1. 5              
+
+> Figure 1. Overview of the proposed nnU-Net v2 pipeline with ComboLoss and optional connected-component post-
+> processing.
+
+3.2 ComboLoss: Dice and Focal Objective 
+
+Let 𝐀 𝐀 ∈ 0,1 denote the predicted probability that voxel belongs to the tumor class, and let 𝐀 𝐀 ∈ 0,1 denote 
+
+the cor responding ground-truth label. 
+
+The soft Dice loss is defined as [4] 
+
+𝐀 Dice = 1 − 2 𝐀 𝐀 𝐀 𝐀 𝐀   +ε      
+
+> 𝐀 𝐀 𝐀  +𝐀 𝐀 𝐀  +ε
+
+(1) 
+
+where 𝐀 is a small constant introduced for numerical stability. 
+
+The focal loss is defined as [5] 
+
+𝐀 Focal =− 𝐀 α𝐀 𝐀 1 − 𝐀 𝐀 γ log 𝐀 𝐀 + 1 − α 1 − 𝐀 𝐀 𝐀 𝐀  
+
+> γ
+
+log 1 − 𝐀 𝐀   (2)
+
+where 𝐀 controls the balance between positive and negative samples, and 𝐀 adjusts the emphasis on hard 
+
+examples. 
+
+Based on these two objectives, we define the proposed ComboLoss as
+
+𝐀 Combo = λ𝐀 Dice + 1 − λ 𝐀 Focal (3)
+
+The Dice term directly optimizes overlap between prediction and ground truth, while the focal term 
+
+increases gradient contributions from difficult and under-represented foreground voxels. In our experiments, 
+
+the default parameters are set to 𝐀 = 0.3 , 𝐀 = 0.3 and 𝐀 = 2.5 , unless otherwise specified. 
+
+3.3 Deep Supervision and Training Compatibility 
+
+nnU-Net employs deep supervision by attaching auxiliary outputs at multiple decoder scales. Each supervised 
+
+scale contributes to the final training objective with a predefined weight. 
+
+To maintain compatibility with the standard nnU-Net framework, we apply ComboLoss independently at 
+
+each supervised scale and aggregate them as 6
+
+𝐀 = 𝐀 𝐀 𝐀   𝐀 Combo 𝐀 𝐀 , 𝐀 𝐀 (4)
+
+where 𝐀 𝐀 and 𝐀 𝐀 denote the prediction and corresponding ground-truth label at scale 𝐀 and 𝐀 𝐀 denotes 
+
+the deep supervision weight. 
+
+In addition, ignore-label regions, if present, are excluded from loss computation to preserve consistency 
+
+with the default nnU-Net training strategy. This allows the proposed loss to be integrated into the original 
+
+framework without modifying the network architecture or trainer internals. 
+
+3.4 Comparison with Alternative Loss Functions 
+
+To evaluate the effectiveness of the proposed objective, we compare ComboLoss with several commonly 
+
+used loss functions under the same nnU-Net v2 configuration. 
+
+First, we include Dice + Cross-Entropy (Dice+CE), which is the default objective in nnU-Net and serves as 
+
+the baseline. Second, we evaluate Tversky Loss [6] , which introduces asymmetric penalties for false positives 
+
+and false negatives and is often used in highly imbalanced segmentation tasks. Third, we include Focal 
+
+Tversky Loss [7] , which further emphasizes hard examples under severe class imbalance. 
+
+All loss functions are trained and evaluated under identical preprocessing, backbone, training, and 
+
+inference settings, so that the comparison focuses only on the effect of loss design in NECT liver tumor 
+
+segmentation. 
+
+3.5 Inference and Post-processing 
+
+During inference, we follow the standard nnU-Net sliding-window strategy with Gaussian weighting. The 
+
+predicted probability map is thresholded at 0.5 to obtain the final binary segmentation mask. Unless otherwise 
+
+specified, test-time augmentation is not applied. 
+
+Boundary-based metrics such as HD95 can be highly sensitive to isolated false-positive regions. Even a
+
+small number of distant components may disproportionately increase the measured boundary distance. To 
+
+improve robustness, we evaluate a simple connected-component (CC) post-processing step as an ablation. 
+
+Specifically, small disconnected components can be removed according to a volume threshold, or only the 
+
+largest connected components can be retained. 
+
+This post-processing strategy does not change the network itself and provides a lightweight way to reduce 
+
+boundary outliers in the final segmentation results. 
+
+4 EXPERIMENTS 
+
+4.1 Dataset and Data Split 
+
+We conduct experiments on an institute-provided non-enhanced CT (NECT) liver tumor segmentation dataset 
+
+consisting of 40 volumetric scans with binary tumor annotations. To ensure consistency across all 
+
+experiments, we follow a fixed split of 28 cases for training and 12 cases for testing. 
+
+All scans are de-identified prior to analysis. No manual post-processing or case-specific correction is 
+
+applied to the model outputs unless explicitly stated in the post-processing ablation. This setting allows a
+
+controlled comparison of different loss functions under the same backbone and data conditions. 7
+
+Because the dataset is relatively small and tumors often occupy only a limited fraction of the image volume, 
+
+it provides a suitable benchmark for evaluating the effect of imbalance-aware loss design in NECT liver tumor 
+
+segmentation. 
+
+4.2 Implementation Details 
+
+All experiments are implemented within the nnU-Net v2 framework using the 3D full-resolution configuration. 
+
+The preprocessing, network architecture, augmentation strategy, optimizer, and inference pipeline are kept 
+
+identical across all compared methods. In this way, the only experimental variable is the loss function. 
+
+The default preprocessing includes resampling, foreground cropping, and intensity normalization as 
+
+determined automatically by nnU-Net. During training, standard nnU-Net data augmentation is applied. Deep 
+
+supervision is enabled following the default training configuration. 
+
+For the proposed ComboLoss, the hyperparameters are set to 𝐀 = 0.3 , 𝐀 = 0.3 , and 𝐀 = 2.5 . The final 
+
+model checkpoint is selected according to the highest pseudo-Dice score on the validation stage within the 
+
+nnU-Net training process. 
+
+During inference, we use the standard sliding-window strategy with Gaussian weighting. The probability 
+
+threshold is set to 0.5 to generate binary segmentation masks. Unless otherwise stated, test-time 
+
+augmentation is disabled in order to keep the evaluation setting compact and reproducible. 
+
+4.3 Compared Loss Functions 
+
+To assess the impact of loss design under severe class imbalance, we compare three training objectives 
+
+under the same nnU-Net v2 backbone and identical experimental settings. 
+
+The first objective is Dice + Cross-Entropy (Dice+CE), which is the default loss in nnU-Net and serves as 
+
+the baseline. The second is the proposed ComboLoss, which combines Dice loss and focal loss to improve 
+
+learning of hard foreground voxels. The third is Focal Tversky Loss, which further emphasizes hard examples 
+
+by combining focal modulation with Tversky-style imbalance control. 
+
+This comparison is designed to isolate the influence of loss formulation while avoiding confounding effects 
+
+from changes in architecture, preprocessing, or inference. 
+
+4.4 Evaluation Metrics 
+
+We evaluate segmentation performance from three complementary perspectives: overlap accuracy, boundary 
+
+fidelity, and lesion-level detectability. 
+
+For overlap-based evaluation, we report Dice similarity coefficient (DSC), intersection-over-union (IoU), 
+
+precision, and recall. These metrics reflect volumetric agreement between predicted and ground-truth masks 
+
+and are widely used in medical image segmentation. 
+
+To evaluate boundary quality, we report the 95th percentile Hausdorff distance (HD95) in millimeters. 
+
+Compared with the maximum Hausdorff distance, HD95 is less sensitive to extreme outliers and is commonly 
+
+used as a more robust boundary metric [10] .
+
+In addition, we report lesion-level recall at 𝐀🀀𝐀 ≥ 0.1 . Under this criterion, each ground-truth connected 
+
+component is counted as detected if any predicted component overlaps with it at an IoU of at least 0.1. This 
+
+metric is intended to better reflect clinically relevant detectability, especially for smal l lesions whose exact 
+
+boundaries may be difficult to delineate. 8
+
+All results are reported as mean ± standard deviation over the test cases. 
+
+4.5 Statistical Analysis 
+
+For pairwise comparisons between methods evaluated on the same test set, we adopt a two-sided Wilcoxon 
+
+signed-rank test [11] . This non-parametric test is suitable for small sample settings and paired experimental 
+
+observations. 
+
+A significance threshold of 𝐀 < 0.05 is used to indicate statistically significant differences. When 
+
+appropriate, the statistical analysis is used to support comparisons between the baseline Dice+CE objective 
+
+and the proposed ComboLoss under the same nnU-Net configuration. 
+
+4.6 Post-processing Ablation 
+
+Although overlap-based metrics can provide a reasonable summary of segmentation quality, boundary 
+
+metrics such as HD95 may be disproportionately affected by a small number of distant false-positive 
+
+components. To investigate whether this effect can be mitigated without modifying the network itself, we 
+
+further evaluate a simple connected-component (CC) post-processing step as an ablation on top of 
+
+ComboLoss predictions. 
+
+In this setting, small disconnected components can be removed based on a predefined size threshold, or 
+
+only the dominant connected components are retained. The purpose of this ablation is to examine whether a
+
+lightweight post-processing strategy can improve boundary robustness while preserving overlap performance 
+
+and lesion detectability. 
+
+5 RESULTS AND DISCUSSION 
+
+5.1 Main Results on the NECT Test Set 
+
+Table I summarizes the main results on the NECT test set under an identical nnU-Net v2 (3D full-resolution) 
+
+backbone. Three loss functions are compared, namely Dice+CE, ComboLoss, and Focal Tversky Loss.                                                                                      
+
+> Table I. Main results on the NECT test set under an identical nnU-Net v2 configuration. Mean ±standard deviation over 12
+> test cases.
+> Objective DSC ↑IoU ↑Precision ↑Recall ↑HD95 (mm) ↓LesionRec. @0.1 ↑
+> Dice+CE
+> (baseline)
+> 0.426 ±0.384 0.352 ±0.333 0.541 ±0.458 0.375 ±0.359 9.472 ±9.082 0.528 ±0.480
+> Focal Tversky
+> Loss
+> 0.620 ±0.364 0.530 ±0.317 0.643 ±0.375 0.601 ±0.367 49.672 ±57.738 0.694 ±0.440
+> ComboLoss
+> (ours)
+> 0.624 ±0.365 0.538 ±0.322 0.647 ±0.378 0.607 ±0.361 57.881 ±62.884 0.694 ±0.440
+
+Overall, all imbalance-aware objectives outperform the default Dice+CE baseline in terms of overlap and 
+
+lesion detectability. Compared with Dice+CE, the proposed ComboLoss improves the Dice similarity 
+
+coefficient from 0.426 ± 0.384 to 0.624 ± 0.365, and improves lesion-level recall@IoU ≥ 0.1 from 0.528 ±
+
+0.480 to 0.694 ± 0.440. These results indicate that introducing focal-style emphasis into the training objective 
+
+is beneficial for learning rare foreground voxels in NECT liver tumor segmentation. 9
+
+Among the compared objectives, ComboLoss achieves the best mean performance on the overlap-based 
+
+metrics, obtaining the highest DSC (0.624 ± 0.365), IoU (0.538 ± 0.322), precision (0.647 ± 0.378), and recall 
+
+(0.607 ± 0.361). In terms of lesion-level detection, ComboLoss and Focal Tversky Loss yield the same 
+
+LesionRec.@0.1 (0.694 ± 0.440), and both substantially outperform the Dice+CE baseline (0.528 ± 0.480). 
+
+These results suggest that imbalance-aware objectives improve lesion sensitivity and region overlap under 
+
+severe class imbalance. 
+
+However, the HD95 results show an opposite trend. The Dice+CE baseline achieves the lowest HD95 
+
+value (9.472 ± 9.082 mm), whereas Focal Tversky Loss and ComboLoss produce much larger distances 
+
+(49.672 ± 57.738 mm and 57.881 ± 62.884 mm, respectively). This finding indicates that improving overlap 
+
+and lesion recall may increase the risk of distant false-positive components. Since HD95 is highly sensitive to 
+
+remote boundary errors, a small number of isolated predictions can substantially increase the measured 
+
+distance even when the dominant tumor region is segmented reasonably well. Therefore, the raw ComboLoss 
+
+prediction should be interpreted together with boundary-oriented post-processing rather than by overlap 
+
+metrics alone. 
+
+5.2 Effect of ComboLoss Relative to the Baseline 
+
+Compared with the default Dice+CE objective, ComboLoss provides a consistent improvement in 
+
+segmentation overlap and lesion detectability. The gain in DSC, IoU, and recall indicates that the proposed 
+
+combination of Dice loss and focal loss is effective for handling the severe foreground –background imbalance 
+
+in NECT images. 
+
+A plausible explanation is that the Dice term stabilizes region-overlap optimization, while the focal term 
+
+increases the contribution of hard and under-represented foreground voxels during training. This combination 
+
+appears particularly beneficial in cases where tumor regions are small or exhibit weak contrast relative to 
+
+surrounding liver tissue. 
+
+From a practical perspective, ComboLoss also has the advantage of being easy to integrate into the 
+
+standard nnU-Net training framework. It does not require architectural modification, additional supervision 
+
+signals, or complex post-hoc refinement. This makes it a lightweight and reproducible alternative to the default 
+
+objective. 
+
+5.3 Boundary Robustness and Connected-Component Filtering 
+
+To further examine the boundary robustness of the proposed approach, we evaluate a simple connected-
+
+component (CC) post-processing step on top of ComboLoss predictions. This ablation is motivated by the 
+
+observation that raw ComboLoss predictions may contain isolated false-positive components, which can 
+
+strongly affect HD95. Table II shows that connected-component filtering substantially reduces HD95, from 
+
+57.881 ± 62.884 mm to 19.759 ± 17.870 mm, while maintaining comparable DSC and lesion-level recall.                                                   
+
+> Table II. Effect of connected-component post-processing on ComboLoss predictions. Mean ±standard deviation over the
+> NECT test set.
+> Method DSC ↑Recall ↑HD95 (mm) ↓LesionRec. @0.1 ↑
+> ComboLoss 0.624 ±0.365 0.607 ±0.361 57.881 ±62.884 0.694 ±0.440
+> ComboLoss +CC 0.619 ±0.365 0.596 ±0.361 19.759 ±17.870 0.708 ±0.420
+
+10 
+
+This result suggests that a relatively small number of distant false-positive components can 
+
+disproportionately inflate boundary-based metrics, even when the main tumor region is segmented reasonably 
+
+well. By removing such isolated components, CC filtering improves boundary robustness without requiring any 
+
+modification to the backbone network. Therefore, in practical use, ComboLoss should be paired with a
+
+lightweight post-processing step when boundary fidelity is a priority .
+
+Importantly, the effect of CC filtering is most pronounced on HD95 rather than on overlap-based metrics. 
+
+This is consistent with the interpretation that overlap measures mainly reflect the quality of the dominant 
+
+predicted region, whereas HD95 is more sensitive to remote segmentation errors. Therefore, the post-
+
+processing ablation provides a useful complement to the main loss comparison and supports the practical 
+
+deployment of simple refinement strategies in small-data settings. Figure 2 presents representative NECT 
+
+cases, illustrating the differences between ground truth, raw predictions, and predictions after connected-
+
+component filtering.                       
+
+> Figure 2. Qualitative comparisons on NECT. Columns correspond to the ground truth overlay, baseline prediction, and
+> ComboLoss-based prediction, with connected-component filtering applied where indicated.
+
+5.4 Discussion of Trade-offs Across Loss Functions 
+
+The results reveal a clear trade-off among the compared objectives. Dice+CE provides the weakest 
+
+performance overall, indicating that the default objective is insufficient for this highly imbalanced segmentation 
+
+task. ComboLoss improves both overlap and lesion detectability relative to the baseline while remaining 
+
+simple and easy to reproduce. Tversky Loss further improves recall-oriented performance, suggesting 
+
+stronger sensitivity to tumor voxels, but at the expense of larger boundary outliers. Focal Tversky Loss 
+
+achieves competitive performance but does not consistently surpass Tversky Loss or ComboLoss across all 
+
+metrics. 
+
+These findings suggest that no single metric is sufficient to characterize performance in NECT liver tumor 
+
+segmentation. A method with higher recall may detect more lesions but also produce more false-positive 
+
+extensions or isolated components, which can degrade boundary fidelity. Conversely, a method with more 11 
+
+stable boundaries may not necessarily maximize lesion sensitivity. For this reason, it is important to evaluate 
+
+methods jointly using overlap, boundary, and lesion-level metrics. 
+
+Within this context, ComboLoss should be interpreted as an overlap- and detection-oriented objective 
+
+rather than a complete solution to all segmentation-quality criteria. It substantially improves DSC, IoU, recall, 
+
+and lesion-level recall over the Dice+CE baseline, but the raw predictions may contain isolated false-positive 
+
+regions that worsen HD95. Therefore, the main value of ComboLoss lies in improving rare-lesion learning 
+
+under severe class imbalance, while lightweight CC post-processing provides a complementary mechanism 
+
+for controlling boundary outliers. This combination offers a practical balance between effectiveness, simplicity, 
+
+and reproducibility under the small-data conditions considered in this study. 
+
+To further examine the relationships among different metrics, we visualize the per-case Pearson 
+
+correlation across methods and metrics in Fig. 3. It shows that overlap-based metrics are strongly correlated 
+
+within each method, whereas HD95 and lesion-level recall capture complementary aspects of segmentation 
+
+quality.             
+
+> Figure 3. Correlation across methods and evaluation metrics on the NECT test set.
+
+5.5 Limitations 
+
+This study has several limitations. First, the dataset is relatively small and single-institute in nature, consisting 
+
+of 40 NECT volumes with a fixed split of 28 training and 12 test cases. Therefore, the reported results should 
+
+be interpreted as evidence from a controlled small-data setting rather than as proof of broad clinical 
+
+generalization. The performance of ComboLoss may vary when applied to more heterogeneous populations, 
+
+different scanners, different acquisition protocols, or external clinical institutions. Future work should validate 
+
+the proposed pipeline on larger multi-center NECT datasets and include external test cohorts to assess 
+
+generalizability more rigorously. 
+
+Second, although multiple loss functions are compared under a unified nnU-Net v2 framework, we do not 
+
+perform extensive hyperparameter tuning for each objective. More comprehensive tuning may further improve 
+
+the performance of some methods and may change the balance between lesion sensitivity and false-positive 
+
+control. Third, the current study focuses on loss design and lightweight connected-component post-
+
+processing, while architectural modifications, multi-stage detection-segmentation pipelines, and uncertainty-
+
+aware refinement strategies are not explored. 12 
+
+Despite these limitations, the present study provides a compact and reproducible baseline for NECT liver 
+
+tumor segmentation and offers a controlled analysis of loss design under severe class imbalance .
+
+6 CONCLUSION 
+
+In this work, we presented a compact and reproducible nnU-Net v2 baseline for non-enhanced CT liver tumor 
+
+segmentation under small-data conditions. By introducing ComboLoss, a weighted combination of Dice loss 
+
+and focal loss, we improved segmentation overlap and lesion detectability relative to the default Dice+CE 
+
+objective without modifying the network architecture. 
+
+In addition, we compared several imbalance-aware loss functions, including Focal Tversky Loss, under an 
+
+identical nnU-Net v2 configuration. The experimental results showed that imbalance-aware objectives 
+
+consistently outperform the default baseline, while also revealing a trade-off between lesion sensitivity and 
+
+boundary robustness. A simple connected-component post-processing step further reduced boundary outliers 
+
+and improved HD95 without materially affecting overlap performance. 
+
+Overall, the proposed framework provides a transparent and reproducible reference pipeline for NECT liver 
+
+tumor segmentation in a controlled small-data setting. The results suggest that ComboLoss can improve 
+
+overlap-based segmentation and lesion-level detectability, while connected-component post-processing is 
+
+useful for reducing boundary outliers caused by isolated false-positive regions. Future work should extend this 
+
+study to larger multi-center datasets, include external validation cohorts, and investigate the combination of 
+
+imbalance-aware objectives with more advanced segmentation architectures. 
+
+REFERENCES 
+
+[1] O. Ronneberger, P. Fischer, and T. Brox. 2015. U-Net: Convolutional Networks for Biomedical Image Segmentation. In Medical Image 
+
+Computing and Computer-Assisted Intervention (MICCAI 2015). Springer, 234 –241. https://doi.org/10.1007/978-3-319-24574-4_28 
+
+[2] O. Çiçek, A. Abdulkadir, S. S. Lienkamp, T. Brox, and O. Ronneberger. 2016. 3D U-Net: Learning Dense Volumetric Segmentation from 
+
+Sparse Annotation. In Medical Image Computing and Computer-Assisted Intervention (MICCAI 2016). Springer, 424 –432. 
+
+https://doi.org/10.1007/978-3-319-46723-8_49 
+
+[3] F. Isensee, P. F. Jaeger, S. A. A. Kohl, J. Petersen, and K. H. Maier-Hein. 2021. nnU-Net: a self-configuring method for deep learning-
+
+based biomedical image segmentation. Nature Methods 18, 2 (2021), 203 –211. https://doi.org/10.1038/s41592-020-01008-z 
+
+[4] F. Milletari, N. Navab, and S.-A. Ahmadi. 2016. V-Net: Fully Convolutional Neural Networks for Volumetric Medical Image Segmentation. 
+
+In 2016 Fourth International Conference on 3D Vision (3DV). IEEE, 565 –571. https://doi.org/10.1109/3DV.2016.79 
+
+[5] T.-Y. Lin, P. Goyal, R. Girshick, K. He, and P. Doll ár. 2017. Focal Loss for Dense Object Detection. In Proceedings of the IEEE 
+
+International Conference on Computer Vision (ICCV 2017). 2980 –2988. https://doi.org/10.1109/ICCV.2017.324 
+
+[6] S. S. M. Salehi, D. Erdogmus, and A. Gholipour. 2017. Tversky Loss Function for Image Segmentation Using 3D Fully Convolutional 
+
+Deep Networks. In Machine Learning in Medical Imaging. Springer, 379 –387. https://doi.org/10.1007/978-3-319-67389-9_44 
+
+[7] N. Abraham and N. M. Khan. 2019. A Novel Focal Tversky Loss Function With Improved Attention U-Net for Lesion Segmentation. In 
+
+2019 IEEE 16th International Symposium on Biomedical Imaging (ISBI 2019). IEEE, 683 –687. 
+
+https://doi.org/10.1109/ISBI.2019.8759329 
+
+[8] P. Bilic, P. F. Christ, E. Vorontsov, et al. 2023. The Liver Tumor Segmentation Benchmark (LiTS). Medical Image Analysis 84 (2023), 
+
+102680. https://doi.org/10.1016/j.media.2022.102680 
+
+[9] H. Liu, Y. Zhou, S. Gou, and Z. Luo. 2024. Tumor conspicuity enhancement-based segmentation model for liver tumor segmentation 
+
+and RECIST diameter measurement in non-contrast CT images. Computers in Biology and Medicine 174 (2024), 108420. 
+
+https://doi.org/10.1016/j.compbiomed.2024.108420 
+
+[10] L. Maier-Hein, A. Reinke, P. Godau, et al. 2024. Metrics reloaded: recommendations for image analysis validation. Nature Methods 21 
+
+(2024), 195 –212. https://doi.org/10.1038/s41592-023-02151-z 
+
+[11] R. F. Woolson. 2008. Wilcoxon Signed-Rank Test. In Wiley Encyclopedia of Clinical Trials. Wiley. 
+
+https://doi.org/10.1002/9780471462422.eoct979 
+
+[12] C. H. Sudre, W. Li, T. Vercauteren, S. Ourselin, and M. J. Cardoso. 2017. Generalised Dice Overlap as a Deep Learning Loss Function 
+
+for Highly Unbalanced Segmentations. In Deep Learning in Medical Image Analysis and Multimodal Learning for Clinical Decision 
+
+Support. Springer, 240 –248. https://doi.org/10.1007/978-3-319-67558-9_28
