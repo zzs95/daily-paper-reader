@@ -1,0 +1,855 @@
+Title: BrainDINO: A Brain MRI Foundation Model for Generalizable Clinical Representation Learning
+
+URL Source: https://arxiv.org/pdf/2604.27277
+
+Published Time: Fri, 01 May 2026 00:19:25 GMT
+
+Number of Pages: 22
+
+Markdown Content:
+# BrainDINO: A Brain MRI Foundation Model for Generalizable Clinical Representation Learning 
+
+Yizhou Wu 1,2 , Shansong Wang 1, Yuheng Li 1,3 , Mojtaba Safari 1, Mingzhe Hu 1,4 ,Chih-Wei Chang 1, Harini Veeraraghavan 5, Xiaofeng Yang 1,3,4* 
+
+> 1
+
+Department of Radiation Oncology and Winship Cancer Institute, Emory University, Atlanta, GA, USA. 
+
+> 2
+
+Department of Electrical and Computer Engineering, Georgia Institute of Technology, Atlanta, GA, USA. 
+
+> 3
+
+Department of Biomedical Engineering, Georgia Institute of Technology, Atlanta, GA, USA. 
+
+> 4
+
+Department of Biomedical Informatics, Emory University, Atlanta, GA, USA. 
+
+> 5
+
+Department of Medical Physics , Memorial Sloan Kettering Cancer Center, New York, NY, USA. *Corresponding author(s). E-mail(s): xiaofeng.yang@emory.edu; 
+
+Abstract 
+
+Brain MRI underpins a wide range of neuroscientific and clinical applications, yet most learning-based methods remain task-specific and require substantial labeled data. Here we show that a single self-supervised representation can generalize across heterogeneous brain MRI endpoints. We trained BrainDINO, a self-distilled foundation model, on approximately 6.6 million unlabeled axial slices from 20 datasets encompassing broad variation in population, disease, and acquisition setting. Using a frozen encoder with lightweight task heads, BrainDINO supported transfer across tumor segmentation, neurode-generative and neurodevelopmental conditions classification, brain age estimation, post-stroke temporal prediction, molecular status prediction, MRI sequence classification, and survival modeling. Across tasks and supervision regimes, BrainDINO consistently equaled or exceeded natural-image and MRI-specific self-supervised baselines, with particularly strong advantages under label scarcity. Representation anal-yses further showed anatomically organized and pathology-sensitive feature structure in the absence of task-specific supervision. Our findings indicate that large-scale slice-wise self-supervised learning can yield a unified brain MRI representation that supports diverse neuroimaging tasks without volumetric pretraining or full-network fine-tuning, establishing a scalable foundation for robust and data-efficient brain imaging analysis.  
+
+> Keywords: brain MRI, self-supervised learning, foundation model, neuroimaging, DINO, representation learning
+
+# 1 Introduction 
+
+Deep learning has transformed brain magnetic resonance imaging (MRI) across diverse clinical applica-tions, including tumor segmentation[1–3], Neurodevelopmental and Neurodegenerative Classification [4–6], biomarker estimation such as brain age prediction [7–9], and prognostic modeling in neuro-oncology [10– 12]. Nevertheless, most existing approaches remain task-specific, requiring substantial labeled data that are often limited and costly to obtain [1, 13, 14]. As a result, learned representations are fragmented, limit-ing reuse, reducing data efficiency under limited annotation, and restricting domain generalization across heterogeneous clinical settings [15–17]. Similar challenges in natural image domains have been addressed by self-supervised learning (SSL), which learns transferable representations from large-scale unlabeled data. SSL has evolved from contrastive 1
+
+> arXiv:2604.27277v1 [cs.LG] 30 Apr 2026
+
+learning, which emphasizes instance-level discrimination [18–20], to masked reconstruction approaches that capture fine-grained structures [21–23], and more recently to self-distillation frameworks such as DINO [24] and DINOv2 [25] that align representations across views without explicit supervision. A comparable evolu-tion has been observed in brain MRI, including contrastive frameworks such as 3D SimCLR Foundation [26] and BrainIAC [27], reconstruction-based approaches including AMAES [28], BM-MAE [29], and Brain-MVP [30], self-distillation adaptation such as BrainFound [31], and emerging generative or hybrid paradigms such as GenBrain [32]. Despite these advances, existing brain MRI SSL paradigms capture only partial aspects of the represen-tation space. Contrastive approaches primarily encode global semantics, while reconstruction-based methods preserve fine-grained local structures. More critically, all current brain MRI SSL approaches, including con-trastive, reconstruction-based, and self-distillation-based methods, typically require full-network fine-tuning to achieve strong downstream performance [27, 29–31]. This reliance on heavy task-specific adaptation makes it difficult to isolate the intrinsic transferability of the learned features, leaving it unclear whether any single brain-specific representation can generalize across fundamentally heterogeneous clinical endpoints. This question is particularly challenging in brain MRI due to intrinsic heterogeneity across acquisi-tion protocols, scanners, subject populations, and disease phenotypes [15, 16]. Moreover, downstream tasks impose distinct structural and semantic demands on the representation space. Tumor segmentation requires fine-grained boundary localization [1, 14, 33]; neurodevelopmental and neurodegenerative classification depends on subtle global morphological patterns [34–37]; temporal trajectory modeling and survival risk esti-mation rely on distributed structural biomarkers [7, 9, 10, 38, 39]. A unified representation must therefore be anatomically structured, disease-agnostic, and robust to distributional shifts [15, 16]. We hypothesize that this requires learning medical-specific invariances that suppress variation arising from acquisition physics while preserving anatomically and clinically meaningful structure. Because such invariances are absent from representations trained on natural images, domain-specific pretraining on brain MRI data is necessary even when the underlying SSL framework is shared. Recent developments in natural image SSL offer a methodological foundation for this goal. DINOv3 [40], building upon the DINO family with refined training recipes and enhanced patch-level objectives, demon-strates that high-quality representations can support strong downstream performance under frozen feature extraction without task-specific adaptation [24]. This shift from fine-tuning-dependent representations to inherently sufficient ones motivates the exploration of analogous approaches in brain MRI. Initial evidence from adapting DINOv3 to CT-based organ and tumor segmentation [41] further supports this direction. In this work, we investigate whether large-scale brain-specific slice-wise SSL can yield such a unified and transferable representation. We adopt a DINOv3-style teacher–student self-distillation framework that jointly optimizes global semantic alignment via CLS-token distillation and local structural consistency via masked patch-token prediction [40], combined with multi-scale cropping to encourage scale-consistent and anatomically coherent feature learning [24]. The model is pretrained on 6.6 million unlabeled axial slices col-lected from 20 heterogeneous brain MRI datasets.The slice-wise formulation enables scalable training across diverse cohorts while remaining agnostic to inter-slice continuity, an assumption that may be unreliable in large-scale pretraining corpora spanning heterogeneous diseases, varying slice thicknesses, and diverse acquisition protocols. To assess intrinsic representational generality, we evaluate the pretrained encoder under frozen-backbone adaptation using lightweight task-specific heads [18, 24]. We conduct systematic evaluation across multiple task families, including neurodevelopmental and neurodegenerative classification, brain age regression, post-stroke temporal prediction, tumor segmentation, molecular status prediction, MRI sequence classification, and survival risk stratification. By analyzing performance across varying labeled-data regimes, we examine not only downstream accuracy but also data efficiency under limited supervision. Across tasks and data regimes, BrainDINO consistently matches or exceeds representative baselines with the most pronounced gains emerging under label scarcity, demonstrating that large-scale slice-wise SSL is sufficient to produce a stable, transferable brain MRI representation without requiring volumetric pretraining or full-network fine-tuning. 
+
+# 2 Results 
+
+We assessed the generality of BrainDINO across seven clinical task families spanning tumor segmenta-tion, neurological disorder classification, brain age estimation, post-stroke temporal prediction, molecular status prediction, MRI sequence classification, and survival modeling. Tumor segmentation was evaluated on BraTS2021 [42], BraTS2023-Mets [43], BraTS2023-MEN [44], and BraTS2024-GoAT [45]. Neurological disorder classification was conducted on ABIDE [46] (autism spectrum disorder), ADNI [47] (Alzheimer’s 2(a) Dataset for BrainDINO pretraining (c) Downstream Clinical Applications and Results (b) Pretraining visual encoder 8 Local Views   
+
+> 2 Global Views
+> 8 Local Views
+> 2 Global Views
+> 1024
+> Self-distillation
+> 2
+> High -resolution
+> Up -sampling
+> Stage 1. Stage 2.
+> Self-distillation
+> Initialized from Stage 1
+> …
+> Overall Survival Survival Risk Risk Estimator
+> Brain DINO Tumor Segmentation Primus Decoder
+> WT TC ET Brain DINO
+> …
+> Mutation Status Prediction Molecular Status Status Predictor
+> Brain DINO
+> …
+> Neurodev. & Neurodeg. Classification Disease Status
+> Brain DINO Decision Head
+> …
+> Sequence Classification T1 T1CE T2 FLAIR Brain DINO Classifier
+> …
+> Continuous Clinical Regression Age Regressor
+> Brain DINO
+
+Training Ratio                      
+
+> 10% 20% 40% 60% 80% 100%
+> Neurodev. & Neurodeg. Classification
+> •Autism Spectrum Disorder
+> •MCI
+> •Alzheimer's Disease
+> Overall Survival
+> •1-Year Overall Survival
+> •Cox Risk Stratification
+> MRI Sequence Classification
+> •T1
+> •T1ce
+> •T2
+> •T2-FLAIR
+> Continuous Clinical Prediction
+> •Brain Age Prediction
+> •Time Since Stroke Prediction
+> Molecular Status Prediction
+> •IDH Mutation
+> Tumor Segmentation
+> •Brain Metastases
+> •Glioma
+> •Meningioma
+> •Multi-Tumor Cohorts
+
+Fig. 1 Overview of the proposed BrainDINO framework. (a) The pretraining corpus consists of large-scale and heterogeneous brain MRI datasets spanning normative populations, lifespan and neurodevelopment cohorts, structural brain tumor imaging, and clinical acquisition collections. Both volume-level composition and slice-level contributions are summarized, together with modality distribution including 3.63M T1, 2.59M T2, 0.31M T2-FLAIR, and 0.63M T1c slices. (b) Slice-wise self-supervised pretraining is performed using a two-stage DINOv3-style self-distillation framework. Stage 1 learns global anatomical repre-sentations at standard resolution, and Stage 2 refines fine-grained structural features via high-resolution upsampling. Detailed training workflow is provided in Supplementary Fig. 1. (c) Frozen-backbone downstream evaluation across six clinical task families, including tumor segmentation, neurodevelopmental and neurodegenerative classification, molecular status prediction, MRI sequence classification, continuous clinical regression, and survival modeling. Left: task families organized under vary-ing labeled-data regimes (10%–100%) to assess data efficiency. Middle: unified model setup with a shared frozen encoder and lightweight task-specific heads. Right: performance comparison at full supervision (100%), showing overall advantages of BrainDINO over alternative pretrained encoders across task categories. 
+
+disease staging), and OASIS [48] (cognitive impairment). Brain age regression used a combined IXI [49], LONG579 [50], and Pixar [51] cohort, and post-stroke temporal prediction was evaluated on ATLAS [38, 52]. Molecular status prediction targeted IDH mutation on UCSF-PDGM [53], MRI sequence classification used a curated cohort from BraTS2023 [44, 54, 55], and survival prediction was performed on UPENN-GBM [56]. Dataset details and train/test splits are provided in Supplementary Table 2. We compare BrainDINO against four representative pretrained backbones: DINOv3 pretrained on natu-ral images, and three MRI-specific self-supervised models–BrainMVP, BM-MAE, and BrainIAC. To assess data efficiency, all experiments were conducted under multiple labeled data availability regimes, ranging from 10% to 100% of the available training data. We further evaluated robustness under common MRI artifact perturbations. 
+
+2.1 Tumor Segmentation 
+
+We first evaluate the learned representation on brain tumor segmentation, a task that requires fine-grained spatial localization and accurate delineation of pathological regions. Experiments are conducted on four complementary benchmarks, including BraTS2021, BraTS2023-Mets, BraTS2023-MEN, and BraTS2024-GoAT, each emphasizing distinct tumor characteristics and generalization challenges. 3BraTS2021 provides a structured benchmark for adult glioma segmentation with well-defined tumor subregions. BraTS2023-Mets focuses on brain metastases, where lesions are typically small, multiple, and spatially dispersed, stressing sensitivity to small targets and boundary precision. BraTS2023-MEN evaluates meningioma segmentation, testing transfer to a different tumor entity beyond glioma-specific patterns. BraTS2024-GoAT is designed to assess generalizability across tumor entities by spanning hetero-geneous tumor populations and imaging conditions, thereby probing performance consistency across diverse segmentation tasks. 
+
+Quantitative Results 
+
+Across all segmentation benchmarks, performance improves with increasing training data availability. Exper-iments were conducted at six labeled-data ratios (10%, 20%, 40%, 60%, 80%, and 100%), as summarized in Fig. 3(a). We highlighted representative results at 10%, 60%, and 100% training data ratios in the main text, corresponding to low-, intermediate-, and full-data regimes (with concrete training set sizes reported per dataset). Segmentation accuracy was evaluated using the Dice similarity coefficient (Dice) for whole tumor (WT), tumor core (TC), and enhancing tumor (ET), reported as mean ± standard deviation. Statistical significance is assessed using paired tests against BrainDINO at each matched data ratio. 
+
+BraTS2021 BrainDINO demonstrated consistent improvements over DINOv3 across all data regimes, with stable gains of approximately +0 .03–0 .05 Dice across all three subregions (Fig. 3(a)). Under limited supervi-sion (10%, n = 100), BrainDINO achieved 0 .916 ± 0.015 (WT), 0 .889 ± 0.018 (TC), and 0 .856 ± 0.019 (ET), exceeding DINOv3 (0 .885, 0 .850, 0 .812; p < 0.05). Performance improved progressively with additional labeled data, reaching 0 .927 ± 0.014 (WT), 0 .898 ± 0.018 (TC), and 0 .872 ± 0.019 (ET) at full supervision (n = 1000), compared with 0 .894, 0 .861, and 0 .818 under DINOv3 ( p < 0.05). Complete results across all data ratios are provided in Supplementary Table 7. 
+
+BraTS2023-MEN BrainDINO maintained consistent advantages in WT segmentation across all data regimes, while TC and ET results revealed a more nuanced pattern (Fig. 3(a)). At 10% training data (n = 80), BrainDINO achieved WT Dice of 0 .851 ± 0.027, compared with 0 .754 under DINOv3 ( p < 0.05). Under full supervision ( n = 800), WT reached 0 .879 ± 0.026, exceeding DINOv3 (0 .786) and BM-MAE (0 .795) while remaining the highest among all backbones ( p < 0.05). For TC and ET, BrainDINO substan-tially improved over DINOv3 across all data regimes—at full data, TC and ET Dice reached 0 .714 ± 0.032 and 0 .729 ± 0.032, compared with 0 .537 and 0 .388 under DINOv3. However, BrainIAC attained numeri-cally higher TC and ET scores across most regimes (0 .806 and 0 .815 at 100%), with effect sizes between MRI-specific SSL models remaining small, indicating modest practical differences. Complete results across all data ratios are provided in Supplementary Table 7. 
+
+BraTS2023-Mets BrainDINO demonstrated the most pronounced advantages on this benchmark, where small and phenotypically variable lesions make limited-supervision performance particularly challenging (Fig. 3(a)). At 10% training data ( n = 19), BrainDINO achieved 0 .711 ± 0.021 (WT), 0 .690 ± 0.021 (TC), and 0 .666 ± 0.020 (ET), substantially exceeding all baselines—DINOv3 (0 .580, 0 .563, 0 .461), BrainIAC (0 .537, 0 .524, 0 .481), BM-MAE (0 .548, 0 .539, 0 .451), and BrainMVP (0 .560, 0 .545, 0 .462; all p < 0.05). Using 100% of the training data ( n = 190), BrainDINO reached 0 .778 ±0.019 (WT), 0 .760 ±0.019 (TC), and 0.745 ± 0.019 (ET), maintaining the largest margins over all baselines ( p < 0.05), with narrowing confidence intervals indicating improved robustness at higher data availability. Complete results across all data ratios are provided in Supplementary Table 7. 
+
+BraTS2024-GoAT BrainDINO consistently achieved the highest Dice scores across all tumor subregions and data regimes on this heterogeneous multi-tumor benchmark (Fig. 3(a)). At 10% training data ( n = 108), BrainDINO achieved 0 .904 ± 0.010 (WT), 0 .869 ± 0.012 (TC), and 0 .828 ± 0.012 (ET), exceeding DINOv3 in WT and ET (0 .895 and 0 .814; p < 0.05) with a numerically higher but non-significant advantage in TC (0 .864). Reconstruction-based MRI-specific baselines ranged from 0 .853–0 .870 (WT), 0 .759–0 .813 (TC), and 0 .770–0 .785 (ET), all significantly below BrainDINO ( p < 0.05). With 100% of the training data (n = 1080), BrainDINO reached 0 .924 ±0.009 (WT), 0 .898 ±0.011 (TC), and 0 .852 ±0.012 (ET), consistently outperforming all baselines ( p < 0.05). Complete results across all data ratios are provided in Supplementary Table 7. 4Fig. 2 Cross-dataset qualitative comparison of tumor segmentation under full-data training. Representative segmentation results on BraTS-METS 2023 and BraTS 2021 benchmarks using models fine-tuned with 100% of labeled training data. For each dataset, we show the input MRI slice, ground-truth (GT) mask (yellow), and predictions from different pretrained backbones (colored contours). Three tumor subregions are visualized: whole tumor (WT), tumor core (TC), and enhancing tumor (ET). 
+
+Qualitative Analysis 
+
+Fig. 2 illustrates representative cross-dataset segmentation examples. Across both BraTS-METS and BraTS21, BrainDINO (red contour) demonstrates closer spatial alignment with the ground-truth masks, with improved boundary conformity and reduced over-segmentation compared to alternative pretrained backbones. Competing models tend to produce enlarged contours or fragmented delineations, particularly along irregular tumor margins and heterogeneous core regions. These qualitative observations are consis-tent with the quantitative trends and support improved cross-dataset generalization under fully supervised fine-tuning. 
+
+2.2 Neurodevelopmental and Neurodegenerative Classification 
+
+We next assessed whether the learned representation captures disease-oriented semantic information through neurodevelopmental and neurodegenerative classification. Experiments were conducted on three structural T1-weighted MRI benchmarks including ABIDE, ADNI, and OASIS spanning distinct dataset scales and diagnostic complexity. ABIDE is formulated as a binary classification task distinguishing autism spectrum disorder (ASD) from healthy controls, comprising 956 training subjects and 240 validation subjects. The ABIDE training cohort partially overlapped with the pretraining corpus, while validation subjects were strictly held out. 5ADNI represents a substantially more challenging multi-class setting involving cognitively normal (CN), mild cognitive impairment (MCI), and Alzheimer’s disease (AD). It includes 1636 training subjects and 546 validation subjects, with no ADNI subjects used during pretraining. OASIS is a smaller independent dementia cohort consisting of 195 training subjects and 40 validation subjects, serving as a low-sample evaluation scenario. Classification performance was evaluated using macro-AUC under training data ratios ranging from 10% to 100%. Statistical significance is assessed via paired bootstrap testing. 
+
+ABIDE As shown in Fig. 3(d), performance differences on ABIDE were modest at low data regimes, with no statistically significant differences among backbones at 10% or 20% supervision. Statistically significant improvements emerged from 40% training data onward, where BrainDINO reached 0 .679, outperforming BrainIAC (0 .548, p < 0.05), BM-MAE (0 .545, p < 0.05), and DINOv3 (0 .598, p < 0.05). Under full supervision (100%), BrainDINO attained 0 .745, exceeding BrainIAC (0 .660, p < 0.05), BM-MAE (0 .544, 
+
+p < 0.05), and DINOv3 (0 .559, p < 0.05), while remaining comparable to BrainMVP (0 .653). These results suggest that moderate supervision is required to unlock statistically robust advantages on this coarse-grained binary task. Complete results are provided in Supplementary Table 8. 
+
+ADNI In contrast to ABIDE, substantially larger and highly consistent gains were observed on ADNI, which evaluated fine-grained multi-class disease staging in a fully unseen cohort (Fig. 3(b)). BrainDINO signifi-cantly outperformed all baselines across all training data ratios ( p < 0.05). At 10% supervision, BrainDINO achieved 0 .743, exceeding the strongest MRI-specific baseline BrainMVP (0 .657) by +0 .086 AUC. The gap widened progressively: at 100% supervision, BrainDINO attained 0 .954, surpassing BrainMVP (0 .872), BM-MAE (0 .762), BrainIAC (0 .666), and DINOv3 (0 .675), corresponding to absolute improvements of 8– 28 AUC points. Age-stratified analysis under full supervision (Fig. 3(c)) revealed the most pronounced advantages in the 65–84 age range, where BrainDINO reached macro-AUC of 0 .971 (65–74) and 0 .946 (75– 84), significantly exceeding BrainMVP (0 .897 and 0 .850, both p < 0.05). Complete results are provided in Supplementary Table 8. 
+
+OASIS On the smaller OASIS cohort, BrainDINO consistently achieved the highest macro-AUC across all training data regimes (Fig. 3(h)). At 10% supervision, BrainDINO reached 0 .837, significantly outperforming DINOv3 (0 .329, p < 0.05) and BrainIAC (0 .687, p < 0.05), while maintaining numerical advantages over BrainMVP (0 .765) and BM-MAE (0 .755). Performance remained stable across all data regimes (0 .815– 0.837), whereas competing models showed greater variability. Due to the small test set ( n = 40), BM-MAE and BrainMVP comparisons did not reach statistical significance across most ratios, highlighting variability inherent to small-sample evaluation. Complete results are provided in Supplementary Table 8. 
+
+2.3 Neuroanatomical Trajectory Modeling 
+
+We next evaluated whether the learned representation captures continuous neuroanatomical trajectories through brain age estimation and post-stroke temporal prediction. Results are summarized in Fig. 3(i-k). 
+
+Brain Age Estimation BrainDINO consistently achieved the lowest mean absolute error (MAE, years) across all training data ratios on the combined IXI, LONG579, and Pixar cohort (Fig. 3(i)), significantly outperforming all baselines at every supervision level ( p < 0.05). Under extreme label limitation (10%, 
+
+n = 144), BrainDINO attained an MAE of 7 .33 ± 0.85 years, compared with BrainIAC (12 .50 ± 0.94), DINOv3 (13 .58 ± 1.02), and BrainMVP (15 .22 ± 0.92), corresponding to an absolute reduction of 5–8 years. Notably, BrainDINO with only 20% labeled data (6 .02 ± 0.77 years) already surpassed all baselines trained with 100% data, demonstrating strong data efficiency. Under full supervision (100%, n = 1440), BrainDINO maintained the lowest MAE at 5 .54 ± 0.75 years, while the best baseline BrainIAC remained at an MAE of 7.50 ± 0.89 years ( p < 0.05). Complete results are provided in Supplementary Table 9. Age-stratified MAE under full supervision (Fig. 3(j)) revealed a nuanced lifespan profile (Supplementary Table 16). BrainDINO achieved the strongest performance in the youngest (0–9: 2 .31 years vs. DINOv3 3.70, p < 0.05) and oldest (70+: 10 .45 years vs. BrainMVP 24 .13, p < 0.05) age groups, as well as in the 50–69 bin (8 .16 vs. BM-MAE 12 .74, p < 0.05). In the mid-life bins (10–49), differences were not statistically significant, with DINOv3 and BrainIAC achieving marginally lower errors in the 10–29 and 30–49 groups respectively. These findings suggest that brain-specific pretraining yields the greatest gains at the extremes of the age distribution, where normative aging signatures are most pronounced. 6*** *** *** *** *** Fig. 3 Summary of downstream evaluation results across segmentation and neuroimaging tasks. (a) Tumor subregion seg-mentation (Dice) across four BraTS cohorts under varying labeled-data ratios. (b) Alzheimer’s disease diagnosis (macro-AUC) on ADNI. (c) Age-stratified AD diagnosis on ADNI at 100% supervision. (d) Autism spectrum disorder classification on ABIDE. (e) IDH mutation prediction on UCSF-PDGM. (f ) Binary overall survival classification on UPENN-GBM. (g) MRI sequence classification on BraTS2023. (h) Cognitive impairment diagnosis on OASIS. (i) Brain age estimation (MAE) on IXI + LONG579 + Pixar. (j) Age-stratified brain age error at 100% supervision. (k) Post-stroke temporal prediction (MAE) on ATLAS. Significance annotations: ∗ p < 0.05; ∗ ∗ p < 0.01; ∗ ∗ ∗ p < 0.001; shown for selected age groups in panels (c) and (j); remaining significance are provided in the Supplementary Materials. 
+
+7Post-Stroke Temporal Prediction We further evaluated pathological temporal modeling on the ATLAS dataset by predicting Days Post Stroke (DPS), a task assessing lesion-driven structural evolution rather than normative aging, measured by MAE (days) (Fig. 3(k)). At 10% supervision ( n = 21), BrainDINO achieved an MAE of 56 .6 ± 4.1 days, comparable to BM-MAE (55 .4) and BrainIAC (56 .2), with no statistically significant differences among MRI-specific models. From 20% supervision onward, BrainDINO consistently outperformed DINOv3 by a substantial margin (51 .3 vs. 81 .3 days at 20%; 49 .5 vs. 77 .2 days at 100%; all 
+
+p < 0.05). The strongest performance was observed at 40% supervision (MAE 46 .7 ± 4.1 days). MRI-specific baselines BrainIAC and BM-MAE remained numerically close to BrainDINO across all regimes without reaching statistical significance, reflecting the high-variance nature of this small-sample task. Complete results are provided in Supplementary Table 16. 
+
+2.4 Overall Survival Classification 
+
+Binary Classification Binary overall survival classification was evaluated on the UPENN-GBM cohort using macro-AUC, with 121 subjects in the held-out validation set (Fig. 3(f)). At 10% supervision ( n = 48), BrainDINO achieved a macro-AUC of 0 .589 [0.568, 0.610], comparable to BrainIAC (0 .591) and BM-MAE (0 .599), and higher than BrainMVP (0 .542) and DINOv3 (0 .548), with overlapping confidence intervals across all comparisons. Performance improved progressively with additional supervision across all backbones. Under full supervision (100%, n = 482), BrainDINO achieved the highest macro-AUC of 0 .683 [0.662, 0.704], exceeding BM-MAE (0 .546, p < 0.05), while differences relative to BrainIAC (0 .576), BrainMVP (0 .590), and DINOv3 (0 .614) did not reach statistical significance. Complete results are provided in Supplementary Table 13. 
+
+Kaplan–Meier Risk Stratification We next evaluated survival modeling using Kaplan-Meier risk strati-fication based on median risk scores estimated from the training set. BrainDINO consistently demonstrated statistically significant separation between high- and low-risk groups across all training data ratios ( p < 0.05 at all ratios; Fig. 4). Clear divergence of survival trajectories was observed even at low data availability, with low-risk median survival of 439 days versus 235 days for high-risk patients at 20% supervision, and remained stable as supervision increased. In contrast, alternative backbones showed inconsistent or non-significant risk separation—DINOv3 achieved significance only at 40% and 100%, while BM-MAE and BrainIAC failed to reach significance at any ratio. These results indicate that BrainDINO supports robust survival risk stratification across varying levels of supervision. Complete results are provided in Supplementary Table 14. 
+
+2.5 Mutation Detection 
+
+We evaluated molecular-level inference using IDH mutation status prediction on the UCSF-PDGM cohort. After filtering for subjects with both T1CE and FLAIR modalities available, 360 subjects were used for training and 92 subjects for independent testing (73 IDH-wildtype and 19 non-wildtype). Performance was assessed using AUC across varying training data ratios (Fig. 3(e)). At 10% training data, BrainDINO achieved an AUC of 0 .858 [0.809, 0.905], significantly exceeding BM-MAE (0 .603, p < 0.05), BrainIAC (0 .580, p < 0.05), DINOv3 (0 .512, p < 0.05), and BrainMVP (0 .682, 
+
+p < 0.05). At intermediate supervision (40%–60%), BrainDINO maintained AUC of 0 .813, significantly outperforming BM-MAE, BrainIAC, and DINOv3 ( p < 0.05), while differences relative to BrainMVP were not statistically significant at these ratios. Under full supervision (100%), BrainDINO achieved its highest AUC of 0 .901 [0.840, 0.949], significantly outperforming BM-MAE (0 .633, p < 0.05), BrainIAC (0 .583, 
+
+p < 0.05), and DINOv3 (0 .478, p < 0.05), while the difference relative to BrainMVP (0 .819) did not reach statistical significance. Across all supervision regimes, BrainDINO consistently achieved the highest AUC, with confidence intervals shifted toward higher performance relative to all baselines. Complete results are provided in Supplementary Table 10. 
+
+2.6 MRI Sequence Classification 
+
+We further evaluated whether the learned representation encodes acquisition-level semantics through MRI sequence classification, a task probing sensitivity to protocol and contrast differences independent of pathol-ogy. Experiments were conducted on a curated cohort from BraTS2023-MEN, BraTS2023-PEDs, and BraTS-Africa, comprising four MRI sequences (T1w, T1c, T2w, and T2-FLAIR; 1,155 samples per class). BrainDINO consistently delivered the strongest sequence discrimination performance across all supervi-sion levels, with particularly pronounced advantages in the low-data regime (Fig. 3(g)). At 10% supervision, 80 500 1000 1500 2000 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+> Survival Probability
+
+Training Ratio 20% 
+
+p=0.395 
+
+> Low Risk (n=47)
+> High Risk (n=59)
+
+0 500 1000 1500 2000 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+Training Ratio 40% 
+
+p=0.022 
+
+> Low Risk (n=44)
+> High Risk (n=62)
+
+0 500 1000 1500 2000 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+Training Ratio 60% 
+
+p=0.323 
+
+> Low Risk (n=60)
+> High Risk (n=46)
+
+0 500 1000 1500 2000 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+Training Ratio 80% 
+
+p=0.274 
+
+> Low Risk (n=55)
+> High Risk (n=51)
+
+0 500 1000 1500 2000 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+Training Ratio 100% 
+
+> DINOv3
+
+p=0.025 
+
+> Low Risk (n=50)
+> High Risk (n=56)
+
+0 500 1000 1500 2000 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+> Survival Probability
+
+p=0.467 
+
+> Low Risk (n=49)
+> High Risk (n=57)
+
+0 500 1000 1500 2000 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+p=0.202 
+
+> Low Risk (n=50)
+> High Risk (n=56)
+
+0 500 1000 1500 2000 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+p=0.004 
+
+> Low Risk (n=55)
+> High Risk (n=51)
+
+0 500 1000 1500 2000 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+p=0.144 
+
+> Low Risk (n=39)
+> High Risk (n=67)
+
+0 500 1000 1500 2000 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+> BrainMVP
+
+p=0.033 
+
+> Low Risk (n=52)
+> High Risk (n=54)
+
+0 500 1000 1500 2000 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+> Survival Probability
+
+p=0.822 
+
+> Low Risk (n=42)
+> High Risk (n=64)
+
+0 500 1000 1500 2000 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+p=0.617 
+
+> Low Risk (n=46)
+> High Risk (n=60)
+
+0 500 1000 1500 2000 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+p=0.598 
+
+> Low Risk (n=43)
+> High Risk (n=63)
+
+0 500 1000 1500 2000 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+p=0.231 
+
+> Low Risk (n=47)
+> High Risk (n=59)
+
+0 500 1000 1500 2000 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+> BM-MAE
+
+p=0.692 
+
+> Low Risk (n=48)
+> High Risk (n=58)
+
+0 500 1000 1500 2000 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+> Survival Probability
+
+p=0.271 
+
+> Low Risk (n=44)
+> High Risk (n=62)
+
+0 500 1000 1500 2000 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+p=0.252 
+
+> Low Risk (n=50)
+> High Risk (n=56)
+
+0 500 1000 1500 2000 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+p=0.670 
+
+> Low Risk (n=44)
+> High Risk (n=62)
+
+0 500 1000 1500 2000 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+p=0.243 
+
+> Low Risk (n=52)
+> High Risk (n=54)
+
+0 500 1000 1500 2000 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+> BrainIAC
+
+p=0.271 
+
+> Low Risk (n=47)
+> High Risk (n=59)
+
+0 500 1000 1500 2000 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+> Survival Probability
+
+p=0.001 
+
+> Low Risk (n=56)
+> High Risk (n=50)
+
+0 500 1000 1500 2000 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+p=0.004 
+
+> Low Risk (n=52)
+> High Risk (n=54)
+
+0 500 1000 1500 2000 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+p=0.002 
+
+> Low Risk (n=52)
+> High Risk (n=54)
+
+0 500 1000 1500 2000 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+p=0.003 
+
+> Low Risk (n=49)
+> High Risk (n=57)
+
+0 500 1000 1500 2000 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+> BrainDINO
+
+p=0.036 
+
+> Low Risk (n=47)
+> High Risk (n=59)
+
+Time from Surgery (days) Fig. 4 Kaplan-Meier survival analysis across training data ratios on UPENN-GBM. Survival curves for low- and high-risk patient groups stratified by predicted risk scores from five pretrained backbones (BrainDINO, DINOv3, BrainMVP, BrainIAC, and BM-MAE) under five training data availability settings (20%, 40%, 60%, 80%, and 100%). Statistical significance is assessed using log-rank tests. For visualization clarity, the time axis is truncated to 2,000 days. 
+
+BrainDINO achieved a macro-AUC of 0 .994 [0.992, 0.996], significantly exceeding DINOv3 (0 .980), BM-MAE (0 .917), and BrainMVP (0 .799; all p < 0.05). From 40% supervision onward, BrainDINO reached a near-perfect macro-AUC of 1 .000, while DINOv3 remained at 0 .991–0 .993 and BM-MAE at 0 .964–0 .977 across the same range (all p < 0.05). These results indicate that brain-specific pretraining yields represen-tations that are highly sensitive to acquisition-level differences, even under limited supervision. Complete results are provided in Supplementary Table 12. 
+
+2.7 Perturbation Analysis 
+
+We further examine the stability of the learned representations under common MRI perturbations to assess generalization under distributional shifts. Perturbation robustness is not treated as a primary contribution of this work; rather, this analysis characterizes how pretrained backbones respond when image statistics are systematically altered at test time. Following a standardized test-time perturbation protocol, we consider three clinically relevant perturbation families: global intensity rescaling via gamma correction (contrast perturbation), Gibbs artifact (k-space truncation), and bias field inhomogeneity. Perturbation severity was progressively increased within predefined ranges, while all encoders remain frozen and no training-time augmentation or adaptation is introduced. Experiments were conducted across three downstream tasks 9Tumor Segmentation ↑     
+
+> Age Regression ↓
+> Alzheimer Diagnosis ↑Fig. 5Test-time perturbation analysis across ADNI classification (AUC), brain age regression (MAE), and BraTS2021 tumor segmentation (Mean Dice for WT/TC/ET) under three representative perturbations (Bias Field, Gibbs, and Contrast). Grouped bars show performance across increasing perturbation severity levels for four pretrained encoders, with error bars indicating uncertainty estimates. BrainDINO achieves the strongest clean baseline and remains robust across most perturba-tion settings, although degradation patterns are task-dependent, with segmentation showing pronounced sensitivity to Gibbs artifacts. For clarity, each subplot displays only a single statistical annotation: the most significant BrainDINO-versus-second-best comparison (smallest p-value across all severity levels within that subplot).
+
+with distinct supervision characteristics: three-class neurodegenerative classification on ADNI, brain age regression, and brain tumor segmentation on BraTS2021 (Fig. 5). On ADNI, BrainDINO achieved the strongest clean baseline performance (AUC 0 .95), substantially exceeding BM-MAE (0 .76) and BrainMVP (0 .56). As perturbation severity increased, all models degraded; however, the relative ranking among backbones remains largely preserved across perturbation families. Under severe contrast perturbation ( γ = 2 .0), BrainDINO retains an AUC of 0 .75, compared to 0 .64 for BM-MAE and 0 .49 for BrainMVP. For Gibbs perturbation at strength 0 .4, performance decreases to 0 .87, while competing models fell to 0 .77 and 0 .56, respectively. Under bias field perturbation at strength 0 .4, BrainDINO reaches 0 .83, remaining substantially above baselines. Notably, absolute degradation is more pronounced for high-capacity models due to their stronger reliance on fine-grained anatomical and intensity cues. Nevertheless, BrainDINO consistently maintains superior absolute performance across all perturbation strengths, indicating stable relative generalization under distributional shifts. For brain age regression, BrainDINO achieves the lowest clean MAE (5 .5 years), markedly outperforming BM-MAE (9 .1) and BrainMVP (16 .9). Under contrast perturbation, BrainDINO remains comparatively stable and preserves the lowest error across the full severity range (MAE 7 .6 at γ = 2 .0), while BM-MAE exhibits substantial error amplification (MAE 34 .6). In contrast, bias field and Gibbs perturbations introduce stronger degradation for all models. BrainDINO demonstrates noticeable error increases under severe bias field and Gibbs perturbations, reflecting the task’s sensitivity to global intensity gradients and high-frequency cortical structure. Despite this degradation, BrainDINO remains competitive and avoids catastrophic error escalation observed in several baselines under extreme contrast perturbation. On brain tumor segmentation (BraTS2021), BrainDINO achieved the highest performance across all subregions under clean conditions. Bias field perturbation produces minimal degradation across all models, with BrainDINO exhibiting nearly unchanged Dice scores even at the highest severity. Moderate contrast perturbation leads to small performance reductions, while relative ranking remains consistent. In contrast, Gibbs perturbation induced substantial degradation for all backbones, particularly for WT segmentation, 10 reflecting the strong dependence of boundary delineation on high-frequency structural information. Although absolute Dice scores decrease sharply under severe Gibbs corruption, BrainDINO maintains competitive per-formance relative to alternative encoders. These findings indicate that segmentation robustness is primarily limited by perturbation type rather than encoder architecture. (a) Reference Patch Similarity Across Models (b) Representation Structure and Consistency (kNN & CKA) 
+
+Fig. 6 Representation structure and downstream discriminability of frozen pretrained encoders. (a) Reference-point patch similarity across models. For a representative BraTS subject, similarity maps are computed from three anatomically distinct reference patches (tumor core, CSF, white matter) using frozen patch-token features from five pretrained backbones. BrainDINO produces spatially selective similarity distributions that closely correspond to anatomical compartments, whereas natural-image-pretrained DINOv3 yields more diffuse patterns. (b) Representation structure and consistency. Left: kNN clas-sification accuracy on ADNI (top) and OASIS (bottom) using frozen features from four MRI-specific SSL backbones across neighborhood sizes k ∈ { 1, 3, 5, 10 , 20 , 50 }. Error bars denote standard deviations estimated via stratified bootstrap resampling of the test set (2,000 iterations). BrainDINO achieves the highest accuracy on ADNI with stable performance across k; on OASIS, numerical advantages are present but confidence intervals are wider due to the small test set ( n = 40). Right: Layer-wise centered kernel alignment (CKA) between frozen BrainDINO representations at early (block 2), mid (block 6), and late (block 11) layers and three pretrained backbones, computed on normative (IXI) and pathological (BraTS, 500 subjects) cohorts. On IXI, BrainDINO remains strongly aligned with DINOv3 across depth. On BraTS, alignment with DINOv3 increases with depth while alternative MRI-specific backbones exhibit lower and less stable similarity in deeper layers, indicating distinct representational geometries under pathological distribution shift. 
+
+2.8 Representation-Level Analysis 
+
+To further examine the intrinsic properties of the learned representation beyond task-specific performance, we conducted representation-level analyses focusing on feature separability, spatial organization, and cross-model representational consistency under frozen encoders. 11 Since kNN classification requires no learned parameters, its performance directly reflects the intrinsic class structure of the frozen feature space—free from any confound introduced by task-specific optimization. To assess whether the learned representations are inherently class-separable prior to any downstream adap-tation, we applied nonparametric kNN probing [24, 25] on frozen CLS-token features from the ADNI and OASIS cohorts across neighborhood sizes k ∈ { 1, 3, 5, 10 , 20 , 50 }. As shown in Fig. 6(b, left), BrainDINO consistently achieved the highest classification accuracy across all values of k on ADNI, with statistically significant advantages over all competing backbones at small neighborhood sizes ( k ≤ 5, p < 0.05) and stable performance across larger k. On OASIS, BrainDINO also demonstrated consistent numerical advan-tages, although no pairwise comparison reached statistical significance due to the smaller test set ( n = 40). These results indicate that the learned representation exhibits stronger intrinsic class separability com-pared to competing backbones prior to any task-specific adaptation (full numerical results in Supplementary Table 17). To further characterize the spatial and structural organization of the learned feature space, we computed reference-point similarity maps using frozen patch-token embeddings, measuring similarity between selected anatomical reference patches (tumor, CSF, and white matter) and all spatial tokens within a slice. As illus-trated in Fig. 6(a), BrainDINO produced spatially selective activation patterns that closely corresponded to anatomical compartments—tumor-centered references yielded segmentation-like highlights across enhancing lesions, while CSF and white matter references selectively activated their respective tissue types—all with-out any task-specific supervision. This suggests that jointly optimizing for global semantic consistency and local structural fidelity during pretraining produces a spatially precise and anatomically organized feature geometry. To assess cross-model representational consistency and how feature geometry evolves across network depth, we performed layer-wise centered kernel alignment (CKA) [57] on both normative (IXI) and patho-logical (BraTS) cohorts (Fig. 6(b, right)). The results revealed a hierarchical pattern consistent with domain-specific adaptation: in early layers, BrainDINO maintained strong alignment with DINOv3, reflect-ing the shared representational geometry induced by the DINO training objective; in deeper layers, BrainDINO progressively diverged from DINOv3 under pathological distribution shift, providing evidence that brain-specific pretraining reshapes late-layer representations in response to pathological morphology. In contrast, MRI-specific SSL baselines exhibited substantially lower CKA similarity to BrainDINO across all layers and both cohorts, indicating that these models occupy a different region of representational space. 
+
+# 3 Discussion 
+
+We developed a large-scale slice-wise self-supervised foundation model for brain MRI, pretrained on 6.6 million unlabeled axial slices collected from 20 heterogeneous datasets spanning normative populations, neurodevelopmental cohorts, structural brain tumor imaging, and diverse clinical acquisition settings. Without any task-specific supervision during pretraining, the learned representation consistently improves performance across a broad spectrum of downstream applications, including tumor segmentation, neu-rodevelopmental and neurodegenerative classification, neuroanatomical trajectory modeling, post-stroke temporal prediction, survival risk stratification, mutation detection, and MRI sequence classification. These improvements are observed across tasks with varying levels of clinical complexity and dataset scale, with par-ticularly pronounced gains under limited-label regimes. Because brain MRI exhibits statistical and structural properties distinct from natural images, these consistent improvements over natural-image-pretrained back-bones suggest that large-scale brain-specific self-supervised learning can yield a generalizable representation capable of supporting diverse neuroimaging tasks with minimal downstream adaptation. A distinguishing characteristic of our framework is its parameter-efficient adaptation strategy. Across classification and regression tasks, only approximately 0.6% of total model parameters are updated during downstream training, while over 99% of the pretrained encoder remains frozen. For dense segmentation, the backbone likewise remains frozen (77.4% of total parameters), with only the task-specific decoder and adapter modules (22.6%) optimized. This design aligns with the intended philosophy of foundation mod-els [58], wherein a pretrained representation functions as a stable, reusable backbone rather than being re-specialized per task. From a clinical deployment perspective, parameter-efficient adaptation reduces com-putational demands, shortens fine-tuning time, and mitigates representation drift when transferring to new institutions or limited-label cohorts. While several prior brain MRI foundation approaches, includ-ing BrainIAC [27], adopt full-network fine-tuning, our results indicate that a well-structured brain-specific representation can support both linear probing and dense prediction with minimal task-specific modifica-tion. To directly quantify this trade-off, we compared frozen-backbone and full fine-tuning adaptation of BrainDINO on three representative tasks spanning distinct supervision types and parameter budgets: ADNI 12 classification, brain age regression, and BraTS2021 segmentation (Supplementary Table 6). Under limited supervision (10% labeled data), the frozen encoder matches or exceeds full fine-tuning on all three tasks while updating fewer than 1% of parameters for classification and regression, and 22.6% for segmentation, demonstrating that representation quality, rather than end-to-end gradient flow, is the primary driver of performance in data-scarce regimes. Under full supervision, fine-tuning yields meaningful gains only for continuous regression (brain age MAE: 3.29 vs. 5.54 years), whereas classification and dense segmentation remain competitive or favor the frozen protocol, consistent with the view that aggressive encoder updates can disrupt fine-grained patch-level features learned during pretraining. Beyond parameter efficiency, BrainDINO demonstrates consistent data efficiency across diverse down-stream tasks. Performance advantages persist even under extremely limited supervision (e.g., 10% and 20% labeled data), with relative gains particularly evident in clinically challenging, data-scarce settings. Improvements span linear classification, regression, and dense segmentation, indicating that the pretrained representation retains sufficient structural information to support task adaptation in low-data regimes, which is a practical advantage frequently needed in clinical neuroimaging. This behavior is further supported by representation-level analyses. Non-parametric kNN probing on frozen features indicates stronger empirical class separability prior to any task-specific adaptation, while reference-based similarity maps and layer-wise CKA reveal that the learned representation is both spatially structured and hierarchically organized. Together, these observations suggest that pretraining on heterogeneous brain MRI data at scale induces invariances that suppress acquisition-driven distributional variation while preserving clinically meaningful structure. The stability observed under test-time perturbations simulating scanner and protocol differ-ences provides additional evidence for this property. These invariances in turn appear to support a shared anatomical encoding from which segmentation, classification, regression, and survival modeling can be real-ized as different projections without task-specific encoder adaptation. A formal characterization of this representational geometry remains an important direction for future investigation. Several limitations should be acknowledged. First, the slice-wise formulation may limit inter-slice con-textual continuity; qualitative inspection suggests that segmentation predictions tend to be conservative on slices with less prominent pathology, and future work may explore cross-slice aggregation or fully 3D pretraining. Second, certain applications, such as autism spectrum disorder classification and post-stroke temporal estimation, remain challenging, likely reflecting subtle and diffuse imaging signatures that may benefit from domain-specific architectures or multimodal integration. Third, we intentionally preserved a frozen backbone to emphasize representation stability; systematic evaluation of full-network fine-tuning may yield additional gains at the expense of computational cost and transfer stability. Finally, the pretraining corpus focuses on structural MRI sequences; functional MRI, diffusion-weighted imaging, and deformable registration [59] represent important directions for future work. 
+
+# 4 Methods 
+
+4.1 Pretraining Data 
+
+4.1.1 Dataset Collection 
+
+We construct a large-scale pretraining corpus by aggregating publicly available brain MRI datasets that collectively capture broad variation in population cohorts, disease entities, and imaging settings. The corpus integrates normative population studies, including ICBM [60], ID1000 and PIOP1&2 [61]; lifespan and neurodevelopmental cohorts such as LONG579 [50], ABIDE [46], and PPMI [62]; structural brain tumor datasets, including TCGA-GBM [63], CPTAC-GBM [64], GLIS-RT [65], REMBRANDT [66], IvyGAP [67], BraTS2025-GLI-PRE [68], BraTS2023-PED [54], BraTS2023-MEN [69], BraTS2023-SSA [55], MEN-SEG-CLASS [70], and ReMIND [71]; as well as clinical acquisition and workflow datasets such as fastMRI-Brain [72], ACRIN-DSC-MR-Brain [73], and ACRIN-FMISO-Brain [74]. In addition, multiple multi-center clinical trial cohorts are included to further enhance diversity in scanner hardware and acquisition protocols. In total, the pretraining corpus comprises 20 heterogeneous datasets and about 6.6 million 2D MRI slices extracted from over 51k 3D volumes. As summarized in Fig. 1, the slice-scale distribution spans several orders of magnitude across datasets, while collectively covering a wide range of subject demographics, imaging pro-tocols, and clinical contexts. The resulting corpus encompasses neurodevelopmental, neurodegenerative, and oncological conditions, as well as variations driven by acquisition and reconstruction differences, providing a rich substrate for learning anatomy-aware and disease-agnostic representations. All datasets are used exclusively in an unlabeled manner during pretraining. For datasets that also appear in downstream evaluation, pretraining and evaluation are conducted under strict subject-level separation: no 13 subject in the downstream test set was seen during pretraining. Detailed overlap descriptions are provided in each downstream task section. 
+
+4.1.2 Slice-wise Sampling Strategy 
+
+We extracted 2D axial slices from 3D brain MRI volumes as the basic training units for self-supervised pretraining. Each volume was processed through a sequential pipeline prior to slice extraction. First, skull stripping was performed using HD-BET [75] to remove non-brain tissues, ensuring that sampled slices pri-marily captured intracranial anatomy. This step standardized the foreground definition across datasets with heterogeneous acquisition protocols and fields of view, and was applied uniformly without using any task-specific information. Each skull-stripped volume was then cropped to the minimal bounding box enclosing non-zero voxels and resized to a fixed spatial resolution of 256 × 256 × 256. Intensity values were subsequently standardized at the volume level using percentile-based normalization: voxel intensities were clipped to the 0 .5th–99 .5th percentile range to suppress extreme outliers and scanner-specific intensity spikes, followed by z-score normalization using the mean and standard deviation of non-zero voxels within the volume. This procedure reduced inter-dataset intensity variability while preserving relative anatomical contrast. After normalization, 128 axial slices were sampled from the 256 available slices along the superior-to-inferior axis. To avoid over-representing slices near the superior and inferior extremes, which often contained limited anatomical or clinical information, slices were selected according to a one-dimensional normal distribution centered at the midpoint of the axis ( μ = 128, σ = 50). This strategy biased sampling toward central brain regions, where clinically relevant structures and pathological patterns were more frequently observed, while still preserving coverage across the full cranio-caudal range. Unless otherwise specified, this preprocessing and sampling pipeline was applied consistently across all pretraining datasets, enabling large-scale and dataset-agnostic representation learning while maintaining a balance between anatomical coverage and information density. 
+
+4.2 Self-Supervised Pretraining Framework 
+
+We adopted a teacher-student self-distillation framework inspired by DINOv3 for slice-wise self-supervised pretraining on brain MRI (Fig. 1(b)). The model was trained to produce consistent representations across multiple augmented views of the same 2D MRI slice without relying on manual annotations. The student and teacher networks shared an identical Vision Transformer backbone (ViT-B/16; patch size 16) with rotary positional embeddings and 4 learned storage tokens. Each input slice was replicated to three channels to conform to the RGB input convention of DINOv3 and fed to both networks. From each slice, we generated a multi-crop set consisting of two global views and eight local views. Global crops were sampled with scale range [0 .32 , 1.0] and resized to 256 × 256, while local crops were sampled with scale range [0 .05 , 0.32] and resized to 112 × 112. To encourage invariance to acquisition noise and minor geometric perturbations in grayscale MRI, we applied random horizontal flips and Gaussian blurring. The teacher network received only the two global views, while the student network was trained on all views (two global plus eight local), encouraging view-invariant representations under both large-field and localized perturbations. The teacher parameters were updated as an exponential moving average (EMA) of the student parame-ters, which stabilized optimization and mitigated representation collapse during training. At each iteration, teacher weights θt were updated from student weights θs using momentum m fixed to 0 .994 throughout training. Each network produced both a global class (CLS) token and patch-level token embeddings, which were passed through lightweight projection heads prior to computing self-distillation losses. Specifically, we used separate DINO and iBOT heads (three-layer MLP; hidden dimension 2048; bottleneck dimension 256) with a prototype dimension of K = 65536 for both objectives. Unlike the full DINOv3 formulation, we did not incorporate Gram matrix regularization. In preliminary experiments on heterogeneous brain MRI data, Gram-based feature regularization did not yield consistent improvements and occasionally led to reduced downstream performance. To preserve representation stability and generality across datasets, we retained only the core self-distillation objectives. Pretraining jointly optimized global and local consistency terms. Global semantic alignment was enforced through a DINO-style cross-entropy loss applied to the CLS tokens, where the student output distribution was matched to a temperature-sharpened and centered teacher distribution: 
+
+LDINO = − X
+
+> k
+
+q(t) 
+
+> k
+
+log p(s) 
+
+> k
+
+, (1) where q(t) denotes the teacher probability distribution and p(s) denotes the student distribution. 14 In parallel, local structural consistency was encouraged through an iBOT-style [76] masked prediction objective applied to patch tokens. For each global crop, a subset of patch tokens was randomly masked with probability 0 .5, using a mask ratio uniformly sampled from [0 .1, 0.5]. The student predicted the teacher’s centered targets only at masked locations: 
+
+LiBOT = − X
+
+> i∈M
+
+X
+
+> k
+
+q(t) 
+
+> ik
+
+log p(s) 
+
+> ik
+
+, (2) where M denotes the set of masked patch locations. The overall training objective combined these two components: 
+
+L = LDINO + λLiBOT , (3) with λ = 1 in all experiments. To further regularize the representation geometry, we additionally applied a KoLeo diversity loss on the student CLS features with weight 0 .1, encouraging non-collapsed and well-spread embeddings. Optimization was performed using AdamW with gradient clipping (max norm 3 .0) and layer-wise learning-rate decay (0 .9). We trained for 500 , 000 iterations. Training used 4 A100 GPUs and a per-GPU batch size of 256. The learning rate was warmed up for 10 , 000 iterations followed by cosine decay, using a peak base learning rate of 10 −4. Weight decay was held constant at 0 .04 throughout training. To improve representation for fine anatomical structures, we performed an additional high-resolution stage after the initial pretraining. Each 256 ×256 slice was upsampled via interpolation to 1024 ×1024 before cropping. This stage continued self-supervised learning under a multi-resolution crop setting. Specifically, five global–local crop pairs were jointly sampled during training, with global crop sizes of {512 , 768 , 768 , 768 , 768 }
+
+and corresponding local crop sizes of {112 , 112 , 168 , 224 , 336 }. Sampling ratios across these crop pairs were set to {0.30 , 0.30 , 0.30 , 0.05 , 0.05 }. This design allowed the model to adapt to varying high-resolution spatial structures. The per-GPU batch size was 56 and training continued for 10 , 000 iterations. Pretraining was conducted exclusively on 2D axial slices rather than full 3D volumes. This slice-wise design enabled efficient scaling across heterogeneous datasets with varying voxel spacings and acquisi-tion protocols, while avoiding assumptions about volumetric alignment across cohorts. By treating slices as independent training units, the model was exposed to large-scale anatomical variability and learned anatomy-aware yet disease-agnostic representations that remained transferable across downstream tasks. 
+
+4.3 Downstream Task Finetuning 
+
+For all downstream tasks, we fine-tuned lightweight task-specific heads on top of a frozen BrainDINO back-bone (Fig. 1(c), middle). Unless otherwise specified, all tasks shared a unified slice-wise feature extraction pipeline. Each 3D MRI volume was resampled to a spatial resolution of 128 × 256 × 256, uniformly sam-pled into 128 axial slices, processed independently by the pretrained 2D ViT encoder, and aggregated into subject-level representations via mean pooling of slice-wise CLS tokens. This design isolated the contribution of the pretrained representation and ensured fair comparison across different pretraining strategies. For classification tasks, a lightweight head consisting of LayerNorm, a linear projection with GELU activation, and a final linear layer was trained on top of the frozen backbone by minimizing the cross-entropy loss: 
+
+LCE = − log exp( zy )
+
+PKk=1 exp( zk) , (4) where z = ( z1, . . . , z K ) denotes the output logits and y the ground-truth label. For regression tasks, the same head architecture was used with a single linear output, replacing the final classification layer. Unless otherwise noted, training used the Adam optimizer with a learning rate of 1 × 10 −4 and weight decay of 1 × 10 −5.
+
+4.3.1 Tumor Segmentation 
+
+Tumor segmentation was evaluated using a frozen-encoder paradigm within the nnU-Net framework across four brain tumor benchmarks: BraTS2021 (glioma), BrainMets2023 (brain metastases), BraTS2023-MEN (meningioma), and BraTS2024-GoAT (multi-tumor generalizability). All four datasets provide four MRI modalities (T1, T1c, T2, FLAIR) and are evaluated on three composite tumor regions, namely whole tumor (WT), tumor core (TC), and enhancing tumor (ET), assembled from dataset-specific raw annotations (Supplementary Table 5). For BrainDINO and the DINOv3 baseline, a 2D slice-based pipeline was used with nnU-Net configuration 
+
+2d at 256 × 256 resolution. The four MRI modalities were handled jointly via a learnable 1 ×1 convolution 15 mapping 4 input channels to 3, initialized as an equal-weight average. The frozen ViT-B encoder was paired with a Primus decoder that extracted intermediate features from transformer layers {2, 5, 8, 11 }. Of the 110.7 M total parameters, 77.4% belonged to the frozen encoder and 22.6% to the trainable decoder and input fusion layer. Three 3D baselines (BrainIAC, BrainMVP, BM-MAE) operated on 128 3 volumetric patches with their respective frozen encoders and compatible decoders; pretrained single-channel patch embeddings were adapted to 4-channel input by repeating and rescaling weights. All experiments followed a data-ratio sweep over {0.1, 0.2, 0.4, 0.6, 0.8, 1.0} of the training split using nnU-Net fold 0, with validation splits held constant. Training minimized a Dice + cross-entropy loss using AdamW. BrainDINO trained for 100 epochs with gradient clipping (max norm 12) and mixed-precision training. Segmentation accuracy was reported as mean Dice ± standard deviation per region. Detailed architectural specifications, hyperparameters, and dataset definitions are provided in Supplementary Section 2. 
+
+4.3.2 Neurodevelopmental and Neurodegenerative Classification 
+
+Neurodevelopmental and Neurodegenerative Classification was formulated as a supervised task using structural T1w brain MRI to evaluate whether the learned representation captured disease-related neuroanatomical patterns. Experiments were conducted on three cohorts. For ABIDE, binary ASD classification contrasted individuals with ASD and neurotypical controls. The training cohort included 492 controls and 464 ASD subjects (956 total), and the testing cohort included 123 controls and 117 ASD subjects (240 total). Among these, 853 subjects used in pretraining were drawn exclusively from the downstream training cohort, with no overlap with the test set. For ADNI, three-class Alzheimer’s disease staging included cognitively normal (CN), mild cognitive impairment (MCI), and Alzheimer’s disease (AD) subjects. The training cohort comprised 561 CN, 735 MCI, and 340 AD subjects (1636 total), and the testing cohort included 187 CN, 246 MCI, and 113 AD subjects (546 total). For OASIS, dementia classification was defined using clinical dementia rating, separating non-demented and demented individuals. The training cohort included 106 non-demented and 89 demented subjects (195 total), and the testing cohort included 29 non-demented and 11 demented subjects (40 total). The classification head described above was trained with K = 2 for ABIDE and OASIS, and K = 3 for ADNI. Performance was evaluated using ROC-AUC: standard ROC-AUC for binary classification (ABIDE, OASIS) and macro-averaged AUC for multi-class classification (ADNI). 
+
+4.3.3 Neuroanatomical Trajectory Modeling 
+
+Neuroanatomical trajectory modeling tasks were conducted to evaluate whether the learned representa-tion captured temporally structured anatomical patterns in brain MRI that reflect physiological aging and pathological evolution following injury. Brain age prediction was formulated as a continuous regression task to assess sensitivity to aging-related neuroanatomical variation. Experiments were conducted using MRI data from the IXI, LONG579, and Pixar datasets, spanning a broad age range. The regression head was trained to predict chronological age by minimizing the mean squared error (MSE): 
+
+LMSE = (ˆ y − y)2. (5) Performance was evaluated using mean absolute error (MAE), MAE = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+|ˆyi − yi| , (6) providing an interpretable measure of prediction error in years. We further evaluated post-stroke temporal modeling on the ATLAS dataset by predicting Days Post Stroke (DPS) as a continuous variable. To stabilize optimization under skewed label distributions, the regression target was transformed during training as ˜y = log(1 + y), (7) with inverse transformation applied at inference, ˆy = exp(ˆ ylog ) − 1. (8) 16 A mixed regression objective was adopted to balance sensitivity and robustness, 
+
+LATLAS = α(ˆ ylog − ˜y)2 + (1 − α) (0 .5 |ˆylog − ˜y| + 0 .5 Huber δ (ˆ ylog − ˜y)) , (9) where α = 0 .2 and δ = 1 .0. AdamW was used for training with a learning rate of 10 −3 and weight decay of 10 −4, and performance was evaluated using MAE, RMSE, and R2.
+
+4.3.4 Survival Prediction 
+
+Survival prediction was evaluated on the UPENN-GBM cohort to assess whether the learned representation supported prognostic modeling under both classification-based and time-to-event formulations. For binary survival prediction, patients were stratified using a one-year threshold into low-risk ( > 365 days) and high-risk ( ≤ 365 days) groups. The training cohort included 270 low-risk and 212 high-risk patients (482 total), and the testing cohort included 68 low-risk and 53 high-risk patients (121 total). The classification head was trained with K = 2 by minimizing the cross-entropy loss defined above. Performance was evaluated using ROC-AUC. Time-to-event survival analysis was further conducted using a Cox proportional hazards formulation. For multi-modal survival modeling, only patients with complete four-modality MRI (T1, T1CE, T2, and FLAIR) and available clinical follow-up were included, resulting in 414 training and 106 testing subjects after filtering from the original split. The training cohort comprised 233 censored and 181 deceased patients, and the testing cohort included 56 censored and 50 deceased patients. In this formulation, event = 1 denoted deceased status and event = 0 denoted censored (lost to follow-up), and patients censored within one year were excluded from analysis. Each modality was processed independently through the frozen BrainDINO encoder using the same slice-wise pipeline. Modality-specific representations were fused via late fusion by averaging modality-wise features, and a regression head output a continuous risk score hi for each patient. The hazard function was defined as 
+
+λ(t | Xi) = λ0(t) exp( hi), (10) where λ0(t) denotes the baseline hazard. Optimization minimized the Cox partial likelihood, 
+
+LCox = − 1
+
+D
+
+X
+
+> i:Ei=1
+
+hi − log X 
+
+> j:Tj≥Ti
+
+exp( hj )
+
+ , (11) using Adam with learning rate 3 × 10 −4 and weight decay 1 × 10 −3. Performance was evaluated using the concordance index (C-index), measuring agreement between predicted risk rankings and observed survival times. 
+
+4.3.5 Mutation Detection 
+
+Isocitrate dehydrogenase (IDH) mutation status prediction was formulated as a binary classification task using the UCSF-PDGM dataset. After filtering for cases with both T1CE and FLAIR modalities available, the cohort comprised 360 training and 92 testing subjects. The training set included 288 IDH wildtype and 72 non-wildtype cases, and the testing set included 73 wildtype and 19 non-wildtype cases. The non-wildtype group included mutated, unknown, and other IDH subtypes as defined in the dataset construction. Two MRI modalities (T1CE and T2-FLAIR) were processed independently through the frozen BrainDINO encoder using the same slice-wise pipeline, and modality-level representations were fused via feature averaging. The classification head with K = 2 and dropout regularization was trained by minimizing the cross-entropy loss. Performance was evaluated using ROC-AUC. 
+
+4.3.6 MRI Sequence Classification 
+
+MRI sequence classification was performed to assess whether the pretrained representation encoded acquisition-level semantics. This task was formulated as a four-way classification problem ( K = 4) to distinguish between T1CE, T1, FLAIR, and T2 sequences using the BraTS-2023 dataset. The combined cohort included 4620 training and 1155 testing volumes (5775 total). The training set was balanced with 1155 volumes per sequence type, while the testing set included 289 T1CE, 289 T1, 289 FLAIR, and 288 T2 volumes. The dataset was aggregated from four BraTS-2023 sub-cohorts: BraTS2023-MEN (4188 total volumes, 72.5%), BrainMets2023 (951 volumes, 16.5%), BraTS2023-SSA (240 volumes, 17 4.2%), and BraTS2023-PED (396 volumes, 6.9%), preserving their predefined training and testing splits. Among these, 200 volumes from BraTS2023-MEN, 120 from BraTS2023-SSA, and 100 from BraTS2023-PED were seen during pretraining; these overlapping cases were used only in the downstream training set and were not included in the test set. The classification head was trained using Adam with a learning rate of 1 × 10 −4 and weight decay of 1 × 10 −5. Performance was assessed using accuracy and macro-averaged ROC-AUC. 
+
+4.4 Robustness Analysis 
+
+We evaluated test-time robustness across three representative downstream task types: tumor segmentation (BraTS2021), neurodegenerative classification (ADNI), and brain age regression. These tasks span dense spatial prediction, categorical inference, and continuous biomarker estimation. All models (BrainDINO, BrainIAC, BM-MAE, BrainMVP, and DINOv3 where applicable) were assessed at full-data training ratio (1.0). Segmentation performance was measured using Dice for WT, TC, and ET; classification was evaluated using macro-AUC; regression was evaluated using MAE. Perturbations were applied to raw MRI volumes prior to preprocessing and inference, without addi-tional training or test-time adaptation. Only one perturbation type was applied at a time. We examined contrast shift via gamma correction ( γ ∈ {0.5, 0.8, 1.0, 1.2, 1.5, 2.0}), Gibbs artifact via k-space trun-cation ( α ∈ {0.0, 0.1, 0.2, 0.3, 0.4}), and bias field via smooth multiplicative RF inhomogeneity ( s ∈{0.0, 0.1, 0.2, 0.3, 0.4}), where the zero or unity value corresponds to the clean condition. 
+
+4.5 Representation-Level Analysis 
+
+kNN probing Frozen CLS-token features were extracted using the slice-wise pipeline described above, where each subject was represented by the mean of 128 uniformly sampled slice-level CLS tokens. All features were L2-normalized, and kNN classification was performed using cosine similarity. The training split was used as the memory bank and the validation split as queries under a fixed protocol. Predictions were obtained via majority voting, with ties broken by the summed cosine similarity within tied classes. We swept k ∈ { 1, 3, 5, 10 , 20 , 50 } to assess neighborhood stability. No PCA or whitening was applied. 
+
+Reference similarity maps Spatial similarity maps were computed from patch-token embeddings. Given a reference token fref and a spatial token fi,j , similarity was defined as cosine similarity between their L2-normalized features: 
+
+s(i, j ) = fref · fi,j 
+
+∥fref ∥ ∥ fi,j ∥ . (12) Three anatomically defined reference locations (tumor, CSF, and white matter) were selected on a fixed slice, and identical pixel coordinates were used across all encoders. Similarity maps were bilinearly upsampled to slice resolution and visualized using a shared color scale without per-encoder rescaling. 
+
+CKA analysis We used linear centered kernel alignment (CKA) to compare subject-level representations across IXI and BraTS. For each subject, a shared preprocessing pipeline generated both 2D slice views and a 3D volume view from the same MRI. For DINOv3 and BrainDINO, CLS tokens from transformer blocks 
+
+{2, 6, 11 } were extracted and mean-pooled across 128 uniformly sampled slices. For BM-MAE, CLS tokens from corresponding blocks were used, and for BrainMVP, globally pooled features from early, mid, and late stages were used. We computed CKA over a fixed subset of 1,000 subjects per dataset without shuffling. 
+
+# 5 Data availability 
+
+This study used exclusively publicly available brain MRI datasets for both pretraining and down-stream evaluation, as detailed in Supplementary Table 2 and Methods Section 4.1. Publicly available datasets include OASIS-1/2/3 (https://sites.wustl.edu/oasisbrains/), IXI (https://brain-development.org/ ixi-dataset/), ABIDE (http://fcon 1000.projects.nitrc.org/indi/abide/), ADNI (https://adni.loni.usc.edu/), and BraTS2021/2023/2024 (https://www.synapse.org/), among others as listed in Supplementary Table 2. Some datasets require registration and data use agreements prior to access. Source data for all figures and tables are provided in the Supplementary Materials. 18 References 
+
+[1] Menze, B. H. et al. The multimodal brain tumor image segmentation benchmark (brats). IEEE transactions on medical imaging 34 , 1993–2024 (2014). [2] Bakas, S. et al. Advancing the cancer genome atlas glioma mri collections with expert segmentation labels and radiomic features. Scientific data 4, 170117 (2017). [3] Isensee, F. et al. nnu-net: Self-adapting framework for u-net-based medical image segmentation. arXiv preprint arXiv:1809.10486 (2018). [4] Suk, H.-I. & Shen, D. Deep learning-based feature representation for ad/mci classification , 583–590 (Springer, 2013). [5] Ebrahimi, A., Luo, S. & Disease Neuroimaging Initiative, f. t. A. Convolutional neural networks for alzheimer’s disease detection on mri images. Journal of Medical Imaging 8, 024503–024503 (2021). [6] Dardouri, S. An efficient method for early alzheimer’s disease detection based on mri images using deep convolutional neural networks. Frontiers in Artificial Intelligence 8, 1563016 (2025). [7] Cole, J. H. et al. Predicting brain age with deep learning from raw imaging data results in a reliable and heritable biomarker. NeuroImage 163 , 115–124 (2017). [8] Peng, H., Gong, W., Beckmann, C. F., Vedaldi, A. & Smith, S. M. Accurate brain age prediction with lightweight deep neural networks. Medical image analysis 68 , 101871 (2021). [9] Bashyam, V. M. et al. Mri signatures of brain age and disease over the lifespan based on a deep brain network and 14 468 individuals worldwide. Brain 143 , 2312–2324 (2020). [10] Kickingereder, P. et al. Radiomic profiling of glioblastoma: identifying an imaging predictor of patient survival with improved performance over established clinical and radiologic risk models. Radiology 280 ,880–889 (2016). [11] Macyszyn, L. et al. Imaging patterns predict patient survival and molecular subtype in glioblastoma via machine learning techniques. Neuro-oncology 18 , 417–425 (2015). [12] Weninger, L., Rippel, O., Koppers, S. & Merhof, D. Segmentation of brain tumors and patient survival prediction: Methods for the brats 2018 challenge , 3–12 (Springer, 2018). [13] Isensee, F., Jaeger, P. F., Kohl, S. A., Petersen, J. & Maier-Hein, K. H. nnu-net: a self-configuring method for deep learning-based biomedical image segmentation. Nature methods 18 , 203–211 (2021). [14] Liu, Z. et al. Deep learning based brain tumor segmentation: a survey. Complex & intelligent systems 
+
+9, 1001–1026 (2023). [15] Guan, H. & Liu, M. Domain adaptation for medical image analysis: a survey. IEEE Transactions on Biomedical Engineering 69 , 1173–1185 (2021). [16] Yoon, J. S., Oh, K., Shin, Y., Mazurowski, M. A. & Suk, H.-I. Domain generalization for medical image analysis: A review. Proceedings of the IEEE 112 , 1583–1609 (2024). [17] Eidex, Z. et al. Deep learning in mri-guided radiation therapy: A systematic review. Journal of applied clinical medical physics 25 , e14155 (2024). [18] Chen, T., Kornblith, S., Norouzi, M. & Hinton, G. A simple framework for contrastive learning of visual representations , 1597–1607 (PmLR, 2020). [19] Chen, X., Fan, H., Girshick, R. & He, K. Improved baselines with momentum contrastive learning. 
+
+arXiv preprint arXiv:2003.04297 (2020). 19 [20] Grill, J.-B. et al. Bootstrap your own latent-a new approach to self-supervised learning. Advances in neural information processing systems 33 , 21271–21284 (2020). [21] He, K. et al. Masked autoencoders are scalable vision learners , 16000–16009 (2022). [22] Xie, Z. et al. Simmim: A simple framework for masked image modeling , 9653–9663 (2022). [23] Bao, H., Dong, L., Piao, S. & Wei, F. Beit: Bert pre-training of image transformers. arXiv preprint arXiv:2106.08254 (2021). [24] Caron, M. et al. Emerging properties in self-supervised vision transformers , 9650–9660 (2021). [25] Oquab, M. et al. Dinov2: Learning robust visual features without supervision. arXiv preprint arXiv:2304.07193 (2023). [26] Kaczmarek, E., Szeto, J., Nichyporuk, B. & Arbel, T. Building a general simclr self-supervised foundation model across neurological diseases to advance 3d brain mri diagnoses , 1310–1319 (2025). [27] Tak, D. et al. A generalizable foundation model for analysis of human brain mri. Nature Neuroscience 
+
+1–12 (2026). [28] Munk, A., Ambsdorf, J., Llambias, S. & Nielsen, M. Amaes: Augmented masked autoencoder pre-training on public brain mri data for 3d-native segmentation. arXiv preprint arXiv:2408.00640 
+
+(2024). [29] Robinet, L., Berjaoui, A. & Moyal, E. C.-J. Multimodal masked autoencoder pre-training for 3d mri-based brain tumor analysis with missing modalities. arXiv preprint arXiv:2505.00568 (2025). [30] Rui, S. et al. Multi-modal vision pre-training for medical image analysis , 5164–5174 (2025). [31] Mazher, M., Parker, G. J. & Alexander, D. C. Towards generalisable foundation models for brain mri. 
+
+arXiv preprint arXiv:2510.23415 (2025). [32] Yang, C., Feng, J., Beckmann, C. F., Smith, S. M. & Gong, W. Genbrain: A generative foundation model of multimodal brain imaging. medRxiv 2025–12 (2025). [33] Allah, A. M. G., Sarhan, A. M. & Elshennawy, N. M. Edge u-net: Brain tumor segmentation using mri based on deep u-net model with boundary information. Expert Systems with Applications 213 , 118833 (2023). [34] Frisoni, G. B., Fox, N. C., Jack Jr, C. R., Scheltens, P. & Thompson, P. M. The clinical use of structural mri in alzheimer disease. Nature reviews neurology 6, 67–77 (2010). [35] Feng, X., Provenzano, F. A., Small, S. A. & Initiative, A. D. N. A deep learning mri approach out-performs other biomarkers of prodromal alzheimer’s disease. Alzheimer’s research & therapy 14 , 45 (2022). [36] Sarica, A. et al. Explainability of random survival forests in predicting conversion risk from mild cognitive impairment to alzheimer’s disease. Brain informatics 10 , 31 (2023). [37] Zhang, Y., Teng, Q., Liu, Y., Liu, Y. & He, X. Diagnosis of alzheimer’s disease based on regional attention with smri gray matter slices. Journal of neuroscience methods 365 , 109376 (2022). [38] Liew, S.-L. et al. A large, open source dataset of stroke anatomical brain images and manual lesion segmentations. Scientific data 5, 180011 (2018). [39] Luckett, P. H. et al. Predicting survival in glioblastoma with multimodal neuroimaging and machine learning. Journal of Neuro-oncology 164 , 309–320 (2023). [40] Sim´ eoni, O. et al. Dinov3. arXiv preprint arXiv:2508.10104 (2025). 20 [41] Li, Y., Wu, Y., Lai, Y., Hu, M. & Yang, X. Meddinov3: How to adapt vision foundation models for medical image segmentation? arXiv preprint arXiv:2509.02379 (2025). [42] Baid, U. et al. The rsna-asnr-miccai brats 2021 benchmark on brain tumor segmentation and radiogenomic classification. arXiv preprint arXiv:2107.02314 (2021). [43] Moawad, A. W. et al. The brain tumor segmentation-metastases (brats-mets) challenge 2023: Brain metastasis segmentation on pre-treatment mri. arxiv arXiv–2306 (2024). [44] LaBella, D. et al. The asnr-miccai brain tumor segmentation (brats) challenge 2023: Intracranial meningioma. arXiv preprint arXiv:2305.07642 (2023). [45] BraTS-ISBI 2024 – generalizability across tumors challenge (BraTS-GoAT). Synapse (2024). URL https://www.synapse.org/Synapse:syn52939291. Synapse ID: syn52939291. [46] Di Martino, A. et al. The autism brain imaging data exchange: towards a large-scale evaluation of the intrinsic brain architecture in autism. Molecular psychiatry 19 , 659–667 (2014). [47] Petersen, R. C. et al. Alzheimer’s disease neuroimaging initiative (adni) clinical characterization. 
+
+Neurology 74 , 201–209 (2010). [48] Marcus, D. S. et al. Open access series of imaging studies (oasis): cross-sectional mri data in young, middle aged, nondemented, and demented older adults. Journal of cognitive neuroscience 19 , 1498–1507 (2007). [49] IXI – information extraction from images. https://brain-development.org/ixi-dataset/ (2015). [50] Wang, J., Lytle, M. N., Weiss, Y., Yamasaki, B. L. & Booth, J. R. A longitudinal neuroimaging dataset on language processing in children ages 5, 7, and 9 years old. Scientific Data 9, 4 (2022). [51] Richardson, H., Lisandrelli, G., Riobueno-Naylor, A. & Saxe, R. Mri data of 3–12 year old children and adults during viewing of a short animated film. Openneuro (2019). [52] Liew, S.-L. et al. A large, curated, open-source stroke neuroimaging dataset to improve lesion segmentation algorithms. Scientific data 9, 320 (2022). [53] Calabrese, E. et al. The university of california san francisco preoperative diffuse glioma MRI (UCSF-PDGM). The Cancer Imaging Archive (2022). Version 5. [54] Kazerooni, A. F. et al. The brain tumor segmentation (brats) challenge 2023: focus on pediatrics (cbtn-connect-dipgr-asnr-miccai brats-peds). ArXiv arXiv–2305 (2024). [55] Adewole, M. et al. The brain tumor segmentation (brats) challenge 2023: Glioma segmentation in sub-saharan africa patient population (brats-africa). ArXiv arXiv–2305 (2023). [56] Bakas, S. et al. Multi-parametric magnetic resonance imaging (mpMRI) scans for de novo glioblastoma (GBM) patients from the university of pennsylvania health system (UPENN-GBM). The Cancer Imaging Archive (2021). Version 2. [57] Kornblith, S., Norouzi, M., Lee, H. & Hinton, G. Similarity of neural network representations revisited ,3519–3529 (PMlR, 2019). [58] Bommasani, R. et al. On the opportunities and risks of foundation models. arXiv preprint arXiv:2108.07258 (2021). [59] Balakrishnan, G., Zhao, A., Sabuncu, M. R., Guttag, J. & Dalca, A. V. Voxelmorph: a learning framework for deformable medical image registration. IEEE transactions on medical imaging 38 ,1788–1800 (2019). [60] Mazziotta, J. et al. A probabilistic atlas and reference system for the human brain: International consortium for brain mapping (icbm). Philosophical Transactions of the Royal Society of London. 
+
+21 Series B: Biological Sciences 356 , 1293–1322 (2001). [61] Snoek, L. et al. The amsterdam open mri collection, a set of multimodal mri datasets for individual difference analyses. Scientific data 8, 85 (2021). [62] Marek, K. et al. The parkinson progression marker initiative (ppmi). Progress in neurobiology 95 ,629–635 (2011). [63] Scarpace, L. et al. The cancer genome atlas glioblastoma multiforme collection (tcga-gbm). The Cancer Imaging Archive (2016). [64] National Cancer Institute Clinical Proteomic Tumor Analysis Consortium (CPTAC). The Clinical Proteomic Tumor Analysis Consortium Glioblastoma Multiforme Collection (CPTAC-GBM). The Cancer Imaging Archive (2018). Version 16. [65] Shusharina, N. & Bortfeld, T. Glioma image segmentation for radiotherapy: RT targets, barriers to cancer spread, and organs at risk (GLIS-RT). The Cancer Imaging Archive (2021). [66] Scarpace, L., Flanders, A. E., Jain, R., Mikkelsen, T. & Andrews, D. W. Data from REMBRANDT. The Cancer Imaging Archive (2019). [67] Puchalski, R. B. et al. An anatomic transcriptional atlas of human glioblastoma. Science 360 , 660–663 (2018). [68] de Verdier, M. C. et al. The 2024 brain tumor segmentation (brats) challenge: Glioma segmentation on post-treatment mri. arXiv preprint arXiv:2405.18368 (2024). [69] LaBella, D. et al. A multi-institutional meningioma mri dataset for automated multi-sequence image segmentation. Scientific data 11 , 496 (2024). [70] Vassantachart, A. et al. Segmentation and classification of grade I and II meningiomas from mag-netic resonance imaging: An open annotated dataset (Meningioma-SEG-CLASS). The Cancer Imaging Archive (2023). [71] Juvekar, P. et al. Remind: The brain resection multimodal imaging database. Scientific data 11 , 494 (2024). [72] Zbontar, J. et al. fastmri: An open dataset and benchmarks for accelerated mri. arXiv preprint arXiv:1811.08839 (2018). [73] Kinahan, P., Muzi, M., Bialecki, B., Herman, B. & Coombs, L. Data from ACRIN-DSC-MR-Brain. The Cancer Imaging Archive (2019). [74] Gerstner, E. R. et al. Acrin 6684 assessment of tumor hypoxia in glioblastoma using 18f-fluoromisonidazole with pet and mri. (2012). [75] Isensee, F. et al. Automated brain extraction of multisequence mri using artificial neural networks. 
+
+Human brain mapping 40 , 4952–4964 (2019). [76] Zhou, J. et al. ibot: Image bert pre-training with online tokenizer. arXiv preprint arXiv:2111.07832 
+
+(2021). 22
