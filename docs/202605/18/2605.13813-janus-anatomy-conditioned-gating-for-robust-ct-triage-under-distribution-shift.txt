@@ -1,0 +1,283 @@
+Title: JANUS: Anatomy-Conditioned Gating for Robust CT Triage Under Distribution Shift
+
+URL Source: https://arxiv.org/pdf/2605.13813
+
+Published Time: Thu, 14 May 2026 01:40:55 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# JANUS: Anatomy-Conditioned Gating for Robust CT Triage Under Distribution Shift 
+
+Lavsen Dahal 1,2[0000 −0002 −8991 −759 X], Yubraj Bhandari 1,3[0009 −0004 −7279 −4097] ,Geoffrey Rubin 4[0000 −0002 −3820 −2500] , and Joseph Y. Lo 1,2[0000 −0002 −9540 −5072]  
+
+> 1
+
+Center for Virtual Imaging Trials, RAI Labs, Department of Radiology, Duke University, Durham NC 27708, USA  
+
+> 2
+
+Electrical and Computer Engineering, Pratt School of Engineering, Duke University, Durham, NC 27708, USA  
+
+> 3
+
+Department of Mathematics, Trinity College of Arts & Sciences, Duke University, Durham, NC 27708, USA  
+
+> 4
+
+Department of Radiology and Imaging Sciences, University of Arizona College of Medicine, Tucson, AZ 85004, USA 
+
+{lavsen.dahal,joseph.lo}@duke.edu 
+
+Abstract. Automated CT triage requires models that are simultane-ously accurate across diverse pathologies and reliable under institutional shift. While Vision Transformers provide strong visual representations, many clinically significant findings are defined by quantitative imag-ing biomarkers rather than appearance alone. We introduce JANUS ,a physiology-guided dual-stream architecture that conditions visual em-beddings on macro-radiomic priors via Anatomically Guided Gating . On the MERLIN test set ( N =5 ,082 ), JANUS attains macro-AUROC 0.88 
+
+and AUPRC 0.74 , outperforming all reproduced baselines. It general-izes to an external dataset ( N =2 ,000 ; AUROC 0.87 ), with the largest gains on findings defined by size and attenuation as well as improved calibration on both datasets. We further quantify prediction suppres-sion using the Physiological Veto Rate (PVR), showing that under do-main shift JANUS reduces high-confidence false positives substantially more often than true positives. Together, these results are consistent with physically grounded conditioning that improves both discrimination and reliability in CT triage. Code is made publicly available at github repos-itory https://github.com/lavsendahal/janus and model weights are at https://huggingface.co/lavsendahal/janus . 
+
+Keywords: Vision Transformers (ViTs) · CT Abdomen · Triage · Classification 
+
+## 1 Introduction 
+
+Automated CT triage seeks to flag clinically significant findings, many defined by quantitative thresholds rather than appearance alone: organomegaly by size, aneurysm by vessel caliber, calcific burden by HU density [12, 7, 17, 15]. Miss-ing such measurement-defined findings can have major consequences, e.g., an  
+
+> arXiv:2605.13813v1 [cs.CV] 13 May 2026 2Dahal et al.
+
+undetected aneurysm can rapidly escalate to a life-threatening event. As CT utilization grows and radiologist workloads intensify, reliable automated triage becomes a clinical necessity [13, 22]. CT foundation models have emerged to meet this need, learning rich vi-sual representations via large-scale pretraining [14, 13, 2, 19], yet lack explicit mechanisms for the measurement cues that define many urgent findings [11]. Under distribution shift, this gap becomes consequential: underlying anatomy is protocol-invariant, but visual appearance can shift with scanner and reconstruc-tion settings [8]. Prior attempts to bridge this gap incorporated only coarse organ-level statis-tics (mean volume and mean HU) as auxiliary inputs to visual embeddings [3], demonstrating that quantitative priors carry signal beyond visual features. Macro-Radiomics [5] enables a richer, clinically aligned measurement space, including organ-level descriptors, diameters, densitometry profiles, calcific burden, and fluid volumes. Unlike microscopic texture features, Macro-radiomics operate at the scale of radiological decision-making and are reliably computable for large, well-defined organs via modern segmentation models [21, 4]. Yet how to enforce such measurements as structural constraints remains un-addressed. Additive fusion lacks an explicit suppression mechanism: under dis-tribution shift, visual models could latch onto spurious correlations [6] and con-catenation may not encourage selective suppression when predictions conflict with available quantitative priors. Multiplicative gating [16, 10] provides this in-ductive bias: physical measurements modulate visual evidence through a learned bottleneck, structurally enabling suppression rather than merely shifting predic-tions. We introduce JANUS , a physiology-guided architecture that operationalizes this principle: quantitative measurements should constrain visual predictions, not merely augment them. 
+
+Contributions. – Architecture. JANUS integrates the full macro-radiomic phenotype space with a visual stream via Anatomically Guided Gating : a disease-specific mul-tiplicative bottleneck that modulates visual evidence through scalar priors, providing an explicit suppression mechanism. 
+
+– Metric. We introduce the Physiological Veto Rate (PVR) to quantify sup-pression of high-confidence baseline false positives at fixed thresholds. To assess whether suppression is selective rather than uniform, we additionally report veto selectivity , defined as the ratio of false-positive suppression to true-positive suppression. On the external dataset, veto selectivity reaches 
+
+10 .8×, indicating suppression is strongly concentrated on high-confidence false positives while largely preserving true positives. 
+
+– Empirical. JANUS achieves the highest macro-AUROC among reproduced baselines on MERLIN and maintains performance on an external dataset, while improving calibration (lower ECE) on both; results support macro-radiomic priors improving discrimination and reliability. Title Suppressed Due to Excessive Length 3⊙   
+
+> bVisual Encoding Stream
+> DINOv3 ViT Backbone (Pre-trained) Volumetric Organ-Masked Attention Pooling Patch Embeddings (E) Visual Features (zv) Label-Specific Classification Head (Linear) Final Logit (p label )
+> Anatomically Guided Output d
+> Hadamard Product
+> c
+> Anatomically-Guided Gate Projector Projected Scalars Sigmoid( σ)Multiplicative Gate (g) Gated Visual Features (z gated )
+> Symbolic Stream
+> Segmentation
+> aData Ingestion & Preprocessing
+> CT Tri-Slice Sampling Scalar Metadata (Macro-Radiomics) Normalization (Z-score) Normalized Scalars
+> .... ....
+> N x Batched Tri-Slices (N x 2.5D)
+
+Fig. 1. JANUS Architecture. (a) A 3D CT volume is sampled into N 2.5D tri-slices; segmentation masks yield macro-radiomic scalar priors. (b) A DINOv3 backbone extracts patch embeddings condensed into a label-specific visual feature zv via Organ-Masked Attention Pooling. (c) Scalar priors are projected and sigmoid-bounded to form a physiological gate g. (d) g modulates zv via Hadamard product ( ⊙), acting as a Physiological Veto ; gated features zgated are passed to a label-specific linear head. 
+
+## 2 Methods 
+
+2.1 Problem Formulation and the Geometric Gap 
+
+We consider automated triage as a multi-label classification problem over a CT volume X ∈ RD×H×W with partially observed targets y ∈ { 0, 1, ∅} L, where ∅
+
+denotes missing labels. Let δℓ = 1[yℓ̸ = ∅] indicate label availability. Our goal is to learn a physiologically conditioned predictor P (y | X, S ), where S encodes segmentation-derived macro-radiomic priors that provide explicit quantitative measurement context spanning anatomical scale and tissue densitometry. We initialize the visual backbone with DINOv3 weights [20]. Standard at-tention pooling is invariant to token count by construction: geometric quantities such as organ volume or vessel diameter are encoded in how many tokens an organ occupies, not per-token appearance, and is thus not explicitly represented in the pooled embedding, the pooling-induced geometric gap . We address this by conditioning visual evidence on explicit scalar priors S derived from segmenta-tion. 
+
+2.2 JANUS Architecture 
+
+We introduce JANUS (Fig. 1), a dual-stream physiology-guided model that couples (i) a visual stream extracting appearance features from X and (ii) a symbolic stream encoding macro-radiomic priors. JANUS fuses the two streams through a multiplicative gate that modulates the visual embedding using explicit anatomical measurements. 4 Dahal et al. 
+
+Visual Stream: 2.5D Tri-slice Encoding. Given X, we construct a 2.5D representation by sampling axial slice centers {t}Tt=1 with stride s and form-ing a 3-channel input at each center by stacking adjacent slices: [Xt−1, X t, X t+1 ]
+
+(boundary slices are replicated). Each tri-slice is resized to a fixed resolution and normalized with ImageNet statistics. Passing all tri-slices through a DINOv3 ViT produces patch token embeddings. We discard the CLS token and DINOv3 reg-ister tokens and reshape tokens as {ui}Ni=1 per tri-slice, yielding u ∈ RB×T ×N ×d,where B is the batch size, N is the number of spatial patch tokens per tri-slice, and d is the embedding dimension ( d=768 for ViT-B). 
+
+Dilated ROI-Masked Attention Pooling. For each label ℓ, we define a disease-specific 3D ROI mask Mℓ by composing segmentation channels relevant to that pathology: a single organ for focal findings (e.g., aorta for Abdominal Aortic Aneurysm), a multi-organ union where appropriate (e.g., liver and spleen for hepatic steatosis), or a localization box where no organ proxy exists (e.g., appendicitis). To capture peri-organ context (e.g., fat stranding), we apply a resolution-adaptive morphological dilation of Mℓ by a physical radius rℓ (mm), using voxel spacing to convert millimeters to per-axis kernel sizes. We align the 3D ROI mask with the tri-slice sampling by extracting a 2D mask at each tri-slice center t and resizing it to the encoder input grid. We then downsample this ROI to the ViT patch grid via nearest-neighbor interpolation to obtain a binary token mask mt,i,ℓ ∈ { 0, 1} indicating whether spatial position i in tri-slice t lies inside the (dilated) ROI. Given tokens {ut,i } where t ∈ { 1, . . . , T } indexes tri-slices and i ∈ { 1, . . . , N }
+
+indexes spatial positions, JANUS pools a label-specific visual embedding zv,ℓ 
+
+using ROI-masked attention: 
+
+at,i,ℓ = ϕℓ(ut,i ) + βin ,ℓ mt,i,ℓ 
+
+τℓ
+
+, wt,i,ℓ = softmax i: mt,i,ℓ =1 (at,i,ℓ ) ,zv,ℓ = 1
+
+T
+
+> T
+
+X
+
+> t=1
+
+X 
+
+> i:mt,i,ℓ =1
+
+wt,i,ℓ ut,i .
+
+(1) Here at,i,ℓ denotes the unnormalized attention logit for token i at tri-slice t
+
+(label ℓ) prior to softmax normalization; ϕℓ(·) is a learned linear scorer, βin ,ℓ is a learnable logit bias for ROI tokens, and τℓ is a learnable temperature. The softmax normalizes over spatial positions i within the ROI independently per slice t, so P  
+
+> i:mt,i,ℓ =1
+
+wt,i,ℓ = 1 for each t. Outside tokens receive zero weight; if an ROI is empty for a sample, we fall back to uniform weights over all tokens. 
+
+Symbolic Stream: Anatomically Guided Gating. From the same anatomi-cal masks used to define Mℓ, we compute a disease-specific macro-radiomic prior vector sℓ ∈ RKℓ . Each feature is z-score normalized using training-set statistics. We map the prior vector to a physiological gate gℓ ∈ [0 , 1] d and modulate visual evidence by element-wise multiplication: 
+
+gℓ = σ(Wg,ℓ sℓ + bg,ℓ ), zgated ,ℓ = zv,ℓ ⊙ gℓ, (2) Title Suppressed Due to Excessive Length 5
+
+where Wg,ℓ ∈ Rd×Kℓ and bg,ℓ ∈ Rd are learned. Because gℓ ∈ [0 , 1] d, the gate implements a bounded, dimension-wise re-weighting of the visual embedding conditioned on quantitative measurements, which can attenuate components of the representation when the priors provide countervailing evidence. We initialize 
+
+bg,ℓ = 2 .0 so that gℓ ≈ 0.88 at initialization, keeping the gate mostly open and ensuring stable gradient flow. This initialization biases the model toward preserving the visual stream unless training data support stronger gating, which can mitigate failure modes when scalar priors are weakly informative. 
+
+2.3 Prediction and Training Objective 
+
+For each label ℓ, we apply a disease-specific linear head to obtain logits ˆyℓ =
+
+w⊤ 
+
+> ℓ
+
+zgated ,ℓ + bℓ and probabilities pℓ = σ(ˆ yℓ). We optimize a curriculum-weighted BCE over partially observed labels yℓ ∈ { 0, 1, ∅} :
+
+L(e) =
+
+PLℓ=1 
+
+δℓ · BCE( pℓ, y ℓ) + (1 − δℓ) · w(e) · BCE( pℓ, 0) PLℓ=1 
+
+δℓ + (1 − δℓ) · w(e) (3) where w(e) ramps linearly from 0 to wmax = 0 .3 over epochs Eignore = 10 to 
+
+Eignore + Eramp = 20 , treating missing labels as weak negatives thereafter. 
+
+## 3 Experimental Setup 
+
+Datasets. We train and evaluate on MERLIN [2], a retrospective abdominal CT dataset ( N =25 ,275 ; 30 labels; splits 15,175/5,018/5,082). We additionally eval-uate on an external dataset from a different [redacted] U.S. hospital ( N =2 ,000 ), with labels derived from radiology reports via dual-LLM consensus: a finding is positive only if both Qwen-3 [23, 1] and MedGemma [18] independently agree, and negative only if both confirm absence; abstaining studies are excluded, with explicit contradictions in fewer than 0.5% of cases. Organ masks are obtained via TotalSegmentator [21]. 
+
+Baselines. We compare against three baselines: (i) ViT-Baseline , DINOv3 ViT-B/16 with global average pooling and no scalar integration; (ii) ORACLE-CT [3], a recent concurrent anatomy-aware baseline; and (iii) ORACLE-CT+OSF [3], which reported the strongest supervised results on the official MERLIN test split and injects scalar priors via projection+concatenation at the pooled embedding (originally mean volume/HU). In our experiments, ORACLE-CT+OSF uses the same macro-radiomic prior bank and backbone as JANUS, isolating prior usage (projection+concatenation vs. prior-modulated features). 
+
+Training. Volumes are clipped to [−1000 , 1000] HU, resampled to 1.5×1.5×3.0 mm, and center-cropped to 224 ×224 ×160 , tri-slice stride (s = 1). Augmentations in-clude 3D affine transforms, gamma jitter, and noise. DINOv3 ViT-B/16 [20] is trained end-to-end for 20 epochs on 4 ×A6000 GPUs (batch size 10). 
+
+Evaluation. All AUROC and AUPRC values are macro-averaged over labels. Calibration is measured via ECE (10 equal-width bins) [9] . 6 Dahal et al. 
+
+Table 1. Global benchmarking. AUROC, AUPRC, and ECE (95% bootstrap CIs; 
+
+n=1000 resamples) on MERLIN (internal) and Duke-Abdomen (external) datasets (27 shared labels). JANUS achieves the strongest overall performance across metrics.                                              
+
+> MERLIN (Internal, N= 5 ,082 )Duke-Abdomen (External, N= 2 ,000 )
+> Model AUC ↑AUPRC ↑ECE ↓AUC ↑AUPRC ↑ECE ↓
+> ViT-Baseline [20] 0.84 0.66 0.13 0.84 0.67 0.16 (0.83–0.85) (0.64–0.68) (0.12–0.14) (0.82–0.85) (0.65–0.70) (0.16–0.17) ORACLE-CT [3] 0.86 0.69 0.15 0.85 0.69 0.19 (0.85–0.87) (0.68–0.72) (0.14–0.16) (0.83–0.86) (0.67–0.72) (0.18–0.20) ORACLE-CT+OSF [3] 0.84 0.66 0.17 0.81 0.66 0.22 (0.83–0.85) (0.65–0.68) (0.16–0.18) (0.80–0.83) (0.64–0.68) (0.21–0.23)
+> JANUS (Ours) 0.88 0.74 0.09 0.87 0.72 0.15
+> (0.87–0.89) (0.72–0.76) (0.09–0.11) (0.85–0.88) (0.71–0.75) (0.15–0.16)
+
+Physiological Veto Rate (PVR). For label ℓ, let Fℓ = {i : yiℓ = 0 , p ViT  
+
+> iℓ
+
+≥
+
+0.8} denote high-confidence false positives under the ViT baseline. PVR mea-sures the fraction of these baseline errors suppressed by JANUS below a decision threshold: 
+
+PVR ℓ = 1
+
+|F ℓ|
+
+X
+
+> i∈F ℓ
+
+⊮pJANUS  
+
+> iℓ
+
+< 0.5 . (4) We report the mean over labels with |F ℓ| ≥ 5. We additionally report the true-positive suppression rate TSR ℓ = Pr( pJANUS  
+
+> iℓ
+
+< 0.5 | yiℓ = 1) and summarize veto selectivity as PVR ℓ/TSR ℓ, where values ≫ 1 indicate suppression concentrated on baseline false positives rather than uniformly reducing confidence. 
+
+## 4 Results 
+
+4.1 Global Performance, Reliability, and Robustness Overall performance. Table 1 reports global results; unless otherwise stated, 
+
+∆AUROC is measured on the external dataset relative to ViT-Baseline. ORACLE-CT shows organ-level context adds signal ( ∆AUROC = +0 .02 ). Additive scalar fusion (+OSF) improves size and density-driven findings but does not improve overall external macro-AUROC ( ∆AUROC = −0.03 ) and has the highest exter-nal ECE. JANUS better leverages macro-radiomic priors via anatomically guided gating, achieving the strongest performance on both datasets (AUROC/AUPRC 
+
+0.88 /0.74 internal, 0.87 /0.72 external) with the lowest ECE on both. 
+
+Gate Mechanism and Physiological Veto. Figure 2(a) examines how the learned gate varies with a quantitative biomarker on the external dataset. Us-ing Abdominal Aortic Aneurysm (AAA) as a probe, the mean anatomical gate weight (mean of g = σ(W s + b) ∈ (0 , 1) d) decreases monotonically with aortic maximum diameter within both label groups, consistent with sensitivity to the scalar measurement rather than simply mirroring disease status. Across all 27 pathologies (Fig. 2b), among baseline overconfident false positives, JANUS re-duces 30 .8% below threshold while affecting only 2.85% of true positives ( 10 .8×Title Suppressed Due to Excessive Length 7a b
+
+Fig. 2. External Dataset: Gate behavior and physiological veto. (a) Mean anatomical gate weight (mean of g = σ(W s + b) ∈ (0 , 1) d) versus aortic maximum di-ameter for AAA negatives and positives; lower values indicate stronger down-weighting of visual features. (b) PVR on the external dataset: among overconfident ViT false positives ( pViT ≥ 0.8, n=357 ), JANUS reduces p < 0.5 more often for negatives than positives, consistent with selective suppression under shift. 0 10 20 50 
+
+> Scalar Perturbation (%)
+> 0.775
+> 0.800
+> 0.825
+> 0.850
+> 0.875
+> AUROC
+> 0.85
+> 0.78
+
+Internal Dataset (MERLIN)    
+
+> JANUS (Gated Fusion)
+> ORACLE-CT + OSF
+> ViT-Baseline (0.84)
+> 010 20 50
+> Scalar Perturbation (%)
+> 0.775
+> 0.800
+> 0.825
+> 0.850
+> 0.875
+> AUROC  0.84
+> 0.77
+
+External Dataset (Duke-Abdomen) 
+
+> JANUS (Gated Fusion)
+> ORACLE-CT + OSF
+> ViT-Baseline (0.84)
+
+Fig. 3. Robustness to scalar corruption. AUROC under 10%, 20%, and 50% cor-ruption of macro-radiomic priors on internal and external datasets. JANUS degrades gracefully and remains above the ViT-Baseline (dotted) at all corruption levels, includ-ing 50%, suggesting the multiplicative gate bounds the influence of corrupted inputs. 
+
+selectivity). Because PVR is computed per label, operating points could be set per pathology to trade off false-positive reduction against true-positive retention. 
+
+Scalar robustness. To stress-test sensitivity to scalar quality, we corrupt each feature by uniform random noise scaled to p% of its value at inference ( p ∈{10 , 20 , 50 }), spanning mild to deliberately extreme degradation. JANUS de-grades more gracefully across all levels on both datasets, remaining above the ViT baseline even at p=50 (external AUROC 0.84 ) while +OSF approaches it (0.77 ), consistent with the sigmoid-bounded gate providing a structural bound on corrupted inputs (Figure 3). 8 Dahal et al. 
+
+Table 2. Stratified performance by pathology. AUROC on MERLIN (internal) and external (Duke-Abdomen) datasets across 27 shared labels. Group rows report category means; two representative diseases are shown per group. Gain (∆AUROC, JANUS vs. ViT-Baseline, external) is largest where physiology scalars are well-defined (Geometric, Densitometric, Chronic). As expected, degradation is minimal for Fo-cal/Control Group, where scalar priors are inherently uninformative.                                                                                                                                                   
+
+> MERLIN EXTERNAL Gain Pathology ViT ORACLE +OSF JANUS ViT ORACLE +OSF JANUS (Ext.)
+> Geometric (7) 0.89 0.92 0.90 0.94 0.86 0.89 0.88 0.91 +0.05 Prostatomegaly 0.80 0.84 0.88 0.89 0.74 0.83 0.89 0.88 +0.14 Aortic Aneurysm 0.83 0.91 0.94 0.98 0.88 0.87 0.95 0.96 +0.08
+> Densitometric (5) 0.83 0.84 0.88 0.90 0.82 0.83 0.89 0.88 +0.06 Hepatic Steatosis 0.79 0.82 0.95 0.96 0.79 0.81 0.88 0.88 +0.09 Gallstones 0.72 0.72 0.80 0.84 0.54 0.62 0.80 0.81 +0.27
+> Fluid/Global (3) 0.97 0.97 0.93 0.97 0.98 0.98 0.95 0.98 0.0 Pleural Effusion 0.97 0.97 0.93 0.97 0.98 0.98 0.94 0.98 0.0 Ascites 0.95 0.95 0.89 0.95 0.97 0.97 0.92 0.97 0.0
+> Chronic (6) 0.85 0.87 0.85 0.90 0.82 0.83 0.83 0.87 +0.05 Renal Cyst 0.81 0.82 0.82 0.89 0.81 0.75 0.87 0.95 +0.14 Pancreatic Atrophy 0.80 0.87 0.90 0.90 0.72 0.84 0.81 0.83 +0.11
+> Focal/Control (6) 0.73 0.75 0.65 0.73 0.76 0.75 0.57 0.74 -0.02 Appendicitis 0.66 0.67 0.59 0.65 0.85 0.86 0.53 0.81 -0.04 Fracture 0.78 0.80 0.68 0.75 0.80 0.84 0.75 0.78 -0.02
+
+4.2 Stratified Analysis by Pathology 
+
+Table 2 stratifies performance by diagnostic mechanism, grouping findings by the type of physical signal available to the gate. 
+
+Measurement-defined targets. JANUS yields the largest gains on geomet-ric and densitometric findings, where scalar measurements directly encode the diagnostic criterion (group means ∆AUROC = +0 .05 and = +0 .06 externally). Fluid/Global findings saturate near 0.98 AUROC across all models, leaving no headroom. Chronic targets show consistent improvement ( ∆AUROC = +0 .05 ), with Renal Cyst benefiting most ( ∆AUROC = +0 .14 ). 
+
+Focal targets and non-local priors. Focal pathologies provide a natural stress test for macro-radiomic priors, which summarize organ-level or global measure-ments and are not designed to capture fine spatial localization. Accordingly, JANUS shows only a small change on these targets ( ∆AUROC = −0.02 ). In contrast, +OSF decreases substantially ( ∆AUROC = −0.19 ), suggesting that directly fusing non-local scalar features can yield an unfavorable accuracy. 
+
+## 5 Conclusion 
+
+We introduced JANUS , a physiology-guided framework that integrates a com-prehensive macro-radiomic prior bank with organ-localized visual representa-tions via disease-specific multiplicative gating. Under a matched training and Title Suppressed Due to Excessive Length 9
+
+evaluation protocol using released baseline code, JANUS achieves the highest macro-AUROC on MERLIN ( 0.88 ) and generalizes under distribution shift to an external dataset (AUROC 0.87 ), with substantially improved calibration on both datasets, suggesting an association between physical grounding and im-porved accuracy and reliability. 
+
+Limitations. JANUS relies on a sequential pipeline where segmentation pre-cedes gating, limiting guidance for focal findings where organ-level priors pro-vide limited signal. Scalar robustness is evaluated via simulated corruption rather than realistic segmentation errors, and evaluation with CT-pretrained backbones remains future work. 
+
+## Acknowledgements 
+
+This work was funded by the Center for Virtual Imaging Trials, NIH grants P41EB028744, R01EB001838, and R01CA261457. 
+
+## Disclosure of Interests. 
+
+The authors have no competing interests to declare that are relevant to the content of this article. 
+
+## References 
+
+1. Agrawal, K.K., Liu, L., Lian, L., Nercessian, M., Harguindeguy, N., Wu, Y., Mikhael, P., Lin, G., Sequist, L.V., Fintelmann, F., et al.: Pillar-0: A new frontier for radiology foundation models. arXiv preprint arXiv:2511.17803 (2025) 2. Blankemeier, L., Cohen, J.P., Kumar, A., Van Veen, D., Gardezi, S.J.S., Paschali, M., Chen, Z., Delbrouck, J.B., Reis, E., Truyts, C., et al.: Merlin: A vision language foundation model for 3d computed tomography. Research Square pp. rs–3 (2024) 3. Dahal, L., Bhandari, Y., Rubin, G.D., Lo, J.Y.: Organ-aware attention improves ct triage and classification. arXiv preprint arXiv:2601.13385 (2026) 4. Dahal, L., Ghojoghnejad, M., Vancoillie, L., Ghosh, D., Bhandari, Y., Kim, D., Ho, F.C., Tushar, F.I., Luo, S., Lafata, K.J., et al.: Xcat 3.0: A comprehensive library of personalized digital twins derived from ct scans. Medical Image Analysis 
+
+103 , 103636 (2025) 5. Dahal, L., Lo, J.Y.: Ct-idp: Segmentation-derived quantitative phe-notypes for interpretable abdominal ct disease classification (2026), https://arxiv.org/abs/2605.09002 6. Geirhos, R., Jacobsen, J.H., Michaelis, C., Zemel, R., Brendel, W., Bethge, M., Wichmann, F.A.: Shortcut learning in deep neural networks. Nature Machine In-telligence 2(11), 665–673 (2020) 7. Gücük, A., Üyetürk, U.: Usefulness of hounsfield unit and density in the assessment and treatment of urinary stones. World journal of nephrology 3(4), 282 (2014) 8. Guo, B., Lu, D., Szumel, G., Gui, R., Wang, T., Konz, N., Mazurowski, M.A.: The impact of scanner domain shift on deep learning performance in medical imaging: an experimental study. arXiv preprint arXiv:2409.04368 (2024) 10 Dahal et al. 9. Guo, C., Pleiss, G., Sun, Y., Weinberger, K.Q.: On calibration of modern neural networks. In: International conference on machine learning. pp. 1321–1330. PMLR (2017) 10. Hu, J., Shen, L., Sun, G.: Squeeze-and-excitation networks. In: Proceedings of the IEEE conference on computer vision and pattern recognition. pp. 7132–7141 (2018) 11. Li, J., Chen, J., Tang, Y., Wang, C., Landman, B.A., Zhou, S.K.: Transforming medical imaging with transformers? a comparative review of key properties, current progresses, and future perspectives. Medical image analysis 85 , 102762 (2023) 12. Linguraru, M.G., Sandberg, J.K., Jones, E.C., Petrick, N., Summers, R.M.: Assess-ing hepatomegaly: automated volumetric analysis of the liver. Academic radiology 
+
+19 (5), 588–598 (2012) 13. Momin, E., Cook, T., Gershon, G., Barr, J., De Cecco, C.N., van Assen, M.: Sys-tematic review on the impact of deep learning-driven worklist triage on radiology workflow and clinical outcomes. European radiology 35 (11), 6879–6893 (2025) 14. Pai, S., Hadzic, I., Bontempi, D., Bressem, K., Kann, B.H., Fedorov, A., Mak, R.H., Aerts, H.J.: Vision foundation models for computed tomography. arXiv preprint arXiv:2501.09001 (2025) 15. Paudyal, R., Shah, A.D., Akin, O., Do, R.K., Konar, A.S., Hatzoglou, V., Mah-mood, U., Lee, N., Wong, R.J., Banerjee, S., et al.: Artificial intelligence in ct and mr imaging for oncological applications. Cancers 15 (9), 2573 (2023) 16. Perez, E., Strub, F., De Vries, H., Dumoulin, V., Courville, A.: Film: Visual rea-soning with a general conditioning layer. In: Proceedings of the AAAI conference on artificial intelligence. vol. 32 (2018) 17. Radiopaedia.org: Splenomegaly, https://radiopaedia.org/articles/splenomegaly, accessed: 2026-02-15 18. Sellergren, A., Kazemzadeh, S., Jaroensri, T., Kiraly, A., Traverse, M., Kohlberger, T., Xu, S., Jamil, F., Hughes, C., Lau, C., et al.: Medgemma technical report. arXiv preprint arXiv:2507.05201 (2025) 19. Shui, Z., Zhang, J., Cao, W., Wang, S., Guo, R., Lu, L., Yang, L., Ye, X., Liang, T., Zhang, Q., et al.: Large-scale and fine-grained vision-language pre-training for enhanced ct image understanding. arXiv preprint arXiv:2501.14548 (2025) 20. Siméoni, O., Vo, H.V., Seitzer, M., Baldassarre, F., Oquab, M., Jose, C., Khali-dov, V., Szafraniec, M., Yi, S., Ramamonjisoa, M., et al.: Dinov3. arXiv preprint arXiv:2508.10104 (2025) 21. Wasserthal, J., Breit, H.C., Meyer, M.T., Pradella, M., Hinck, D., Sauter, A.W., Heye, T., Boll, D.T., Cyriac, J., Yang, S., et al.: Totalsegmentator: robust segmen-tation of 104 anatomic structures in ct images. Radiology: Artificial Intelligence 
+
+5(5), e230024 (2023) 22. Winder, M., Owczarek, A., Chudek, J., Pilch-Kowalczyk, J., Baron, J.: Are we overdoing it? changes in diagnostic imaging workload during the years 2010-2020 including the impact of the sars-cov-2 pandemic. healthcare (basel) (2021) 23. Yang, A., Li, A., Yang, B., Zhang, B., Hui, B., Zheng, B., Yu, B., Gao, C., Huang, C., Lv, C., et al.: Qwen3 technical report. arXiv preprint arXiv:2505.09388 (2025)
