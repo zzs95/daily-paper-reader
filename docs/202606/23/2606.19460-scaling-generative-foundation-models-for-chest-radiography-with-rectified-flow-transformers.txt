@@ -1,0 +1,1592 @@
+Title: Scaling Generative Foundation Models for Chest Radiography with Rectified Flow Transformers
+
+URL Source: https://arxiv.org/pdf/2606.19460
+
+Published Time: Fri, 19 Jun 2026 00:07:33 GMT
+
+Number of Pages: 38
+
+Markdown Content:
+# Scaling Generative Foundation Models for Chest Radiography with Rectified Flow Transformers 
+
+Fabio De Sousa Ribeiro 1,2,†,∗ Emma A.M. Stanley 1,∗ Charles Jones 1 Tian Xia 1
+
+Dominic C. Marshall 1,4 Laurent Renard Triché 5 Christopher V. Cosgriff 6,7
+
+Panagiotis Dimitrakopoulos 2,3 Sotirios A. Tsaftaris 2,3 Ben Glocker 1,21Imperial College London, 2Causality in Healthcare AI Hub, 3University of Edinburgh 
+
+> 4
+
+Cleveland Clinic London, 5Department of Perioperative Medicine, CHU Clermont-Ferrand 
+
+> 6
+
+Department of Medicine, Massachusetts General Hospital, 7Broad Institute of MIT and Harvard Project page: RadiT-project.github.io 
+
+Abstract 
+
+We introduce the first generative foundation model for chest radiograph synthesis trained from scratch at the billion-parameter scale. Existing radiographic AI models often suffer from poor generalisation across patient subpopulations, institutions, and acquisition settings, resulting in limited real-world clinical utility. Controlled, high-fidelity synthesis of chest radiographs is a promising path toward diversifying clinical datasets and evaluating the robustness of diagnostic models. Therefore, we present the largest specialist generative foundation model for chest radiographs to date, with over 1.3B parameters, trained for 1.6T tokens on a curated, heterogeneous dataset comprising 1.2M radiographs and clinical expert-guided metadata. Our model supports controllable radiograph generation and editing across multiple demographic subgroups, acquisition views, and a dozen pathologies. Moreover, we significantly advance the state of the art in radiograph synthesis fidelity, producing images that are indistinguishable from real radiographs to clinical experts. 
+
+1 Introduction 
+
+Real and diverse clinical datasets are difficult to collect and share at scale. Expert annotation is costly, pathology prevalence is highly skewed, and acquisition protocols vary substantially between institutions (Topol, 2019; Aristidou et al., 2022). Combined with privacy constraints, these factors impede the dissemination of medical data and hinder progress in healthcare AI (Rieke et al., 2020). AI models continue to advance rapidly, yet they’re often criticised for relying too heavily on statistical associations rather than capturing the underlying causal structure of the data (Schölkopf et al., 2021; Bareinboim et al., 2022). This limitation is particularly consequential in healthcare, as models that exploit spurious shortcuts generalise poorly across patient subpopulations, institutions, and acquisition settings (Castro et al., 2020; D’Amour et al., 2022; Jones et al., 2024), ultimately undermining the utility of these systems in real-world clinical practice (Cross et al., 2024; Wenderott et al., 2025). Alongside calls to expand and diversify clinical datasets (Seyyed-Kalantari et al., 2020; Arora et al., 2023; Hasanzadeh et al., 2025), generative modelling has recently emerged as a promising approach to addressing the aforementioned challenges (Ribeiro et al., 2023; Pezoulas et al., 2024; Khosravi et al., 2024) by producing targeted synthetic examples that expand coverage of underrepresented subgroups (Moroianu et al., 2025), facilitate model stress-testing (Pérez-García et al., 2024), and improve robustness (Roschewitz et al., 2025) and fairness in downstream tasks (Ktena et al., 2024).  
+
+> ∗Joint first authors †f.de-sousa-ribeiro@imperial.ac.uk Preprint.
+> arXiv:2606.19460v1 [cs.CV] 17 Jun 2026
+
+Despite longstanding speculation that AI would replace radiologists, radiology faces growing service pressures (Afshari Mirak et al., 2025), and chest radiography (CXR) remains the most commonly performed imaging examination worldwide. Recent advances in generative modelling have enabled realistic CXR synthesis from text reports (Weber et al., 2023; Pérez-García et al., 2024; Bluethgen et al., 2025; Moroianu et al., 2025), alongside efforts to incorporate medical causal knowledge in principled ways (Ribeiro et al., 2023, 2025). However, existing CXR generative models are still limited in terms of fidelity (Dutt et al., 2025), demographic controllability, and causal consistency. 
+
+RoentGen-v2 (Moroianu et al., 2025) begins to tackle these limitations, but is still constrained by its single-source training data from MIMIC-CXR (Johnson et al., 2019), its restriction to single-view Posterior-Anterior (PA) radiographs, and its reliance on an adapted general-purpose Stable Diffusion v2.1 (Rombach et al., 2022) backbone, all of which hamper high-fidelity generation at scale. Although causal approaches to CXR synthesis exhibit impressive controllability (Ribeiro et al., 2023; Xia et al., 2025; Ribeiro et al., 2025), they still fall short of modern generative fidelity standards and have only been shown in lower-resolution, small-scale settings. Furthermore, generative models like Ribeiro et al. (2023) rely on external classifiers for strong performance, risking the reintroduction of the very classifier bias they are intended to address (Kumar et al., 2025). Given these limitations, together with the potential of generative modelling to mitigate robustness and safety issues in healthcare AI (Ma et al., 2025), there is a clear need for more capable and scalable generative models for CXR. 
+
+Contributions. We present a generative foundation model for chest radiography at unprecedented scale and fidelity. To our knowledge, this is the first specialist generative model in chest radiography trained from scratch at the billion-parameter scale. Beyond advancing the state-of-the-art in CXR synthesis, our approach supports controllable generation across multiple demographic subgroups (e.g. age, race, sex), acquisition views (AP, PA, Lateral) and a dozen pathologies. Our contributions are: (i) We collate the CXR7-1M dataset (§3), the largest-scale open-source chest X-ray dataset to date, comprising over 1.2M radiographs, harmonised from multiple existing datasets and paired with radiologist-guided metadata systematically extracted through expert consultation. (ii) We introduce an expert - designed, clinically plausible causal graph for CXR and instantiate it as the largest continuous flow-based causal model to date (§4.3), spanning 19 demographic and radiological variables, and unlocking scalable exact abduction for discrete factors. (iii) We ablate and train a series of scaled rectified flow transformers for chest X-ray generation, up to 1.3B parameters. Our largest model, RadiT XL , attains four-fold FDD and ten-fold KDD improvements over prior state-of-the-art on the CheXGenBench benchmark (§5.2). (iv) We evaluate our models on controllable image generation and editing, showing that RadiT achieves high-fidelity control over multiple demographic, acquisition-view, and clinical attributes (§5.3), producing radiographs that experts find indistinguishable from real ones. 
+
+2 Related Work 
+
+Diffusion & Flow Matching. Diffusion models were introduced as discrete-time Markov processes that gradually transform data into noise, with a neural network parameterising the reverse process (Sohl-Dickstein et al., 2015; Ho et al., 2020). Follow-up work improved their performance (Nichol and Dhariwal, 2021), displacing GANs (Goodfellow et al., 2014; Karras et al., 2020) as the dominant approach (Dhariwal and Nichol, 2021). Song et al. (2021) then unified diffusion and score-based models (Song and Ermon, 2019) from an SDE perspective. EDM (Karras et al., 2022, 2024a) and DiT (Peebles and Xie, 2023) refined latent diffusion (Rombach et al., 2022), improving architectures and training. More recently, Flow Matching (Lipman et al., 2023; Liu et al., 2023; Albergo and Vanden-Eijnden, 2023) simplified and generalised diffusion-style modelling by enabling simulation-free training of continuous transports between arbitrary distributions via neural ODEs (Chen et al., 2018). Most relevant to our work are Rectified Flows (RF) (Liu et al., 2023), which seek to learn straight transport paths, offering conceptual simplicity and strong few-step sampling. RF transformers now power frontier generative models at scale (Esser et al., 2024; Batifol et al., 2025), including our own. 
+
+Chest Radiography Synthesis. Previous work on chest radiography synthesis spans early task-specific generative models (Madani et al., 2018; Salehinejad et al., 2018) and more recent report-conditioned foundation models. RoentGen (Chambon et al., 2022) helped establish latent diffusion CXR synthesis, showing that radiology reports can be used to generate realistic CXRs and improve downstream performance with synthetic data augmentation. Afterwards, ViewXGen (Lee et al., 2024a) 20 0.20M 0.40M 0.60M 0.80M 1.00M 1.20M Dataset Age Race Sex View              
+
+> MIM ReX CXP Pad CXR14 BRV 0-20 21-40 41-60 61-80 80+ ABWMale Female AP PA LATERAL
+
+Figure 1: Generative foundation model for chest radiography. (a) Proposed CXR7-1M dataset, harmonised from seven existing datasets and augmented with additional radiologist-guided metadata. (b) Radiographic rectified flow transformer (RadiT), and VAE trained with Rad-DINO perceptual loss (Rad-VAE). ( c) Synthetic 512 ×512 chest radiographs generated using our RadiT XL (1.3B). explored view-specific CXR generation, whereas Cheff (Weber et al., 2023) scaled the latent diffusion approach through a cascaded pipeline to enable higher resolution outputs. LLM-CXR (Lee et al., 2024b) extended the vision-language direction by combining CXR understanding and generation in a single instruction-tuned model. In parallel, a line of work on counterfactual image editing showed significant progress in CXR synthesis controllability (Ribeiro et al., 2023, 2025; Xia et al., 2024, 2025; Kumar et al., 2025), inspiring applications in contrastive learning (Roschewitz et al., 2025), stress-testing (Pérez-García et al., 2024; Ma et al., 2025), and segmentation (Mehta et al., 2025). Recent work using diffusion models has further shown that synthetic radiographs can improve the robustness, fairness, and generalisation of downstream models (Ktena et al., 2024). RoentGen-v2 
+
+(Moroianu et al., 2025) focuses on finer-grained control over radiographic findings and demographics, while ChexGen (Ji et al., 2026) adds spatial control through masks and bounding boxes. Although 
+
+ChexGen is also trained from scratch on multiple CXR datasets, its generative pipeline is relatively dated by modern standards, relying on an SD-v1.5 VAE, staged 256-to-512 resolution training, and discrete-time diffusion instead of continuous-time rectified flow (Esser et al., 2024; Batifol et al., 2025). Despite their clinical potential, existing CXR synthesis methods remain limited in fidelity and controllability. These limitations partly reflect insufficient data and model scaling, as well as the difficulty of building performant generative pipelines for clinical data, which this work addresses. 
+
+3 CXR7-1M: Dataset Construction 
+
+The scale, diversity, and quality of training data are key determinants of AI capability (Kaplan et al., 2020; Bommasani et al., 2021). With this in mind, we devoted significant effort to the careful design, harmonisation, and expert - in-the-loop curation of a large and diverse chest X - ray dataset to improve generative synthesis. The resulting CXR7 -1M dataset comprises over 1.2 million radiographs paired with radiologist - guided metadata (Figure 1). To create CXR7-1M, we combine seven publicly available chest X-ray datasets, including MIMIC-CXR (Johnson et al., 2019), CheXpert-Plus (Irvin et al., 2019; Chambon et al., 2024), ReXGradient-160K (Zhang et al., 2025), PadChest (Bustos et al., 2020), VinDr-CXR (Nguyen et al., 2022), NIH ChestX-ray14 (Wang et al., 2017), and BRAX (Reis et al., 2022). All available images were converted to 16-bit PNG with the aim of retaining radiometric fidelity while enabling efficient downstream use. Where available (i.e. MIMIC, CheXpert, VinDr, BRAX), we converted from original DICOM with correct windowing and photometric interpretation. For all images, pixel intensities were normalised to the full 16-bit range, before applying aspect-ratio preserving resampling, with centre padding where required, to obtain a consistent 512 ×512 image size. A detailed breakdown of the composition of CXR7-1M is provided in Appendix A. 33.1 Metadata Harmonisation with Clinical Guidance 
+
+To enable controlled CXR synthesis, we performed a series of clinician-guided preprocessing and harmonisation steps to standardise pathology labels, patient demographics, and image acquisition metadata across all 7 datasets present in CXR7-1M. For consistent pathology labelling, we adopted the CheXpert-14 framework (Irvin et al., 2019), comprising 12 pathology categories in addition to ‘No Finding’ and ‘Support Devices’. The pathology labels for different datasets were harmonised either by deriving them from radiology reports using CheXbert (Smit et al., 2020) or by manually mapping dataset-specific annotations to the 14 CheXpert labels in consultation with a clinical expert. 
+
+Dataset-Specific Preprocessing. For MIMIC-CXR, radiology report sections were processed using CheXbert to obtain CheXpert-14 compatible pathology labels. Patient ‘Age’ and acquisition ‘View’ information were extracted from the available metadata, and patient ‘Race’ labels were consolidated to ‘Asian’, ‘Black’ and ‘White’. For PadChest, NIH, and VinDr-CXR, the original pathology labels were manually mapped to the CheXpert-14 label space with the help of clinical experts, and any unmatched categories were marked as missing (‘NaN’). For instance, PadChest contains 193 distinct pathology labels, each of which was individually mapped to an appropriate CheXpert-14 label and validated by a clinical expert. PadChest required ‘Age’ information to be computed from study dates, and VinDr-CXR required majority voting across pathology annotations and extraction of ‘Age’ and ‘Sex’ from the original DICOM metadata. RexGradient already includes CheXbert-extracted labels, and ‘Age’ was computed from study dates. CheXpert-Plus and BRAX were already broadly compatible and required minimal processing; missing/ambiguous values were assigned to ‘NaN’. 
+
+Merged Metadata Filtering. Following dataset-level harmonisation, we applied a set of global postprocessing steps to filter the merged metadata by: (i) replacing implausible ages ( >110 ) with ‘NaN’; (ii) restricting ‘Sex’ to ‘Male’/‘Female’ labels; (iii) consolidating ‘Race’ categories to ‘Asian’, ‘Black’ and ‘White’; (iv) standardising acquisition ‘View’ positions to ‘AP’, ‘PA’ and ‘Lateral’; (v) treating all remaining invalid or ambiguous labels as missing and assigning them a ‘NaN’ label. The resulting combined dataset was then split at the patient level into 302,871 training, 10,000 validation and 30,790 test subsets, corresponding to 1,063,255, 35,726, and 106,513 radiographs, respectively. 
+
+4 Generative Foundation Model for Chest Radiography 
+
+We introduce a frontier generative foundation model for chest radiographs, designed for high-fidelity, controllable synthesis. We return to first principles by designing and training domain-specific rectified flow models from scratch at the billion-parameter scale on the largest CXR dataset to date, thereby unlocking substantial improvements in fidelity. Next, we detail our model variants tailored to CXR. 
+
+Preliminaries. Flow Matching (FM) (Lipman et al., 2023; Liu et al., 2023; Albergo and Vanden-Eijnden, 2023) provides a simulation-free way to train Continuous Normalizing Flows (CNFs) (Chen et al., 2018). FM learns a map from a source X0 ∼ psrc to a target distribution X1 ∼ ptgt via an ODE with neural velocity field v : Rd × [0 , 1] → Rd. To train, we regress vt onto a known target velocity: 
+
+min 
+
+> θ
+
+Z 10
+
+EX0∼psrc ,X 1∼ptgt 
+
+h
+
+∥vt(Xt; θ) − (X1 − X0)∥2i
+
+dt, Xt = (1 − t)X0 + tX 1, (1) where dXt = ( X1 − X0) d t defines the target velocity field of the prescribed straight-line interpolant. This simple choice of interpolant and objective is best known as a Rectified Flow (Liu et al., 2023). Samples are generated by drawing from the source distribution and integrating the learned ODE. 
+
+4.1 Optimising Radiographic Perceptual Fidelity of VAEs 
+
+A key design component of large-scale latent flow/diffusion models is the VAE (Esser et al., 2024). We systematically evaluate frontier VAEs for radiographic fidelity and, unlike prior work, begin by developing and training our own baseline VAE from scratch on CXR. We adopt a block design based on the EDM2 (Karras et al., 2024b) architecture, with magnitude-preserving layers for training stability. For complete architectural details and hyperparameters, please refer to Appendix B.1. 
+
+Radiographic Perceptual Training. Our VAEs are trained with a domain-specific LPIPS perceptual loss inspired by Hansen-Estruch et al. (2025), which in their case replaces VGG with DINOv2/v3 features. However, we propose to use Rad-DINO (Pérez-García et al., 2025) features instead to 4optimise for clinical, chest radiograph-specific perceptual quality. The VAE loss we optimise is: 
+
+LVAE = LMSE (x, ˆx) + βD KL (qϕ(z | x) ∥ p(z)) + αLRad-LPIPS (x, ˆx), ˆx = D(E(x)) , (2) where E : X → Z and D : Z → X denote the encoder and decoder networks respectively. We also benchmark several off-the-shelf VAEs pretrained on natural images (i.e. Stable Diffusion and FLUX), finding them to underperform our baseline VAE in terms of radiographic fidelity. To close this performance gap, we find that LoRA fine-tuning (Hu et al., 2022) selected FLUX.2 VAE decoder layers using the proposed Rad-DINO perceptual training strategy in Eq. (2) performs best on CXR. 
+
+4.2 Rectified Flow Architectures: Latent & Pixel Spaces 
+
+The design space we explore can be divided into two main parts: (i) whether to build a latent- or pixel-space flow model, with the former requiring a suitable VAE for CXR (see §4.1); and (ii) the backbone architecture, i.e. U-Net or Transformer. Next, we present our model architecture variants. 
+
+Vision Transformer & U-Net Backbones. The vision transformer architecture we use is built on DiT/SiT (Peebles and Xie, 2023; Ma et al., 2024) with two upgrades to improve training stability and performance at scale. Namely, we add query-key RMS-Norm (Zhang and Sennrich, 2019) to the attention layers following Esser et al. (2024), and replace the standard MLPs with SwiGLU blocks (Shazeer, 2020). We use the same vision transformer architecture for both pixel- and latent-space variants of our flow models, with a patch size of 16 for the former and 2 for the latter. Our largest flow transformer has over 1.3B parameters and is trained in the latent space of the FLUX.2 VAE. For our U-Net model variants, we adopt the EDM2 backbone (Karras et al., 2024b) without modification, except for extending the channel multiplier schedule from 4 to 6 levels to support higher-resolution pixel-space modelling. For further architecture and training details, please refer to Appendix B.2. 
+
+Pixel-Space Flows. Contrary to prior work on CXR synthesis, which exclusively builds on popular 
+
+latent diffusion pipelines, we find that pixel-space modelling can improve identity preservation in controlled generation settings, such as (counterfactual) image editing. To improve pixel-space training at high resolutions (Esser et al., 2024), we use the shifted timestep mapping t 7 → t/ (α − t(α − 1)) 
+
+with α = 3 , which is a time-inverted version of Batifol et al. (2025)’s Logit-Normal parameterisation. 
+
+Metadata Conditioning Strategy. To enable controlled CXR synthesis, we need to effectively condition our generative model on all 19 metadata variables available in CXR7-1M. These include the CheXpert-14 pathology labels, the three patient demographic factors ‘Age’, ‘Race’, and ‘Sex’, acquisition view (with values ‘AP’, ‘PA’, ‘Lateral’), and a dataset source indicator (7 datasets), cf. §3. All variables except for ‘Age’ are categorical and are encoded with learned embedding tables. For each variable, class 0 is reserved as a null category for missing/ambiguous labels (‘NaN’). We treat ‘Age’ separately as a continuous variable, rescaling it by 100 and encoding it with the same Fourier/sinusoidal parameterisation used for timestep embeddings in the flow backbone. The ‘Age’ encoding is then projected by an MLP to the shared embedding dimension d. The final conditioning embedding z ∈ Rd is a magnitude-preserving scaled sum of the n individual variable embeddings: 
+
+z = 1
+
+√n
+
+> n
+
+X
+
+> i=1
+
+e(i), where e(i) := E x(i); ϕ(i) ∈ Rd for all i ∈ { 1, . . . , n }, (3) with E(·, ϕ (i)) : X (i) → Rd denoting the embedding function for the ith variable X(i), parameterised by ϕ(i). This prevents z’s magnitude from growing excessively with n and affecting training stability. 
+
+4.3 Metadata Causal Modelling with Neural ODEs Clinical Expert-Informed Causal Graph. To incorporate clinical domain knowledge into the generative process of our CXR synthesis model, we developed a causal graph over the CXR7-1M metadata through iterative discussions with three experienced pulmonologists. As shown in Table 1, our causal graph includes ‘Age’, ‘Race’ and ‘Sex’ demographic factors as well as all CheXpert-14 pathologies. For an in-depth clinical rationale for the selected edges, please refer to Appendix B.3.1. 
+
+Continuous-Time Flow SCM. We build a Structural Causal Model (SCM) (Pearl, 2009) of CXR7-1M metadata using the clinical expert-guided causal graph in Table 1, such that CXR synthesis can reflect known clinical dependencies between demographic factors and pathologies. An SCM specifies the data-generating process of n variables X1, X 2 . . . , X n via deterministic functions: 5Table 1: Clinical expert-informed causal graph of radiologic findings and demographic factors. 
+
+The causal parents of each finding are shown, with Age ( A), Race ( R), and Sex ( S) demographics.              
+
+> 1. Atelectasis
+> 2. Cardiomegaly
+> 3. Consolidation
+> 4. Edema
+> 5. Enlarged CM
+> 6. Fracture
+> 7. Lung Lesion
+> 8. Lung Opacity
+> 9. No Finding
+> 10 . Pleural Eff.
+> 11 . Pleural Other
+> 12 . Pneumonia
+> 13 . Pneumothorax
+> 14 . Support Dev.
+> 10,12 A,R,S 12 A,R,S 2A,S 81,3,4,11 1-14 2,11,12 A,S A,S A,S,6 10,13
+
+Xi := fi(PA i, U i), where PA i are Xi’s parents, and Ui its exogenous noise variable. Pawlowski et al. (2020); Ribeiro et al. (2023) used classical Normalizing Flows to parameterise SCMs, but their approaches do not support deterministic abduction Ui = f −1 
+
+> i
+
+(PA i, X i) for discrete variables. To address this, we model each variable with a continuous-time flow over t ∈ [0 , 1] (Ribeiro et al., 2025), but with all categorical variables Xi ∈ { 1 . . . , K } in one-hot space Yi = onehot( Xi) ∈ { 0, 1}K :
+
+dYi(t) = vi(t, Y i(t); PA i) d t, Yi(0) = Ui, Yi := Yi(1) , for i = 1 , . . . , n. (4) We then train n such flows jointly end-to-end with the following rectified flow matching objective: 
+
+LFM-SCM := 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+Z 10
+
+E
+
+h
+
+vi(t, Y i(t); PA i) − (Yi − Ui) 2i
+
+dt. (5) Samples are drawn ancestrally in a topological ordering of the causal graph, with continuous ODE solver outputs ˆYi = Ui + R 10 vi(t, Y i(t); PA i)d t ∈ RK being converted to discrete predictions ˆXi
+
+via an argmax over categories. For further details, please see Appendix B.3. Ribeiro et al. (2025) provide the theoretical basis for causal identification in flow matching models that we rely on here. 
+
+5 Experiments 
+
+Our experiments are organised into three main stages. First, to identify the most suitable VAE for CXR, we study the effect of the proposed radiographic perceptual loss. Second, we evaluate the fidelity of our generative models, comparing them with the state of the art and conducting an expert real-vs-synthetic discrimination study with three experienced pulmonologists. Finally, we assess controllable editing capabilities of our models. To do this, we build and compare different patient metadata and clinical finding predictors for reliable subgroup identification. We then evaluate our flow models on effectively editing and preserving the identity of both real and sampled radiographs. 
+
+Metrics. We report FID/FDD (Heusel et al., 2017) and KID/KDD (Bi´ nkowski et al., 2018) metrics, as well as Precision, Recall, Density, and Coverage (Naeem et al., 2020) for generated image samples using Rad-DINO, DINOv3, and Inveptionv3. We use these same models to measure LPIPS perceptual distance between images. For reconstruction quality, we use Structural Similarity Index Measure (SSIM), Peak Signal-to-Noise Ratio (PSNR), and Reconstruction Fréchet Distance (rFD). For patient metadata prediction, we report Area Under the Receiver Operating Characteristic Curve (ROCAUC). 
+
+5.1 Radiographic Perceptual Fidelity of VAEs 
+
+Table 2: Performance comparison of radiographic VAEs. 
+
+Our RadVAEs are either trained from scratch or fine-tuned from a FLUX.2 base, using Rad-DINO perceptual loss (§4.1).                                              
+
+> Model Reconstruction FD ↓PSNR ↑SSIM ↑
+> Rad-DINO DINOv3 Inceptionv3
+> Stable Diffusion 2.1 0.3855 2.5369 0.6472 39.163 0.9542 Stable Diffusion XL 0.4475 1.7326 0.8849 39.886 0.9527 Stable Diffusion 3.5 0.0615 0.6820 0.3473 42.027 0.9329 FLUX.2 0.0887 0.6320 0.3848 45.413 0.9875 RadVAE (Scratch) 0.0476 2.2460 0.8938 43.706 0.9831 RadVAE FLUX.2 (FT Head) 0.0616 0.6657 0.2358 45.555 0.9872
+> RadVAE FLUX.2 (LoRA) 0.0487 0.5933 0.1879 45.829 0.9880
+
+To identify the best VAE for CXR, we first train our baseline VAE from scratch on CXR7-1M, which we call RadVAE (Scratch). For model archi-tecture and training details, please see §4.1, and Appendix C.2. We then benchmark state-of-the-art pre-trained VAEs, such as Stable Diffu-sion 3.5 and FLUX.2 (Esser et al., 2024; Batifol et al., 2025), and ab-late VAE fine-tuning strategies us-ing the proposed Rad-DINO percep-tual loss in §4.1. Since off-the-shelf VAEs were trained on RGB images and CXRs are greyscale, 6Table 3: Comparative evaluation of CXR generative fidelity. All metrics were computed using Rad-DINO features. Benchmark results are from CheXGenBench (Dutt et al., 2025). We also report results on two internal test splits from CXR7-1M , a MIMIC-CXR 5K split and a separate 50K split. Superscript ( pix ) denotes our flow model variants trained in pixel-space ( 512 ×512 resolution). 
+
+Model FDD ↓ KDD ↓ Precision ↑ Recall ↑ Density ↑ Coverage ↑ Size      
+
+> (Rad-DINO) (Rad-DINO) (Rad-DINO) (Rad-DINO) (Rad-DINO) (Rad-DINO)
+
+SDv3.5 M 91.302 0.103 0.632 0.205 0.401 0.244 2.5B LLM-CXR 71.243 0.061 0.782 0.041 0.671 0.459 12B RadEdit 69.695 0.033 0.397 0.544 0.150 0.285 0.8B Pixart Sigma 60.154 0.023 0.666 0.522 0.506 0.506 0.6B Sana 54.225 0.016 0.674 0.614 0.520 0.548 0.6B RadiT B pix 29.259 0.0258 0.7449 0.3482 0.5261 0.4768 0.3B RadiT B 16.879 0.0050 0.7795 0.6732 0.6273 0.5952 0.3B RadUNet pix 25.417 0.0209 0.7459 0.4233 0.5445 0.5282 0.3B RadUNet 16.873 0.0051 0.7906 0.6818 0.6383 0.6017 0.5B 
+
+RadiT XL 13.152 0.0013 0.7590 0.8602 0.5683 0.6369 1.3B 
+
+CXR7-1M (MIMIC) 
+
+RadiT B pix 19.328 0.0125 0.9176 0.5314 1.0970 0.8373 0.3B RadiT B 12.200 0.0030 0.9144 0.7203 1.1567 0.9156 0.3B RadUNet pix 16.976 0.0105 0.9141 0.5870 1.0792 0.8745 0.3B RadUNet 11.786 0.0027 0.9346 0.7388 1.1967 0.9182 0.5B 
+
+RadiT XL 9.128 0.0005 0.9056 0.8532 1.0245 0.9217 1.3B 
+
+CXR7-1M (50K) 
+
+RadiT XL 1.715 0.0005 0.8911 0.8483 0.9620 0.8895 1.3B P1 P2                       
+
+> Expert 1
+> Expert 2
+> Expert 3
+> 0.49 0.54
+> 0.54 0.54
+> 0.48 0.60
+> Real vs Synthetic
+> 0.0 0.2 0.4 0.6
+> Cohen's kappa
+> Expert 2
+> Expert 3
+> Expert 1
+> 0.23
+> 0.27
+> 0.42
+> Intra-rater (P1 vs P2)
+> Expert 1 Expert 2 Expert 3
+> Expert 1
+> Expert 2
+> Expert 3
+> 1.00 0.11 -0.04
+> 0.11 1.00 0.13
+> -0.04 0.13 1.00
+> Inter-rater (P1)
+> Expert 1 Expert 2 Expert 3
+> Expert 1
+> Expert 2
+> Expert 3
+> 1.00 0.15 0.05
+> 0.15 1.00 -0.08
+> 0.05 -0.08 1.00
+> Inter-rater (P2)
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Accuracy
+> 1.0
+> 0.5
+> 0.0
+> 0.5
+> 1.0
+> Cohen's kappa
+
+Figure 2: Clinical experts’ performance on the real-vs-synthetic task across 2 presentations. 
+
+Near-chance accuracy and low intra- and inter-rater Cohen’s κ indicate high synthetic image realism. we repeat the input 3 times and average the decoder’s RGB predictions. As reported in Tables 2 & 8, RadVAE (Scratch) achieves the best radiographic fidelity (Rad-DINO rFD) while outperforming Stable Diffusion VAEs in terms of PSNR and SSIM. We find that averaging decoder RGB predictions achieves highly competitive results on CXR despite its simplicity when using the FLUX.2 VAE; observing an improved PSNR of 45.41 compared to our 43.71 RadVAE (Scratch) baseline. To further improve FLUX.2 VAE performance on CXR, we systematically ablate VAE fine-tuning strategies us-ing our Rad-DINO perceptual loss, which we denote by RadVAE FLUX.2 . We find that LoRA fine-tuning (Hu et al., 2022) the FLUX.2 VAE’s Mid-Block , and the final layer of each Up-Block , combined with full fine-tuning of the RGB head, yields the best performance overall on CXR (cf. Tables 2 & 8). 
+
+5.2 Evaluating Generative Fidelity: Benchmarks & Clinical Expert Study 
+
+To evaluate the generative fidelity of our models, we first use CheXGenBench (Dutt et al., 2025). The CheXGenBench test split has 5K samples from MIMIC-CXR, which we use as the closest available basis for fair comparison with prior work. We further evaluate our models on two internal test splits from the CXR7-1M dataset, a 5K MIMIC-CXR split and a separate 50K split. Tables 3, 9 and 10 report our results. Although direct comparison is limited by differences in training data (MIMIC-CXR vs CXR7-1M, see Table 13), our 1.3B flow transformer model (RadiT XL) achieves an FDD of 9.13, substantially improving on the previous best reported FDD of 54.23 under the available benchmark setting. This 83% reduction in FDD signals a substantial gain in raw generative fidelity. In addition, RoentGen (Chambon et al., 2022) and RoentGenv2 (Moroianu et al., 2025) report FIDs 7Age : 55 🠆 7 Support Devices : P 🠆 NDifference Difference             
+
+> Sex :Male 🠆 Female
+> Cardiomegaly :N🠆 P
+> View :Lateral 🠆 PA
+> Pleural Effusion :N🠆 P
+
+Figure 3: Selected 512 ×512 edits of real radiographs generated by our RadiT XL (1.3B) model. of 96.1 and 76.8, respectively, on their MIMIC-CXR split, whereas our 1.3B model achieves an FID of 4.25 on ours, further indicating a large improvement in raw generative fidelity over recent CXR synthesis models. With a 50K reference test split from CXR7-1M, RadiT XL achieves an FDD of 
+
+1.72 , approaching the range of distributional distances typically seen in mature natural-image settings. 
+
+Expert Real-vs-Synthetic Evaluation. To further assess sample quality, we conducted a real-vs-synthetic discrimination experiment with three clinical experts. We randomly selected 50 test-set images and generated 50 samples using our RadiT XL 1.3B model. We measured accuracy against the ground truth, intra-rater consistency across 2 presentations, and pairwise inter-rater agreement using Cohen’s κ. As reported in Figure 2, expert accuracy was near chance, with low intra- and inter-rater agreement, indicating that synthetic images were almost indistinguishable from real ones. 
+
+5.3 Controllable Image Generation: Subgroup Analysis 
+
+Figure 4: ROCAUC performance radar plot of our patient metadata predictors trained on CXR7-1M. 
+
+Patient Metadata Predictors. To facilitate subgroup analysis of our models, we develop pa-tient metadata predictors on CXR7-1M. These predictors may be of independent interest to the community due to their strong performance. We consider all 19 target variables in CXR7-1M (§3), and train our predictors with a multi-task loss (Cross-Entropy/MSE) that automatically skips tasks with missing labels. We first estab-lish a baseline with a fully fine-tuned ImageNet-pretrained ResNet50. We then train three Rad-DINO models: (i) a linear probe on the 768-dimensional CLS embeddings; (ii) the same setup augmented with an MLP adapter; (iii) an attention pooling (AP) model over concatenated multi-layer patch features, inspired by Ilse et al. (2025). For comparison, we also train a DINOv3 model with the same AP setup. As shown in Figure 4, Rad-DINO AP outperforms all baselines, particularly on patient ‘Race’ classification. 
+
+Controlled Editing. We perform controlled editing of patient metadata and clinical findings for a random test subset of 5K patients from CXR7-1M, and use Rad-DINO AP to evaluate the ability of our generative models (RadUNet pix and RadiT XL) to produce the desired edits. We intervene on each of the patient metadata attributes (sex, race, age, view, dataset), as well as on random finding categories 80.2 0.1 0.0                                          
+
+> Sex
+> Race
+> View
+> Dataset
+> 0.4 0.2 0.0
+> LL
+> FR
+> ED
+> EC
+> CO
+> CA
+> AT
+> 0.2 0.1 0.0 0.1 ROCAUC
+> SD
+> PX
+> PE
+> PA
+> NF
+> LO
+> 0.2 0.1 0.0
+> 0.4 0.2 0.0
+> 0.2 0.1 0.0 0.1 ROCAUC
+> 0.2 0.1 0.0
+> 0.4 0.2 0.0
+> 0.2 0.1 0.0 0.1 ROCAUC
+> 0.2 0.1 0.0
+> 0.4 0.2 0.0
+> 0.2 0.1 0.0 0.1 ROCAUC
+> 0.2 0.1 0.0
+> 0.4 0.2 0.0
+> 0.2 0.1 0.0 0.1 ROCAUC
+> 0.2 0.1 0.0
+> 0.4 0.2 0.0
+> 0.2 0.1 0.0 0.1 ROCAUC
+> Model RadiT XL RadUNet pix
+
+Figure 5: Performance evaluation of subgroup-controlled CXR synthesis. Plot titles denote edited attributes. ( a) Difference in Rad-DINO AP ROCAUC between 5K CXR7-1M images and their edits. 
+
+∆ROCAUC values closer to zero indicate better performance. ( b) Trade-off between effective editing (X-axis) and patient identity preservation ( Y-axis) for our best latent- vs. pixel-space flow models. from CheXpert-14, for six sets of experiments in total. To ensure the resulting counterfactual images are plausible and in-distribution for CXR7-1M, we use our Flow SCM (§4.3) to specify the full metadata and clinical finding profiles for a given intervention. As shown in Figure 5, RadiT XL consistently outperforms RadUNet pix on image editing. We also perform targeted editing on random samples , as this takes half the ODE solving time to generate image pairs. To do this, we fix an exogenous noise vector representing a distinct identity, and perform edits using our Flow SCM (§4.3). We observe similar trends in editing performance compared to real images (cf. Figure 12). 
+
+Patient Identity Preservation. Patient identity preservation is the degree to which non-intervened upon image attributes remain unaffected by controlled edits. We evaluate this by computing similarity between original and edited CXRs in pixel-space (SSIM), deep feature-space (LPIPS), as well as attribute-specialised latent space. The latter uses cosine similarity of metadata-tuned embeddings extracted from the individual task prediction heads of Rad-DINO AP . We observe a trade-off between effective editing and patient identity preservation in pixel- vs latent-space flow models (Fig. 5,13). We find that RadUNet pix outperforms RadiT XL in terms of identity preservation despite underperforming it in terms of generative fidelity and edit effectiveness (Table 14). To assess whether latent encoding is the major contributor to a loss of identity, we also compare approximately parameter-matched pixel and latent flow models for both the transformer and UNet backbone, and find that pixel-space flows generally outperform latent-space flows on our identity preservation metrics (Appendix C.4). 
+
+6 Conclusion 
+
+We introduced the first specialist generative foundation model for chest radiography trained from scratch at the billion - parameter scale, alongside CXR7 -1M, the largest open-source chest X -ray dataset to date, curated with systematic clinical expert consultation. Our largest model, RadiT XL ,produces synthetic radiographs that were indistinguishable from real ones to a panel of clinical experts. In addition, it supports metadata-controlled synthesis and clinically coherent manipulation of findings informed by expert -designed causal structure. Limitations of this work include reliance on CheXpert-14 labels, which are unavailable for some CXR7-1M datasets, and incomplete negative-label coverage, as clinical reports often leave absent findings unstated rather than explicitly marking them as negative. Additionally, while we propose novel approaches to measuring identity preservation in image editing, robustly measuring patient identity from radiographs alone remains challenging and may require 9clinical input alongside higher-quality metadata. Our work also opens several directions for future research. First, large - scale, high -fidelity generative models can serve as testbeds for studying shortcut reliance, causal validity, and failure modes of medical imaging systems under controlled distribution shifts. Second, the combination of expert - guided metadata and continuous - time causal modelling provides a foundation for integrating medical knowledge into scalable generative pipelines, bridging symbolic (clinical) reasoning and modern foundation models. Finally, CXR7 - 1M and RadiT XL create opportunities for downstream applications such as fairness auditing, representation learning, synthetic cohort construction, and cross - institutional generalisation studies that are difficult to realise with real data alone. We hope that releasing both the dataset and models will accelerate research on trustworthy, robust, and clinically grounded medical AI, and serve as a blueprint for scaling domain-specific generative foundation models in other areas of healthcare imaging and beyond. 
+
+Acknowledgments and Disclosure of Funding 
+
+This project was supported by the UKRI AI programme, and the EPSRC, for CHAI - EPSRC Causality in Healthcare AI Hub [EP/Y028856/1], by the Royal Academy of Engineering as part of the Kheiron/RAEng Research Chair, by the Centre of Excellence for Regulatory Science & Innovation in AI & Digital Health Project Support Fund [ref PSF04], and through Imperial’s UKRI Impact Acceleration Account [EP/X52556X/1]. DCM is supported by an MRC clinical research training fellowship [MR/Y000404/1] and the Mittal Fund at Cleveland Clinic Philanthropy. CVC is supported by an NIH grant [T32HL116275]. The authors acknowledge the use of resources provided by the Isambard-AI National AI Research Resource (AIRR). Isambard-AI is operated by the University of Bristol and is funded by the UK Government’s Department for Science, Innovation and Technology (DSIT) via UKRI; and the Science and Technology Facilities Council [ST/AIRR/I-A-I/1023]. 
+
+References 
+
+Sohrab Afshari Mirak, Sree Harsha Tirumani, Nikhil Ramaiya, and Inas Mohamed. The growing nationwide radiologist shortage: current opportunities and ongoing challenges for international medical graduate radiologists. Radiology , 314(3):e232625, 2025. 2 Michael Samuel Albergo and Eric Vanden-Eijnden. Building normalizing flows with stochastic interpolants. In The Eleventh International Conference on Learning Representations , 2023. 2, 4 Angela Aristidou, Rajesh Jena, and Eric J. Topol. Bridging the chasm between AI and clinical implementation. The Lancet , 399(10325):620, February 2022. ISSN 0140-6736, 1474-547X. doi: 10.1016/S0140-6736(22)00235-5. Publisher: Elsevier. 1 Anmol Arora, Joseph E Alderman, Joanne Palmer, Shaswath Ganapathi, Elinor Laws, Melissa D Mccradden, Lauren Oakden-Rayner, Stephen R Pfohl, Marzyeh Ghassemi, Francis Mckay, et al. The value of standards for health datasets in artificial intelligence-based applications. Nature medicine , 29(11):2929–2938, 2023. 1 Elias Bareinboim, Juan D. Correa, Duligur Ibeling, and Thomas Icard. On Pearl’s Hierarchy and the Foundations of Causal Inference , pages 507–556. Association for Computing Machinery, 2022. 1 Stephen Batifol, Andreas Blattmann, Frederic Boesel, Saksham Consul, Cyril Diagne, Tim Dockhorn, Jack English, Zion English, Patrick Esser, et al. Flux. 1 kontext: Flow matching for in-context image generation and editing in latent space. arXiv preprint arXiv:2506.15742 , 2025. 2, 3, 5, 6, 18 Mikołaj Bi´ nkowski, Dougal J. Sutherland, Michael Arbel, and Arthur Gretton. Demystifying MMD GANs. In International Conference on Learning Representations , 2018. 6, 22 Christian Bluethgen, Pierre Chambon, Jean-Benoit Delbrouck, Rogier Van Der Sluijs, Małgorzata Połacin, Juan Manuel Zambrano Chaves, Tanishq Mathew Abraham, Shivanshu Purohit, Curtis P Langlotz, and Akshay S Chaudhari. A vision–language foundation model for the generation of realistic chest x-ray images. Nature Biomedical Engineering , 9(4):494–506, 2025. 2 10 Rishi Bommasani, Drew A Hudson, Ehsan Adeli, Russ Altman, Simran Arora, Sydney von Arx, Michael S Bernstein, Jeannette Bohg, Antoine Bosselut, Emma Brunskill, et al. On the opportuni-ties and risks of foundation models. arXiv preprint arXiv:2108.07258 , 2021. 3 Aurelia Bustos, Antonio Pertusa, Jose-Maria Salinas, and Maria De La Iglesia-Vaya. Padchest: A large chest x-ray image dataset with multi-label annotated reports. Medical image analysis , 66: 101797, 2020. 3 Daniel C Castro, Ian Walker, and Ben Glocker. Causality matters in medical imaging. Nature Communications , 11(1):1–10, 2020. 1 Pierre Chambon, Christian Bluethgen, Jean-Benoit Delbrouck, Rogier Van der Sluijs, Małgorzata Połacin, Juan Manuel Zambrano Chaves, Tanishq Mathew Abraham, Shivanshu Purohit, Curtis P Langlotz, and Akshay Chaudhari. Roentgen: vision-language foundation model for chest x-ray generation. arXiv preprint arXiv:2211.12737 , 2022. 2, 7 Pierre Chambon, Jean-Benoit Delbrouck, Thomas Sounack, Shih-Cheng Huang, Zhihong Chen, Maya Varma, Steven QH Truong, Chu The Chuong, and Curtis P Langlotz. Chexpert plus: Augmenting a large chest x-ray dataset with text radiology reports, patient demographics and additional image formats. arXiv preprint arXiv:2405.19538 , 2024. 3 Ricky T. Q. Chen. torchdiffeq, 2018. URL https://github.com/rtqichen/torchdiffeq . 24 Ricky TQ Chen, Yulia Rubanova, Jesse Bettencourt, and David K Duvenaud. Neural ordinary differential equations. Advances in neural information processing systems , 31, 2018. 2, 4 James L Cross, Michael A Choma, and John A Onofrey. Bias in medical ai: implications for clinical decision-making. PLOS digital health , 3(11):e0000651, 2024. 1 Alexander D’Amour, Katherine Heller, Dan Moldovan, Ben Adlam, Babak Alipanahi, Alex Beutel, Christina Chen, Jonathan Deaton, Jacob Eisenstein, Matthew D Hoffman, et al. Underspecification presents challenges for credibility in modern machine learning. Journal of Machine Learning Research , 23(226):1–61, 2022. 1 Prafulla Dhariwal and Alexander Nichol. Diffusion models beat gans on image synthesis. Advances in neural information processing systems , 34:8780–8794, 2021. 2 Alexey Dosovitskiy, Lucas Beyer, Alexander Kolesnikov, Dirk Weissenborn, Xiaohua Zhai, Thomas Unterthiner, Mostafa Dehghani, Matthias Minderer, Georg Heigold, Sylvain Gelly, Jakob Uszkoreit, and Neil Houlsby. An image is worth 16x16 words: Transformers for image recognition at scale. In International Conference on Learning Representations , 2021. 18 Raman Dutt, Pedro Sanchez, Yongchen Yao, Steven McDonagh, Sotirios A Tsaftaris, and Timothy Hospedales. Chexgenbench: a unified benchmark for fidelity, privacy and utility of synthetic chest radiographs. arXiv preprint arXiv:2505.10496 , 2025. 2, 7, 25, 26 Patrick Esser, Sumith Kulal, Andreas Blattmann, Rahim Entezari, Jonas Müller, Harry Saini, Yam Levi, Dominik Lorenz, Axel Sauer, Frederic Boesel, et al. Scaling rectified flow transformers for high-resolution image synthesis. In Forty-first international conference on machine learning , 2024. 2, 3, 4, 5, 6, 18, 24 Ian J Goodfellow, Jean Pouget-Abadie, Mehdi Mirza, Bing Xu, David Warde-Farley, Sherjil Ozair, Aaron Courville, and Yoshua Bengio. Generative adversarial nets. Advances in neural information processing systems , 27, 2014. 2 Aaron Grattafiori, Abhimanyu Dubey, Abhinav Jauhri, Abhinav Pandey, Abhishek Kadian, Ahmad Al-Dahle, Aiesha Letman, Akhil Mathur, Alan Schelten, Alex Vaughan, et al. The llama 3 herd of models. arXiv preprint arXiv:2407.21783 , 2024. 18 11 Philippe Hansen-Estruch, Jiahui Chen, Vivek Ramanujan, Orr Zohar, Yan Ping, Animesh Sinha, Markos Georgopoulos, Edgar Schoenfeld, Ji Hou, Felix Juefei-Xu, Sriram Vishwanath, and Ali Thabet. Dino perceptual loss, 2025. URL https://github.com/Na-VAE/dino-perceptual .4, 26 Fereshteh Hasanzadeh, Colin B Josephson, Gabriella Waters, Demilade Adedinsewo, Zahra Azizi, and James A White. Bias recognition and mitigation strategies in artificial intelligence healthcare applications. NPJ Digital Medicine , 8(1):154, 2025. 1 Martin Heusel, Hubert Ramsauer, Thomas Unterthiner, Bernhard Nessler, and Sepp Hochreiter. Gans trained by a two time-scale update rule converge to a local nash equilibrium. Advances in neural information processing systems , 30, 2017. 6, 21 Jonathan Ho, Ajay Jain, and Pieter Abbeel. Denoising diffusion probabilistic models. In H. Larochelle, M. Ranzato, R. Hadsell, M.F. Balcan, and H. Lin, editors, Advances in Neural Information Processing Systems , volume 33, pages 6840–6851. Curran Associates, Inc., 2020. 2 Edward J Hu, yelong shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Lu Wang, and Weizhu Chen. LoRA: Low-rank adaptation of large language models. In International Conference on Learning Representations , 2022. 5, 7, 23 Maximilian Ilse, Harshita Sharma, Anton Schwaighofer, Sam Bond-Taylor, Fernando Pérez-García, Olesya Melnichenko, Anne-Marie G Sykes, Kelly K Horst, Ashish Khandelwal, Maxwell Reynolds, et al. Data scaling laws for radiology foundation models. arXiv preprint arXiv:2509.12818 , 2025. 8Jeremy Irvin, Pranav Rajpurkar, Michael Ko, Yifan Yu, Silviana Ciurea-Ilcus, Chris Chute, Henrik Marklund, Behzad Haghgoo, Robyn Ball, Katie Shpanskaya, et al. Chexpert: A large chest radiograph dataset with uncertainty labels and expert comparison. In Proceedings of the AAAI conference on artificial intelligence , volume 33, pages 590–597, 2019. 3, 4 Yuanfeng Ji, Dan Lin, Xiyue Wang, Lu Zhang, Wenhui Zhou, Chongjian Ge, Ruihang Chu, Xiaoli Yang, Junhan Zhao, Junsong Chen, Xiangde Luo, Sen Yang, Jin Fang, Ping Luo, and Ruijiang Li. A generative foundation model for chest radiography. NEJM AI , 3(5):AIoa2500799, 2026. doi: 10.1056/AIoa2500799. 3 Alistair EW Johnson, Tom J Pollard, Seth J Berkowitz, Nathaniel R Greenbaum, Matthew P Lungren, Chih-ying Deng, Roger G Mark, and Steven Horng. Mimic-cxr, a de-identified publicly available database of chest radiographs with free-text reports. Scientific data , 6(1):1–8, 2019. 2, 3 Charles Jones, Daniel C. Castro, Fabio De Sousa Ribeiro, Ozan Oktay, Melissa McCradden, and Ben Glocker. A causal perspective on dataset bias in machine learning for medical imaging. Nature Ma-chine Intelligence , pages 1–9, February 2024. ISSN 2522-5839. doi: 10.1038/s42256-024-00797-8. Publisher: Nature Publishing Group. 1 Jared Kaplan, Sam McCandlish, Tom Henighan, Tom B Brown, Benjamin Chess, Rewon Child, Scott Gray, Alec Radford, Jeffrey Wu, and Dario Amodei. Scaling laws for neural language models. 
+
+arXiv preprint arXiv:2001.08361 , 2020. 3 Tero Karras, Samuli Laine, Miika Aittala, Janne Hellsten, Jaakko Lehtinen, and Timo Aila. Analyzing and improving the image quality of stylegan. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pages 8110–8119, 2020. 2 Tero Karras, Miika Aittala, Timo Aila, and Samuli Laine. Elucidating the design space of diffusion-based generative models. Advances in neural information processing systems , 35:26565–26577, 2022. 2, 19 Tero Karras, Miika Aittala, Jaakko Lehtinen, Janne Hellsten, Timo Aila, and Samuli Laine. Analyzing and improving the training dynamics of diffusion models. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pages 24174–24184, June 2024a. 12 2Tero Karras, Miika Aittala, Jaakko Lehtinen, Janne Hellsten, Timo Aila, and Samuli Laine. Analyzing and improving the training dynamics of diffusion models. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pages 24174–24184, 2024b. 4, 5, 18, 19, 20, 24 Bardia Khosravi, Frank Li, Theo Dapamede, Pouria Rouzrokh, Cooper U Gamble, Hari M Trivedi, Cody C Wyles, Andrew B Sellergren, Saptarshi Purkayastha, Bradley J Erickson, et al. Synthetically enhanced: unveiling synthetic data’s potential in medical imaging research. EBioMedicine , 104, 2024. 1 Ira Ktena, Olivia Wiles, Isabela Albuquerque, Sylvestre-Alvise Rebuffi, Ryutaro Tanno, Abhijit Guha Roy, Shekoofeh Azizi, Danielle Belgrave, Pushmeet Kohli, Taylan Cemgil, et al. Generative models improve fairness of medical classifiers under distribution shifts. Nature Medicine , 30(4): 1166–1173, 2024. 1, 3 Amar Kumar, Anita Kriz, Mohammad Havaei, and Tal Arbel. PRISM: High-resolution & precise counterfactual medical image generation using language-guided stable diffusion. In Medical Imaging with Deep Learning , 2025. 2, 3 Hyungyung Lee, Wonjae Kim, Jin-Hwa Kim, Tackeun Kim, Jihang Kim, Leonard Sunwoo, Edward Choi, et al. Vision-language generative model for view-specific chest x-ray generation. In 
+
+Conference on Health, Inference, and Learning , pages 280–296. PMLR, 2024a. 2 Suhyeon Lee, Won Jun Kim, Jinho Chang, and Jong Chul Ye. LLM-CXR: Instruction-finetuned LLM for CXR image understanding and generation. In The Twelfth International Conference on Learning Representations , 2024b. 3 Yaron Lipman, Ricky TQ Chen, Heli Ben-Hamu, Maximilian Nickel, and Matthew Le. Flow matching for generative modeling. In The Eleventh International Conference on Learning Representations ,2023. 2, 4 Aixin Liu, Bei Feng, Bing Xue, Bingxuan Wang, Bochao Wu, Chengda Lu, Chenggang Zhao, Chengqi Deng, Chenyu Zhang, Chong Ruan, et al. Deepseek-v3 technical report. arXiv preprint arXiv:2412.19437 , 2024. 18 Xingchao Liu et al. Flow straight and fast: Learning to generate and transfer data with rectified flow. In The Eleventh International Conference on Learning Representations , 2023. 2, 4 Haroui Ma, Francesco Quinzan, Theresa Willem, and Stefan Bauer. Ai alignment in medical imaging: Unveiling hidden biases through counterfactual analysis. arXiv preprint arXiv:2504.19621 , 2025. 2, 3 Nanye Ma, Mark Goldstein, Michael S Albergo, Nicholas M Boffi, Eric Vanden-Eijnden, and Saining Xie. Sit: Exploring flow and diffusion-based generative models with scalable interpolant transformers. In European Conference on Computer Vision , pages 23–40. Springer, 2024. 5, 18 Ali Madani, Mehdi Moradi, Alexandros Karargyris, and Tanveer Syeda-Mahmood. Chest x-ray generation and data augmentation for cardiovascular abnormality classification. In Medical imaging 2018: Image processing , volume 10574, pages 415–420. SPIE, 2018. 2 Simon McIntosh-Smith, Sadaf R. Alam, and Christopher J. Woods. Isambard-ai: a leadership class supercomputer optimised specifically for artificial intelligence. arXiv preprint arXiv:2410.11199 ,2024. 23 Raghav Mehta, Fabio De Sousa Ribeiro, Tian Xia, Mélanie Roschewitz, Ainkaran Santhirasekaram, Dominic C Marshall, and Ben Glocker. Cf-seg: Counterfactuals meet segmentation. In Inter-national Conference on Medical Image Computing and Computer-Assisted Intervention , pages 117–127. Springer, 2025. 3 13 Stefania L Moroianu, Christian Bluethgen, Pierre Chambon, Mehdi Cherti, Jean-Benoit Delbrouck, Magdalini Paschali, Brandon Price, Judy Gichoya, Jenia Jitsev, Curtis P Langlotz, et al. Improving performance, robustness, and fairness of radiographic ai models with finely-controllable synthetic data. arXiv preprint arXiv:2508.16783 , 2025. 1, 2, 3, 7 Muhammad Ferjad Naeem, Seong Joon Oh, Youngjung Uh, Yunjey Choi, and Jaejun Yoo. Reliable fidelity and diversity metrics for generative models. In International conference on machine learning , pages 7176–7185. PMLR, 2020. 6, 22 Ha Q Nguyen, Khanh Lam, Linh T Le, Hieu H Pham, Dat Q Tran, Dung B Nguyen, Dung D Le, Chi M Pham, Hang TT Tong, Diep H Dinh, et al. Vindr-cxr: An open dataset of chest x-rays with radiologist’s annotations. Scientific Data , 9(1):429, 2022. 3 Alexander Quinn Nichol and Prafulla Dhariwal. Improved denoising diffusion probabilistic models. In International conference on machine learning , pages 8162–8171. PMLR, 2021. 2 Adam Paszke, Sam Gross, Francisco Massa, Adam Lerer, James Bradbury, Gregory Chanan, Trevor Killeen, Zeming Lin, Natalia Gimelshein, Luca Antiga, et al. Pytorch: An imperative style, high-performance deep learning library. Advances in neural information processing systems , 32, 2019. 23, 24 Nick Pawlowski, Daniel C Castro, and Ben Glocker. Deep structural causal models for tractable counterfactual inference. Advances in Neural Information Processing Systems , 33:857–869, 2020. 6, 21 Judea Pearl. Causality . Cambridge university press, 2009. 5, 21 William Peebles and Saining Xie. Scalable diffusion models with transformers. In Proceedings of the IEEE/CVF international conference on computer vision , pages 4195–4205, 2023. 2, 5, 18 Fernando Pérez-García, Sam Bond-Taylor, Pedro P Sanchez, Boris van Breugel, Daniel C Castro, Harshita Sharma, Valentina Salvatelli, Maria TA Wetscherek, Hannah Richardson, Matthew P Lungren, et al. Radedit: stress-testing biomedical vision models via diffusion image editing. In 
+
+European Conference on Computer Vision , pages 358–376. Springer, 2024. 1, 2, 3 Fernando Pérez-García, Harshita Sharma, Sam Bond-Taylor, Kenza Bouzid, Valentina Salvatelli, Maximilian Ilse, Shruthi Bannur, Daniel C Castro, Anton Schwaighofer, Matthew P Lungren, et al. Exploring scalable medical image encoders beyond text supervision. Nature Machine Intelligence ,7(1):119–130, 2025. 4, 23 Vasileios C Pezoulas, Dimitrios I Zaridis, Eugenia Mylona, Christos Androutsos, Kosmas Apostolidis, Nikolaos S Tachos, and Dimitrios I Fotiadis. Synthetic data generation methods in healthcare: A review on open-source tools and methods. Computational and structural biotechnology journal ,23:2892–2910, 2024. 1 Eduardo P Reis, Joselisa PQ De Paiva, Maria CB Da Silva, Guilherme AS Ribeiro, Victor F Paiva, Lucas Bulgarelli, Henrique MH Lee, Paulo V Santos, Vanessa M Brito, Lucas TW Amaral, et al. Brax, brazilian labeled chest x-ray dataset. Scientific Data , 9(1):487, 2022. 3 Fabio De Sousa Ribeiro, Tian Xia, Miguel Monteiro, Nick Pawlowski, and Ben Glocker. High fidelity image counterfactuals with probabilistic causal models. In International Conference on Machine Learning , pages 7390–7425. PMLR, 2023. 1, 2, 3, 6, 21 Fabio De Sousa Ribeiro, Ainkaran Santhirasekaram, and Ben Glocker. Counterfactual identifiability via dynamic optimal transport. In The Thirty-ninth Annual Conference on Neural Information Processing Systems , 2025. 2, 3, 6, 21 Nicola Rieke, Jonny Hancox, Wenqi Li, Fausto Milletari, Holger R Roth, Shadi Albarqouni, Spyridon Bakas, Mathieu N Galtier, Bennett A Landman, Klaus Maier-Hein, et al. The future of digital health with federated learning. NPJ digital medicine , 3(1):119, 2020. 1 14 Robin Rombach, Andreas Blattmann, Dominik Lorenz, Patrick Esser, and Björn Ommer. High-resolution image synthesis with latent diffusion models. In Proceedings of the IEEE/CVF confer-ence on computer vision and pattern recognition , pages 10684–10695, 2022. 2 Olaf Ronneberger, Philipp Fischer, and Thomas Brox. U-net: Convolutional networks for biomedical image segmentation. In International Conference on Medical image computing and computer-assisted intervention , pages 234–241. Springer, 2015. 19 Mélanie Roschewitz, Fabio De Sousa Ribeiro, Tian Xia, Galvin Khara, and Ben Glocker. Robust image representations with counterfactual contrastive learning. Medical Image Analysis , 105: 103668, 2025. ISSN 1361-8415. doi: https://doi.org/10.1016/j.media.2025.103668. 1, 3 Hojjat Salehinejad, Shahrokh Valaee, Tim Dowdell, Errol Colak, and Joseph Barfett. Generalization of deep neural networks for chest pathology classification in x-rays using generative adversarial networks. In 2018 IEEE international conference on acoustics, speech and signal processing (ICASSP) , pages 990–994. IEEE, 2018. 2 Bernhard Schölkopf, Francesco Locatello, Stefan Bauer, Nan Rosemary Ke, Nal Kalchbrenner, Anirudh Goyal, and Yoshua Bengio. Toward causal representation learning. Proceedings of the IEEE , 109(5):612–634, 2021. 1 Laleh Seyyed-Kalantari, Guanxiong Liu, Matthew McDermott, Irene Y Chen, and Marzyeh Ghassemi. Chexclusion: Fairness gaps in deep chest x-ray classifiers. In BIOCOMPUTING 2021: proceedings of the Pacific symposium , pages 232–243. World Scientific, 2020. 1 Noam Shazeer. Glu variants improve transformer. arXiv preprint arXiv:2002.05202 , 2020. 5, 18 Oriane Siméoni, Huy V Vo, Maximilian Seitzer, Federico Baldassarre, Maxime Oquab, Cijo Jose, Vasil Khalidov, Marc Szafraniec, Seungeun Yi, Michaël Ramamonjisoa, et al. Dinov3. arXiv preprint arXiv:2508.10104 , 2025. 24 Akshay Smit, Saahil Jain, Pranav Rajpurkar, Anuj Pareek, Andrew Y Ng, and Matthew Lungren. Combining automatic labelers and expert annotations for accurate radiology report labeling using bert. In Proceedings of the 2020 conference on empirical methods in natural language processing (EMNLP) , pages 1500–1519, 2020. 4 Jascha Sohl-Dickstein, Eric Weiss, Niru Maheswaranathan, and Surya Ganguli. Deep unsupervised learning using nonequilibrium thermodynamics. In International conference on machine learning ,pages 2256–2265. pmlr, 2015. 2 Yang Song and Stefano Ermon. Generative modeling by estimating gradients of the data distribution. In H. Wallach, H. Larochelle, A. Beygelzimer, F. d'Alché-Buc, E. Fox, and R. Garnett, editors, 
+
+Advances in Neural Information Processing Systems , volume 32. Curran Associates, Inc., 2019. 2 Yang Song, Jascha Sohl-Dickstein, Diederik P Kingma, Abhishek Kumar, Stefano Ermon, and Ben Poole. Score-based generative modeling through stochastic differential equations. In International Conference on Learning Representations , 2021. 2 Christian Szegedy, Vincent Vanhoucke, Sergey Ioffe, Jon Shlens, and Zbigniew Wojna. Rethinking the inception architecture for computer vision. In Proceedings of the IEEE conference on computer vision and pattern recognition , pages 2818–2826, 2016. 24 Eric J. Topol. High-performance medicine: the convergence of human and artificial intelligence. 
+
+Nature Medicine , 25(1):44–56, January 2019. ISSN 1546-170X. doi: 10.1038/s41591-018-0300-7. Publisher: Nature Publishing Group. 1 Xiaosong Wang, Yifan Peng, Le Lu, Zhiyong Lu, Mohammadhadi Bagheri, and Ronald M Summers. Chestx-ray8: Hospital-scale chest x-ray database and benchmarks on weakly-supervised classi-fication and localization of common thorax diseases. In Proceedings of the IEEE conference on computer vision and pattern recognition , pages 2097–2106, 2017. 3 15 Tobias Weber, Michael Ingrisch, Bernd Bischl, and David Rügamer. Cascaded latent diffusion models for high-resolution chest x-ray synthesis. In Pacific-Asia conference on knowledge discovery and data mining , pages 180–191. Springer, 2023. 2, 3 Katharina Wenderott, Jim Krups, Matthias Weigl, and Abigail R. Wooldridge. Facilitators and Barriers to Implementing AI in Routine Medical Imaging: Systematic Review and Qualitative Analysis. Journal of Medical Internet Research , 27(1):e63649, July 2025. doi: 10.2196/63649. 1 Tian Xia, Mélanie Roschewitz, Fabio De Sousa Ribeiro, Charles Jones, and Ben Glocker. Mitigating attribute amplification in counterfactual image generation. In International Conference on Medical Image Computing and Computer-Assisted Intervention , pages 546–556. Springer, 2024. 3 Tian Xia, Fabio De Sousa Ribeiro, Rajat R Rasal, Avinash Kori, Raghav Mehta, and Ben Glocker. Decoupled classifier-free guidance for counterfactual diffusion models. arXiv preprint arXiv:2506.14399 , 2025. 2, 3 Biao Zhang and Rico Sennrich. Root mean square layer normalization. Advances in neural informa-tion processing systems , 32, 2019. 5 Richard Zhang, Phillip Isola, Alexei A Efros, Eli Shechtman, and Oliver Wang. The unreasonable effectiveness of deep features as a perceptual metric. In Proceedings of the IEEE conference on computer vision and pattern recognition , pages 586–595, 2018. 26 Xiaoman Zhang, Julián N Acosta, Josh Miller, Ouwen Huang, and Pranav Rajpurkar. Rexgradient-160k: A large-scale publicly available dataset of chest radiographs with free-text reports. arXiv preprint arXiv:2505.00228 , 2025. 3 16 Appendices 
+
+# Table of Contents 
+
+A CXR7-1M: Dataset Composition 17 B Generative Foundation Model for Chest Radiographs 18 
+
+B.1 Radiographic VAE Architecture . . . . . . . . . . . . . . . . . . . . . . . . . . 18 B.2 Flow Model Architectures for CXR . . . . . . . . . . . . . . . . . . . . . . . . 18 B.3 Metadata Causal Model: Continuous-Time Flows . . . . . . . . . . . . . . . . . 20 
+
+C Experiment Details & Additional Results 21 
+
+C.1 Evaluation Metrics . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 21 C.2 Improved VAEs for Radiographic Perceptual Quality . . . . . . . . . . . . . . . 23 C.3 Evaluating Generative Fidelity: Benchmarks & Clinical Expert Study . . . . . . 24 C.4 Controllable Image Generation: Subgroup Analysis . . . . . . . . . . . . . . . 24 C.5 Extra Qualitative Results . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 34 
+
+A CXR7-1M: Dataset Composition 10 4 10 5
+
+> 10 6
+> MIMIC-CXR
+> ReXGradient
+> CheXpert-Plus
+> PadChest
+> ChestX-ray14
+> BRAX
+> VinDr-CXR
+> 377095
+> 273004
+> 223462
+> 160846
+> 112120
+> 40967
+> 18000
+
+Dataset     
+
+> 10 110 210 310 410 5
+> 0
+> 25
+> 50
+> 75
+> 100
+
+Age  
+
+> 10 410 5
+> 10 6
+> U
+> Asian
+> Black
+> White
+> 737175
+> 35467
+> 71869
+> 360983
+
+Race  
+
+> 10 410 5
+> 10 6
+> U
+> Male
+> Female
+> 15011
+> 631099
+> 559384
+
+Sex 
+
+> 10 5
+> U
+> AP
+> PA
+> LATERAL
+> 135826
+> 442198
+> 333777
+> 293693
+
+View   
+
+> 10 310 510 7
+> U
+> N
+> P
+> 1080935
+> 1875
+> 122684
+
+Atelectasis 
+
+> 10 5
+> 10 6
+> U
+> N
+> P
+> 1024259
+> 71154
+> 110081
+
+Cardiomegaly  
+
+> 10 410 5
+> 10 6
+> U
+> N
+> P
+> 1133392
+> 38563
+> 33539
+
+Consolidation 
+
+> 10 5
+> 10 6
+> U
+> N
+> P
+> 1080070
+> 58166
+> 67258
+
+Edema  
+
+> 10 410 5
+> 10 6
+> U
+> N
+> P
+> 1133931
+> 52565
+> 18998
+
+Enlarged CM  
+
+> 10 410 5
+> 10 6
+> U
+> N
+> P
+> 1154639
+> 24634
+> 26221
+
+Fracture    
+
+> 10 310 410 5
+> 10 610 7
+> U
+> N
+> P
+> 1158581
+> 4059
+> 42854
+
+Lung Lesion    
+
+> 10 310 410 5
+> 10 610 7
+> U
+> N
+> P
+> 1002746
+> 7900
+> 194848
+
+Lung Opacity  
+
+> 10 410 5
+> 10 6
+> U
+> N
+> P
+> 591806
+> 12148
+> 601540
+
+No Finding 
+
+> 10 5
+> 10 6
+> U
+> N
+> P
+> 972439
+> 89455
+> 143600
+
+Pleural Effusion   
+
+> 10 210 410 6
+> U
+> N
+> P
+> 1187957
+> 188
+> 17349
+
+Pleural Other  
+
+> 10 410 5
+> 10 6
+> U
+> N
+> P
+> 1104896
+> 57351
+> 43247
+
+Pneumonia  
+
+> 10 410 5
+> 10 6
+> U
+> N
+> P
+> 1089569
+> 89137
+> 26788
+
+Pneumothorax    
+
+> 10 310 410 5
+> 10 610 7
+> U
+> N
+> P
+> 1049346
+> 2718
+> 153430
+
+Support Devices 
+
+U: Uncertain/Missing 
+
+N: Negative 
+
+P: Positive 
+
+Figure 6: CXR7-1M dataset composition. Showing the 7 different dataset sources (top left) and all the available metadata variables, which were harmonised with the help of a clinical expert. 17 B Generative Foundation Model for Chest Radiographs 
+
+B.1 Radiographic VAE Architecture 
+
+Figure 7: RadVAE radiographic perceptual training schematic. Our RadVAE variants are optimised for radiographic fidelity by either training from scratch or LoRA fine-tuning from a FLUX.2 base, using a domain-specific Rad-DINO perceptual loss (§4.1). Table 4: Architecture hyperparameters for the proposed RadVAE, trained from scratch on CXR7-1M.                       
+
+> RadVAE Architecture
+> Setting Value Setting Value Image resolution 512 ×512 Residual blocks (per stage) 3Image channels 1Attention resolutions -Latent resolution 64 Attention head channels 64 Latent channels 16 Attention balance 0.3 Model channels 128 Residual balance 0.3 Channel multipliers [1, 2, 3, 4] Dropout 0.0 #Parameters 0.8B
+
+RadVAE. Table 4 reports the hyperparameters used to build RadVAE, which has 88M parameters. To help identify the best VAE to use for CXR, we first build and train our own VAE from scratch on CXR7-1M, which we call RadVAE. To that end, we adopt a block design based on the EDM2 (Karras et al., 2024b) architecture, with magnitude-preserving layers for stable training. The main modifica-tions we make are: (i) adding magnitude-preserving 1 ×1 convolutions after the encoder output to obtain bottleneck representations, and before the decoder input to project these representations back to the decoder feature space; (ii) removing all encoder-decoder skip-connections to maximise the information content of the bottleneck representation. It is also worth mentioning that the base EDM2 architecture applies attention only at the decoder bottleneck, whereas our variant applies bottleneck attention symmetrically in both the encoder and decoder. Following modern VAEs (Batifol et al., 2025), we choose a wider latent bottleneck of 16 channels and keep the spatial resolution at 64 ×64. 
+
+B.2 Flow Model Architectures for CXR Vision Transformer Backbone. Table 5 provides the transformer architecture hyperparameters for our CXR flow models. The vision transformer (Dosovitskiy et al., 2021) architectures we use are based on DiT/SiT (Peebles and Xie, 2023; Ma et al., 2024) and include two modernising upgrades to improve training stability. Specifically, we add query-key RMS-Norm as suggested by Esser et al. (2024), and replace the standard MLP blocks with SwiGLU blocks (Shazeer, 2020). This choice is further supported by the adoption of SwiGLU in recent high-performing LLM architectures (Grattafiori et al., 2024; Liu et al., 2024). We build three CXR flow transformer variants: (i) a 0.3B parameter pixel-space (512 ×512) flow transformer (RadiT B pix ); (ii) the same as (i) but trained in the 32 ×64 ×64 latent space of a FLUX.2 VAE (RadiT B); (iii) the same as (ii) but much larger, with 1.3B parameters (RadiT XL). For reference, DiT XL/2 has 0.6B parameters (Peebles and Xie, 2023). 18 Figure 8: Rectified flow transformer architectures. (a) Latent-space rectified flow models operate on Rad-VAE latent tokens and use patient metadata conditioning to generate controllable chest radiographs. ( b) Pixel-space rectified flow models operate directly on image patch tokens with the same metadata conditioning interface, avoiding an explicit VAE bottleneck. Table 5: Transformer architecture hyperparameters for our CXR flow models (RadiT). 
+
+Setting RadiT B pix RadiT B RadiT XL 
+
+(Pixel) (Latent) (Latent) Input resolution 512 ×512 64 ×64 64 ×64 Input channels 1 32 32 Patch size 16 2 2Hidden size 1024 1024 1536 Depth 16 16 32 Num. heads 16 16 24 Head dim. 64 64 64 QK RMS-Norm Yes Yes Yes MLP block SwiGLU SwiGLU SwiGLU MLP ratio 8/3 8/3 8/3 Metadata conditions 19 19 19 VAE Encoder None FLUX.2 FLUX.2 VAE Decoder None RadVAE FLUX.2 RadVAE FLUX.2 
+
+#Parameters 0.3B 0.3B 1.3B 
+
+Table 6: UNet architecture hyperparameters for our CXR flow models (RadUNet). 
+
+Setting RadUNet pix RadUNet 
+
+(Pixel) (Latent) Input resolution 512 ×512 64 ×64 Input channels 1 32 Model channels 32 256 Channel multipliers [1, 2, 4, 8, 16, 32] [1, 2, 3 ,4] Residual blocks (per stage) 3 3Attention resolutions [32, 16] [16, 8] Attention head channels 64 64 Dropout 0.0 0.1 Metadata conditions 19 19 VAE Encoder None FLUX.2 VAE Decoder None RadVAE FLUX.2 
+
+#Parameters 0.3B 0.5B 
+
+U-Net Backbone. Table 6 provides the transformer architecture hyperparameters for our CXR flow models. As outlined in the main text (§4.2), the U-Net (Ronneberger et al., 2015) architectures we use are based on EDM2 (Karras et al., 2024b, 2022). Since these architectures are already highly optimised, we found that any further architectural modifications were unnecessary. We build two CXR flow U-Net variants: (i) a 0.3B parameter pixel-space (512 ×512) flow U-Net (RadUNet pix ); (ii) an EDM2-M model (Karras et al., 2024b) trained in the 32 ×64 ×64 latent space of a FLUX.2 VAE (RadUNet). We note that RadUNet pix departs from the architecture presets by Karras et al. (2024b), as the channel multiplier schedule is extended from 4 to 6 levels to support pixel-space modelling. 19 B.3 Metadata Causal Model: Continuous-Time Flows          
+
+> Age Race Sex
+> Cardiomegaly Edema Pleural Other Pneumonia Fracture Pneumothorax
+> Enlarged CM Consolidation Support Devices Pleural Effusion
+> Atelectasis Lung Opacity Lung Lesion
+
+Figure 9: Proposed clinical expert-informed causal graph of demographic factors and radiologic find-ings. The graph was developed through iterative discussions with three experienced pulmonologists. 
+
+B.3.1 Clinical Rationale for the Causal Graph 
+
+Edge directionality was determined by two complementary principles. Three experienced pulmo-nologists reviewed the graph in an iterative process, reaching consensus on all included edges before finalisation. First, demographic factors were positioned as upstream roots: ‘Age’, ‘Sex’, and ‘Race’ are known to modulate the prevalence of structural cardiac disease, pulmonary infection, osteoporotic fracture, and fluid retention, and therefore act as common causes of several downstream findings rather than consequences of them. Second, we encoded a clinical hierarchy among the findings themselves, reflecting the mechanistic sequence by which radiographic abnormalities arise. For example, pneumonia produces consolidation, which manifests as a lung opacity; a rib fracture can cause pneumothorax through pleural disruption; cardiomegaly, as a marker of underlying cardiac dysfunction, predisposes to pulmonary oedema and pleural effusion; and pleural effusion promotes atelectasis through compressive collapse. Lung lesion occupies the terminal node of the graph, representing a non-specific radiographic disturbance that may be the downstream expression of multiple upstream opacifying processes. One edge warrants explicit comment: the relationship between pneumothorax and support devices is bidirectional, reflecting two distinct clinical realities. A pneumothorax may necessitate intercostal drain insertion, while central venous catheter placement can itself cause iatrogenic pneumothorax. We retain both directions in the graph and acknowledge that this constitutes a cycle; users of the SCM should select a single direction based on the causal query of interest. 
+
+B.3.2 Continuous-Time Flow SCM Architecture 
+
+There are 19 continuous-time flow MLP models in our metadata SCM, all trained concurrently under the joint flow matching objective in Eq (5) . We propose a metadata conditioning strategy that remains consistent for all flows in the SCM, regardless of the number of causal parents each variable has. Similar to the conditioning strategy described in Section 4.2, each variable in the causal graph is mapped to a learnable d-dimensional embedding. For categorical variables, this is done using a learned embedding table. For continuous variables (i.e. ‘Age’), we rescale and encode them with the same Fourier parameterisation used by Karras et al. (2024b), then project the result by an MLP to the shared embedding dimension d. Next, we define the parent index set for each node 
+
+I(i) := {j ∈ { 1, . . . , n } : X(j) ∈ PA (i)}, k(i) = |I (i)| = |PA (i)|, for i = 1 , . . . , n. (6) Given all n = 19 learned embeddings, the conditioning signal z(i) ∈ Rd for each flow model in the SCM is given by a magnitude-preserving scaled sum of the parent embeddings of X(i):
+
+z(i) = 1
+
+√k(i)
+
+X
+
+> j∈I (i)
+
+e(j), e(j) := E x(j); ϕ(j) ∈ Rd, j ∈ { 1, . . . , n }. (7) 20 The input to each flow MLP is then a concatenation of the time variable t ∼ U (0 , 1) , the flow interpolant value in one-hot space y(i) 
+
+> t
+
+= (1 − t)u(i) + t onehot( x(i)), and the respective parent conditioning embedding z(i) ∈ Rd. For the MLPs, we stack 3 of the following residual blocks: 
+
+y(i) 7 → LINEAR ◦ SILU ◦ DROPOUT ◦ LINEAR ◦ LAYER NORM (onehot ( x(i))) , (8) with a 512 hidden dimension. Each MLP receives a non-linear projection of the concatenated inputs explained above, and each MLP’s head has a L AYER NORM and a final L INEAR layer to predict the velocity field of its respective flow. The final linear layer in each residual block is zero-initialised so that each block initially behaves as an identity transformation, which stabilises early training. 
+
+Samples, Interventions, and Counterfactuals. At inference time, random samples from our continuous-time flow SCM are drawn by first sampling from the root node’s source distribution and solving each subsequent ODE ancestrally in a topological ordering of the associated causal graph. Let (π1, . . . , π n) denote a topological ordering of the variables X1, . . . , X n, such that for every edge 
+
+Xi → Xj in the graph we have that π−1(i) < π −1(j). In simple terms, π−1(i) < π −1(j) means variable Xi is processed before variable Xj , since Xi causes Xj . We traverse the causal graph according to this topological ordering, and at step k we process variable i = πk.For all categorical variables Yi = onehot( Xi) ∈ { 0, 1}K in turn, continuous ODE solver outputs 
+
+ˆYi = Ui +
+
+Z 10
+
+vi(t, Y i(t); PA i) d t, Ui ∼ p(i) 
+
+> src
+
+, ˆYi ∈ RK , (9) are converted to discrete predictions via an argmax operation over K categories 2:
+
+ˆXi = arg max 
+
+> k∈{ 1,...,K }
+
+ˆY ki , for i = 1 , . . . , n. (10) Each of these discrete predictions is used to retrieve the corresponding entry from the embedding table, which then conditions the flows of its descendants, until the graph has been fully traversed. Sampling from the interventional distribution is similar, but with one or more observed variables intervened upon and detached from their parents. No ODE solving is needed for such variables. Finally, to compute counterfactuals , we use the abduction-action-prediction (Pearl, 2009) procedure for continuous-time flows following Ribeiro et al. (2025), but applied to our categorical variable case. In particular, Ribeiro et al. (2025) used continuous flows for their image model only, relying on the classical Normalizing Flow approach of Pawlowski et al. (2020); Ribeiro et al. (2023) for their SCM, which does not support deterministic abduction for discrete variables. Our abduction step proceeds ancestrally in a topological ordering of the graph, inferring all posterior exogenous noise variables: 
+
+ˆUi = Yi −
+
+Z 10
+
+vi(t, Y i(t); PA i) d t ⇒ Y ∗ 
+
+> i
+
+= ˆUi +
+
+Z 10
+
+vi(t, Y i(t); PA ∗ 
+
+> i
+
+) d t, (11) then the corresponding counterfactuals Y ∗ 
+
+> i
+
+, under one or more interventions on the parents PA ∗ 
+
+> i
+
+.Like before, continuous ODE solver outputs Y ∗ 
+
+> i
+
+(1) ∈ RK are converted to discrete counterfactual predictions X∗ 
+
+> i
+
+via an argmax operation over K categories (cf. Eq. (10) ). As the graph is traversed in topological order, each predicted value is used to retrieve its corresponding embedding from the embedding table, which then conditions the flow vector fields of its causal descendants. 
+
+C Experiment Details & Additional Results 
+
+C.1 Evaluation Metrics Distributional Fidelity Metrics. To evaluate the generative fidelity of our models, we measure the similarity between generated images and real test images using standard distributional fidelity and diversity metrics, but computed in multiple different feature spaces. Fréchet Inception Distance (FID) (Heusel et al., 2017) compares the feature distribution of real and generated images by approximating   
+
+> 2For simplicity, we slightly abuse notation by using Kto denote the number of categories for all categorical variables, although different variables may have different numbers of classes.
+
+21 both distributions as multivariate Gaussians. Given feature means and covariances (μr , Σr ) for real images and (μg , Σg ) for generated images, FID is defined as: 
+
+FID = ∥μr − μg ∥22 + Tr(Σ r + Σ g − 2(Σ r Σg )1/2). (12) Standard FID is computed using InceptionV3 features. In addition, we report analogous Fréchet distances in radiographic or self-supervised feature spaces, denoted FDD, by replacing InceptionV3 features with representations extracted from Rad-DINO or DINOv3. Kernel Inception Distance (KID) (Bi´ nkowski et al., 2018) measures the squared maximum mean discrepancy between real and generated feature distributions. Similar to FDD, we denote the corresponding kernel distance computed in DINO-based feature spaces as KDD. Together, FID/FDD and KID/KDD provide complementary measures of whether generated samples match the real data distribution in both generic natural-image and domain-relevant radiographic representation spaces. 
+
+Precision, Recall, Density, and Coverage. We further report Precision, Recall, Density, and Coverage (Naeem et al., 2020) to characterise different aspects of generative performance. Precision and Density measure the fidelity of generated samples by evaluating how well they lie on or near the real data manifold. Recall and Coverage measure sample diversity by evaluating how well the generated samples cover the support of the real data distribution. 
+
+Reconstruction Quality Metrics. For reconstruction quality, we report both pairwise image similarity metrics and distributional reconstruction fidelity. Structural Similarity Index Measure (SSIM) measures perceptual structural agreement between each input image and its reconstruction, while Peak Signal-to-Noise Ratio (PSNR) measures pixel-level reconstruction error. We also report Reconstruction Fréchet Distance (rFD), which applies the same Fréchet-distance formulation as FID, but compares the feature distribution of original images with that of their reconstructions rather than comparing real images with randomly generated samples. In our experiments, rFD is computed using Rad-DINO features rather than InceptionV3 features. Therefore, rFD evaluates whether the VAE reconstructions preserve the distribution of clinically relevant image features. 
+
+Patient Identity Preservation Metrics. For image editing, we further evaluate whether the model preserves image content that should remain unchanged under the intervention. We refer to this property as patient identity preservation. Given an original image x and its edited counterpart 
+
+x∗, we measure identity preservation using complementary pixel-space, global feature-space, and attribute-specialised feature-space metrics. First, we compute SSIM between x and x∗ in pixel space. While SSIM is also used for reconstruction evaluation, here it measures whether the target edit preserves low-level anatomical and acquisition-specific image structure. Higher SSIM indicates stronger structural preservation. Second, we compute LPIPS-style perceptual distances in pretrained representation spaces. Unlike standard LPIPS, which is typically computed using natural-image backbones, we compute feature-space distances using Rad-DINO and DINOv3 representations. Given a feature extractor ϕ, let ϕℓ(x) ∈ RNℓ×Cℓ denote the hidden representation of image x at layer ℓ,where Nℓ is the number of tokens and Cℓ is the feature dimension. For a set of selected layers L, we define the perceptual distance between the original image x and its edit x∗ as 
+
+dϕ(x, x∗) = X
+
+> ℓ∈L
+
+1
+
+NℓCℓ
+
+˜ϕℓ(x) − ˜ϕℓ(x∗) 2
+
+> F
+
+, (13) where ˜ϕℓ(·) denotes the layer representation after optional feature normalization, and ∥ · ∥ F is the Frobenius norm over token and feature dimensions. Lower values indicate that the edited image remains closer to the original image in semantic feature space, and therefore better preserves identity-relevant visual content. We also report a relative version of this perceptual distance, which normalises the edit-induced feature distance by the average distance between randomly paired real images: 
+
+drel  
+
+> ϕ
+
+(x, x∗) = dϕ(x, x∗)
+
+> 1
+> M
+
+PMi=1 dϕ(x′
+
+> i
+
+, x′′  
+
+> i
+
+) , (14) where {(x′
+
+> i
+
+, x′′  
+
+> i
+
+)}Mi=1 denotes a set of randomly sampled image pairs. This relative score expresses the magnitude of the edit change as a fraction of the typical feature-space distance between unrelated images. It therefore makes identity preservation scores easier to interpret and compare across feature extractors such as Rad-DINO and DINOv3. Finally, to assess whether non-intervened patient attributes are preserved, we compute cosine similarity in attribute-specialised latent spaces. Let ψa(·)
+
+22 denote the embedding extracted from the prediction head corresponding to attribute a, and let A
+
+denote the set of attributes left unchanged by the edit. We then compute 
+
+sa(x, x∗) = 1
+
+|A| 
+
+X
+
+> a∈A
+
+ψa(x)⊤ψa(x∗)
+
+∥ψa(x)∥2∥ψa(x∗)∥2
+
+. (15) Higher attribute-space cosine similarity indicates stronger preservation of metadata-relevant infor-mation that should remain unchanged after editing. Together, these metrics provide complementary views of identity preservation. SSIM measures low-level structural similarity, Rad-DINO and DI-NOv3 LPIPS-style distances measure global semantic preservation, and attribute-specialised cosine similarity measures whether invariant patient attributes remain stable under editing. 
+
+C.2 Improved VAEs for Radiographic Perceptual Quality 
+
+Table 7: Training hyperparameters for the proposed RadVAE trained from scratch on CXR7-1M.                      
+
+> RadVAE Training
+> Setting Value Setting Value Optimizer AdamW Batch size 192 Learning rate 1e-4 LR warmup steps 4000 Weight decay 1e-4 Adam betas [0.9, 0.999] EMA rate 0.9999 KL weight ( β)0.0 DINO version Rad Rad-LPIPS weight ( α)250 Num. nodes 4Num. GPUs 16
+
+Table 7 reports the training hyperparameters we used to train our RadVAE. The model was trained for 630K steps using multi-node distributed data parallelism in bfloat16 precision, on 16 NVIDIA GH200 GPUs split over 4 compute nodes (McIntosh-Smith et al., 2024). In all cases, model development and training were performed using PyTorch (Paszke et al., 2019). 
+
+Radiographic Perceptual Training. As mentioned in §5.1, we find that averaging decoder RGB predictions achieves highly competitive results on CXR when using the FLUX.2 VAE in particular. Since the exact training recipe of the FLUX.2 VAE has not been publicly released at the time of this writing, it is difficult to attribute this performance to any specific design or training factor. That said, the FLUX.2 VAE still underperforms our baseline RadVAE trained from scratch in terms of radiographic fidelity (Rad-DINO rFD). To close this gap, we explored several different radiographic perceptual fine-tuning setups using Rad-DINO (Pérez-García et al., 2025) and LoRA (Hu et al., 2022). We elected to tune only the FLUX.2 VAE decoder to avoid affecting the pretrained latent space, particularly since the original training recipe is not public. Training only the decoder improves radiographic reconstruction quality while preserving compatibility with the pretrained encoder. All our fine-tuned models were trained on CXR7-1M and ran for a maximum 50K steps, as early experiments showed that performance saturated relatively quickly. We fine-tuned using the Adam optimiser with a learning rate of 2e-5, batch size of 16, 500 linear warmup steps, no weight decay, Adam betas of [0.9, 0.999], and an EMA rate of 0.995. We ran a light sweep over the Rad-DINO perceptual loss weight, using α ∈ { 10 , 100 , 200 , 500 , 1000 }, and found α = 500 to perform best. We selected the checkpoint with the lowest validation loss for evaluation on the CXR7-1M test set. The results of our ablation study are reported in Table 8. The first thing we tried that didn’t work well enough was replacing the simple RGB-mean FLUX.2 decoder prediction with a weighted prediction by Luma coefficients: (0.29894, 0.58704, 0.11402). Luma coefficients weight the RGB channels according to perceived brightness, giving more weight to green and less to blue. This slightly improved all reconstruction metrics except for the intended Rad-DINO rFD. We then evaluated several decoder fine-tuning strategies with and without a Rad-DINO perceptual loss: full decoder fine-tuning, RGB head only fine-tuning, joint fine-tuning of the RGB head and the final decoder block, and LoRA fine-tuning of selected mid-block and up-block layers. We found that full decoder fine-tuning led to undesirable overfitting. The best approach was a radiographic perceptual LoRA configuration that updated the decoder input convolution, selected mid-block residual and attention projections, one residual convolution from each upsampling block, and fine-tuned the RGB head. 23 Table 8: Ablation study of VAE radiographic fine-tuning strategies . We fine-tune (FT) the FLUX.2 VAE with different Rad-DINO perceptual loss and LoRA setups, closing the radiographic fidelity gap to our baseline RadVAE trained from scratch, whilst outperforming it on all other metrics. The blue row reports the baseline FLUX.2 VAE performance on the CXR7-1M test set when simply averaging decoder RGB predictions; remaining rows show results from RadVAE FLUX.2 fine-tuning variants.                                                            
+
+> Model Reconstruction FD ↓PSNR ↑SSIM ↑
+> Rad-DINO DINOv3 RadVAE (Scratch) 0.0476 2.246 43.706 0.9831 FLUX.2 (RGB-mean) 0.0887 0.6320 45.413 0.9875 Luma Coefficients 0.0903 0.6231 45.699 0.9878 LoRA (Mid-Block) 0.0755 0.5962 45.352 0.9881 FT RGB Head 0.0994 0.6019 45.552 0.9875 + Rad-DINO Perceptual 0.0616 0.6657 45.555 0.9872 + FT Last Block 0.0722 0.8946 45.905 0.9869 + LoRA (Mid-Block, r=16, α=16) 0.0574 0.6527 45.260 0.9862 + LoRA (Mid-Block, r=8, α=8) 0.0539 0.6257 45.413 0.9861 + LoRA (Up-Blocks, r=8, α=8) 0.0487 0.5933 45.829 0.9880 + LoRA (Up-Blocks, r=8, α=16) 0.0532 0.5775 45.867 0.9882
+
+C.3 Evaluating Generative Fidelity: Benchmarks & Clinical Expert Study 
+
+Tables 11 and 12 report the training hyperparameters we used to train our transformer and U-Net-based flow models, respectively. Training was performed in PyTorch (Paszke et al., 2019). For the transformer models, hyperparameters were largely adopted from prior work, with minor adjustments based on initial experiments. In particular, we found that learning-rate warmup degraded training stability early on, so we disabled it. To facilitate comparison, the base transformer models (RadiT B) were trained with identical training hyperparameters, except that the pixel-space version used a shifted timestep schedule t 7 → t/ (α − t(α − 1)) with α = 3 , as prescribed by (Esser et al., 2024). Intuitively, larger α’s compensate for the increased redundancy at higher resolutions and can boost performance. Since our pixel-space RadUNet model departs from the original EDM2 configuration presets (Karras et al., 2024b), partly due to compute constraints, we took a more conservative training setup (e.g. reduced the learning rate to 1e-4). As for the latent-space RadUNet, we used the EDM2-M setup and adjusted the hyperparameters for a 1M-step run to match our compute resources. Due to using a smaller batch size, we reduced the learning rate to 1e-2, with 50K warmup steps. We elect RadiT XL (latent) and RadUNet (pixel) as the most capable variants from their respective model classes. For all our generative fidelity results, we used a dopri5 ODE solver (Chen, 2018) with atol and rtol of 1e-5, with identical seed conditions. Tables 9 and 10 report additional results using DINOv3 (Siméoni et al., 2025) and Inceptionv3 (Szegedy et al., 2016) as feature extractors, respectively. We also conducted a reference split sensitivity test, and the results are reported in Table 13. Since part of CheXGenBench overlaps with the CXR7-1M training split, we repeated the FDD evaluation using three 5K reference splits sampled from the CXR7-1M train and test splits. The results are similar between CXR7-1M train and test references, showing that the measured fidelity is not primarily driven by train-set overlap. The larger shift relative to ChexGenBench, especially for Rad-DINO FDD, indicates that absolute FDD values depend on the chosen reference distribution. 
+
+C.4 Controllable Image Generation: Subgroup Analysis Patient Metadata & Clinical Finding Predictors. The hyperparameters used for training our patient metadata predictors are reported in Table 15. As mentioned in the main text, all our models were trained to predict the 19 metadata variables available in CXR7-1M. We used a multi-task training approach, with individual Cross-Entropy losses for each categorical variable and an MSE loss for ‘Age’. We handle missing/ambiguous labels (‘NaN’) by simply skipping them in the loss computation. No extensive hyperparameter tuning was necessary to obtain strong performance. We experimented with standard data augmentation strategies (e.g. random flips, cropping, affine transformations, elastic deformations, Gaussian blur etc) but found that they did not meaningfully improve performance. Therefore, our final models were trained without any data augmentation for simplicity. 24 Table 9: Comparative evaluation of CXR generative fidelity. All metrics were computed using DINOv3 features. Benchmark results are from CheXGenBench (Dutt et al., 2025). We also report results on two internal test splits from CXR7-1M , a MIMIC-CXR 5K split and a separate 50K split. Superscript ( pix ) denotes our flow model variants trained in pixel-space ( 512 ×512 resolution). 
+
+Model FDD ↓ KDD ↓ Precision ↑ Recall ↑ Density ↑ Coverage ↑ Size      
+
+> (DINOv3) (DINOv3) (DINOv3) (DINOv3) (DINOv3) (DINOv3)
+
+CheXGenBench 
+
+RadiT B pix 9.6176 0.0398 0.3776 0.1170 0.2004 0.2733 0.3B RadiT B 1.7651 0.0050 0.7795 0.6662 0.5702 0.7243 0.3B RadUNet pix 5.6389 0.0210 0.5638 0.2243 0.4546 0.4871 0.3B RadUNet 2.8031 0.0095 0.7906 0.6486 0.4734 0.5186 0.5B 
+
+RadiT XL 1.2907 0.0013 0.7590 0.8602 0.5683 0.6369 1.3B 
+
+CXR7-1M (MIMIC) 
+
+RadiT B pix 10.066 0.0385 0.4811 0.1444 0.2854 0.3828 0.3B RadiT B 1.6791 0.0042 0.7614 0.6428 0.8288 0.8933 0.3B RadUNet pix 5.6100 0.0199 0.6820 0.2644 0.5991 0.6351 0.3B RadUNet 2.5850 0.0079 0.7396 0.5159 0.7537 0.8343 0.5B 
+
+RadiT XL 1.3142 0.0033 0.7749 0.7040 0.8471 0.9178 1.3B 
+
+CXR7-1M (50K) 
+
+RadiT XL 0.8342 0.0031 0.7477 0.6772 0.7960 0.8806 1.3B 
+
+Table 10: Comparative evaluation of CXR generative fidelity. All metrics were computed using Inceptionv3 features. Benchmark results are from CheXGenBench (Dutt et al., 2025). We also report results on two internal test splits from CXR7-1M , a MIMIC-CXR 5K split and a separate 50K split. Superscript ( pix ) denotes our flow model variants trained in pixel-space ( 512 ×512 resolution). 
+
+Model FDD ↓ KDD ↓ Precision ↑ Recall ↑ Density ↑ Coverage ↑ Size      
+
+> (Inceptionv3) (Inceptionv3) (Inceptionv3) (Inceptionv3) (Inceptionv3) (Inceptionv3)
+
+CheXGenBench 
+
+RadiT B pix 10.870 0.0082 0.7688 0.6381 0.8430 0.8198 0.3B RadiT B 4.7431 0.0011 0.8053 0.7437 1.0350 0.9499 0.3B RadUNet pix 7.8100 0.0045 0.7912 0.6855 0.9834 0.8953 0.3B RadUNet 5.3172 0.0017 0.8166 0.7193 1.0773 0.9478 0.5B 
+
+RadiT XL 4.2102 0.0006 0.8063 0.7775 0.9839 0.9507 1.3B 
+
+CXR7-1M (MIMIC) 
+
+RadiT B pix 9.4911 0.0056 0.7791 0.6615 0.8924 0.8826 0.3B RadiT B 4.6394 0.0006 0.8133 0.7473 1.0871 0.9682 0.3B RadUNet pix 6.9954 0.0031 0.8127 0.6980 1.0734 0.9331 0.3B RadUNet 5.2601 0.0011 0.8208 0.7277 1.0992 0.9585 0.5B 
+
+RadiT XL 4.2529 0.0004 0.8186 0.7692 1.0631 0.9664 1.3B 
+
+CXR7-1M (50K) 
+
+RadiT XL 0.8668 0.0004 0.8062 0.7507 1.0566 0.9635 1.3B 
+
+Image Editing. A randomly selected subset of 5K patients from the test split of CXR7-1M was used as the baseline for evaluating the editing effectiveness of our models. For our edited samples, we used the unique metadata profiles (the 19 target variables, including patient demographics, image acquisition characteristics, and clinical findings) from these same 5K patients to generate images. To perform an edit on an image, we first change the existing attribute value ( e.g. , Dataset = BRAX, or Age = 35) to a random value that is different from the initial one ( e.g. , Dataset = VinDR-CXR, or Age 
+
+= 57). Based on this edit, we solve our Flow SCM model (with dopri5 , atol =1e-6, rtol =1e-6) to predict the rest of the metadata profile such that it adheres to the causal graph in Figure 9. Then, with the fully updated metadata profile based on the targeted edit, we perform the counterfactual inference steps of abduction, action, and prediction using our generative models as described in §B.3.2, with 
+
+dopri5 solver settings of atol =1e-5 and rtol =1e-5. We use a batch size of 32 for RadiT XL, RadUNet, and RadUNet pix , and a batch size of 16 for RadiT B and RadiT B pix .25 Table 11: Transformer training hyperparameters for our CXR flow models (RadiT). 
+
+Setting RadiT B pix RadiT B RadiT XL 
+
+(Pixel) (Latent) (Latent) Optimizer Adam Adam Adam Learning rate 1e-4 1e-4 1e-4 LR warmup steps 0 0 0Batch size 72 72 512 Weight decay 0 0 0Adam betas [0.9, 0.999] [0.9, 0.999] [0.9, 0.999] Gradient clipping 1.0 1.0 1.0 Shifted schedule α 3.0 1.0 1.0 Uniform dequant. Yes No No EMA rate 0.9999 0.9999 0.9999 Training steps 1M 1M 3M Training tokens 73.7B 73.7B 1.57T Tokens/s 100K 200K 1M Num. nodes 1 1 8Num. GPUs 2 2 32 Precision bfloat16 bfloat16 bfloat16 
+
+Table 12: UNet training hyperparameters for our CXR flow models (RadUNet). 
+
+Setting RadUNet pix RadUNet 
+
+(Pixel) (Latent) Optimizer AdamW Adam Learning rate 1e-4 1e-2 LR warmup steps 4000 50K Batch size 72 72 Weight decay 1e-4 0Adam betas [0.9, 0.99] [0.9, 0.99] Gradient clipping 1.0 1.0 Shifted schedule α 3 1Uniform dequant. Yes No EMA rate 0.9999 0.9999 Training steps 2M 1M Num. nodes 1 1Num. GPUs 6 2Precision bfloat16 bfloat16 
+
+Table 13: Reference split sensitivity of FDD estimates. We compare the CheXGenBench (Dutt et al., 2025) reference split against internal 5K-sample reference subsets drawn from CXR7-1M train and test splits. Reporting RadiT XL FDD across 3 seeds using Rad-DINO, DINOv3, and Inceptionv3. 
+
+Model Ref. Split (5K) FDD FDD FDD   
+
+> (Rad-DINO) (DINOv3) (Inceptionv3)
+
+RadiT XL CheXGenBench 13.152 1.2907 4.2102 RadiT XL CXR7-1M (Train) 8.367 ±0.081 1.356 ±0.035 4.228 ±0.015 RadiT XL CXR7-1M (Test) 9.188 ±0.045 1.356 ±0.040 4.241 ±0.011 
+
+Identity Preservation. The main quantitative metrics we use for measuring patient identity preservation under image editing are SSIM and LPIPS loss. These are computed by comparing real observed CXR images with their edited counterparts. Rather than using VGG to compute the LPIPS loss (Zhang et al., 2018), we use modern and more capable feature extractors, namely Rad-DINO and DINOv3 (Hansen-Estruch et al., 2025). SSIM captures structural similarity, while LPIPS uses deep perceptual features and is generally more aligned with human judgements (Zhang et al., 2018). For our attribute-specialised embedding analysis, we utilise the task-conditioned attention-pooled embeddings from Rad-DINO AP for sex, race, age, view, and dataset prediction. We extract these 26 Table 14: Quantitative evaluation of identity preservation under controlled editing. We report SSIM and LPIPS loss between observed CXR images and their edited counterparts, with the latter computed using both Rad-DINO and DINOv3. Since LPIPS losses are naturally small in magnitude, we also report relative LPIPS (rLPIPS) with respect to a baseline loss on 5K random image pairings. Although RadiT XL is by far the superior generative model in terms of fidelity (cf. Table 3), we find that it is outperformed by the pixel-space RadUNet pix in terms of identity preservation under editing. Overall, we find that pixel-space models consistently rank top in terms of identity preservation. It’s important to note that improved identity preservation alone does not imply a better model, as a perfect score can be attained by not applying any changes. Thus, practitioners should consider the trade-off between edit effectiveness and identity preservation when selecting models for downstream tasks. 
+
+Model Edit SSIM ↑ rLPIPS ↓ LPIPS ↓ rLPIPS ↓ LPIPS ↓   
+
+> (Rad-DINO) (Rad-DINO) (DINOv3) (DINOv3)
+
+Random Pairs N/A 0.4780 1.0 0.01020 1.0 0.01155 RadUNet pix Age 0.8813 0.2559 0.00261 0.3030 0.00350 RadiT B pix Age 0.8657 0.2851 0.00291 0.3299 0.00381 RadiT B Age 0.8527 0.2866 0.00292 0.3295 0.00381 RadiT XL Age 0.8255 0.3471 0.00354 0.3948 0.00456 RadUNet Age 0.8109 0.3726 0.00380 0.4097 0.00473 RadUNet pix Dataset 0.6959 0.6048 0.00617 0.6295 0.00727 RadiT B pix Dataset 0.6498 0.6939 0.00708 0.7115 0.00822 RadiT B Dataset 0.6051 0.7567 0.00772 0.7634 0.00882 RadiT XL Dataset 0.5975 0.7753 0.00791 0.7841 0.00906 RadUNet Dataset 0.5845 0.8004 0.00816 0.7997 0.00924 RadUNet pix Race 0.9283 0.1548 0.00158 0.2002 0.00231 RadiT B pix Race 0.9203 0.1705 0.00174 0.2117 0.00245 RadiT B Race 0.9187 0.1517 0.00155 0.1940 0.00224 RadiT XL Race 0.8887 0.2179 0.00222 0.2713 0.00313 RadUNet Race 0.8712 0.2502 0.00255 0.2909 0.00336 RadUNet pix Sex 0.8734 0.2976 0.00304 0.3628 0.00419 RadiT B pix Sex 0.8492 0.3410 0.00348 0.4004 0.00462 RadiT B Sex 0.8272 0.3577 0.00365 0.4070 0.00470 RadiT XL Sex 0.8054 0.4088 0.00417 0.4602 0.00532 RadUNet Sex 0.7794 0.4583 0.00468 0.4984 0.00576 RadUNet pix View 0.6957 0.6305 0.00643 0.6623 0.00765 RadiT B pix View 0.6459 0.7214 0.00736 0.7481 0.00864 RadiT XL View 0.6047 0.7833 0.00799 0.8023 0.00927 RadiT B View 0.6006 0.7860 0.00802 0.8009 0.00925 RadUNet View 0.5784 0.8296 0.00846 0.8367 0.00966 RadUNet pix Finding 0.9523 0.1067 0.00109 0.1372 0.00158 RadiT B Finding 0.9399 0.1108 0.00113 0.1454 0.00168 RadiT B pix Finding 0.9264 0.1559 0.00159 0.1876 0.00217 RadiT XL Finding 0.9060 0.1825 0.00186 0.2264 0.00262 RadUNet Finding 0.8911 0.2092 0.00213 0.2417 0.00279 
+
+3072-dimensional representations for the original images, along with the edited images, and compute cosine similarity for all 5K pairs of images. 27 Figure 10: Patient metadata and clinical finding predictors trained on CXR7-1M. Radar plots comparing ResNet50, attention-pooled DINOv3 AP , and three Rad-DINO variants. Reporting RO-CAUC on the left, and AUPRC on the right. We find that Rad-DINO AP outperforms all baselines, and given its strong performance, we expect it to be broadly useful beyond image editing evaluation. Table 15: Training hyperparameters for patient metadata and clinical finding predictors. 
+
+Setting ResNet-50 DINOv3 AP Rad-DINO Rad-DINO MLP Rad-DINO AP 
+
+Optimizer AdamW AdamW AdamW AdamW AdamW Learning rate 1e-4 1e-4 1e-4 1e-4 1e-4 LR warmup steps 100 100 100 100 100 Batch size 128 360 512 512 360 Weight decay 1e-4 1e-4 1e-4 1e-4 1e-4 Adam betas [0.9, 0.999] [0.9, 0.999] [0.9, 0.999] [0.9, 0.999] [0.9, 0.999] Gradient clipping 1.0 1.0 1.0 1.0 1.0 EMA rate 0.9999 0.999 0.9999 0.9999 0.999 Hidden dim. size n/a n/a n/a 1024 n/a Dropout n/a n/a n/a 0.1 n/a Attn. pooling layers n/a [3, 6, 9, 12] n/a n/a [3, 6, 9, 12] Max. training steps 100K 25K 75K 75K 25K Num. nodes 1 1 1 1 1Num. GPUs 1 2 2 2 2Precision bfloat16 bfloat16 bfloat16 bfloat16 bfloat16 
+
+28 20 50 100 200 400 
+
+Midpoint NFE 
+
+9
+
+10 
+
+11 
+
+12 
+
+13 
+
+> (Rad-DINO)
+
+12.97 
+
+9.506 9.183 9.126 9.13 
+
+FDD 
+
+20 50 100 200 400 
+
+Midpoint NFE 
+
+0
+
+1
+
+2
+
+3
+
+4
+
+5
+
+> KDD mean ( ×10 3)
+> (Rad-DINO)
+
+4.075 
+
+0.9022 
+
+0.5881 0.5322 0.5353 
+
+KDD 
+
+20 50 100 200 400 
+
+Midpoint NFE 
+
+0.905 
+
+0.910 
+
+0.915 
+
+> (Rad-DINO)
+
+0.9023 
+
+0.915 
+
+0.911 
+
+0.9096 
+
+0.9058 
+
+Precision 
+
+20 50 100 200 400 
+
+Midpoint NFE 
+
+0.80 
+
+0.82 
+
+0.84 
+
+> (Rad-DINO)
+
+0.7942 
+
+0.8381 
+
+0.8494 0.8486 0.8512 
+
+Recall 
+
+20 50 100 200 400 
+
+Midpoint NFE 
+
+0.94 
+
+0.96 
+
+0.98 
+
+1.00 
+
+1.02 
+
+1.04 
+
+> (Rad-DINO)
+
+0.9491 
+
+1.032 1.028 1.024 1.025 
+
+Density 
+
+20 50 100 200 400 
+
+Midpoint NFE 
+
+0.89 
+
+0.90 
+
+0.91 
+
+0.92 
+
+> (Rad-DINO)
+
+0.8892 
+
+0.9215 0.9219 0.9201 0.9217 
+
+Coverage 20 50 100 200 400 
+
+Midpoint NFE 
+
+1.2 
+
+1.4 
+
+1.6 
+
+1.8 
+
+2.0 
+
+2.2 (DINOv3) 
+
+2.089 
+
+1.366 1.328 1.31 1.316 
+
+FDD 
+
+20 50 100 200 400 
+
+Midpoint NFE 
+
+3
+
+4
+
+5
+
+6
+
+> KDD mean ( ×10 3)
+> (DINOv3)
+
+5.54 
+
+3.357 3.296 3.262 3.298 
+
+KDD 
+
+20 50 100 200 400 
+
+Midpoint NFE 
+
+0.755 
+
+0.760 
+
+0.765 
+
+0.770 
+
+0.775 (DINOv3) 
+
+0.7571 
+
+0.7729 
+
+0.7678 
+
+0.7694 
+
+0.7714 
+
+Precision 
+
+20 50 100 200 400 
+
+Midpoint NFE 
+
+0.62 
+
+0.64 
+
+0.66 
+
+0.68 
+
+0.70 
+
+0.72 (DINOv3) 
+
+0.6224 
+
+0.7086 0.7088 0.7062 0.7092 
+
+Recall 
+
+20 50 100 200 400 
+
+Midpoint NFE 
+
+0.78 
+
+0.80 
+
+0.82 
+
+0.84 
+
+> (DINOv3)
+
+0.7857 
+
+0.8483 
+
+0.8404 0.8425 0.8468 
+
+Density 
+
+20 50 100 200 400 
+
+Midpoint NFE 
+
+0.86 
+
+0.88 
+
+0.90 
+
+0.92 
+
+> (DINOv3)
+
+0.8617 
+
+0.913 0.9136 
+
+0.9188 0.917 
+
+Coverage 20 50 100 200 400 
+
+Midpoint NFE 
+
+4.0 
+
+4.5 
+
+5.0 
+
+5.5 
+
+6.0 
+
+6.5 
+
+> (Inceptionv3)
+
+6.556 
+
+4.471 4.326 4.281 4.263 
+
+FID 
+
+20 50 100 200 400 
+
+Midpoint NFE 
+
+0
+
+1
+
+2
+
+3
+
+> KID mean ( ×10 3)
+> (Inceptionv3)
+
+2.47 
+
+0.5816 0.4207 0.3731 0.3546 
+
+KID 
+
+20 50 100 200 400 
+
+Midpoint NFE 
+
+0.818 
+
+0.819 
+
+0.820 
+
+0.821 
+
+0.822 
+
+0.823 
+
+> (Inceptionv3)
+
+0.82 
+
+0.8192 
+
+0.823 
+
+0.8184 0.8186 
+
+Precision 
+
+20 50 100 200 400 
+
+Midpoint NFE 
+
+0.70 
+
+0.72 
+
+0.74 
+
+0.76 
+
+0.78 
+
+> (Inceptionv3)
+
+0.6998 
+
+0.7499 
+
+0.766 
+
+0.7779 0.772 
+
+Recall 
+
+20 50 100 200 400 
+
+Midpoint NFE 
+
+1.070 
+
+1.075 
+
+1.080 
+
+1.085 
+
+> (Inceptionv3)
+
+1.08 
+
+1.087 
+
+1.074 
+
+1.069 1.068 
+
+Density 
+
+20 50 100 200 400 
+
+Midpoint NFE 
+
+0.950 
+
+0.955 
+
+0.960 
+
+0.965 
+
+0.970 
+
+> (Inceptionv3)
+
+0.9493 
+
+0.9694 
+
+0.967 
+
+0.9702 0.969 
+
+Coverage Figure 11: Ablation of ODE solver Midpoint function evaluations (NFE) . We used our RadiT XL model and the 5k-sample MIMIC-CXR split from the CXR7-1M test set as the reference. From top to bottom, each row shows results computed using Rad-DINO, DINOv3, and Inceptionv3 features. The dopri5 ODE solver used to obtain the results in Table 3 requires an average NFE of ≃318.9. Table 16: Image editing performance for patient metadata. Rad-DINO AP ROCAUC and MAE values for the observed (real) set of 5K images, and their edited versions. Values closer to the observed indicate better editing performance. 
+
+ROCAUC MAE 
+
+(years) 
+
+Sex Race View Dataset Age 
+
+Observed 0.9986 0.9822 0.9980 1.0000 4.870 
+
+Model Edit 
+
+RadiT XL Sex 0.9957 0.9822 0.9975 0.9966 6.581 RadUNet pix Sex 0.9886 0.9515 0.9969 0.9911 6.798 RadiT XL Race 0.9984 0.8880 0.9973 0.9958 6.592 RadUNet pix Race 0.9977 0.7640 0.9969 0.9928 6.496 RadiT XL Age 0.9959 0.9636 0.9955 0.9927 7.492 RadUNet pix Age 0.9930 0.9450 0.9927 0.9837 9.267 RadiT XL View 0.9983 0.9849 0.9562 0.9580 6.399 RadUNet pix View 0.9936 0.9360 0.9361 0.9232 7.171 RadiT XL Dataset 0.9971 0.9527 0.9957 0.9973 6.277 RadUNet pix Dataset 0.9944 0.8653 0.9834 0.9423 7.096 RadiT XL Finding 0.9984 0.9816 0.9965 0.9962 6.487 RadUNet pix Finding 0.9977 0.9673 0.9965 0.9938 6.191 
+
+29 Table 17: Image editing performance for clinical findings. Rad-DINO AP ROCAUC for the observed (real) set of 5K images, and their edited versions. Values closer to the observed indicate better editing performance. n/a results are due to a lack of the negative class. AT = atelectasis, CA = cardiomegaly, CO = consolidation, ED = edema, EC = enlarged cardiomediastinum, FR = fracture, LL = lung lesion. 
+
+ROCAUC 
+
+AT CA CO ED EC FR LL 
+
+Observed 0.8764 0.9587 0.9587 0.9618 0.929 0.9448 0.9438 
+
+Model Edit 
+
+RadiT XL Sex 0.7708 0.9537 0.9614 0.9383 0.9390 0.9170 0.8339 RadUNet pix Sex 0.7655 0.9430 0.9204 0.9548 0.9299 0.9097 0.8862 RadiT XL Race 0.7887 0.9486 0.9369 0.9541 0.9328 0.9281 0.8928 RadUNet pix Race 0.8677 0.9336 0.9501 0.9581 0.9154 0.9194 0.9326 RadiT XL Age 0.8787 0.9464 0.9310 0.9571 0.9089 0.9149 0.8967 RadUNet pix Age 0.8402 0.9345 0.9282 0.9609 0.8962 0.9130 0.8921 RadiT XL View 0.7271 0.9397 0.9099 0.9104 0.9364 0.9077 0.8097 RadUNet pix View 0.4827 0.8900 0.8762 0.8897 0.8823 0.8737 0.7229 RadiT XL Dataset n/a 0.9735 0.9348 0.8645 0.9830 0.9810 0.6854 RadUNet pix Dataset n/a 0.9503 0.7795 0.8770 0.9278 0.9709 0.9213 RadiT XL Finding 0.6408 0.8942 0.7414 0.8338 0.7148 0.7436 0.6552 RadUNet pix Finding 0.6250 0.8946 0.7253 0.8237 0.6834 0.7046 0.6605 
+
+Table 18: Image editing performance for clinical findings. Rad-DINO AP ROCAUC values for the observed (real) set of 5K images, and their edited versions. Values closer to the observed indicate better editing performance. n/a results are due to a lack of the negative class. LO = lung opacity, NF = no finding, PE = pleural effusion, PO = pleural (other), PX = pneumothorax, SD = support devices. 
+
+ROCAUC 
+
+LO NF PE PO PX SD 
+
+Observed 0.8375 0.9903 0.9822 0.9275 0.9405 0.8888 
+
+Model Edit 
+
+RadiT XL Sex 0.7993 0.9934 0.9766 n/a 0.9077 0.8255 RadUNet pix Sex 0.8148 0.9891 0.9673 0.9004 0.8362 RadiT XL Race 0.7981 0.9886 0.9762 n/a 0.8961 0.8673 RadUNet pix Race 0.7913 0.9726 0.9719 0.9202 0.8394 RadiT XL Age 0.7997 0.9762 0.9714 n/a 0.8888 0.8627 RadUNet pix Age 0.7943 0.9676 0.9578 0.9033 0.8158 RadiT XL View 0.7219 0.9802 0.9697 n/a 0.8677 0.7380 RadUNet pix View 0.7242 0.9596 0.9490 0.8161 0.7650 RadiT XL Dataset 0.8250 0.9286 0.9864 n/a 0.8568 0.9764 RadUNet pix Dataset 0.5674 0.8948 0.9806 0.8495 0.8443 RadiT XL Finding 0.6006 0.9634 0.8927 n/a 0.8137 0.7640 RadUNet pix Finding 0.5943 0.9608 0.8760 0.7599 0.6640 
+
+30 Table 19: Sample editing performance for patient metadata. Rad-DINO AP ROCAUC and MAE values for the baseline set of 5K sampled images, and their edited versions. Values closer to the baseline indicate better editing performance. 
+
+ROCAUC MAE 
+
+> (years)
+
+Sex Race View Dataset Age RadiT XL Baseline 0.9990 0.9734 0.9978 0.9957 6.424 RadUNet pix Baseline 0.9968 0.9252 0.9954 0.9871 6.519 RadiT XL Sex 0.9984 0.9765 0.9964 0.9961 6.425 RadUNet pix Sex 0.9967 0.9237 0.9947 0.9868 6.514 RadiT XL Race 0.9984 0.9212 0.9975 0.9951 6.568 RadUNet pix Race 0.9957 0.8450 0.9953 0.9834 6.669 RadiT XL Age 0.9952 0.9557 0.9955 0.9921 7.006 RadUNet pix Age 0.9914 0.9040 0.9926 0.9767 8.245 RadiT XL View 0.9981 0.9783 0.9641 0.9562 6.065 RadUNet pix View 0.9959 0.9264 0.9662 0.9091 6.556 RadiT XL Dataset 0.9978 0.9555 0.9946 0.9973 6.198 RadUNet pix Dataset 0.9957 0.9005 0.9921 0.9865 6.218 RadiT XL Finding 0.9986 0.9761 0.9977 0.9962 6.312 RadUNet pix Finding 0.9959 0.9159 0.9950 0.9857 6.587 
+
+Table 20: Sample editing performance for patient metadata. Rad-DINO AP ROCAUC values for the baseline set of 5K sampled images, and their edited versions. Values closer to the baseline indicate better editing performance. n/a results are due to a lack of the negative class. AT = atelectasis, CA = cardiomegaly, CO = consolidation, ED = edema, EC = enlarged cardiomediastinum, FR = fracture, LL = lung lesion. 
+
+ROCAUC 
+
+AT CA CO ED EC FR LL 
+
+Model Edit 
+
+RadiT XL Baseline 0.8101 0.9446 0.9225 0.9312 0.9268 0.9238 0.8992 RadUNet pix Baseline 0.7277 0.9343 0.9039 0.9284 0.9111 0.8814 0.7721 RadiT XL Sex 0.7051 0.9452 0.9267 0.9208 0.9050 0.9230 0.8866 RadUNet pix Sex 0.5257 0.9225 0.9071 0.9245 0.9044 0.9040 0.8490 RadiT XL Race 0.7230 0.9436 0.9352 0.9375 0.9133 0.9266 0.8384 RadUNet pix Race 0.6927 0.9200 0.9176 0.9323 0.9027 0.8785 0.7785 RadiT XL Age 0.7064 0.9303 0.9067 0.9144 0.9052 0.8787 0.8961 RadUNet pix Age 0.6420 0.9365 0.8940 0.9140 0.8710 0.8129 0.8436 RadiT XL View 0.5335 0.9426 0.9193 0.8644 0.8896 0.9183 0.8795 RadUNet pix View 0.4173 0.9131 0.8810 0.8450 0.8453 0.8532 0.8012 RadiT XL Dataset n/a 0.9746 0.9414 0.8021 0.9833 0.9908 0.9663 RadUNet pix Dataset n/a 0.9655 0.9069 0.8779 0.9388 0.9861 0.6461 RadiT XL Finding 0.6484 0.9002 0.7251 0.8033 0.7101 0.7459 0.6559 RadUNet pix Finding 0.6246 0.8821 0.6946 0.7784 0.7162 0.6673 0.6321 
+
+31 Table 21: Sample editing performance for patient metadata. Rad-DINO AP ROCAUC values for the baseline set of 5K sampled images, and their edited versions. Values closer to the baseline indicate better editing performance. n/a results are due to a lack of the negative class. LO = lung opacity, NF = no finding, PE = pleural effusion, PO = pleural (other), PX = pneumothorax, SD = support devices. 
+
+ROCAUC 
+
+LO NF PE PO PX SD 
+
+Model Edit 
+
+RadiT XL Baseline 0.7802 0.9906 0.9571 n/a 0.8698 0.8598 RadUNet pix Baseline 0.7529 0.9858 0.9592 n/a 0.7547 0.6153 RadiT XL Sex 0.7790 0.9916 0.9669 0.8568 0.8117 RadUNet pix Sex 0.7231 0.9758 0.9530 n/a 0.7490 0.5620 RadiT XL Race 0.8246 0.9925 0.9474 0.8890 0.8157 RadUNet pix Race 0.8121 0.9806 0.9597 n/a 0.7425 0.6163 RadiT XL Age 0.7401 0.9714 0.9530 0.8282 0.7773 RadUNet pix Age 0.7459 0.9661 0.9330 n/a 0.7420 0.5695 RadiT XL View 0.7718 0.9832 0.9599 0.8641 0.8459 RadUNet pix View 0.7118 0.9577 0.9429 n/a 0.7321 0.6609 RadiT XL Dataset 0.8318 0.9316 0.9913 0.8831 0.2807 RadUNet pix Dataset 0.7368 0.9020 0.9850 n/a 0.6404 0.5613 RadiT XL Finding 0.6215 0.9727 0.8866 0.7868 0.7750 RadUNet pix Finding 0.6220 0.9560 0.8830 n/a 0.6964 0.6265 0.075 0.050 0.025 0.000                                               
+
+> Sex
+> Race
+> View
+> Dataset
+> Age
+> 0.075 0.050 0.025 0.000
+> Dataset
+> 0.075 0.050 0.025 0.000
+> Race
+> 0.075 0.050 0.025 0.000
+> Sex
+> 0.075 0.050 0.025 0.000
+> View
+> 0.075 0.050 0.025 0.000
+> Finding (Random)
+> 0.2 0.0
+> LL
+> FR
+> ED
+> EC
+> CO
+> CA
+> AT 0.2 0.0 0.2 0.0 0.2 0.0 0.2 0.0 0.2 0.0
+> 0.6 0.4 0.2 0.0 ROCAUC
+> SD
+> PX
+> PE
+> PA
+> NF
+> LO 0.6 0.4 0.2 0.0 ROCAUC
+> 0.6 0.4 0.2 0.0 ROCAUC
+> 0.6 0.4 0.2 0.0 ROCAUC
+> 0.6 0.4 0.2 0.0 ROCAUC
+> 0.6 0.4 0.2 0.0 ROCAUC
+> Model RadiT XL RadUNet pix
+
+Figure 12: Difference in Rad-DINO AP ROCAUC between the 5K images sampled from our models, and their edited versions. Each column represents the attribute that was edited. ∆ROCAUC values closer to zero indicate better editing performance. MAE values for Age are reported in Appendix C.4 (Table 19). Sex  
+
+> Race
+> Age
+> View
+> Dataset
+> 0.50
+> 0.25
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> Cosine Similarity
+> Age
+> Sex
+> Race
+> Age
+> View
+> Dataset
+> Sex
+> Sex
+> Race
+> Age
+> View
+> Dataset
+> Race
+> RadiT XL RadUNet pix
+> Sex
+> Race
+> Age
+> View
+> Dataset
+> View
+> Sex
+> Race
+> Age
+> View
+> Dataset
+> Finding (Random)
+
+Figure 13: Identity preservation comparison of our best latent- and pixel-space flow models. 
+
+Cosine similarity is measured between original and edited CXRs using Rad-DINO AP task conditioned embeddings. Titles show target edits; x-axis labels show task embeddings used. RadUNet pix achieves higher cosine similarities, indicating better identity preservation but less effective editing. 32 Sex 
+
+> Race
+> Age
+> View
+> Dataset
+
+0.5 
+
+0.0 
+
+0.5 
+
+1.0 
+
+> Cosine Similarity
+
+Age 
+
+> Sex
+> Race
+> Age
+> View
+> Dataset
+
+Sex 
+
+> Sex
+> Race
+> Age
+> View
+> Dataset
+
+Race  
+
+> RadUNet RadUNet pix
+> Sex
+> Race
+> Age
+> View
+> Dataset
+
+View 
+
+> Sex
+> Race
+> Age
+> View
+> Dataset
+
+Finding (Random) 
+
+> Sex
+> Race
+> Age
+> View
+> Dataset
+
+0.5 
+
+0.0 
+
+0.5 
+
+1.0 
+
+> Cosine Similarity
+
+Age 
+
+> Sex
+> Race
+> Age
+> View
+> Dataset
+
+Sex 
+
+> Sex
+> Race
+> Age
+> View
+> Dataset
+
+Race  
+
+> RadiT B RadiT B pix
+> Sex
+> Race
+> Age
+> View
+> Dataset
+
+View 
+
+> Sex
+> Race
+> Age
+> View
+> Dataset
+
+Finding (Random) 
+
+a
+
+bFigure 14: Identity preservation comparison of latent- versus pixel-space flows with matched backbones. Cosine similarity is measured between original and edited CXRs using Rad-DINO AP 
+
+task conditioned embeddings. Titles show target edits; x-axis labels show task embeddings used. ( a)UNet backbone, ( b) Transformer backbone. 33 C.5 Extra Qualitative Results do (Age =85) 
+
+> 222
+> 111
+> 0111 222
+> do (Consolidation =P)
+> do (Pleural Effusion =P)
+> 171
+> 86
+> 086 171
+
+Real Sample 
+
+> 249
+> 124
+> 0124 249
+> 97
+> 48
+> 048 97
+> 141
+> 70
+> 070 141
+> 145
+> 72
+> 072 145
+
+Figure 15: Edits performed on a real radiograph from CXR7-1M (left) and a synthetic radiograph sampled from RadiT XL (right). Both sets of images have the same metadata and clinical finding profile. 34 RadiT XL RadiT XL RadUNet pix RadUNet pix Figure 16: Comparing edit effectiveness of RadiT XL vs. RadUNet pix on real radiographs. 35 Edema : U
+
+do (Edema =P)    
+
+> 229 114 0114 229
+
+Support Devices : U
+
+do (Support Devices =P)    
+
+> 205 102 0102 205
+
+Cardiomegaly : U
+
+do (Cardiomegaly =P)    
+
+> 205 102 0102 205
+
+Atelectasis : U Cardiomegaly : U Consolidation : U
+
+do (Atelectasis =P) do (Cardiomegaly =P) do (Consolidation =P)              
+
+> 255 128 0128 255 255 128 0128 255 255 128 0128 255
+
+a bFigure 17: Examples of editing failure cases with RadiT XL. ( a) No meaningful changes are made to the images. ( b) The same changes are made for multiple clinical interventions. 
+
+Figure 18: Synthetic 512 ×512 chest radiographs generated using our RadiT XL model. 36 Figure 19: Synthetic 512 ×512 chest radiographs generated using our RadiT XL model. 37 Figure 20: Synthetic 512 ×512 chest radiographs generated by our RadiT XL (1.3B) model, which all three clinical experts classified as real in a blinded real-vs-synthetic reader study. 38
