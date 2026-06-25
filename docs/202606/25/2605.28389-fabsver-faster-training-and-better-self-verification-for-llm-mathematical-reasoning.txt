@@ -1,0 +1,631 @@
+Title: FABSVer: Faster Training and Better Self-Verification for LLM Mathematical Reasoning
+
+URL Source: https://arxiv.org/pdf/2605.28389
+
+Published Time: Thu, 28 May 2026 01:13:01 GMT
+
+Number of Pages: 18
+
+Markdown Content:
+# FABSVer: Faster Training and Better Self-Verification for LLM Mathematical Reasoning 
+
+Haihui Pan, Junwei Bao, Hongfei Jiang, Yang Song 
+
+Zuoyebang Education Technology 
+
+Abstract 
+
+While large language models have made significant progress in mathematical reasoning, they remain unreliable at judging the correctness of their own solutions. Existing approaches that equip models with self-verification typically treat solution generation and verification as two separate tasks, leading to substantially increased training time. In this paper, we propose FABSVer , which fuses these two tasks into a single generation pass, dramatically reducing training overhead while jointly optimizing both capabilities. We further identify a convergence bottleneck both theoretically and empirically: as training progresses, the reward reaches a plateau because the policy is constrained by a fixed reference model. To overcome this, we introduce Dynamic Reference Model Update (DRMU), which raises the reward ceiling and enables sustained reward growth. Extensive experiments on math benchmarks demonstrate that FABSVer achieves superior self-verification and reasoning performance across three model scales, while requiring only 51%–71% of the training time of existing methods. Analysis further reveals distinct learning phases in how models acquire self-verification, and that the gap between verify and answer rewards shrinks noticeably as model size increases. 
+
+1 Introduction 
+
+Large Language Models (LLMs) have become a foundational paradigm in artificial intelligence, demonstrating remarkable capabilities across a wide range of natural language processing tasks. Through scaling model size, data, and compute, modern LLMs exhibit emergent abilities in code generation, commonsense reasoning, and mathematical problem-solving [Guo et al., 2025, Jaech et al., 2024, Team, 2024]. Among these, mathematical reasoning serves as a critical benchmark for evaluating logical deduction and multi-step inference, as it demands not only factual knowledge but also rigorous step-by-step reasoning. In recent years, LLMs have advanced substantially in mathematical reasoning, largely driven by Reinforcement Learning with Verifiable Rewards (RLVR) [Guo et al., 2025, Zeng et al., 2025, Jaech et al., 2024, Hu et al., 2025]. By leveraging objective, rule-based rewards derived solely from final answer correctness, RLVR enables scalable training and elicits sophisticated reasoning processes. However, despite their improved problem-solving accuracy, LLMs trained via RLVR suffer from a critical limitation: overconfidence in their own outputs. As noted in recent studies, even when a generated solution is fundamentally incorrect, the model frequently perceives it as correct [Shao et al., 2025, Liu et al., 2025, Sareen et al., 2025, Zhang et al., 2025]. This verification gap motivates the need for self-verification—the ability of a model to accurately judge the correctness of its own generated sequences. The importance of self-verification extends well beyond improved accuracy. From a trustworthiness standpoint, LLM reasoning remains largely opaque; self-verification offers a window into the model’s confidence, helping users decide when to rely on its outputs and enabling models to flag their own potential errors. Most fundamentally, from a comprehension perspective, solving a problem without 
+
+> Preprint.
+> arXiv:2605.28389v1 [cs.CL] 27 May 2026
+
+the ability to judge the correctness of a solution reflects, at best, a superficial understanding. Just as true mastery entails evaluating both one’s own answers and those of others, genuine reasoning requires the integration of generation and verification. Recent work on intrinsic self-verification, such as RISE [Liu et al., 2025], jointly optimizes solution generation and verification during online reinforcement learning. However, these approaches treat generation and verification as two independent forward passes. Given N questions, with k solutions generated per question and m verification judgments per solution, the total number of forward passes inflates from N · k to N · k · (1 + m), multiplicatively increasing both training data and inference time. This overhead makes large-scale self-verification training prohibitively expensive. Beyond training efficiency, a more fundamental challenge stems from the optimization dynamics of RLVR itself. In standard frameworks such as PPO and GRPO [Schulman et al., 2017, Shao et al., 2025], a fixed reference model regularizes policy updates via a KL divergence penalty. While this stabilizes training, it imposes an implicit upper bound on policy improvement: as we theoretically demonstrate, once the KL divergence ceases to grow, the achievable reward is effectively capped. This bottleneck is particularly detrimental for self-verification training, which requires sustained exploration over extended horizons. To address these challenges, we propose FABSVer (Faster Training and Better Self-Ver ification), built upon two key innovations: (1) Task Fusion , which merges solution generation and self-verification into a single forward pass, eliminating the multiplicative overhead; and (2) Dynamic Reference Model Update (DRMU) , which periodically resets the reference model to the current policy, releasing the KL constraint and enabling sustained reward growth. We provide theoretical justification for DRMU by deriving an upper bound relating the expected reward to the KL divergence. We validate FABSVer on three model scales (1.5B, 3B, and 7B) across multiple math benchmarks. The results, detailed in Section 5, show that FABSVer consistently outperforms existing methods in both self-verification and reasoning, while requiring substantially less training time. Beyond performance gains, our analysis uncovers new insights into the training dynamics of self-verification. Our contributions are summarized as follows: • We propose FABSVer , a task-fused training framework that unifies solution generation and self-verification into a single forward pass, eliminating the multiplicative overhead of existing approaches while enabling synergistic optimization of both capabilities. • We introduce DRMU , a simple yet theoretically grounded mechanism that overcomes the convergence bottleneck caused by a fixed reference model, enabling sustained reward growth with theoretical guarantees. • Through extensive experiments across three model scales, we demonstrate that FABSVer achieves superior performance at substantially lower training cost, and we uncover distinct learning phases and scaling effects in self-verification acquisition. 
+
+2 Related work 
+
+RLVR for Reasoning. Reinforcement Learning with Verifiable Rewards (RLVR) has recently emerged as a powerful paradigm for enhancing LLM reasoning capabilities [Guo et al., 2025, Zeng et al., 2025, Jaech et al., 2024, Hu et al., 2025]. Unlike previous RL approaches that rely on either human preference annotations [Ouyang et al., 2022, Rafailov et al., 2023] or complex process reward models that require fine-grained supervision [Lightman et al., 2023, Setlur et al., 2024], RLVR leverages objective, rule-based rewards derived solely from final answer correctness, such as exact match with ground truth or passing unit tests. This key advantage—providing feedback based only on the final output without requiring complete output annotations or dense signals from process supervision—enables scalable and efficient training for reasoning tasks. Recent works [Guo et al., 2025, Zeng et al., 2025, Jaech et al., 2024, Hu et al., 2025] have demonstrated that such outcome-based RL can effectively elicit sophisticated reasoning processes in LLMs, achieving substantial improvements on mathematical and programming benchmarks. 
+
+Self-Verification for LLM. Self-verification—the ability of a model to evaluate the correctness of its own outputs—has been recognized as a crucial capability for reliable LLM reasoning [Shao 2et al., 2025, Liu et al., 2025, Sareen et al., 2025, Zhang et al., 2025, Lin et al., 2025]. While RLVR effectively improves a model’s problem-solving accuracy through outcome-based rewards, recent studies have identified a notable limitation: models trained with RLVR often lack robust self-verification capabilities [Shao et al., 2025, Liu et al., 2025, Sareen et al., 2025, Zhang et al., 2025]. Specifically, these models tend to exhibit overconfidence, incorrectly judging their own erroneous solutions as correct. This observation has motivated a growing body of research aimed at equipping models with both problem-solving and self-verification abilities simultaneously [Shao et al., 2025, Liu et al., 2025, Zhang et al., 2025]. By jointly optimizing for solution generation and correctness verification, these approaches seek to address the verification gap and further enhance the reliability of LLM reasoning systems. 
+
+3 Preliminaries 
+
+3.1 Reinforcement Learning for LLMs 
+
+Reinforcement Learning (RL) has emerged as a crucial technique for aligning LLMs with human preferences and specific task objectives. In the context of LLMs, the RL framework is adapted as follows: the policy πθ is the language model itself, parameterized by θ, which generates text autoregressively. At each generation step t, given a prompt x and previously generated tokens 
+
+y<t , the model produces a next token yt according to πθ (yt|x, y<t ). The complete response y =(y1, y 2, ..., y |y|) forms a trajectory. After generating the complete response, a reward model or task-specific metric assigns a scalar reward r reflecting the overall quality of the response. 
+
+Policy gradient (PG). PG methods [Sutton et al., 1999] provide a way to optimize the language model directly by estimating the gradient of the expected reward. For LLMs, the standard policy gradient objective can be written as: 
+
+JP G (θ) = Ex∼D ,y∼πθ (·| x) [r(x, y)] , (1) where D is the input distribution and r(x, y) is the reward for response y given input x.
+
+Proximal Policy Optimization (PPO). PPO [Schulman et al., 2017] was originally designed to improve training stability by restricting policy updates to a trust region. In the context of LLMs, the objective of PPO is typically formulated as maximizing a clipped surrogate objective while incorporating a KL-divergence penalty to keep the learned policy close to a reference model πref :
+
+JPPO (θ) = Ex∼D ,y∼πold (·| x)
+
+ 1
+
+|y|
+
+> |y|
+
+X
+
+> t=1
+
+min 
+
+
+
+rt(θ) ˆAt, clip (rt(θ), 1 − ϵ, 1 + ϵ) ˆAt
+
+
+
+− βKL [πθ || πref ]
+
+ ,
+
+(2) where rt(θ) = πθ (yt|x,y<t ) 
+
+> πold (yt|x,y<t )
+
+is the importance sampling ratio, ˆAt is the advantage estimate, and β
+
+is a coefficient controlling the strength of the KL penalty. PPO relies on a value model to compute advantages, which introduces significant memory and computational overhead during training. 
+
+Group Relative Policy Optimization (GRPO). To eliminate the need for an expensive value model, GRPO [Shao et al., 2024] introduces a novel group-based advantage estimation method. For the same input x, GRPO first samples a group of G outputs {y1, y2, . . . , yG} from the old policy πold .Instead of learning a value model, it estimates the advantage by comparing rewards within this group. For each output yi, we obtain its reward score ri = r(x, yi) from the reward model. The advantage 
+
+ˆAi for the i-th output is defined as the reward normalized by the mean and standard deviation of the group. The optimization objective of GRPO is then formulated as: 
+
+JGRPO (θ) = Ex∼D ,{yi}Gi=1 ∼πold (·| x)
+
+"
+
+1
+
+G
+
+> G
+
+X
+
+> i=1
+
+
+
+min 
+
+
+
+ri(θ) ˆAi, clip (ri(θ), 1 − ϵ, 1 + ϵ) ˆAi
+
+
+
+− βKL [πθ || πref ]
+
+#
+
+, (3) where ri(θ) = πθ (y|x) 
+
+> πold (y|x)
+
+is the importance sampling ratio and ˆAi = ri−mean (r1,··· ,r G)  
+
+> std (r1,··· ,r G)
+
+.33.2 Self-Verification for LLMs 
+
+Recent studies indicate that LLMs trained via RVLR often suffer from overconfidence regarding their generated outputs y. Even when the generated solution y is fundamentally incorrect, the model frequently perceives it as correct [Shao et al., 2025, Liu et al., 2025, Sareen et al., 2025, Zhang et al., 2025]. The primary goal of self-verification is to endow the policy πθ with the capability to accurately judge the correctness of its own generated sequence y.To develop this self-verification capability, existing approaches typically joint-train two tasks during the reinforcement learning phase: solution generation and solution verification [Shao et al., 2025, Liu et al., 2025, Sareen et al., 2025, Zhang et al., 2025]. Specifically, given an input question x, the policy 
+
+πθ first generates a solution y. Subsequently, conditioned on x, y, and a specialized self-verification prompt Iv , the policy produces a verification outcome v. For verifiable mathematical problems, the reward for solution generation can be straightforwardly derived via rule-based evaluation, checking whether the generated answer y matches the ground-truth y∗. Likewise, the reward signal for the verification task can also be determined using rule-based logic based on the triplet (v, y, y∗). For instance, when the verification output v asserts that the generated solution is correct, a true reward is obtained by checking whether y is indeed consistent with y∗.Therefore, the overall optimization objective for these methods integrates the RL objectives of both generation and verification, which can be formulated as: 
+
+JSV (θ) = E(x,y∗)∼D ,y∼πθ (·| x)
+
+rgen (y, y∗) + Ev∼πθ (·| x,y,I v ) [rver (v, y, y∗)]  , (4) where D denotes the dataset containing questions x and their corresponding ground-truth answers y∗;
+
+rgen and rver are the rule-based reward functions for the solution generation and verification tasks, respectively. The fundamental difference between [Liu et al., 2025] and [Zhang et al., 2025] lies in the formalization of the verification prompt Iv . While [Liu et al., 2025] treats the self-verification query as a completely independent, standalone prompt, [Zhang et al., 2025] structures it as a follow-up query within a multi-turn conversation (i.e., a second-turn request). The Iv of these two methods are shown in Figure 4 and Figure 5, respectively. [Shao et al., 2025] uses human-annotated data to train Verification and Meta-Verification, which provide feedback for solution generation and solution verification. Subsequently, RL is used to train the policy’s ability to generate solutions and its self-verification capability. 
+
+4 Faster Training and Better Self-Verification (FABSVer) 
+
+Existing methods for self-verification treat solution generation and verification as two separate tasks, performing independent forward passes for each during online RL training. Given N questions with 
+
+k solutions per question and m verification judgments per solution, the total number of forward passes expands from N · k to N · k · (1 + m), multiplicatively increasing both training data and inference time. This prohibitive overhead stems from a fundamental design choice: the decoupling of generation and verification. 
+
+Motivation and Core Idea. To address this, we propose FABSVer , which fuses solution genera-tion and self-verification into a single forward pass , eliminating the multiplicative overhead. To further address the convergence bottleneck caused by the fixed reference model, we introduce DRMU ,which periodically resets the reference model to the current policy, releasing the KL constraint and enabling sustained reward growth. Due to space constraints, we defer the algorithm overview to Appendix C. The overall procedure of FABSVer is summarized in Algorithm 1: each generation produces both the solution and the verifica-tion result in a single forward pass, optimizes with the combined reward rcombine , and periodically updates the reference model. 
+
+4.1 Task Fusion and Reward Design Task Fusion. To reduce training overhead, we propose to output both the solution and the self-verification result in a single generation. Specifically, given an input x, the model πθ generates a solution y and a verification result v in one forward pass. The prompt template used for training 4and inference is shown in Figure 3, where the model is instructed to output the reasoning process, answer, and verification result within < think >, < answer >, and < verify > tags, respectively. Compared with existing methods, the training data size does not incur additional increase, and no second forward pass is required for verification, thereby significantly reducing training time and computational cost. 
+
+Reward Design. Under the single-generation framework, we redesign the reward function. We introduce three binary reward signals based on the format, the solution, and the verification result: 
+
+rformat (y) ∈ { 0, 1} indicates whether the output format is correct, rgen (y, y∗) ∈ { 0, 1} indicates whether the generated solution y matches the ground truth y∗, and rver (y, v, y∗) ∈ { 0, 1} indi-cates whether the verification result v correctly judges the solution. The final combined reward 
+
+rcombine (y, v, y∗) is then defined as: 
+
+rcombine (y, v, y∗) = 
+
+
+
+1.0, if rformat (y) = 1 and rgen (y, y∗) = 1 and rver (y, v, y∗) = 1 0.5, if rformat (y) = 1 and rgen (y, y∗) = 1 and rver (y, v, y∗) = 0 0.25 , if rformat (y) = 1 and rgen (y, y∗) = 0 and rver (y, v, y∗) = 1 0, otherwise (5) 
+
+Design Principles: The design of rcombine (y, v, y∗) follows three principles. 1. Reward for correct solutions is significantly higher than for incorrect ones: A correct solution with correct verification receives the highest reward (1.0), a correct solution with incorrect verification receives a medium reward (0.5), while an incorrect solution can receive at most 0.25 (only if the verification is correct). This reflects the consideration that solution generation is more difficult than self-verification. 2. Encourage correct self-verification: Even if the solution is incorrect, a correct verification still receives a small positive reward (0.25) to guide the model to learn accurate judgment of its own output. If both the solution and the verification are incorrect, the reward is zero. 3. Both correct solution and correct verification are required for the highest reward: The model must improve both its generation ability and its self-verification ability simultaneously to achieve optimal performance. 
+
+Additional Advantages of Task Fusion. Beyond reducing training overhead, task fusion brings two additional advantages: • Flexible output control. In practice, the < verify > tag can be treated as an EOS (End of Sequence) token, allowing the model to flexibly decide whether to output the verification result on demand without any architectural modification. • Joint optimization effect. In the two-task framework, generation and verification are optimized independently by rgen and rver respectively; verification errors do not affect the reward for generation. In contrast, under the fused framework, the combined reward rcombine 
+
+depends on both the correctness of the solution and the correctness of the verification. For example, even if the solution is correct, a wrong verification reduces the total reward from 1.0 to 0.5. This coupling mechanism encourages the model to improve its self-verification ability while optimizing generation, as verification errors directly reduce the overall reward, thereby providing a stronger joint learning signal. 
+
+4.2 Dynamic Reference Model Update (DRMU) 
+
+Although task fusion significantly reduces training overhead, during RL training we observe that the reward increases slowly in the later stage, while the KL divergence barely increases. This indicates that the policy update is constrained by the fixed reference model πref . Intuitively, while the KL divergence provides stability for policy updates, it also acts as a constraint that limits exploration. We further analyze this phenomenon theoretically in Theorem 4.1. The proof of Theorem 4.1 can be found in the Appendix F. 
+
+Theorem 4.1. Let πθ (y|x) be the policy to be optimized, and πref (y|x) be the reference model. For every reward model r(x, y ) such that Eπref (y|x)[er(x,y )] < ∞, then we have: 
+
+Eπθ (y|x)[r(x, y )] ≤ KL[ πθ ∥πref ] + log Eπref (y|x)[er(x,y )]
+
+5In RL algorithms such as PPO or GRPO, πref is fixed, and thus the second term on the right-hand side of the inequality is constant. Consequently, if KL [πθ ∥πref ] no longer increases, the upper bound of the reward becomes locked, making further improvement difficult. To break this limitation, we propose Dynamic Reference Model Update (DRMU). Specifically, at certain epochs or training steps, we replace the reference model πref with the current policy πθ . This operation resets KL [πθ ∥πref ] to 0, allowing the policy to regain room to diverge from the reference model (i.e., releasing the KL budget), thereby enabling continued reward optimization. Meanwhile, the updated reference model is closer to the current policy, which helps maintain training stability. In this way, DRMU effectively accelerates the overall convergence process. 
+
+5 Experiment 
+
+5.1 Setup Models, Dataset and Training Details. We follow the same experimental setup as [Liu et al., 2025] for both training data and model selection. We use three Qwen2.5 base models [Team, 2024] of varying sizes—1.5B, 3B, and 7B—for our experiments, and MATH-Hard (Level 3–5) [Hendrycks et al., 2021] serves as the training set throughout. Due to space constraints, the training details are provided in Appendix B. 
+
+Benchmarks and Evaluation. We evaluate our models on five mathematical reasoning benchmarks. MATH500 [Hendrycks et al., 2021, Lightman et al., 2023], a subset of the MATH test set, serves as an in-distribution test to assess the efficacy of learning. To evaluate out-of-distribution generalization, we use OlympiadBench[He et al., 2024], AIME2024, AMC2023 and Minerva [Lewkowycz et al., 2022]. Among these, AIME2024 and Olympiad feature competition-level problems, allowing us to rigorously assess model performance on challenging, multi-step reasoning tasks. Following the evaluation setup in [Liu et al., 2025], we generate 8 responses per problem with a sampling temperature of 1 and adopt Pass@1 [Chen et al., 2021] accuracy as our primary metric. Specifically, reasoning correctness is determined by the final answer in the model’s response, and verification correctness is assessed based on both the model’s predicted verification result and its consistency with the gold answer. To ensure reproducibility of the results, we use the same inference seed for all models. 
+
+5.2 Comparative Analysis of Self-Verification and Reasoning Performance 
+
+Experimental results on self-verification and reasoning performance are reported in Table 1, while training efficiency comparisons are provided in Table 2. From Base to FABSVer, the model exhibits a pronounced dual-improvement trend in both self-verification and reasoning capabilities. As shown in Table 1, taking Qwen2.5-1.5B as an example, the average self-verification score surges from 20.2% to 79.8%, while the average reasoning score rises from 1.1% to 26.6%, indicating that FABSVer achieves positive synergistic gains in both capabilities without sacrificing reasoning performance for self-verification accuracy . This dual-improvement trend holds consistently across the 3B and 7B model sizes, demonstrating the strong scalability of the proposed method. In stark contrast, Zero-RL focuses predominantly on enhancing reasoning performance but yields only marginal improvements in self-verification. For the 1.5B model, Zero-RL attains a reasoning average of 24.0%, a substantial gain over the Base score of 1.1%; however, its self-verification average reaches merely 26.8%, far below the 79.8% achieved by FABSVer. This “one-sided improvement” 
+
+phenomenon persists across both the 3B and 7B models. These results indicate that reasoning-oriented training alone cannot spontaneously engender high-quality self-verification capability .FABSVer, by contrast, successfully realizes synergistic gains in both capacities—substantially raising the ceiling of self-verification while maintaining a lead in reasoning performance. FABSVer also comprehensively outperforms the concurrent work RISE across both dimensions, with demonstrably lower training costs. As detailed in Table 1, FABSVer surpasses RISE in self-verification by 5.3%, 2.7%, and 4.5% on the 1.5B, 3B, and 7B models, respectively. In terms of reasoning, FABSVer likewise maintains a consistent advantage over RISE across all three model sizes, confirming that the enhanced self-verification capability does not come at the expense of reasoning performance. Crucially, with respect to training efficiency, Table 2 shows that the training time of 6Table 1: Comparison of self-verification and reasoning performance between FABSVer and existing methods on various math benchmarks. Results for other methods are obtained from [Liu et al., 2025].                                                                                                                                                                                                                                                                    
+
+> Self-Verification Reasoning
+> Model MATH Olym. AIME AMC Mine. Avg. MATH Olym. AIME AMC Mine. Avg.
+> GPT-4o 83.4 54.4 33.3 67.5 50.4 57.8 79.0 42.5 13.3 55.0 50.0 48.0
+> Qwen2.5-1.5B
+> ⊢Base 19.4 21.1 21.9 22.7 15.9 20.2 2.0 0.6 0.0 1.9 0.8 1.1
+> ⊢Instruct 48.8 29.6 22.1 36.5 36.9 34.8 37.5 11.7 0.8 19.4 8.3 15.5
+> ⊢SFT 19.0 10.9 5.8 12.3 10.5 11.7 10.1 2.0 0.0 4.1 1.8 3.6
+> ⊢Zero-RL 54.1 23.0 5.0 30.7 21.0 26.8 55.3 19.5 2.1 25.9 17.4 24.0
+> ⊢RISE-1.5B 75.9 74.9 85.0 70.6 66.0 74.5 54.6 19.8 2.9 27.5 17.2 24.4
+> ⌞FABSVer-1.5B 81.0 81.9 91.7 83.1 61.4 79.8 56.8 22.4 4.6 30.6 18.7 26.6
+> Qwen2.5-3B
+> ⊢Base 39.5 21.2 13.6 22.5 29.9 25.3 32.7 10.7 1.3 15.3 10.3 14.1
+> ⊢Instruct 65.6 35.0 21.0 45.5 37.6 40.9 61.0 24.6 3.8 34.1 25.6 29.8
+> ⊢SFT 21.5 13.2 2.1 10.9 17.9 13.1 14.4 2.8 0.4 5.3 2.9 5.2
+> ⊢Zero-RL 64.9 31.2 13.0 39.7 30.3 35.8 64.2 26.6 6.7 37.5 27.4 32.5
+> ⊢RISE-3B 81.0 73.6 86.3 74.4 56.1 74.3 64.3 26.6 7.9 42.5 26.2 33.5
+> ⌞FABSVer-3B 85.2 77.8 85.4 81.3 55.1 77.0 67.5 30.0 6.3 37.5 28.0 33.9
+> Qwen2.5-7B
+> ⊢Base 58.4 48.4 45.9 51.5 48.4 50.5 38.3 13.2 2.1 21.9 11.9 17.5
+> ⊢Instruct 77.2 45.2 26.3 57.0 40.2 49.2 73.8 35.8 10.0 50.6 35.9 41.2
+> ⊢SFT 40.5 36.1 36.6 47.4 39.2 40.0 28.7 7.2 0.8 13.8 6.2 11.3
+> ⊢Zero-RL 75.9 41.6 21.7 56.5 37.3 46.6 74.5 36.7 12.1 51.3 34.2 41.7
+> ⊢RISE-7B 83.8 65.9 75.0 72.5 48.6 69.2 74.8 36.7 12.5 55.9 34.6 42.9
+> ⌞FABSVer-7B 88.3 70.1 85.8 76.9 47.5 73.7 77.4 41.0 13.8 53.1 35.4 44.1
+
+FABSVer amounts to only 51% to 71% of that required by RISE, representing a Pareto improvement of stronger performance with lower computational overhead . This comprehensive superiority substantiates that FABSVer, through a more streamlined training paradigm, achieves synergistic advancement in both error-detection and reasoning capabilities .Table 2: Training time (GPU hours) of Fabvers and RISE on H20 GPUs. Qwen2.5-1.5B Base Qwen2.5-3B Base Qwen2.5-7B Base Fabvers RISE Fabvers RISE Fabvers RISE GPU hours 98 192 136 192 244 384 
+
+5.3 Ablation Study 
+
+To evaluate the effectiveness of the proposed Dynamic Reference Model Update (DRMU), we conduct ablation experiments on FABSVer by removing DRMU while keeping all other components unchanged. Both quantitative results on math benchmarks and training dynamics are analyzed. 
+
+Quantitative Results. Table 3 presents the ablation results across 1.5B, 3B, and 7B model sizes. Overall, DRMU brings consistent improvements in both self-verification and reasoning capabilities. In terms of self-verification, FABSVer with DRMU outperforms its counterpart without DRMU by 1.7%, 6.2%, and 2.6% on average for the 1.5B, 3B, and 7B models, respectively. The gains are particularly pronounced on challenging competition-level benchmarks such as AIME and OlympiadBench, demonstrating that DRMU effectively enhances the model’s error-detection ability on difficult problems. In terms of reasoning, DRMU also yields consistent improvements across all three model sizes, confirming that the enhanced self-verification capability does not come at the cost of reasoning performance. 
+
+Training Dynamics. Figure 1 illustrates the training curves of combined reward and KL divergence for FABSVer with and without DRMU. For the variant with DRMU, the reference model is updated 7Table 3: Ablation results of FABSVer with and without DRMU. 
+
+Self-Verification Reasoning 
+
+Model MATH Olym. AIME AMC Mine. Avg. MATH Olym. AIME AMC Mine. Avg. 
+
+FABSVer-1.5B 
+
+⊢ w/ DRMU 81.0 81.9 91.7 83.1 61.4 79.8 56.8 22.4 4.6 30.6 18.7 26.6 
+
+⌞ w/o DRMU 80.1 81.4 89.8 79.1 60.3 78.1 56.4 21.6 3.8 27.8 18.2 25.6 
+
+FABSVer-3B 
+
+⊢ w/ DRMU 85.2 77.8 85.4 81.3 55.1 77.0 67.5 30.0 6.3 37.5 28.0 33.9 
+
+⌞ w/o DRMU 81.1 70.3 82.5 70.6 49.3 70.8 64.8 28.8 5.3 40.0 27.8 33.3 
+
+FABSVer-7B 
+
+⊢ w/ DRMU 88.3 70.1 85.8 76.9 47.5 73.7 77.4 41.0 13.8 53.1 35.4 44.1 
+
+⌞ w/o DRMU 87.3 69.4 80.4 74.3 43.9 71.1 76.1 38.7 13.8 49.7 34.7 42.6 1 273 546 819                
+
+> Training Steps
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> Combined Reward
+> Combined Reward FABSVer-1.5B
+> w/ DRMU
+> w/o DRMU
+> 1273 546 819
+> Training Steps
+> 0.0000
+> 0.0025
+> 0.0050
+> 0.0075
+> 0.0100
+> 0.0125
+> 0.0150
+> 0.0175
+> 0.0200
+> KL Divergence
+> KL Divergence
+> w/ DRMU
+> w/o DRMU
+> 1273 546 819
+> Training Steps
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> Combined Reward
+> FABSVer-3B
+> w/ DRMU
+> w/o DRMU
+> 1273 546 819
+> Training Steps
+> 0.0000
+> 0.0025
+> 0.0050
+> 0.0075
+> 0.0100
+> 0.0125
+> 0.0150
+> 0.0175
+> KL Divergence
+> w/ DRMU
+> w/o DRMU
+> 1273 546 819
+> Training Steps
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> Combined Reward
+> FABSVer-7B
+> w/ DRMU
+> w/o DRMU
+> 1273 546 819
+> Training Steps
+> 0.000
+> 0.005
+> 0.010
+> 0.015
+> 0.020
+> KL Divergence
+> w/ DRMU
+> w/o DRMU
+
+Effect of DRMU on FABSVer 
+
+Figure 1: The effect of DRMU on FABSVer. For FABSVer with DRMU, steps 273, 546, and 819 correspond to the updates of the reference model using the current policy. After each update, the KL divergence drops sharply to approximately zero, since the current policy becomes the new reference. at steps 273, 546, and 819, which correspond to epochs 4, 8, and 12, respectively. After each update, the KL divergence drops sharply to approximately zero, since the current policy becomes the new reference. This KL reset releases the constraint imposed by the fixed reference model, allowing the policy to continue exploring and improving its reward. As a result, FABSVer with DRMU achieves higher final rewards across all three model sizes compared to the variant without DRMU. In contrast, without DRMU, the KL divergence ceases to exhibit significant growth in the later stages of training, and the reward improvement decelerates accordingly. This observation aligns with Theorem 4.1. Consequently, when KL[ πθ ∥πref ] stops increasing, the ceiling on the achievable reward is effectively capped, limiting the potential for further improvement. By periodically resetting the KL to zero, DRMU raises this ceiling and thus enables continued reward growth. 81 273 546 819       
+
+> Training Steps
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> Reward
+> FABSVer-1.5B
+> Answer Reward
+> Verify Reward
+> 1273 546 819
+> Training Steps
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> Reward
+> FABSVer-3B
+> Answer Reward
+> Verify Reward
+> 1273 546 819
+> Training Steps
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> Reward
+> FABSVer-7B
+> Answer Reward
+> Verify Reward
+
+Figure 2: Training curves of answer reward and verify reward for FABSVer across different model sizes. 
+
+5.4 Analysis of Answer and Verify Rewards during Training 
+
+Figure 2 presents the training curves of answer reward and verify reward for FABSVer across three model sizes. Several notable patterns emerge from these dynamics. In the early stages of training, the answer reward and verify reward are nearly identical across all model sizes. We observe that the model exhibits a strong tendency to always predict its own outputs as correct at this stage. This can be attributed to a free-riding effect : as the model’s answer generation capability steadily improves, it produces correct answers with increasing frequency. Consequently, the verify task can achieve a steadily increasing reward by simply predicting “Correct” for every sample, without developing any genuine discriminative ability. As a result, the verify reward passively tracks the answer reward, and the two remain tightly coupled. As training progresses into the middle and later stages, the growth of answer reward decelerates. At this point, the free-riding strategy becomes insufficient—merely judging most outputs as correct no longer yields additional reward gains. To further improve the overall reward, the model is forced to develop the ability to correctly identify its own errors. This shift from a naive “almost-always-correct” strategy to a more sophisticated discriminative policy drives a second wave of verify reward improvement, allowing it to outpace answer reward. This phenomenon represents a forced learning effect : the model must learn to discriminate in order to unlock further reward when answer quality plateaus. Notably, the gap between verify reward and answer reward shrinks as model size increases. For smaller models (e.g., 1.5B), verify reward notably surpasses answer reward, reflecting their greater reliance on explicit verification learning. For larger models (e.g., 7B), the gap between the two rewards is considerably smaller, suggesting that larger models possess stronger intrinsic self-verification capabilities—likely acquired during pretraining—and thus require less explicit discriminative training to achieve relatively balanced performance. This observation is consistent with the results in Table 1, where larger models consistently achieve higher absolute self-verification scores. 
+
+6 Conclusion 
+
+In this paper, we propose FABSVer, a streamlined training paradigm that fuses solution generation and self-verification into a single forward pass, substantially reducing training overhead while achieving synergistic gains in both capabilities. Through a combined reward design and the Dynamic Reference Model Update (DRMU) mechanism, FABSVer overcomes the convergence bottleneck imposed by a fixed reference model, enabling sustained reward growth. Our experimental results demonstrate that FABSVer consistently outperforms existing methods across multiple model sizes and math benchmarks, achieving stronger performance with lower computational cost. Further analysis of training dynamics reveals that models undergo a two-phase transition in acquiring self-verification ability—from an early free-riding stage to a later forced learning stage. 
+
+References 
+
+Mark Chen, Jerry Tworek, Heewoo Jun, Qiming Yuan, Henrique Ponde De Oliveira Pinto, Jared Kaplan, Harri Edwards, Yuri Burda, Nicholas Joseph, Greg Brockman, et al. Evaluating large 9language models trained on code. arXiv preprint arXiv:2107.03374 , 2021. Daya Guo, Dejian Yang, Haowei Zhang, Junxiao Song, Peiyi Wang, Qihao Zhu, Runxin Xu, Ruoyu Zhang, Shirong Ma, Xiao Bi, et al. Deepseek-r1: Incentivizing reasoning capability in llms via reinforcement learning. arXiv preprint arXiv:2501.12948 , 2025. Chaoqun He, Renjie Luo, Yuzhuo Bai, Shengding Hu, Zhen Thai, Junhao Shen, Jinyi Hu, Xu Han, Yujie Huang, Yuxiang Zhang, et al. Olympiadbench: A challenging benchmark for promoting agi with olympiad-level bilingual multimodal scientific problems. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 3828–3850, 2024. Dan Hendrycks, Collin Burns, Saurav Kadavath, Akul Arora, Steven Basart, Eric Tang, Dawn Song, and Jacob Steinhardt. Measuring mathematical problem solving with the math dataset. arXiv preprint arXiv:2103.03874 , 2021. Jingcheng Hu, Yinmin Zhang, Qi Han, Daxin Jiang, Xiangyu Zhang, and Heung-Yeung Shum. Open-reasoner-zero: An open source approach to scaling up reinforcement learning on the base model. arXiv preprint arXiv:2503.24290 , 2025. Aaron Jaech, Adam Kalai, Adam Lerer, Adam Richardson, Ahmed El-Kishky, Aiden Low, Alec Helyar, Aleksander Madry, Alex Beutel, Alex Carney, et al. Openai o1 system card. arXiv preprint arXiv:2412.16720 , 2024. Aitor Lewkowycz, Anders Andreassen, David Dohan, Ethan Dyer, Henryk Michalewski, Vinay Ra-masesh, Ambrose Slone, Cem Anil, Imanol Schlag, Theo Gutman-Solo, et al. Solving quantitative reasoning problems with language models. Advances in neural information processing systems ,35:3843–3857, 2022. Hunter Lightman, Vineet Kosaraju, Yuri Burda, Harrison Edwards, Bowen Baker, Teddy Lee, Jan Leike, John Schulman, Ilya Sutskever, and Karl Cobbe. Let’s verify step by step. In The twelfth international conference on learning representations , 2023. Zi Lin, Sheng Shen, Ilia Kulikov, Jingbo Shang, Jason Weston, and Yixin Nie. Learning to solve and verify: A self-play framework for code and test generation. arXiv preprint arXiv:2502.14948 ,2025. Xiaoyuan Liu, Tian Liang, Zhiwei He, Jiahao Xu, Wenxuan Wang, Pinjia He, Zhaopeng Tu, Haitao Mi, and Dong Yu. Trust, but verify: A self-verification approach to reinforcement learning with verifiable rewards. arXiv preprint arXiv:2505.13445 , 2025. Long Ouyang, Jeffrey Wu, Xu Jiang, Diogo Almeida, Carroll Wainwright, Pamela Mishkin, Chong Zhang, Sandhini Agarwal, Katarina Slama, Alex Ray, et al. Training language models to follow instructions with human feedback. Advances in neural information processing systems , 35:27730– 27744, 2022. Rafael Rafailov, Archit Sharma, Eric Mitchell, Christopher D Manning, Stefano Ermon, and Chelsea Finn. Direct preference optimization: Your language model is secretly a reward model. Advances in neural information processing systems , 36:53728–53741, 2023. Kusha Sareen, Morgane M Moss, Alessandro Sordoni, Rishabh Agarwal, and Arian Hosseini. Putting the value back in rl: Better test-time scaling by unifying llm reasoners with verifiers. arXiv preprint arXiv:2505.04842 , 2025. John Schulman, Filip Wolski, Prafulla Dhariwal, Alec Radford, and Oleg Klimov. Proximal policy optimization algorithms. arXiv preprint arXiv:1707.06347 , 2017. Amrith Setlur, Chirag Nagpal, Adam Fisch, Xinyang Geng, Jacob Eisenstein, Rishabh Agarwal, Alekh Agarwal, Jonathan Berant, and Aviral Kumar. Rewarding progress: Scaling automated process verifiers for llm reasoning. arXiv preprint arXiv:2410.08146 , 2024. Zhihong Shao, Peiyi Wang, Qihao Zhu, Runxin Xu, Junxiao Song, Xiao Bi, Haowei Zhang, Mingchuan Zhang, YK Li, Yang Wu, et al. Deepseekmath: Pushing the limits of mathemat-ical reasoning in open language models. arXiv preprint arXiv:2402.03300 , 2024. 10 Zhihong Shao, Yuxiang Luo, Chengda Lu, ZZ Ren, Jiewen Hu, Tian Ye, Zhibin Gou, Shirong Ma, and Xiaokang Zhang. Deepseekmath-v2: Towards self-verifiable mathematical reasoning. arXiv preprint arXiv:2511.22570 , 2025. Richard S Sutton, David McAllester, Satinder Singh, and Yishay Mansour. Policy gradient methods for reinforcement learning with function approximation. Advances in neural information processing systems , 12, 1999. Qwen Team. Qwen2.5 technical report. arXiv preprint arXiv:2412.15115 , 2024. Leandro von Werra, Younes Belkada, Lewis Tunstall, Edward Beeching, Tristan Thrush, Nathan Lam-bert, Shengyi Huang, Kashif Rasul, and Quentin Gallouédec. TRL: Transformers Reinforcement Learning, 2020. URL https://github.com/huggingface/trl .Weihao Zeng, Yuzhen Huang, Qian Liu, Wei Liu, Keqing He, Zejun Ma, and Junxian He. Simplerl-zoo: Investigating and taming zero reinforcement learning for open base models in the wild. arXiv preprint arXiv:2503.18892 , 2025. Fuxiang Zhang, Jiacheng Xu, Chaojie Wang, Ce Cui, Yang Liu, and Bo An. Incentivizing llms to self-verify their answers. arXiv preprint arXiv:2506.01369 , 2025. 11 A Limitation 
+
+The trained LLM, although capable of serving as a rule verifier to guide RL training on unlabeled data for self-improvement, is not explored in this direction within this paper and remains future work. Meanwhile, the training data in this work are entirely derived from mathematical reasoning tasks; despite the model exhibiting a certain degree of generalization ability, its effectiveness in broader domains beyond those with verifiable rewards still requires further validation. In addition, we primarily adopt final inference accuracy as the evaluation metric. However, a single metric makes it difficult to fully capture the criticality of the model’s emergent verification behavior, indicating that the evaluation system still needs further refinement. 
+
+B Training Details. 
+
+We use trl [von Werra et al., 2020] for our experiments. During RL training, the training batch size is set to 1024, with a constant learning rate of 5e-7 and a uniform KL penalty coefficient of 1e-2. The sampling temperature is set to 1.0, and we roll out 8 responses per problem. The maximum output length is set to 3000 tokens. We train for 16 epochs, and the reference model is updated every 4 epochs. As the Qwen2.5-1.5B Base and Qwen2.5-3B Base models have difficulty producing responses in the required format, we first sample 5K correct responses from the Qwen2.5-7B Base model’s training run and use them to fine-tune the 1.5B and 3B models for 20 steps, before proceeding with RL training on these two models. 
+
+C Algorithm Overview 
+
+Algorithm 1 FABSVer (GRPO) 
+
+Input Language model πθinit ; dataset D; number of solutions per question K; generation batch size 
+
+Bg ; total training iterations N ; reference model update interval U . 
+
+> 1:
+
+Initialize: policy πθ ← πθinit , reference model πref ← πθinit  
+
+> 2:
+
+for iteration = 1 to N do  
+
+> 3:
+
+Sample Bg questions {(xi, y∗ 
+
+> i
+
+)}Bg 
+
+> i=1
+
+∼ D  
+
+> 4:
+
+Generate solutions and verification results in a single forward pass: ▷ Task Fusion 
+
+Btrain ← (xi, y(k) 
+
+> i
+
+, v(k) 
+
+> i
+
+, r combine (y(k) 
+
+> i
+
+, v(k) 
+
+> i
+
+, y∗ 
+
+> i
+
+)) (y(k) 
+
+> i
+
+, v(k) 
+
+> i
+
+) ∼ πθ (·| xi), i ≤ B g , k ≤
+
+K 
+
+> 5:
+
+Compute rewards using Eq. 5  
+
+> 6:
+
+Update policy πθ using GRPO objective (Eq. 3) with reference model πref  
+
+> 7:
+
+if iteration mod U = 0 then ▷ Dynamic Reference Model Update  
+
+> 8:
+
+πref ← πθ 
+
+> 9:
+
+end if  
+
+> 10:
+
+end for Output Optimized policy πθ
+
+12 D Prompt for training and inference 
+
+Prompt Template 
+
+<|im_start|>system A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer along with the verification result of the answer. The reasoning process, answer and verification result are enclosed within <think> </think>, <answer> </answer> and <verify> </verify> tags, respectively, i.e., <think> please provide the detailed reasoning process here </think> <answer> please provide the complete answering process here, then output the final answer in \\boxed{Your answer} </answer> <verify> please provide the detailed verification process here, then output \\boxed{Correct} if the answer is correct, otherwise output \\boxed{Incorrect} </verify> <|im_end|> <|im_start|>user {Input}<|im_end|> <|im_start|>assistant 
+
+Figure 3: Prompt template used in the training and inference. 13 E Verification Prompt in Related Approaches 
+
+Prompt Template 
+
+Below you are presented with a question and a tentative response. Your task is to evaluate and assign a rating to the response based on the following clear criteria: Rating Criteria: 1. Missing final answer enclosed in \\boxed{} at the end: assign \\boxed{-1}. 2. Correct response with the final answer enclosed in \\boxed{} at the end: assign \\boxed{1}. 3. Incorrect response with the final answer enclosed in \\boxed at the end: assign \\boxed{-0.5}. ### Question Begin ### {Question }### Question End ### ### Response Begin ### {Response }### Response End ### Briefly summarize your analysis, then clearly state your final rating value enclosed in \\boxed{} at the end. 
+
+Figure 4: Verification prompt used in [Liu et al., 2025]. Prompt Template User: [Math problem] Assistant: [Solution] User : Please verify the solution step by step. At the end of the solution verification, when you give your final grade, write it in the form " Is the answer correct ( Yes / No ) ? X" , where X is either Yes or No. Assistant : Figure 5: Verification prompt used in [Zhang et al., 2025]. 14 F Proof of Theorem 4.1 
+
+Theorem 4.1. Let πθ (y|x) be the policy to be optimized, and πref (y|x) be the reference model. For every reward model r(x, y ) such that Eπref (y|x)[er(x,y )] < ∞, then we have: 
+
+Eπθ (y|x)[r(x, y )] ≤ KL[ πθ ∥πref ] + log Eπref (y|x)[er(x,y )]
+
+Proof. We can construct a Gibbs distribution πϕ(y|x) based on πref (y|x) and r(x, y ) as follows: 
+
+πϕ(y|x) = er(x,y )
+
+Eπref (y|x)[er(x,y )] πref (y|x). (6) Furthermore, we can obtain: 
+
+πref (y|x)
+
+πϕ(y|x) = Eπref (y|x)[er(x,y )]
+
+er(x,y ) . (7) Now, let us compute the KL divergence between πθ (y|x) and πϕ(y|x):KL [πθ ∥πϕ] = Eπθ (y|x)
+
+
+
+log πθ (y|x)
+
+πϕ(y|x)
+
+
+
+= Eπθ (y|x)
+
+
+
+log 
+
+ πθ (y|x)
+
+πref (y|x) · πref (y|x)
+
+πϕ(y|x)
+
+ 
+
+(8) 
+
+= KL [πθ ∥πref ] + Eπθ (y|x)
+
+
+
+log πref (y|x)
+
+πϕ(y|x)
+
+
+
+. (9) Substituting Eq. 7 into the above expression yields: KL [πθ ∥πϕ] = KL [πθ ∥πref ] + Eπθ (y|x)
+
+"
+
+log Eπref (y|x)[er(x,y )]
+
+er(x,y )
+
+#
+
+(10) 
+
+= KL [πθ ∥πref ] + log Eπref (y|x)[er(x,y )] − Eπθ (y|x)[r(x, y )] . (11) By the non-negativity of KL divergence, we have KL [πθ ∥πϕ] ≥ 0. Therefore, we can finally prove: 
+
+Eπθ (y|x)[r(x, y )] ≤ KL [πθ ∥πref ] + log Eπref (y|x)[er(x,y )]. (12) 15 G Examples of Outputs 
+
+Output Case 
+
+Input : Let 
+
+f (n) = 
+
+ n3 + 2 n − 1 if n > 1,n − 1 if n ≤ 1.
+
+Find f (0) + f (1) + f (2) .
+
+Output :<think> Let’s evaluate f (0) , f (1) , and f (2) and sum them up. 1. For f (0) :
+
+f (0) = 
+
+ 03 + 2 · 0 − 1 if 0 > 1,
+
+0 − 1 if 0 ≤ 1.
+
+Since 0 ≤ 1, we use the second expression: 
+
+f (0) = 0 − 1 = −1.
+
+2. For f (1) :
+
+f (1) = 
+
+ 13 + 2 · 1 − 1 if 1 > 1,
+
+1 − 1 if 1 ≤ 1.
+
+Since 1 ≤ 1, we use the second expression: 
+
+f (1) = 1 − 1 = 0 .
+
+3. For f (2) :
+
+f (2) = 2 3 + 2 · 2 − 1 = 8 + 4 − 1 = 11 .
+
+Now we sum these values: 
+
+f (0) + f (1) + f (2) = −1 + 0 + 11 = 10 .
+
+</think> <answer> \boxed{10} </answer> <verify> To verify the calculation, I will go back to the definitions and the rules I stated. 1. f (0) = −1 2. f (1) = 0 3. f (2) = 11 
+
+Summing them up: 
+
+−1 + 0 + 11 = 10 
+
+Verifying the correctness, I get \boxed{Correct}. </verify> 
+
+Figure 6: Output case of FABSVer-1.5B. 16 Output Case 
+
+Input : How many ways are there to put 4 distinguishable balls into 2 distinguishable boxes? 
+
+Output :<think> To solve this problem, we can use the concept of permutations. Since each ball must go into one of two distinguishable boxes, and the balls are distinguishable, each ball has two choices (either of the two boxes). For 4 distinguishable balls, each ball has 2 choices: (For the first ball) 2 choices, (For the second ball) 2 choices, (For the third ball) 2 choices, and (For the fourth ball) 2 choices. The total number of ways to distribute the balls is 2 × 2 × 2 × 2 = 2 4.Calculating this, 
+
+24 = 16 
+
+Therefore, there are 16 different ways to put 4 distinguishable balls into 2 distinguishable boxes. </think> <answer> \boxed{16} </answer> <verify> The problem requires counting the number of ways to distribute 4 distinguishable balls into 2 distinguishable boxes. We established that each of the 4 balls has 2 choices, leading to 24 = 16 possible distributions. Each distribution is indeed one arrangement of the 4 balls in two boxes, which confirms our answer. Therefore, the answer is \boxed{Correct}. </verify> 
+
+Figure 7: Output case of FABSVer-3B. 17 Output Case 
+
+Input : What is the value of y in the arithmetic sequence y + 6 , 12 , y?
+
+Output :<think> To determine the value of y in the arithmetic sequence, we need to use the property of arithmetic sequences that the difference between consecutive terms is constant. Let’s denote the common difference of the sequence as d.From the sequence y + 6 , 12 , y :1. The difference between the first and second term should be equal to the difference between the third and second term: 
+
+12 − (y + 6) = y − 12 
+
+2. Simplify both sides of the equation: 
+
+12 − y − 6 = y − 12 6 − y = y − 12 
+
+3. Solve for y:
+
+6 + 12 = y + y
+
+18 = 2 yy = 9 
+
+</think> <answer> The value of y is \boxed{9}. </answer> <verify> Let’s verify the solution by checking if it maintains the same common difference d:- The difference between the first and second term with y = 9 :
+
+12 − (9 + 6) = 12 − 15 = −3
+
+- The difference between the second and third term with y = 9 :
+
+9 − 12 = −3
+
+Since both differences are equal, the solution is \boxed{Correct} </verify> 
+
+Figure 8: Output case of FABSVer-7B. 18
