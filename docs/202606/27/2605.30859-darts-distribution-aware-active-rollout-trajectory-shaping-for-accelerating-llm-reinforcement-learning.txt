@@ -1,0 +1,1083 @@
+Title: DARTS: Distribution-Aware Active Rollout Trajectory Shaping for Accelerating LLM Reinforcement Learning
+
+URL Source: https://arxiv.org/pdf/2605.30859
+
+Published Time: Mon, 01 Jun 2026 00:38:38 GMT
+
+Number of Pages: 16
+
+Markdown Content:
+# DARTS: Distribution-Aware Active Rollout Trajectory Shaping for Accelerating LLM Reinforcement Learning 
+
+Yujie Wang * 1 Siwei Chen * 1 Longzan Luo * 1 Xinyi Liu 1 Xupeng Miao 1 Fangcheng Fu 2 Bin Cui 1 3 
+
+## Abstract 
+
+Reinforcement Learning (RL) has become piv-otal for improving model capabilities yet suffers from rollout efficiency bottlenecks due to the long-tail response length distribution. While existing works mitigate the impact of long tails via prompt-level tail scheduling, we focus on the root source of inefficiency: the distribution itself. Specifi-cally, we characterize the long-tail distribution at a finer granularity, identifying intra-prompt long tails, and revealing that they frequently consist of ineffective verbosity. To address this, we propose a novel paradigm of active distribution shaping to shape the rollout distribution towards conciseness and certainty, thereby fundamentally resolving tail-induced overheads. We achieve this through a distribution-aware trajectory sampling mecha-nism, which selects trajectories from a redundant exploration space for each prompt, and an adap-tive redundancy allocation scheme to maximize both shaping effectiveness and system efficiency. Experiments demonstrate significant acceleration over state-of-the-art systems by up to 1.77 × with-out compromising model performance. Source code available at: URL. 
+
+## 1. Introduction 
+
+Reinforcement Learning (RL) has catalyzed the develop-ment of advanced LLMs (Large Language Models), such as OpenAI o-series (Jaech et al., 2024; OpenAI, 2025), Gem-ini 3 (Google, 2025), Claude 4.5 (Anthropic, 2025b;a), Grok 4 (xAI, 2025), DeepSeek-R1 (Guo et al., 2025), 
+
+> *
+
+Equal contribution 1School of Computer Science & Beijing Key Laboratory of Software and Hardware Cooperative Artificial Intelligence Systems, Peking University, Beijing, China 2School of Artificial Intelligence, Shanghai Jiao Tong University, Shanghai, China 3Institute of Computational Social Science, Peking Uni-versity (Qingdao), Qingdao, China. Correspondence to: Bin Cui 
+
+<cui.bin@pku.edu.cn >.
+
+Proceedings of the 43 rd International Conference on Machine Learning , Seoul, South Korea. PMLR 306, 2026. Copyright 2026 by the author(s). 2000 4000 6000 8000 10000 12000 14000 16000        
+
+> Response Length
+> Inter-prompt distribution
+> 2000 4000 6000 8000 10000 12000 14000 16000
+> Response Length
+> Intra-prompt distribution
+
+Figure 1. Inter-prompt and intra-prompt rollout trajectory length distribution. (Qwen3-30B-A3B on DAPO-MATH dataset) 
+
+Qwen3 (Yang et al., 2025), Kimi-K2 (Team et al., 2025a) and so on (Li et al., 2025). By shifting the focus from pre-training scaling to inference-time scaling, RL has em-powered state-of-the-art models with robust reasoning ca-pabilities, enabling them to tackle complex mathematical problems (Shao et al., 2024), coding tasks (Luo et al., 2025; Zhang et al., 2024), tool usage (Feng et al., 2026; Xu et al., 2025), database intelligent applications (Zhou et al., 2024) and intricate agentic tasks (Team et al., 2025b). RL for LLMs (Schulman et al., 2017; Shao et al., 2024) typically comprises two major phases: rollout and training .Empirically, the rollout phase accounts for over 70% of the total RL training time, constituting the primary system bottleneck (Guan et al., 2024; Zhang et al., 2025). This stems from a severe long-tail distribution in rollout trajectory lengths (Zhong et al., 2025; Gao et al., 2026; Zhou et al., 2025), where a small fraction of prompts trigger ultra-long trajectories, often exceeding the median length by 5–10 ×
+
+and short responses by over 20 ×, as shown in Fig. 1 (left). This long-tail distribution imposes severe system overheads. For one thing, these extremely long trajectories consume excessive computational resources, leading to inefficiency. For another, in synchronous on-policy RL systems (Sheng et al., 2025; Wang et al., 2025), the longest response blocks the entire batch from entering the training phase, resulting in significant device under-utilization. Recent literature has attempted to mitigate the system bot-tleneck caused by long tails, primarily through prompt-level tail scheduling . Strategies like Tail Batching (Gao et al., 2026) speculatively over-sample prompts (sampling 
+
+N ′ prompts, where N ′ > N ). Once the target N prompts complete generation, the remaining ongoing prompts (typi-cally, the long tails) are halted and deferred to a dedicated queue for batched re-computation later. Similarly, Partial 1    
+
+> arXiv:2605.30859v1 [cs.LG] 29 May 2026 DARTS: Distribution-Aware Active Rollout Trajectory Shaping for Accelerating LLM Reinforcement Learning 02000 4000 6000 8000
+
+Response Length   
+
+> Density
+> p99=3909
+> p99=3141
+> Base (w/o RL)
+> RL w/o DARTS
+> RL w/ DARTS
+> Figure 2. Rollout length distribution within a single prompt, w/o and w/ distribution shaping. P99 denotes the 99 th percentile.
+
+Rollout (Team et al., 2025b; Zhou et al., 2025) specula-tively over-samples and truncates the unfinished long-tail prompts when sufficient data is collected, resuming them in subsequent steps. Fundamentally, these approaches identify the inter-prompt long-tail distribution (Fig. 1, Left), which stems from the variance across different prompts. They rely on scheduling schemes to defer the execution of heavy-tailed prompts, aiming to prevent GPU resource underutilization. Nevertheless, these works only try to harness the latency of long trajectories via scheduling approaches, yet fail to resolve this challenge from the root cause, namely the long-tail distribution itself. Therefore, in this work, we shift our focus to optimizing the rollout distribution. To achieve so, we first characterize the long-tail phe-nomenon at a finer granularity, and find that the rollout length distribution for even a single prompt exhibits a pro-nounced long tail. We identify this as intra-prompt long tail 
+
+distribution, which evidences that such a long-tail distribu-tion stems from the model’s inherent characteristic, rather than the prompts. Subsequently, we further inspect that these tails are not always beneficial: a substantial portion consists of verbose and ineffective trajectories, which im-pede training efficiency and degrade reasoning conciseness. This indicates that the model’s inherent rollout length distri-bution is often suboptimal, wasting computational resources on low-quality trajectories. These observations motivate us to tackle the long-tail bottle-neck from a distribution-centric perspective. In particular, instead of merely scheduling around the long tails, we aim to shape the rollout length distribution to be more concise and compact. Fig. 2 exemplifies the effect of distribution shaping. The blue curve denotes the original distribution derived from standard RL with GRPO, and the orange curve represents our optimization target: a distribution concen-trated in the concise and short-length region. In this work, we introduce DARTS, an efficient RL frame-work designed to mitigate the long-tail bottleneck and ac-celerate the RL training pipeline via Distribution-aware 
+
+Active Rollout Trajectory Shaping. The core insight is 
+
+active distribution shaping , which actively shapes the roll-out distribution towards conciseness and certainty , thereby fundamentally mitigating tail-induced overheads. Specifi-cally, we propose a distribution-aware trajectory sampling 
+
+mechanism. By leveraging a dual-end length sampling strat-egy, this mechanism selectively samples trajectories from a redundantly-generated exploration space for each prompt. Complementing this, we devise a variance-based adaptive redundancy allocation scheme, which adaptively adjusts exploration budgets to strike a balance between shaping effectiveness and system efficiency. To further maximize ef-ficiency, we propose a series of system-level optimizations, including variance-guided tail pruning with proactive early stopping scheme, alongside a token-level streaming pipeline. Extensive experiments across mainstream RL algorithms and datasets demonstrate that our method achieves up to 1.77 × end-to-end acceleration compared to state-of-the-art systems, without compromising model performance. Our contributions are summarized as follows: • We empirically characterize the long-tail distribution, and propose a novel paradigm of active distribution shaping 
+
+from the distribution-centric perspective. • We propose a distribution-aware trajectory sampling and 
+
+adaptive redundancy allocation scheme, and implement a novel efficient RL framework DARTS. • Extensive experiments demonstrate the efficiency and effectiveness of our approach and framework. 
+
+## 2. Related Work 
+
+2.1. Reinforcement Learning for LLMs The Evolution of RL for LLMs. Reinforcement Learn-ing (RL) has evolved from primarily aligning models with human preferences (RLHF) (Schulman et al., 2017) to driv-ing the latest inference-time scaling paradigm (Jaech et al., 2024). Unlike standard next-token-prediction objective in pre-training, RL incentivizes models to explore vast solu-tion spaces, facilitating the emergence of self-correction and long Chain-of-Thought (CoT) (Wei et al., 2022). This evo-lution empowers state-of-the-art reasoning models, includ-ing OpenAI o-series (Jaech et al., 2024), Gemini (Google, 2025), Claude (Anthropic, 2025b), with robust capabilities in logic-intensive domains such as mathematics and coding. 
+
+The RL Training Pipeline. RL algorithms for LLMs, e.g., GRPO (Shao et al., 2024), DAPO (Yu et al., 2026), operating through an iterative process of rollout and training . Dur-ing the rollout phase , the current policy interacts with the environment to generate trajectories for a batch of prompts (e.g., mathematical problems), which are evaluated against specific verifiers to derive reward signals. In the subsequent 
+
+training phase , the model parameters are optimized based on trajectories and their rewards. Crucially, these algorithms enforce strict on-policy semantics, requiring that the rollout parameters remain strictly synchronized with the training 2DARTS: Distribution-Aware Active Rollout Trajectory Shaping for Accelerating LLM Reinforcement Learning 
+
+Table 1. Summary of notations used in this paper. 
+
+Symbol Description 
+
+qi Input prompt sampled from dataset P(Q)
+
+oji The jth output response of prompt qi
+
+lji Response length of the rollout output oji
+
+M Group size used for policy update 
+
+M ′ 
+
+> i
+
+Redundant rollout size for prompt qi (M ′ 
+
+> i
+
+≥ M )
+
+N Batch size of sampled prompts for each iteration 
+
+A(oji ) Advantage estimate for the response oji
+
+rji Reward score for query qi and response oji pair 
+
+version. This two-phase cycle repeats until convergence, with the rollout phase constituting the primary computa-tional bottleneck due to long-tail phenomenon (Section 1). 
+
+2.2. Rollout Long-tail Optimization Techniques Prompt-level Tail Scheduling. Recent literature mitigates the long-tail bottleneck primarily through prompt-level tail scheduling . RollPacker (Gao et al., 2026) introduces Tail Batching, which speculatively over-samples prompts (sam-pling N ′ > N ) to identify long-tail outliers. Once N
+
+prompts complete rollout, instead of blocking the pipeline, it defers the unfinished prompts to dedicated queues for batched re-computation later. This ensures that the major-ity of training steps remain load-balanced while preserving strict on-policy semantics. Similarly, Partial Rollout (Zhou et al., 2025; Team et al., 2025b) employs over-sampling but adopts a truncate-and-resume strategy. Once the target sample count is collected, it terminates the batch and buffers the unfinished trajectories to be resumed in subsequent iter-ations. This effectively eliminates generation bubbles and maximizes throughput, albeit by permitting a negligible de-gree of off-policy data. Fundamentally, these approaches rely on scheduling to mitigate long-tail inefficiency. 
+
+Asynchronous Relaxation. Another orthogonal line of work relaxes the synchronization constraints of RL algo-rithms and adopts asynchronous architectures (Fu et al., 2026; Lu et al., 2025; Han et al., 2025; Sheng et al., 2026). While hiding the long-tail latency by fully overlapping roll-out with training, they deviate from the on-policy semantics. Such staleness or off-policy behavior can lead to training in-stability and degradation in model performance. Therefore, in this work, we focus on synchronous optimizations. 
+
+## 3. Preliminaries and Motivations 
+
+3.1. Notions and Preliminaries 
+
+Key notations are listed in Tab. 1. We illustrate the standard RL paradigm for LLMs using the popular GRPO (Shao et al., 2024) as an example. For each prompt qi from dataset 
+
+P(Q), GRPO samples a group of M outputs Yi = {oji }Mj=1 0 500 1000 1500 2000 2500 3000       
+
+> Response Length
+> Density
+> Pattern
+> Reward > 0
+> Reward < 0
+> Combined
+> 0500 1000 1500 2000 2500 3000
+> Response Length
+> Pattern
+> Reward > 0
+> Reward < 0
+> Combined
+
+Figure 3. Illustration of distinct rollout distribution patterns. 
+
+from the policy model πθ , estimating the gradient as: 
+
+J(θ) = Eqi∼P (Q),{oji }∼ πθ (·| qi)
+
+"
+
+1
+
+M
+
+> M
+
+X
+
+> j=1
+
+A(oji ) · ∇ θ log πθ (oji |qi)
+
+#
+
+(1) 
+
+Here, ∇θ log πθ (oji |qi) represents the gradient of log-probability, and A(oji ) is the advantage computed by nor-malizing rewards within the group: 
+
+A(oji ) = rji − μ(Yi)
+
+σ(Yi) (2) where rji is the reward of output oji and prompt qi, and μ(Yi)
+
+and σ(Yi) denote the mean and standard deviation of the group rewards {rji }Mj=1 .
+
+3.2. Observations and Motivations 
+
+We analyze RL rollout characteristics, focusing on the roll-out length distribution. We characterize long tails in a finer-grained granularity of intra-prompt long tails , and conduct an in-depth analysis of the tail patterns, motivating distribu-tion shaping to mitigate these distributional inefficiencies. 3.2.1. P REVALENCE OF INTRA -P ROMPT LONG TAILS 
+
+Recent works (Team et al., 2025b; Zhou et al., 2025; Gao et al., 2026) primarily employ prompt scheduling ap-proaches to tackle long-tail bottlenecks caused by prompt diversity. However, these methods typically mitigate the latency of long tails, largely overlooking the root cause, the underlying rollout distribution. In this work, we shift our focus to optimizing the rollout distribution itself, characteriz-ing long tails at a finer granularity. Specifically, we observe significant length variance and skewed distribution within 
+
+the rollouts of a single prompt (Fig. 1, Right): the maxi-mum length can exceed the mean by over 10 ×. We term this the intra-prompt long-tail distribution , which reflects the model’s inherent rollout distribution for each prompt. Orthogonal to scheduling, we aim to directly mitigate the long tails from this fine-grained intra-prompt distribution perspective, thereby eliminating excessive computational overheads and enhancing rollout efficiency. 3.2.2. D ECONSTRUCTING THE TAIL PATTERNS 
+
+A critical question arises: Are all of these expensive long tails necessary? To assess their value, we analyze the length-3DARTS: Distribution-Aware Active Rollout Trajectory Shaping for Accelerating LLM Reinforcement Learning   
+
+> Figure 4. Illustration of DARTS method: adaptive sampling strate-gies and redundancy allocations for different prompts ( M= 8 ).
+
+reward correlation. Specifically, for a given prompt qi, we compare the expected response lengths of correct ( E[lji |rji >
+
+0] ) and incorrect ( E[lji |rji < 0] ) responses, identifying two distinct rollout distribution patterns. 
+
+Pattern I: Verbose and Ineffective Tails. In the first pattern (left of Fig. 3), the expected length of correct responses is shorter than that of incorrect ones, i.e., Elji | rji > 0 ≤
+
+Elji | rji < 0. This implies that the model is capable of answering these prompts correctly with concise reasoning. However, it often exhibits unnecessary verbosity, producing chains that are correct but verbose, or trapped in incorrect logical loops. These tails incur significant computational costs while offering minimal marginal utility for learning. For such patterns, the ideal optimization objective is to encourage the model to be concise and decisive, eliminating superfluous generation, thereby enhancing efficiency. 
+
+Pattern II: Necessary and Effective Tails. Conversely, for complex prompts requiring extensive deep reasoning (e.g., complex mathematical proofs), we observe that correct re-sponses are generally longer than incorrect ones, as shown in the right of Fig. 3, i.e., Elji | rji > 0 > Elji | rji < 0. In this pattern, the tail is populated by high-quality, correct tra-jectories, whereas shorter responses often result from super-ficial errors or premature conclusions. Therefore, while gen-erally encouraging conciseness, we should preserve these effective tails to ensure necessary reasoning depth. 
+
+Motivation. These observations inspire a novel perspec-tive on mitigating the long-tail bottleneck: focusing on the distribution itself and shaping it towards an ideal state. We posit that an ideal rollout distribution should: (1) suppress verbose and ineffective tails to enforce conciseness and enhance efficiency; while (2) preserve necessary effective tails to maintain reasoning capabilities. To this end, we propose to actively shape the rollout distribution towards conciseness and certainty in a distribution-adaptive manner, fundamentally accelerating RL training pipeline. 
+
+## 4. Method 
+
+In this section, we present DARTS, a unified framework designed to tackle the long-tail bottleneck and accelerate RL training pipeline via Distribution-aware Active Rollout 
+
+Trajectory Shaping. The core principle, active distribu-tion shaping , proactively modulates the length distribution of rollout trajectories, aiming to shape the rollout towards 
+
+conciseness and certainty . The framework comprises three key components: (1) Distribution-Aware Trajectory Sam-pling (Section 4.1): We explicitly expand the exploration space for each prompt via intra-prompt redundant rollout .From this redundantly generated candidate pool, we employ 
+
+dual-end length sampling to selectively sample trajectories based on length distribution statistics, thereby shaping the distribution to enhance rollout efficiency. (2) Adaptive Redundancy Allocation (Section 4.2): To maximize the effectiveness of distribution shaping under system budget constraints, we propose a variance-based adaptive redun-dancy allocation scheme, which allocates redundancy lev-els to each prompt in a distribution-adaptive manner. (3) System-Level Optimization (Section 4.3): To further opti-mize framework efficiency, we propose variance-guided tail pruning with proactive early stopping , which complements our sampling strategy to accelerate rollout. Furthermore, we implement token-level streaming to enable fine-grained overlapping of rollout and training phase. Fig. 4 illustrates the core schemes of DARTS method. 
+
+4.1. Distribution-Aware Trajectory Sampling 
+
+The objective of distribution-aware trajectory sampling is to actively shape the model’s rollout length distribution via selective sampling from an expanded exploration space. 4.1.1. I NTRA -P ROMPT REDUNDANT ROLLOUT 
+
+The prerequisite for distribution shaping is the expansion of the exploration space. For each query qi, we construct a 
+
+redundant candidate pool Ti = {o1 
+
+> i
+
+, o 2 
+
+> i
+
+, . . . , o M ′ 
+
+> i
+> i
+
+} by explic-itly over-sampling to generate M ′ 
+
+> i
+
+independent trajectories, where the candidate count exceeds the target group size (M ′ 
+
+> i
+
+≥ M ). This superset Ti ensures sufficient exploration and diversity required for the subsequent sampling process. We term this intra-prompt redundant rollout . Orthogonal to prompt-level over-sampling employed in tail schedul-ing approaches, we focus on expanding the intra-prompt 
+
+exploration space for fine-grained trajectory sampling. 4.1.2. D UAL -E ND LENGTH SAMPLING 
+
+From the candidate pool Ti of size M ′ 
+
+> i
+
+, we aim to select a subset of M trajectories to form the training group Yi
+
+for prompt qi, targeting two objectives: (1) Enforcing Con-ciseness : Filtering out ineffective verbosity to steer the model towards concise responses. (2) Preserving Reasoning Depth : Retaining a subset of long trajectories with nec-essary complex reasoning, ensuring the model maintains problem-solving capabilities. To resolve this, we propose 4DARTS: Distribution-Aware Active Rollout Trajectory Shaping for Accelerating LLM Reinforcement Learning 
+
+dual-end length sampling . Specifically, we construct group 
+
+Yi by selecting trajectories from the two extremes of the rollout length distribution within Ti: Yi = Yshort ∪ Y long ,where Yshort consists of the top-K shortest trajectories to maximize conciseness, and Ylong comprises the top-L
+
+longest to preserve the exploration of reasoning depth (with 
+
+K + L = M ,K ≫ L). This composition ensures that the training group is dominated by concise samples while maintaining a minority of deep reasoning paths. Notably, the top-L longest selection excludes incomplete and invalid trajectories reaching the system length limit. 4.1.3. C ONNECTION TO GRADIENT DYNAMICS 
+
+This dual-end sampling strategy is grounded in a straightfor-ward length-distribution-aware heuristic . We now analyze its connection to gradient dynamics. As shown in Eq. 1, the advantage A(oi) serves as a signed weighting factor for the gradient, meaning trajectories with larger |A(oi)| exert a stronger influence. Our dual-end sampling strategically constructs the training group Yi to shift the average group re-ward μ(Yi) in Eq. 2. Since the short component dominates the group ( K ≫ L), μ(Ydual  
+
+> i
+
+) is mathematically anchored by the mean reward of the shortest trajectories ( ¯rshort ): 
+
+μ(Ydual  
+
+> i
+
+) = K ¯rshort + L¯rlong 
+
+K + L ≈ ¯rshort (3) 
+
+Proposition 1: Suppressing Verbosity. For prompts charac-terized by verbosity ( Elji | rji > 0 ≤ Elji | rji < 0), correct solutions are generally short. Consequently, Yshort 
+
+captures high-reward positive samples (high ¯rshort ). Substi-tuting this into Eq. 3, it elevates the average group reward: 
+
+μ(Ydual  
+
+> i
+
+) ≥ μ(Ystd  
+
+> i
+
+), where Ystd  
+
+> i
+
+denotes the average of the standard approach. This reduces the advantage of inefficient long trajectories: r(olong  
+
+> i
+
+) − μ(Ydual  
+
+> i
+
+) ≤ r(olong  
+
+> i
+
+) − μ(Ystd  
+
+> i
+
+),which suppresses the positive advantage of verbose correct answers and amplifies the negative advantage of incorrect long tails, steering the distribution towards conciseness. 
+
+Proposition 2: Preserving Reasoning Depth. For com-plex prompts requiring depth ( Elji | rji > 0 > Elji |
+
+rji < 0), overly short trajectories often represent errors. Here, Yshort captures low-reward failures (low ¯rshort ). Via Eq. 3, this results in a depressed average group reward, 
+
+μ(Ydual  
+
+> i
+
+) < μ (Ystd  
+
+> i
+
+), and valid long trajectories now gain a boosted relative advantage against this lowered baseline: 
+
+r(olong  
+
+> i
+
+)−μ(Ydual  
+
+> i
+
+) > r (olong  
+
+> i
+
+)−μ(Ystd  
+
+> i
+
+). This signal amplifi-cation ensures that necessary reasoning paths receive strong positive gradients, preserving problem-solving capabilities. The two patterns are used only for motivational analysis; DARTS does not explicitly classify prompts into Pattern I or Pattern II during training. Instead, dual-end sampling implicitly adapts through the group reward baseline. For intermediate cases where short and long trajectories have overlapping reward distributions, the two effects coexist: ineffective verbosity is suppressed, while useful long trajec-tories can still receive positive advantages. In summary, by strategically modulating the gradient dy-namics via selective sampling, our method actively steers model evolution towards a concise and compact distribution. 
+
+4.2. Adaptive Redundancy Allocation 
+
+We then address the upstream decision: how should we determine the optimal redundancy budget M ′ 
+
+> i
+
+(size of Ti)for each specific prompt qi? We observe that a uniform allocation strategy is inherently suboptimal, as it disregards the distribution characteristics across diverse prompts and fails to reconcile the trade-off between shaping effectiveness and system efficiency. To address this, we propose adap-tive redundancy allocation , which adaptively determines the redundancy budget M ′ 
+
+> i
+
+based on the rollout distribu-tion characteristics, ensuring computational resources are invested where they yield the highest marginal gain. 4.2.1. R OLLOUT COST MODELING 
+
+We first establish an execution cost model for rollout phase. Following previous works (Zhong et al., 2025), let PTL (dTP , bsz ) denote the per-token generation latency given a batch size bsz and tensor parallel size dTP . For a rollout batch of M ′ 
+
+> i
+
+responses {oji }M ′ 
+
+> j=1
+
+with sorted response lengths l[1] ≤ · · · ≤ l[M ′] (let l[0] = 0 ), the total rollout cost Trollout can be formulated as the cumulative latency of piecewise generation intervals: 
+
+Trollout = 
+
+> M′
+
+X
+
+> m=1
+
+(l[m] − l[m−1] ) · PTL (dTP , M ′ − m + 1) (4) We instantiate this model by fitting a continuous PTL curve via profiling-based regression (Appendix A). In data parallel, we take the maximum latency across groups as the overhead. 4.2.2. V ARIANCE -B ASED ADAPTIVE ALLOCATION 
+
+We introduce the adaptive redundancy allocation mecha-nism. The redundancy budget M ′ 
+
+> i
+
+indicates the size of ex-ploration space for sampling, presenting a trade-off between 
+
+shaping effectiveness and system efficiency : insufficient re-dundancy ( M ′ 
+
+> i
+
+≈ M ) constrains the exploration, reverting to standard sampling and diminishing the benefits of distri-bution shaping; whereas excessive redundancy ( M ′ 
+
+> i
+
+≫ M )incurs prohibitive rollout overhead, negating acceleration gains. Therefore, under a system budget constraint, our ob-jective is to strategically allocate the redundancy budget into the most critical prompts with pronounced long-tail features where distribution shaping is most needed. To navigate this trade-off, we propose a variance-based adaptive redundancy allocation mechanism. We iden-tify response length variance , denoted as σ2
+
+> L
+
+(qi) =
+
+5DARTS: Distribution-Aware Active Rollout Trajectory Shaping for Accelerating LLM Reinforcement Learning 0.000          
+
+> 0.001
+> 0.002
+> L=219.5 L=237.9 L=354.0 L=385.3 L=485.9
+> 2500 5000
+> 0.000
+> 0.001
+> 0.002
+> L=540.4
+> 2500 5000
+> L=563.7
+> 2500 5000
+> L=799.9
+> 2500 5000
+> L=941.1
+> 2500 5000
+> L=1269.5
+
+Response Length 
+
+> Density
+
+Figure 5. Observation: High variance implies more pronounced long-tail features. (Qwen2.5-Math-7B on DAPO-MATH dataset) 
+
+σ2({l1 
+
+> i
+
+, . . . , l M ′ 
+
+> i
+> i
+
+}), as a robust proxy for intra-prompt long-tail severity and model uncertainty. As illustrated in Fig. 5: (1) High-variance prompts display severe long-tail distribu-tion and elevated model uncertainty, necessitating a larger candidate pool to enable effective distribution shaping and to bridge the gap from the long-tail distribution to the target concise distribution. (2) Conversely, low-variance prompts typically feature trajectories concentrated in the short-length region, indicating a concise distribution and high model confidence. For such prompts, a minimal redundancy bud-get suffices. Based on these observations, we utilize the smoothed historical variance ˜σ2
+
+> L
+
+(qi) of prompt qi, main-tained via a moving average over preceding epochs, to quan-tify the prompt’s long-tail severity and the model’s uncer-tainty. Here we formulate the redundancy allocation as a resource optimization problem and detail our solution. First, we introduce our adaptive redundancy budget scheme, which dynamically determines the optimal total system re-dundancy budget Mtotal . Specifically, we define a utility function, U (M ), to characterize the trade-off between al-gorithmic effectiveness E(M ) of distribution shaping and the system overhead T (M ) given the total budget M . Let 
+
+U (M ) = E(M ) − λ · T (M ), where λ is a trade-off coeffi-cient. For system overhead, we directly utilize the rollout cost in Eq. 4 as the metric. For algorithmic effectiveness, we utilize the historical length variance ˜σ2 
+
+> L
+
+of the dataset as the metric for optimization potential. We then obtain the optimal Mtotal by maximizing U (M ) and solving ∂U ∂M = 0 .Detailed proof and analysis are in Appendix B. Then, we illustrate our variance-based adaptive allocation 
+
+scheme, which adaptively allocates redundancy level for each prompt. Given the total budget Mtotal , our objective is to minimize the total distance between the current rollout distribution and the ideal concise and compact one. We de-fine a distance metric: D(M ′ 
+
+> i
+
+, q i) = Norm (˜ σL(qi)) /M ′ 
+
+> i
+
+. It is positively correlated with ˜σL(qi), which denotes the long-tail severity, and inversely correlated with its redundancy allocation. Norm (·) represents the min-max normalization over the prompt batch to ensure robustness across different length scales. This formulation reflects the property of di-minishing marginal utility: allocating additional redundancy 131 133 135 137 
+
+> 150.0
+> 200.0
+> 250.0
+> 300.0
+> Step Time
+
+Step 
+
+> w/o tail pruning
+> DARTS
+
+Figure 6. Efficiency comparison of w/o and w/ variance-guided tail pruning scheme. (Qwen2.5-Math-7B on 32 H20) Rollout GPUs 
+
+Training GPUs 
+
+Saved 
+
+time 
+
+(a) Sample -level streaming. 
+
+(b) Token -level streaming. 
+
+Rollout GPUs 
+
+Training GPUs 
+
+Figure 7. Timeline of sample-level and token-level streaming. 
+
+to high-variance prompts (large ˜σL(qi)) yields a larger re-duction in distance than allocating to low-variance ones. Consequently, the optimization problem is defined as: 
+
+min    
+
+> {M′
+> 1,...,M ′
+> N}
+> N
+
+X
+
+> i=1
+
+Norm (˜ σL(qi)) 
+
+M ′
+
+> i
+
+s.t. 
+
+> N
+
+X
+
+> i=1
+
+M ′ 
+
+> i
+
+= Mtotal , M ′ 
+
+> i
+
+∈ Z+
+
+Mlow ≤ M ′ 
+
+> i
+
+≤ Mup , ∀i ∈ { 1, . . . , N }
+
+(5) where Mlow and Mup are hyper-parameters (set to M and 
+
+2M in our experiments) enforcing lower and upper bounds to prevent starvation or resource monopolization. Since the objective function is convex (the second derivative w.r.t. 
+
+M ′ 
+
+> i
+
+is positive), this discrete optimization problem can be efficiently solved using a greedy algorithm Alg. 1. Refer to Appendix C for detailed algorithm. 
+
+4.3. System-Level Optimization 
+
+In this subsection, we introduce system-level optimization techniques designed to mitigate the computational bottle-necks caused by extremely long-tail distributions. 4.3.1. V ARIANCE -G UIDED TAIL PRUNING 
+
+While generally effective, dual-end sampling incurs inef-ficiencies when processing highly complex prompts with extreme long tails, some of which even reach the system length limit. Strictly retaining these longest trajectories causes substantial overhead and GPU under-utilization. To address this, we propose a variance-guided tail pruning 
+
+6DARTS: Distribution-Aware Active Rollout Trajectory Shaping for Accelerating LLM Reinforcement Learning Qwen2.5-3B Qwen2.5-Math-7B Qwen2.5-14B Qwen2.5-32B Qwen3-30B-A3B   
+
+> 0.5
+> 1.0
+> 1.5
+> 2.0
+> Normalized
+> Speedup
+> 1.07×
+> 1.21×
+> 1.14×
+> 1.27×
+> 1.62×
+> 1.29×
+> 1.45×
+> 1.63×
+> 1.61×
+> 1.77×
+> VeRL Tail Batching DARTS
+
+Figure 8. End-to-end throughput comparison for various model sizes. Speedup ratios compared to VeRL are indicated. 200 400 600 800 steps 
+
+> 0.2
+> 0.4
+> 0.6
+> Accuracy
+> VeRL
+> DARTS
+
+(a) Qwen2.5-Math-7B 50 100 150 200 250 steps 
+
+> 0.2
+> 0.4
+> 0.6
+> Accuracy
+> VeRL
+> DARTS
+
+(b) Qwen2.5-32B Qwen2.5    
+
+> 3B
+> Qwen2.5
+> Math-7B
+> Qwen2.5
+> 14B
+> Qwen3
+> 30B-A3B
+> Qwen2.5
+> 32B 20
+> 30
+> 40
+> 50
+> VeRL DARTS
+
+(c) Benchmarks 
+
+Figure 9. Training convergence (left) and benchmark scores (right). 
+
+mechanism. We leverage the decision from our variance-based allocation (Section 4.2), and treat the saturation of the budget ( M ′ 
+
+> i
+
+= Mup ) as a proxy for severe long-tail char-acteristics. In such cases, we dynamically switch from the dual-end sampling to shortest-only sampling strategy, which exclusively samples the top-M shortest trajectories. This pruning is grounded in the observation that for such difficult prompts, the length distribution is already globally shifted rightward. Consequently, even the shortest trajectories typ-ically possess sufficient reasoning depth rather than being trivial shortcuts. Experiments indicate this triggers for ∼5% of the most expensive prompts, preventing the significant throughput degradation caused by extreme outliers (Fig. 6). 
+
+Proactive Early Stopping. Shortest-only sampling enables a further optimization: proactive early stopping . In contrast to standard dual-end sampling, where the full M ′ 
+
+> i
+
+pool is re-quired to identify the longest candidates, tail pruning simpli-fies to collecting only the M shortest trajectories. Therefore, we implement a proactive termination signal for prompts triggering the tail pruning: the generation process is halted immediately once M valid trajectories are collected, prun-ing the heavy-tail computation for the remaining M ′ 
+
+> i
+
+− M
+
+candidates. Overall, our complete sampling mechanism is summarized in Alg. 2 (Appendix D), integrating dual-end sampling and variance-guided pruning with early stopping. 4.3.2. T OKEN -L EVEL STREAMING 
+
+Following previous works (Luo et al., 2025; Zhong et al., 2025), we adopt a disaggregated architecture, decoupling rollout and training to enable flexible scaling. Exist-ing frameworks typically employ sample-level stream-ing (Zhong et al., 2025), where a trajectory is transferred to the training engine immediately upon completion, thereby overlapping rollout and training. However, this coarse granu-larity is suboptimal in extremely long-tail scenarios. Specif-ically, early tokens in long trajectories must wait for the generation of the final token before training, leading to sig-nificant idle time. Furthermore, in large-scale data-parallel settings, its efficacy diminishes as the limited number of trajectories per device restricts the sample-level overlapping opportunities. To bridge this gap, we propose a finer-grained 
+
+token-level streaming technique, as illustrated in Fig. 7 and detailed in Appendix E. Instead of awaiting full completion, we transfer data in token chunks: as soon as accumulated rollout tokens reach a predefined threshold, they are dis-patched to the training engine. When the training engine accumulates sufficient token chunks, it launches the forward computation. This overlaps training the prefix with generat-ing the suffix, maximizing efficiency in long-tail scenarios. 
+
+## 5. Experiments 
+
+5.1. Implementation and Experimental Setups Implementation. We implement DARTS with ∼7K lines of additional Python code built upon VeRL (Sheng et al., 2025), utilizing AsyncLLMEngine of vLLM (Kwon et al., 2023) to facilitate the sampling, streaming and early stopping scheme. Specifically, we implement the sampling scheme and redun-dancy allocation within the VeRL main controller, and main-tain the strategies dynamically within a separate Ray actor, which synchronizes states between the main controller and rollout actors to guide rollouts. 
+
+Models and Datasets. We conduct experiments on Qwen-series models (Yang et al., 2024; 2025) with 3B, 7B, 14B, 30B and 32B parameters, including both dense and MoE architectures. For training datasets, we use DAPO-MATH (Yu et al., 2026) for 7B-32B models and MATH-lighteval (Hendrycks et al., 2021) for 3B model. 
+
+Hardware Environments. We conduct experiments on a GPU cluster with 8 nodes, with each node consisting of 8 NVIDIA H20 96GB GPUs equipped with NVLink. All nodes are interconnected by 1.6Tbps InfiniBand net-7DARTS: Distribution-Aware Active Rollout Trajectory Shaping for Accelerating LLM Reinforcement Learning 
+
+work. We scale the computational resources according to model size, using 8×H20 to train Qwen2.5-3B, 32×H20 to train Qwen2.5-Math-7B, Qwen2.5-14B, and 64×H20 to train Qwen2.5-32B, Qwen3-30B-A3B. 
+
+Baselines. We evaluate DARTS against two representative baselines: (1) VeRL (Sheng et al., 2025), a state-of-the-art open-source RL framework; and (2) Tail Batching (from RollPacker (Gao et al., 2026)), representing the leading 
+
+prompt-level tail scheduling approach for mitigating rollout long-tail bottlenecks. For fair comparison, we implement all approaches upon VeRL (v0.4) codebase, with vLLM (0.8.5.post1) (Kwon et al., 2023) as the rollout engine and PyTorch (2.6.0) FSDP (Zhao et al., 2023) for training, and employing disaggregated architecture (Zhong et al., 2025). All hyper-parameters and settings are kept the same across frameworks. We adopt GRPO (Shao et al., 2024) as the core RL algorithm (group size M = 8 ), incorporating op-timizations from DAPO (Yu et al., 2026), e.g., clip-higher, token-level loss, and overlong reward shaping. 
+
+5.2. End-to-End Performance Throughput Comparison. We present the end-to-end throughput comparison (averaged over 500 steps) in Fig. 8. DARTS consistently outperforms all baselines across differ-ent model scales, achieving a maximum speedup of 1.77 ×
+
+compared to VeRL, and 1.43 × compared to Tail Batch-ing. Specifically, VeRL suffers from efficiency degradation due to the long-tail bottleneck. Tail Batching mitigates this by scheduling long tails for deferred batched execution. While this alleviates idleness and achieves a 1.07 ×–1.62 ×
+
+speedup, such prompt-level tail scheduling approaches can-not fundamentally optimize the long-tail distribution itself. In contrast, DARTS actively shapes the rollout distribution towards conciseness and certainty, achieving a speedup of 1.29 ×–1.77 ×. By guiding the model to concentrate on the short-length region, DARTS fundamentally mitigates the long-tail overhead. Notably, DARTS demonstrates supe-rior effectiveness on larger models, which typically exhibit deeper reasoning paths and more pronounced long-tail fea-tures, offering greater optimization potential for our method. 
+
+Training Convergence. We conduct comprehensive conver-gence experiments across multiple model configurations. As shown in Fig. 9(a)(b), DARTS exhibits robust convergence stability, closely aligning with the VeRL baseline. Further-more, we evaluate the capabilities of the trained models on five common downstream mathematical benchmarks: MATH500 (Lightman et al., 2024), GSM8K (Cobbe et al., 2021), AIME2024, AIME2025, and Olympiad (He et al., 2024). The averaged score reported in Fig. 9(c) confirms that DARTS maintains competitive accuracy without degra-dation, and even surpasses the baseline in specific cases. These results indicate that our distribution shaping does  
+
+> Table 2. Generalization evaluation on BIG-Bench Hard (BBH). DARTS improves or maintains zero-shot performance across dif-ferent model scales.
+
+Model VeRL DARTS Qwen2.5-3B 34.7 38.7 Qwen2.5-Math-7B 56.6 58.8 Qwen2.5-14B 76.1 76.4 Qwen2.5-32B 78.1 84.7 Qwen3-30B-A3B 85.8 84.4  
+
+> Table 3. Ablation study.
+
+Method Speedup 
+
+VeRL 1.00 ×
+
++ Token-Level Streaming 1.09 ×
+
++ Distribution-Aware Sampling 1.40 ×
+
++ Adaptive Allocation (DARTS) 1.63 ×
+
+not compromise convergence or accuracy. This stems from our carefully designed sampling scheme, which effectively encourages conciseness while preserving reasoning paths. 
+
+5.3. Generalization Beyond Mathematical Reasoning 
+
+To further evaluate whether DARTS preserves necessary long-form reasoning beyond the main mathematical training setting, we conduct additional evaluations on BIG-Bench Hard (BBH), which contains tasks requiring logical deduc-tion, multi-step reasoning, object tracking, and planning. As shown in Table 2, DARTS improves the zero-shot perfor-mance of most model scales compared with VeRL, while maintaining comparable performance on the remaining case. These results suggest that DARTS does not simply shorten responses at the cost of reasoning ability; instead, it removes redundant verbosity while preserving useful reasoning tra-jectories. We also conduct preliminary experiments in broader do-mains. On multimodal reasoning with Qwen2.5-VL-3B on Geo3K, DARTS achieves a 1.20 × speedup. On cod-ing generation with Phi-3-mini-3B on Eurus-2-RL-Data, DARTS achieves a 1.15 × speedup. The gains are smaller than those observed on larger reasoning models, likely be-cause smaller models exhibit less pronounced long-tail roll-out behavior. Nevertheless, these results indicate that the benefit of DARTS is not limited to mathematical reasoning, but applies more generally when training exhibits diverse and partially redundant intra-prompt rollout lengths. 
+
+5.4. Ablation Study 
+
+We conduct an ablation study to analyze the efficacy of each key component within DARTS, utilizing Qwen2.5-14B on 8DARTS: Distribution-Aware Active Rollout Trajectory Shaping for Accelerating LLM Reinforcement Learning 0 2000 4000 6000 8000 
+
+Response Length 
+
+> Density
+> p99=4100
+> p99=1910
+> Base (w/o RL)
+> RL w/o DARTS
+> RL w/ DARTS
+
+Figure 10. Dataset-level rollout distribution shaping effect. 500 1000 1500 2000 2500 3000 3500     
+
+> Response Length
+> Density  Pattern I
+> 1000 1500 2000 2500 3000
+> Response Length
+> Pattern II VeRL Reward>0
+> VeRL Reward<0
+> DARTS Reward>0
+> DARTS Reward<0
+
+Figure 11. Distribution shaping effect for different prompt patterns. 
+
+32 GPUs. As shown in Tab. 3, the efficiency gains primarily stem from our distribution-aware sampling (Section 4.1) and adaptive redundancy allocation (Section 4.2). Our sampling scheme, with dual-end sampling as the core, effectively shapes the rollout distribution toward conciseness and com-pactness, achieving a 1.40 × speedup even under a na ¨ıve uniform redundancy allocation. Adaptive allocation further boosts the speedup to 1.63 × by adaptively allocating the ex-ploration budget to prompts with more pronounced long-tail features, thereby maximizing both shaping effectiveness and system efficiency. Additionally, our token-level streaming (Section 4.3) also contributes a 9 % speedup. 
+
+5.5. Case Study 
+
+We present a case study using Qwen2.5-14B on DAPO-MATH dataset, comparing the rollout length distributions of models trained with the baseline (VeRL) versus DARTS. Fig. 10 presents the dataset-level average rollout distri-bution, where DARTS exhibits a significantly more com-pact distribution concentrated in the short-length region. This confirms the effective mitigation of verbose long tails, thereby reducing token consumption and improving effi-ciency. Furthermore, we conduct a fine-grained analysis on two prompts with distinct patterns as in Section 3.2.2. For Pattern I (Fig. 11, Left), the verbose and ineffective tails are largely eliminated, and the distributions of both correct and incorrect responses become prominently concise. For Pattern II (Fig. 11, Right), incorrect responses become con-centrated and shorter, whereas the distribution of correct responses remains positioned to the right of the incorrect ones, confirming that DARTS maintains sufficient reason-ing depth. Consequently, our method effectively shapes the distribution without compromising the model’s capability. 
+
+Table 4. Sensitivity analysis of the dual-end sampling ratio. The reported numbers are speedups over VeRL. 
+
+Model 1:7 2:6 4:4 Qwen2.5-Math-7B 1.45 × 1.43 × 1.25 ×
+
+Qwen2.5-3B 1.29 × 1.35 × 1.15 ×
+
+Note: Columns denote the ratio L:K.
+
+5.6. Discussion Length Penalty. Notably, DARTS employs the same length penalty settings as prior work (Yu et al., 2026). A na ¨ıve approach to mitigate long tails is to simply apply a larger length penalty. However, our experiments reveal that this ag-gressive approach causes a 2%-7% performance drop across downstream tasks, demonstrating that such forced brevity compromises reasoning capabilities. In contrast, DARTS does not modify rewards or directly penalize long responses. It reshapes the sampled GRPO group and changes relative advantages through the group reward baseline. Therefore, long responses can still receive strong positive gradients when they are correct and necessary, unlike explicit length penalties that uniformly reduce rewards for long outputs. 
+
+Hyperparameter Sensitivity. We further study the sensi-tivity of DARTS to the dual-end sampling ratio. Recall that DARTS selects the top-K shortest trajectories and the top-L
+
+longest trajectories, where K + L = M . Table 4 reports the speedup of different L : K settings. DARTS remains effective under different ratios, especially when short trajec-tories dominate the training group. More balanced settings such as L : K = 4 : 4 reduce the strength of distribution shaping and therefore lead to smaller speedups, but still provide acceleration over the baseline. Therefore, we set 
+
+L = 1 for all main experiments. We set Mup = 2 M as a soft upper bound, which provides sufficient extra samples for distribution shaping while avoid-ing excessive rollout overhead. Increasing this cap brings diminishing returns because the marginal benefit of addi-tional redundant trajectories decreases. The coefficient λ
+
+controls the strength of adaptive allocation: a larger λ makes the allocation more conservative, while a smaller λ makes it closer to aggressive expansion. In practice, DARTS remains stable as long as prompts with more severe long-tail behav-ior receive more redundancy than low-variance prompts. 
+
+## 6. Conclusion 
+
+In this work, we aimed to tackle the long-tail bottleneck in RL rollout. We characterized the long-tail distribution in detail and introduced a novel perspective of active dis-tribution shaping . To this end, we presented a framework that integrated distribution-aware trajectory sampling and 9DARTS: Distribution-Aware Active Rollout Trajectory Shaping for Accelerating LLM Reinforcement Learning 
+
+an adaptive redundancy allocation scheme. Extensive ex-periments demonstrated its superior efficiency over SOTA frameworks. 
+
+## Acknowledgment 
+
+This work is supported by National Natural Science Foundation of China (U23B2048, 62402011, 624B1019), Fundamental and Interdisciplinary Disciplines Break-through Plan of the Ministry of Education of China (JYB2025XDXM108), and High-performance Computing Platform of Peking University. 
+
+## Impact Statement 
+
+This paper presents work whose goal is to advance the field of Machine Learning. Specifically, this paper aims to accel-erate the LLM reinforcement learning (RL) training pipeline to advance the development of Large Language Models. By effectively mitigating the long-tail bottleneck, our method significantly reduces the computational overhead and energy consumption associated with RL training. There are many potential societal consequences of our work, none which we feel must be specifically highlighted here. 
+
+## References 
+
+Anthropic. Claude 4.5 opus. https://www. anthropic.com/news/claude-opus-4-5/ ,2025a. Anthropic. Claude 4.5 sonnet. https://www. anthropic.com/news/claude-sonnet-4-5/ ,2025b. Cobbe, K., Kosaraju, V., Bavarian, M., Chen, M., Jun, H., Kaiser, L., Plappert, M., Tworek, J., Hilton, J., Nakano, R., et al. Training verifiers to solve math word problems. 
+
+arXiv preprint arXiv:2110.14168 , 2021. Feng, J., Huang, S., Qu, X., Zhang, G., Qin, Y., Zhong, B., Jiang, C., Chi, J., and Zhong, W. Retool: Reinforcement learning for strategic tool use in LLMs. In The Fourteenth International Conference on Learning Representations ,2026. Fu, W., Gao, J., Shen, X., Zhu, C., Mei, Z., He, C., Xu, S., Wei, G., Mei, J., Wang, J., et al. Areal: A large-scale asynchronous reinforcement learning system for language reasoning. Advances in Neural Information Processing Systems , 38:36256–36282, 2026. Gao, W., Zhao, Y., An, D., Wu, T., Cao, L., Xiong, S., Huang, J., Wang, W., Yang, S., Su, W., et al. {RollPacker }: Taming {Long-Tail } rollouts for 
+
+{RL }{ Post-Training } with tail batching. In 23rd USENIX Symposium on Networked Systems Design and Implemen-tation (NSDI 26) , pp. 849–866, 2026. Google. Gemini 3 pro. https://deepmind.google/ models/gemini/pro/ , 2025. Guan, L., Li, D.-S., Liang, J., Wang, W.-J., Ge, K.-s., and Lu, X. Advances of pipeline model parallelism for deep learning training: An overview. J. Comput. Sci. Technol. ,39(3):567–584, 2024. Guo, D., Yang, D., Zhang, H., Song, J., Zhang, R., Xu, R., Zhu, Q., Ma, S., Wang, P., Bi, X., et al. Deepseek-r1: In-centivizing reasoning capability in llms via reinforcement learning. arXiv preprint arXiv:2501.12948 , 2025. Han, Z., You, A., Wang, H., Luo, K., Yang, G., Shi, W., Chen, M., Zhang, S., Lan, Z., Deng, C., et al. Asyncflow: An asynchronous streaming rl framework for efficient llm post-training. arXiv preprint arXiv:2507.01663 , 2025. He, C., Luo, R., Bai, Y., Hu, S., Thai, Z., Shen, J., Hu, J., Han, X., Huang, Y., Zhang, Y., et al. Olympiadbench: A challenging benchmark for promoting agi with olympiad-level bilingual multimodal scientific problems. In Pro-ceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) ,pp. 3828–3850, 2024. Hendrycks, D., Burns, C., Kadavath, S., Arora, A., Basart, S., Tang, E., Song, D., and Steinhardt, J. Measuring mathematical problem solving with the math dataset. In 
+
+Thirty-fifth Conference on Neural Information Process-ing Systems Datasets and Benchmarks Track (Round 2) ,2021. Jaech, A., Kalai, A., Lerer, A., Richardson, A., El-Kishky, A., Low, A., Helyar, A., Madry, A., Beutel, A., Car-ney, A., et al. Openai o1 system card. arXiv preprint arXiv:2412.16720 , 2024. Kwon, W., Li, Z., Zhuang, S., Sheng, Y., Zheng, L., Yu, C. H., Gonzalez, J., Zhang, H., and Stoica, I. Efficient memory management for large language model serving with pagedattention. In Proceedings of the 29th sym-posium on operating systems principles , pp. 611–626, 2023. Li, J., Tang, Z., Ding, Y., Wang, P., Guo, P., You, W., Qiao, D., Wang, C., Chen, W., Fu, G., et al. Openba: an open-sourced 15b bilingual asymmetric seq2seq model pre-trained from scratch. Sci. China Inf. Sci. , 68(9), 2025. Lightman, H., Kosaraju, V., Burda, Y., Edwards, H., Baker, B., Lee, T., Leike, J., Schulman, J., Sutskever, I., and Cobbe, K. Let’s verify step by step. In International Conference on Learning Representations , volume 2024, pp. 39578–39601, 2024. 10 DARTS: Distribution-Aware Active Rollout Trajectory Shaping for Accelerating LLM Reinforcement Learning 
+
+Lu, H., Liu, Z., Xiong, S., He, Y., Gao, W., Wu, Y., Wang, W., Liu, J., Li, Y., Zhao, H., et al. Part ii: Roll flash– accelerating rlvr and agentic training with asynchrony. 
+
+arXiv preprint arXiv:2510.11345 , 2025. Luo, M., Tan, S., Huang, R., Patel, A., Ariyak, A., Wu, Q., Shi, X., Xin, R., Cai, C., Weber, M., Zhang, C., Li, L. E., Popa, R. A., and Stoica, I. DeepCoder: A fully open-source 14b coder at O3-mini level. Together AI Blog, April 2025. URL https://www.together. ai/blog/deepcoder .OpenAI. Openai o3. https://openai.com/index/ introducing-o3-and-o4-mini/ , 2025. Schulman, J., Wolski, F., Dhariwal, P., Radford, A., and Klimov, O. Proximal policy optimization algorithms. 
+
+arXiv preprint arXiv:1707.06347 , 2017. Shao, Z., Wang, P., Zhu, Q., Xu, R., Song, J., Bi, X., Zhang, H., Zhang, M., Li, Y., Wu, Y., et al. Deepseekmath: Push-ing the limits of mathematical reasoning in open language models. arXiv preprint arXiv:2402.03300 , 2024. Sheng, G., Zhang, C., Ye, Z., Wu, X., Zhang, W., Zhang, R., Peng, Y., Lin, H., and Wu, C. Hybridflow: A flexible and efficient rlhf framework. In Proceedings of the Twentieth European Conference on Computer Systems , pp. 1279– 1297, 2025. Sheng, G., Tong, Y., Wan, B., Zhang, W., Jia, C., Wu, X., Wu, Y., Li, X., Zhang, C., Peng, Y., et al. Laminar: A scalable asynchronous rl post-training framework. In Pro-ceedings of the 21st European Conference on Computer Systems , pp. 400–422, 2026. Team, K., Bai, Y., Bao, Y., Chen, G., Chen, J., Chen, N., Chen, R., Chen, Y., Chen, Y., Chen, Y., et al. Kimi k2: Open agentic intelligence. arXiv preprint arXiv:2507.20534 , 2025a. Team, K., Du, A., Gao, B., Xing, B., Jiang, C., Chen, C., Li, C., Xiao, C., Du, C., Liao, C., et al. Kimi k1. 5: Scaling reinforcement learning with llms. arXiv preprint arXiv:2501.12599 , 2025b. Wang, W., Xiong, S., Chen, G., Gao, W., Guo, S., He, Y., Huang, J., Liu, J., Li, Z., Li, X., et al. Reinforcement learning optimization for large-scale learning: An effi-cient and user-friendly scaling library. arXiv preprint arXiv:2506.06122 , 2025. Wei, J., Wang, X., Schuurmans, D., Bosma, M., Xia, F., Chi, E., Le, Q. V., Zhou, D., et al. Chain-of-thought prompting elicits reasoning in large language models. Advances in neural information processing systems , 35:24824–24837, 2022. xAI. Grok 4. https://x.ai/news/grok-4 , 2025. Xu, W., Huang, C., Gao, S., and Shang, S. Llm-based agents for tool learning: A survey. Data Sci. Eng. , 10(4): 533–563, 2025. Yang, A., Zhang, B., Hui, B., Gao, B., Yu, B., Li, C., Liu, D., Tu, J., Zhou, J., Lin, J., et al. Qwen2. 5-math techni-cal report: Toward mathematical expert model via self-improvement. arXiv preprint arXiv:2409.12122 , 2024. Yang, A., Li, A., Yang, B., Zhang, B., Hui, B., Zheng, B., Yu, B., Gao, C., Huang, C., Lv, C., et al. Qwen3 technical report. arXiv preprint arXiv:2505.09388 , 2025. Yu, Q., Zhang, Z., Zhu, R., Yuan, Y., Zuo, X., Yue, Y., Dai, W., Fan, T., Liu, G., Liu, L., et al. Dapo: An open-source llm reinforcement learning system at scale. Advances in Neural Information Processing Systems , 38:113222– 113244, 2026. Zhang, H., Zhang, K., Li, Z., Li, J., Li, J., Li, Y., Zhao, Y., Zhu, Y., Liu, F., Li, G., et al. Deep learning for code generation: a survey. Sci. China Inf. Sci. , 67(9):191101, 2024. Zhang, Z., Wen, Y., Lyu, H.-Q., Liu, C., Zhang, R., Li, X.-Q., Wang, C., Du, Z., Guo, Q., Li, L., et al. Ai computing systems for large language models training. J. Comput. Sci. Technol. , 40(1):6–41, 2025. Zhao, Y., Gu, A., Varma, R., Luo, L., Huang, C., Xu, M., Wright, L., Shojanazeri, H., Ott, M., Shleifer, S., Desmai-son, A., Balioglu, C., Damania, P., Nguyen, B., Chauhan, G., Hao, Y., Mathews, A., and Li, S. Pytorch FSDP: experiences on scaling fully sharded data parallel. Proc. VLDB Endow. , 16(12):3848–3860, 2023. Zhong, Y., Zhang, Z., Song, X., Hu, H., Jin, C., Wu, B., Chen, N., Chen, Y., Zhou, Y., Wan, C., et al. Streamrl: Scalable, heterogeneous, and elastic rl for llms with disaggregated stream generation. arXiv preprint arXiv:2504.15930 , 2025. Zhou, X., Sun, Z., and Li, G. DB-GPT: large language model meets database. Data Sci. Eng. , 9(1):102–111, 2024. doi: 10.1007/S41019-023-00235-6. Zhou, Y., Li, J., Su, Y., Ramesh, G., Zhu, Z., Long, X., Zhao, C., Pan, J., Yu, X., Wang, Z., et al. April: Active partial rollouts in reinforcement learning to tame long-tail generation. arXiv preprint arXiv:2509.18521 , 2025. 11 DARTS: Distribution-Aware Active Rollout Trajectory Shaping for Accelerating LLM Reinforcement Learning 
+
+## A. PTL Curve Fitting 
+
+As illustrated in Section 4.2.1, we employ a profiling-based regression approach to construct the PTL curve. Here, we present the details. We conduct preliminary profiling on our cluster utilizing the exact same vLLM inference engine employed in the main experiments setup, across various model sizes. Specifically, under different tensor parallelism size dTP settings, we profile data points and measure the relationship between PTL and batch sizes bsz to facilitate subsequent cost-model modeling. Empirically, we found that a three-stage piecewise linear function provides an accurate approximation of the PTL curve. Fig. 12 and Fig. 13 illustrate the fitting results for the 7B model on the H20 cluster with TP=2 and TP=4.    
+
+> Figure 12. PTL curve fitting for TP=2. Figure 13. PTL curve fitting for TP=4.
+
+## B. Adaptive Redundancy Budget 
+
+As introduced in Section 4.2.2, we design an adaptive redundancy budget scheme to dynamically determine the optimal global redundancy budget Mtotal . This requires balancing algorithmic effectiveness with system latency. Therefore, we formulate a utility function as U (M ) = E(M ) − λ · T (M ), where E(M ) represents algorithmic effectiveness and T (M )
+
+denotes system efficiency. For simplicity, we employ a linear formulation to balance these two factors, with λ serving as the trade-off coefficient. To obtain the optimal Mtotal , we need to find the maximum value of this function. We now detail the definitions of T (M ) and E(M ). For the system overhead T (M ), we directly utilize the rollout cost model (Eq. 4) from Section 4.2.1, with the rollout latency scaling linearly with the redundancy budget: 
+
+T (M ) = k · M + c (6) where k is derived from the measured PTL and cluster parameters, and c denotes constant system overhead. Next, we define the algorithmic effectiveness E(M ). We first introduce a metric ρ = ˜σL 
+
+> ˜L
+
+. Here, ˜σL and ˜L denote the historical standard deviation and average of the model’s response lengths, respectively. These are dataset-level statistics rather than prompt-specific values, and they evolve as training proceeds. In practice, we track them via a moving average over preceding steps. As discussed in Section 4.2, ˜σL serves as a robust proxy for both model uncertainty and the severity of the long-tail phenomenon. Consequently, ρ quantifies the potential optimization gain from distribution shaping, as it is positively correlated with response variance. Formally, we define E(M ) as: 
+
+E(M ) = ρt · ln M (7) where ln M captures the diminishing marginal returns of increasing redundancy. The term ρt (the value of ρ at step t) acts as an amplification factor: more severe long-tail features and higher uncertainty imply a steeper effectiveness curve, justifying a larger exploration budget. 
+
+Analytical Solution. Our objective is to maximize the utility U (M ). By solving ∂U ∂M = 0 , we can get the optimal M ∗:
+
+∂U ∂M = ρt
+
+M − λk = 0 ⇒ M ∗ = ρt
+
+λk (8) 12 DARTS: Distribution-Aware Active Rollout Trajectory Shaping for Accelerating LLM Reinforcement Learning 
+
+This closed-form solution intuitively reveals that the optimal redundancy is proportional to uncertainty ( ρt) and constrained by system cost ( k). Finally, we constrain M ∗ within algorithmic needs to obtain the dynamic budget: 
+
+Mtotal = clip 
+
+
+
+⌊M ∗⌋, M low , M up 
+
+
+
+(9) where M low and M up are set as M N and 2M N , respectively, as the lower and upper constraint of total budget. Here N
+
+denotes the batch size and M denotes the training group size. 
+
+Discussion of Redundancy Budget. Mtotal represents the total redundancy budget, which defines the size of the exploration space for sampling. An insufficient budget constrains exploration and limits the shaping effectiveness of DARTS, whereas an excessively large Mtotal incurs substantial system overhead. Empirically, we observe that the solved optimal Mtotal is approximately 1.5N M on average, striking a favorable balance between algorithmic effectiveness and system efficiency. 
+
+## C. Adaptive Redundancy Allocation Algorithm 
+
+As discussed in Section 4.2.2, we propose a variance-based adaptive redundancy allocation scheme, which adaptively allocates redundancy budgets for each prompt based on the rollout distribution characteristics. Specifically, this scheme allocates more budget to the prompts with more pronounced long-tail features and higher model uncertainty. This is indicated via length variance, for which we maintain a historical variance estimate ˆσ2 
+
+> i
+
+for each prompt pi. This estimate is updated via an Exponential Moving Average (EMA) to smooth out transient noise and provide a robust signal for allocation. As illustrated in Section 4.2.2, we define the distance metric D(M ′ 
+
+> i
+
+, q i) = Norm (˜ σL(qi)) /M ′ 
+
+> i
+
+, and define the optimization problem as: 
+
+min    
+
+> {M′
+> 1,...,M ′
+> N}
+> N
+
+X
+
+> i=1
+
+Norm (˜ σL(qi)) 
+
+M ′
+
+> i
+
+s.t. 
+
+> N
+
+X
+
+> i=1
+
+M ′ 
+
+> i
+
+= Mtotal , M ′ 
+
+> i
+
+∈ Z+
+
+Mlow ≤ M ′ 
+
+> i
+
+≤ Mup , ∀i ∈ { 1, . . . , N }
+
+(10) Then, we solve this convex optimization problem with a greedy algorithm (Alg. 1). The allocation process operates under a global budget Mtotal , which is dynamically determined by the adaptive redundancy budget scheme (Appendix B). The complete procedure is outlined in Alg. 1. The algorithm begins by initializing the redundancy budget for all prompts to a baseline Mlow = M and computing a priority weight wi derived from the normalized historical length variance (Lines 1–2). Subsequently, it employs a greedy iterative strategy to allocate the remaining budget Mremain . In each iteration, the algorithm calculates the marginal gain ∆i for all valid candidates that have not reached the upper bound Mup . As formulated in Line 4, ∆i quantifies the expected reduction in the objective function obtained by adding additional allocation, scaled by the prompt-specific weight wi. The system then identifies the prompt index k that offers the maximal marginal gain (Line 5) and increments its budget M ′ 
+
+> k
+
+accordingly (Line 6). This process repeats until the total budget is exhausted. Finally, Alg. 1 outputs the optimized redundancy allocation plan M′ (Lines 8–9). 
+
+## D. Distribution-Aware Trajectory Sampling Algorithm 
+
+As illustrated in Section 4.1 and Section 4.3.1, our distribution-aware trajectory sampling algorithm consists of dual-end length sampling , as well as variance-guided tail pruning with proactive early stopping . The complete algorithm is detailed in Alg. 2. For each prompt qi in the batch B, the execution flow diverges based on the allocated redundancy budget M ′
+
+> i
+
+relative to the upper bound constraint Mup , reflecting the variance characteristics as illustrated in Section 4.2.2. Specifically, when the allocated budget satisfies M ′ 
+
+> i
+
+< M up , we employ the dual-end length sampling strategy. We first generate a candidate set Ti by performing rollouts with size M ′ 
+
+> i
+
+(Line 5). To construct the final training group Yi of target size M , we explicitly sample a subset of trajectories to shape the distribution: we retrieve the top-K shortest trajectories 
+
+Yshort to encourage conciseness, and the top-L longest trajectories Ylong (where L = M − K) to maintain diversity (Lines 6–9). Notably, the top-L longest selection excludes incomplete or invalid trajectories that reach the system length limit. The union of these two subsets forms the training group for the current prompt. Conversely, when the allocated budget hits the saturation threshold ( M ′ 
+
+> i
+
+≥ Mup ), this prompt is considered extremely long-tailed, and the algorithm switches to variance-guided tail pruning for better system efficiency. In this scenario, we 13 DARTS: Distribution-Aware Active Rollout Trajectory Shaping for Accelerating LLM Reinforcement Learning 
+
+Algorithm 1 Adaptive Redundancy Allocation 
+
+Input: Prompt Batch B, Total Redundancy Budget Mtotal 
+
+Output: Redundancy Allocation Plan M′ 
+
+> 1:
+
+wi ← Norm (˜ σL(qi)) , M ′ 
+
+> i
+
+← Mlow for all 
+
+qi ∈ B ; 
+
+> 2:
+
+Mremain ← Mtotal − N · Mlow ; 
+
+> 3:
+
+while Mremain > 0 do  
+
+> 4:
+
+Compute marginal gains for valid candidates ( M ′ 
+
+> i
+
+< M up ): 
+
+∆i ← wi ·
+
+ 1 
+
+> M′
+> i
+
+− 1  
+
+> M′
+> i+1
+
+
+
+; 
+
+> 5:
+
+Select optimal index: k ← arg max i ∆i; 
+
+> 6:
+
+Update: M ′ 
+
+> k
+
+← M ′ 
+
+> k
+
++ 1 ,
+
+Mremain ← Mremain − 1; 
+
+> 7:
+
+end while  
+
+> 8:
+
+M′ ← { M ′
+
+> 1
+
+, . . . , M ′ 
+
+> N
+
+}; 
+
+> 9:
+
+return M′;
+
+Algorithm 2 Distribution-Aware Trajectory Sampling 
+
+Input: Prompt Batch B, Redundancy Allocation Plan M′, Target Size 
+
+M , Dual-End Short Size K
+
+Output: Training Group Y for Batch B 
+
+> 1:
+
+Initialize Y ← ∅ ; 
+
+> 2:
+
+for parallel prompt qi ∈ B with M ′ 
+
+> i
+
+∈ M ′ do  
+
+> 3:
+
+if M ′ 
+
+> i
+
+< M up then  
+
+> 4:
+
+// Dual-End Length Sampling  
+
+> 5:
+
+Ti ← Rollout (qi, size = M ′ 
+
+> i
+
+); 
+
+> 6:
+
+L ← M − K; 
+
+> 7:
+
+Yshort ← SelectTopShortest (Ti, K ); 
+
+> 8:
+
+Ylong ← SelectTopLongest (Ti, L ); 
+
+> 9:
+
+Yi ← Y short ∪ Y long ; 
+
+> 10:
+
+else  
+
+> 11:
+
+// Sampling Tail Pruning with Early Stopping  
+
+> 12:
+
+Yi ← Rollout (qi, size = M ′ 
+
+> i
+
+, early stop = M ); 
+
+> 13:
+
+end if  
+
+> 14:
+
+Y ← Y ∪ Y i; 
+
+> 15:
+
+end for  
+
+> 16:
+
+return Y;perform rollouts with a proactive early stopping mechanism (Line 12). Instead of generating the full redundancy M ′ 
+
+> i
+
+, the generation process terminates immediately once M valid complete responses are collected. This effectively prunes the long-tail execution overhead for prompts that already exhibit high variance or have reached the maximum resource cap. Finally, the processed group Yi is aggregated into the global training batch Y.
+
+## E. Details of Token-Level Streaming 
+
+As illustrated in Section 4.3.2, we propose a novel token-level streaming scheme to further overlap rollout generation with training. Our implementation centers on two key architectural designs. First, within the training engine, we implement incremental forward computation . By maintaining a KV cache for each trajectory and employing a masking strategy that pads processed tokens, we ensure that the model performs forward passes exclusively on newly generated incremental tokens. This effectively avoids redundant computations on historical data. Second, we adopt a hybrid granularity management strategy. Forward computations operate via token-level streaming: they are triggered immediately once sufficient token chunks are accumulated to maximize GPU utilization. In contrast, the reward calculation and backward pass strictly necessitate complete trajectories to maintain sample-level integrity. This design effectively overlaps the heavy forward computation latency with ongoing generation, optimizing throughput while preserving the correctness of the reward and update steps. 
+
+## F. Analysis on Response Length 
+
+Our method actively shapes the response distribution, and the temporal evolution of its effects is intuitively illustrated in Fig. 14 and Fig. 15. As shown by the orange curves (DARTS), both the average and maximum response lengths exhibit a significant reduction during the early and middle stages of training compared to the baseline (VeRL). This trend confirms that our method effectively mitigates the verbose long-tail issue early on, greatly enhancing training efficiency. Crucially, the data reveal a strategic growth in response length during the later stages (e.g., after 300 steps). This behavior demonstrates the effectiveness of our dual-end sampling strategy: rather than permanently constraining the model to short and concise responses, our adaptive distribution dynamically incorporates longer, complex trajectories as training progresses, enabling continuous improvement in reasoning depth. 14 DARTS: Distribution-Aware Active Rollout Trajectory Shaping for Accelerating LLM Reinforcement Learning 0 100 200 300 400 500         
+
+> Steps
+> 0
+> 1000
+> 2000
+> Average Response Length
+> VeRL
+> DARTS
+> Figure 14. Average length comparison of Qwen2.5-14B training process on DAPO-MATH dataset. 0100 200 300 400 500
+> Steps
+> 0
+> 2000
+> 4000
+> 6000
+> 8000
+> Max Response Length
+> VeRL
+> DARTS
+> Figure 15. Max length comparison of Qwen2.5-14B training process on DAPO-MATH dataset.
+> Table 5. Scalability study.
+
+DARTS 16 GPUs 32 GPUs 64 GPUs Speedup 1.21× 1.44× 1.55× 
+
+## G. Scalability Study 
+
+To evaluate the scalability of DARTS, we conduct a scalability study and compare it against VeRL on Qwen2.5-Math-7B across varying cluster scales, ranging from 16 to 64 GPUs. As shown in Tab. 5, DARTS consistently achieves substantial acceleration across all configurations. Notably, the performance gains even amplify as the cluster size increases. This is because abundant computational resources allow for a larger redundancy exploration budget, which in turn boosts the effectiveness of our active distribution shaping. 
+
+## H. Comparison between Prompt Scheduling and Active Distribution Shaping 
+
+The Limitation of Tail Batching. As a representative scheduling-based mitigation strategy, Tail Batching employs a prompt-level tail scheduling scheme to enhance rollout efficiency. Specifically, it over-samples prompts and schedule long tails for deferred batched execution to mitigate the idleness and under-utilization caused by long tails. For a set of over-sampled N ′ prompts, let Tgroup, (i) denote the i-th order statistic of the group completion times for prompt qi,
+
+{Tgroup, 1, . . . , T group,N ′ } (where N ′ > N ). By defining the batch completion time as Tbatch = Tgroup, (N ), the system successfully avoids the overhead caused by the extreme tails (N + 1 , . . . , N ′), which are deferred to a dedicated batch for later re-computation. However, we argue that Tail Batching is not a fundamental solution for the following reasons: • Distribution Bias: By consistently selecting the N fastest-completing groups, Tail Batching implicitly clusters prompts with inherently short generation latencies into the same training batch. This creates a bias among the training data: early batches are dominated by short, simple sequences, while later batches consist exclusively of long, complex ones. Such temporal shifts in the data distribution can lead to unstable convergence and biased gradient signals during training. • Persistence of Long-Tail Distribution: Tail Batching is primarily a prompt-level scheduling heuristic; it does not fundamentally address the long-tail distribution itself. Specifically, as shown in Fig. 1, the latency distribution within a single prompt also exhibits a severe long-tail distribution, which cannot be resolve by prompt scheduling approaches. Even if a prompt is selected among the first N , its group completion time Tgroup is still dictated by the slowest of its M
+
+internal samples: Tgroup = max( T1, . . . , T M ). Consequently, despite scheduling optimization, such long-tail distribution persists and consumes heavy computational overhead. 
+
+Effectiveness of DARTS. Unlike reactive prompt scheduling in prior works, our method addresses the long-tail bottleneck by actively shaping the policy’s response distribution during training. This creates a dual-reduction effect to resolve the problem at its root: • Conciseness (Mean Reduction): Through dual-end sampling, our method encourages the model to generate more concise and information-dense responses. This effectively lowers the average response length, shifting the entire latency distribution toward the left. While Tail Batching leaves the inherent generation distribution process untouched, allowing 15 DARTS: Distribution-Aware Active Rollout Trajectory Shaping for Accelerating LLM Reinforcement Learning 
+
+the model to continuously produce extremely lengthy and verbose outputs, DARTS mitigates this issue by fundamentally altering the generation tendency. • Certainty (Variance Reduction): Simultaneously, our approach encourages a more concentrated output distribution. As discussed in Section 4.2.2, length variance serves as a robust proxy for both long-tail features and model uncertainty. Via variance-based optimization, the model’s uncertainty is reduced, resulting in a more compact rollout distribution. This suppresses the emergence of extreme outliers within each prompt group, directly alleviating the intra-prompt bottleneck. Ultimately, our approach provides a more principled and fundamental solution than current scheduling approaches by directly addressing the long-tail distribution at its root. 
+
+## I. Limitation 
+
+DARTS is most effective when rollouts exhibit substantial intra-prompt length diversity and partial redundancy. It may provide limited benefit for tasks whose output lengths are fixed or tightly constrained, such as translation, fixed-length style tuning, or tasks with strict word-count requirements. In extremely sparse-reward settings where rollouts provide little within-prompt discrimination, distribution shaping may also be less effective. Broader evaluation on larger multimodal and agentic models remains future work. 16
