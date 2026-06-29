@@ -1,0 +1,444 @@
+Title: 2026.findings-acl.1344.pdf
+
+URL Source: https://aclanthology.org/2026.findings-acl.1344.pdf
+
+Published Time: Thu, 11 Jun 2026 02:31:37 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+> Findings of the Association for Computational Linguistics: ACL 2026 , pages 26954–26965 July 2-7, 2026 ©2026 Association for Computational Linguistics
+
+# On-Policy Self-Distillation for Efficient Diffusion Language Models with Early-Stage Calibration 
+
+## Huaisheng Zhu †, MingYu Liu, Junze Liu, Zhen Ge, Tian Wang, Jiri Gesi, Dakuo Wang 
+
+## Weiqi Zhang, Houyu Zhang, Yufan Guo, Xian Li, Bing Yin, Sujay Sanghavi Amazon 
+
+## hvz5312@psu.edu {ethenliu,junzeliu,zge,wangtan,jirigesi,dakuow,} {zhaweiqi,zhanhouy,gyufan,xianlee,alexbyin,sujayrs}@amazon.com 
+
+## Abstract 
+
+Diffusion Large Language Models (DLLMs) have recently achieved strong performance, e.g., masked diffusion models (MDMs) can sur-pass autoregressive models (ARMs) in various tasks. However, DLLMs often struggle with inaccurate early-stage predictions due to lim-ited context, which hinders both the model’s inference efficiency and the output’s overall quality. We propose Calibrated On-Policy Self-Distillation (COPSD) for DLLMs, a simple and efficient method to calibrate early token pre-dictions without requiring demonstration data. COPSD distills an unnormalized target distribu-tion derived from later decoding steps into the original model, enabling more accurate early predictions during inference. Experiments on math, planning, and RLHF tasks show that COPSD improves both effectiveness and effi-ciency, and further enhances performance when combined with supervised fine-tuning. 
+
+## 1 Introduction 
+
+Recently, Diffusion Large Language Models (DLLMs) have made remarkable progress in vari-ous tasks (Sohl-Dickstein et al., 2015; Austin et al., 2021; Campbell et al., 2022; Lou et al., 2023; Meng et al., 2022). By optimizing the evidence lower bound or its simplified variants, masked diffusion models (MDMs) have achieved performance com-parable to, and in some cases surpassing, that of autoregressive models (Sahoo et al., 2024; Shi et al., 2024; Nie et al., 2025). Moreover, recent studies have investigated the scaling properties of MDMs, demonstrating that they can achieve competitive performance with state-of-the-art autoregressive models of similar size (e.g., LLaMA 2 (Touvron et al., 2023) and LLaMA 3 (Dubey et al., 2024)) across a range of downstream tasks (Nie et al., 2025; Gong et al., 2024; Nie et al., 2024; Gong et al., 2025; Sahoo et al., 2025; Zhu et al., 2025b).    
+
+> †Work done as an intern at Amazon 24816
+> Number of Tokens
+> 0
+> 5
+> 10
+> 15
+> 20
+> Accuracy (%)
+> Sudoku
+> LLaDA-Instruct Base-Self COPSD
+
+Figure 1: Performance comparison of different baselines using the same base model (LLaDA-Instruct) based on different number of tokens generated simultaneously. 
+
+Despite these advancements, most existing work on DLLMs has focused on unsupervised pre-training, supervised fine-tuning, or reinforcement learning-based fine-tuning (Zhu et al., 2025a; Zhao et al., 2025; You et al., 2025). However, DLLMs often suffer from inaccurate token predictions dur-ing the early stages of generation, when nearly all tokens are masked and contextual information is limited. In contrast, later stages benefit from a larger number of unmasked tokens, enabling more accurate predictions through richer context. These early-stage inaccuracies not only hurt output qual-ity but also reduce model efficiency, especially since DLLMs typically generate multiple tokens in parallel and rely heavily on accurate contextual cues. As shown in Figure 1, DLLM-based mod-els can accurately predict tokens and achieve cor-rect results when generating two tokens simultane-ously, as indicated by the red line. However, gen-erating more tokens at once leads to a noticeable drop in performance, which limits the efficiency of DLLMs. This is likely because the models tend to produce inaccurate predictions in the early stages due to limited context. These early errors can then propagate and adversely impact subsequent predic-
+
+26954 tions that rely on the earlier outputs. To address these challenges, this paper proposes a On-Policy Self-Distillation approach for DLLMs that calibrates the prediction distribution of early-stage tokens, called Calibrated On-Policy Self-Distillation (COPSD) . Specifically, we introduce an unnormalized target distribution that leverages information from later decoding steps to refine early predictions. However, since such future con-text is unavailable during inference, we propose to on-policy distill this calibrated distribution into the original DLLM. This encourages the model to de-velop an inherent ability to produce more accurate early-stage predictions, even without access to fu-ture tokens at test time. To stabilize training, we use a group relative normalization method, which helps mitigate the challenges due to the limited number of samples that can be drawn during training. 
+
+Our contributions. We propose Calibrated On-Policy Self-Distillation (COPSD), an efficient al-gorithm that requires no demonstration data and calibrates the prediction distribution at the early stages of generation. By improving early-stage predictions, COPSD enhances both the efficiency and effectiveness of current DLLMs. To the best of our knowledge, this is the first On-Policy Self-Distillation method specifically designed to address early-stage calibration in DLLMs, offering a practi-cal recipe for improving their overall performance. 
+
+Experiments. We conduct experiments with COPSD on tasks involving math, planning, and RLHF, and observe consistent improvements over naive self-distillation baselines. Notably, COPSD significantly boosts efficiency on simpler tasks such as Sudoku, enabling the model to generate more tokens in parallel while maintaining performance comparable to baseline models that generate fewer tokens at a time. Furthermore, when combined with supervised fine-tuning, our self-distillation ap-proach further enhances performance, demonstrat-ing the effectiveness and versatility of COPSD. 
+
+## 2 Related Works 
+
+Diffusion Language Models . The development of DLLMs is inspired by recent advances in dis-crete diffusion models, which introduced novel for-ward and reverse transition mechanisms and en-abled a variety of model variants (Sohl-Dickstein et al., 2015; Austin et al., 2021; Campbell et al., 2022; Lou et al., 2023; Meng et al., 2022). Em-pirical results show that masked diffusion models (MDMs) can achieve perplexity on par with autore-gressive models (ARMs) (Sahoo et al., 2024; Shi et al., 2024; Nie et al., 2025; Ou et al., 2024). To improve training efficiency, several works have pro-posed simplified training objectives for masked dif-fusion processes with theoretical justifications. In addition, recent research has examined the scaling behavior of MDMs, including both training from scratch and adaptation from pre-trained ARMs (Nie et al., 2025; Gong et al., 2024; Nie et al., 2024). 
+
+On-Policy Distillation . Our work connects to On-Policy Distillation methods, which train a student model directly on trajectories sampled from its own policy, while a teacher model provides per-token guidance via KL-based regularization or re-lated objectives (Agarwal et al., 2024; Xu et al., 2024; Gu et al., 2023; Xiao et al., 2026). This approach mitigates distribution shift by optimiz-ing over the student’s visitation distribution, but it typically relies on a separate, often larger, teacher model. To eliminate reliance on large teacher mod-els, on-policy self-distillation has been proposed, enabling a model to improve its performance by leveraging its own inherent capabilities (Zhao et al., 2026; Hübotter et al., 2026; Kim et al., 2026). 
+
+Training of Diffusion Language Models . Beyond unsupervised pre-training on large-scale datasets, some studies have explored supervised fine-tuning and reinforcement learning-based methods for DLLMs (Zhu et al., 2025a; Zhao et al., 2025; You et al., 2025; Prabhudesai et al., 2025). However, these approaches largely follow training pipelines originally designed for autoregressive models, over-looking the unique inference dynamics of diffu-sion models—particularly the multi-step unmask-ing process that generates several tokens in paral-lel to improve inference speed (Nie et al., 2025). This oversight is critical, as DLLMs often strug-gle with inaccurate early-stage predictions, which significantly limit their efficiency in parallel gener-ation and degrade overall generation quality. To ad-dress these challenges, we propose Calibrated On-Policy Self-Distillation (COPSD), a self-distillation method designed to calibrate the token distribution at early stages of generation. To the best of our knowledge, this is the first work to systematically study the limitations of early-stage token predic-tions and introduce a On-Policy Self-Distillation framework tailored for Efficient DLLMs. 26955 3 Preliminaries 
+
+Let the text sequence x = [ x1, x 2, . . . ] represent the input prompt, and y = [ y1, y 2, . . . ] represent the generated response. We denote the DLLM by 
+
+pθ(y | x) for simplicity, where θ are the model pa-rameters and the probability defines the probability of generating response y conditioned on the x. In this paper, we focus on On-Policy Self-Distillation settings, where we denote the set of prompts in a dataset Dp as {x0, . . . , xN }, with N representing the total number of samples in the dataset. 
+
+Diffusion Language Models . Specifically, given a context x, a DLLM begins generation from an ini-tial response yT , where all tokens are masked (de-noted as M), i.e., yiT = M for all positions i. The model then iteratively unmasks tokens in a reverse diffusion process. At each timestep t, it predicts the distribution over previous states as pθ(yt−1 |
+
+x, yt). During inference, the model selects a subset of n tokens to update, changing their states from masked to unmasked based on the predicted distri-bution. Mathematically, the update at step yt can be expressed as yI 
+
+> t−1
+
+∼ pθ
+
+(yI 
+
+> t−1
+
+| x, yt
+
+), where 
+
+I is the set of indices of masked tokens in yt and the size of I is n. Then, DLLMs update tokens at those positions, while the rest remain unchanged: 
+
+yit−1 =
+
+{
+
+yit−1 if i ∈ I 
+
+yit otherwise . (1) 
+
+Supervised Fine-tuning . In this paper, we focus on the most widely adopted class of diffusion lan-guage models—masked diffusion language mod-els (MDMs)—for supervised fine-tuning. Specifi-cally, fine-tuning a DLLM involves a forward nois-ing process that progressively corrupts an input token sequence y0 by the mask token. Specifi-cally, at timestep t, the sequence yt is partially masked, where for each token the probability of masking is t/T . The process is indexed by time 
+
+t ∈ [0 , T ]. Given a partially masked sequence, we follow prior work that adopts simplified objectives derived from the original negative evidence lower bound (NELBO) for training MDMs. Therefore, the supervised fine-tuning objective on each sample can be written as follows (You et al., 2025): 
+
+Lyt =
+
+> |yt|
+
+∑
+
+> j=1
+
+1
+
+[
+
+yjt = M 
+
+]
+
+log pθ(yj 
+
+> 0
+
+| yt, x), (2) where |yt| is the sequence length of yt and y0 is the ground truth response of the prompt x. The key difference between masked DLLMs and BERT (De-vlin et al., 2019) lies in their masking and decoding strategies. BERT employs a fixed masking ratio and performs single-step infilling, while masked DLLMs use time-dependent masking ratios and a multi-step decoding process that starts from fully masked inputs and progressively denoises them. This iterative refinement enables masked DLLMs to function as true generative models. The fi-nal training objective over the entire dataset with prompt and response pairs can be formulated as: 
+
+min  
+
+> θ
+
+−Et∼U{ 0,T },x,y∼pdata ,yt∼qt|0 Lyt , (3) where the prompt x and its corresponding re-sponse y are sampled from the data distribution 
+
+pdata and a timestep t is uniformly sampled from 
+
+{0, 1, . . . , T }, denoted as U{ 0, T }. The forward process qt|0 denotes the corruption mechanism that randomly masks tokens in y0, where each token is independently masked with probability t/T .
+
+Naive Self-Distillation . In this paper, we focus on the Self-Distillation of Diffusion Large Language Models (DLLMs). As our baseline, we adopt a straightforward Self-Distillation approach: we iter-atively sample response ˆy for each prompt x from the DLLM, denoted as pθ(ˆ y | x), and then fine-tune the model by maximizing the likelihood of these sampled responses. Specifically, we optimize the following loss objective for each prompt x and its corresponding generated response ˆy:
+
+Lb = −
+
+> |ˆyt|
+
+∑
+
+> j=1
+
+1
+
+[
+
+ˆyjt = M 
+
+]
+
+log pθ(ˆ yj 
+
+> 0
+
+| ˆyt, x). (4) We put details of this baseline into Algorithm 1. 
+
+## 4 Method 
+
+In this section, we mainly introduce Calibrated On-Policy Self-Distillation (COPSD), a framework for DLLMs that encourages the model to calibrate its early-stage token distribution. By improving the ac-curacy of token predictions in the initial decoding steps, COPSD enables DLLMs to generate more re-liable outputs earlier in the process. This not only enhances overall prediction quality but also im-proves efficiency by supporting parallel generation of more tokens during early stages. Specifically, we propose a calibrated distribution that leverages fu-ture state information in DLLMs to improve early-stage predictions. To incorporate this information, we introduce a self-distillation framework based on 26956 Algorithm 1 Naive Self-Distillation 
+
+Require: Dataset {x(1) , . . . , x(N )} ∈ D p where 
+
+x(1) is a prompt, a pretrained diffusion lan-guage model p0(y | x) 
+
+> 1:
+
+for each training iteration do  
+
+> 2:
+
+For each prompt x from D and then sample 
+
+y from p0(y | x) 
+
+> 3:
+
+Sample t ∼ U{ 0, T } 
+
+> 4:
+
+For response y, Mask tokens in y with probability t/T to obtain yt 
+
+> 5:
+
+Update the parameter θ with Lb 
+
+> 6:
+
+end for 
+
+KL divergence that enables the model to learn from the calibrated distribution in an implicit manner. To ensure training stability, we further apply a group normalization technique for our model training. 
+
+4.1 Calibrated Distribution 
+
+DLLMs are originally designed to predict tokens in parallel and in arbitrary order, offering the po-tential for faster inference. However, in practice, they still require a large number of sampling steps to generate high-quality outputs. A key factor con-tributing to this inefficiency is the inaccuracy of early-stage token predictions. Specifically, DLLMs iteratively unmask tokens until a fully unmasked sequence is produced, meaning that later-stage pre-dictions heavily depend on the quality of earlier ones. A central intuition from prior work is that tokens unmasked at early generation steps tend to have suboptimal probability distributions due to in-sufficient contextual information. Remasking these early tokens in later steps can substantially improve performance (Nie et al., 2025; Wang et al., 2025), in contrast to tokens unmasked at later steps, which benefit from richer context and thus yield more re-liable predictions. Motivated by this intuition, we propose an unnormalized distribution that leverages later steps to calibrate the earlier token prediction distribution pθ(yit−1 | yt, x) Specifically, we uti-lize the output pθ(yit−1 | yit−s, x) which provides more contextual information at a later step t − s,where t − s < t , and yields more accurate predic-tions, denoted as ˜pθ for simplicity. The calibrated distribution p(yit−1 | yt, yt−s, x) for the token at the position i is defined as the following Equation: 
+
+p(yit−1 | yt, yt−s, x)=pθ(yit−1 | yt, x) · ebi(yt,yt−s)
+
+Z ,
+
+(5) where the calibration term is bi(yt, yt−s) =
+
+−∥ ˜pθ′ (yit−1 | yt, x) − pθ′ (yit−1 | yt−s, x)∥22 mea-sures the distance between two token distributions at the position i: one at timestep t, where fewer tokens are unmasked and contextual information is limited, and the other at timestep t − s, where more tokens are unmasked, providing richer con-text and enabling more accurate token predictions. We use pθ(yit−1 | yt, x) to represent the probabil-ity and Z = ∑ 
+
+> yit−1∈V
+
+pθ(yt−1 | yt, x)eb(yt,yt−s).We have following properties for this distribution: when earlier time steps show greater inconsisten-cies, the probability values are reduced. Con-versely, if the discrepancies are smaller in earlier steps, the probability values are increased. This approach is founded on the principle that predic-tions made during later time steps are inherently more accurate due to their access to more contex-tual tokens (unmasked tokens). As more contextual tokens become available, the model can make more informed and reliable predictions compared to ear-lier steps where limited context is available. By leveraging this calibrated distribution, we can rec-tify inaccurate tokens from previous steps using information gained in later steps. This approach enables us to unmask more tokens at earlier stages while maintaining accuracy, as the previous steps’ tokens can be corrected through the calibrated dis-tribution. Consequently, this calibrated distribution can potentially reduce the total number of sam-pling steps and enhance the overall performance of DLLMs. By improving the accuracy of early-stage token predictions, it enables the model to safely generate more tokens in parallel, offering a clear advantage over uncalibrated approaches. 
+
+4.2 Calibrated On-Policy Self-Distillation 
+
+In the previous section, we introduced a calibrated distribution that can improve both the performance and efficiency of DLLMs. However, applying this distribution directly during inference is challeng-ing, as it relies on future sequence information that is not accessible at test time. To address this, we propose a self-distillation approach that distills the calibrated distribution into the original DLLM us-ing reverse KL divergence, enabling the model to approximate the benefits of future context without explicitly accessing it for the timestep t:
+
+DKL [pθ(yt−1 | yt, x)∥p(yt−1 | yt, yt−s, x)] (6) However, directly optimizing the reverse KL diver-gence is either intractable or unstable during train-26957 ing, as it requires sampling from the model itself. To address this issue, we propose distilling knowl-edge from earlier optimization steps, where the model parameters are denoted as θ′. During train-ing, we employ a weighted sampling algorithm that leverages the predictions of the model at these pre-vious checkpoints. Specifically, for each timestep 
+
+t and token position i, we perform weighted sam-pling based on the outputs of the model with param-eters θ′. In doing so, we replace θ with θ′ to provide a more stable target distribution, thereby guiding the optimization of the reverse KL divergence in Equation (6) more effectively given yt−s:
+
+Lti = Eyt∼pθ (log piθ(yt) − log pi(yt)) = 
+
+Eyt∼pθ′
+
+piθ(yt)
+
+piθ′ (yt) (log piθ(yt)
+
+piθ′ (yt) + bi(yt, yt−s)) , (7) where pi(yt)) = p(yt−1 | yt, yt−s, x), piθ(yt) = 
+
+pθ(yit−1 | yt, x), piθ′ (yt) = pθ′ (yit−1 | yt, x) and 
+
+˜piθ′ (yt−s) = ˜pθ′ (yit−1 | yt−s, x) for simplicity. Accurately estimating the log Z term requires a large number of samples, which is impractical in real implementations. For unnormalized models such as those used in Noise Contrastive Estimation, a common solution is to treat as a learnable parame-ter and optimize it jointly with the model (Gutmann and Hyvärinen, 2010). However, this introduces additional computational overhead and effectively requires training an extra parameter or sub-model. To avoid this issue, the referenced work argues that Z can be safely omitted in practice (Song and Kingma, 2021). Therefore, we adopt this simplifi-cation throughout our method. 
+
+4.3 Practical Implementation 
+
+Although sampling from previous timesteps helps stabilize training, optimizing the loss in Equa-tion (7) still presents several additional challenges. To train each timestep t in Equation (7), we typi-cally perform a reverse diffusion step by iteratively unmasking tokens at that specific timestep. How-ever, this procedure becomes computationally inef-ficient when sampling multiple timesteps t for the same prompt during training. To address this, we propose an optimized training strategy that com-bines the reverse step with the forward diffusion process, leveraging pre-sampled data from the orig-inal diffusion language model. This integration results in the following training objective: 
+
+min  
+
+> θ
+
+Ey∼p0(·| x), t ∼U{ 0,T }
+
+> yt−s∼pt−s(·| y)
+
+Lti, (8) where pt−s(· | y) represents the forward diffusion process in DLLMs, where each token in the se-quence (t − s)/T is independently masked with probability. From our empirical studies, we find that fixing the timestep t accelerates the training of this objective. Therefore, in our experiments, we keep t fixed during training. Additionally, since Lti
+
+depends on ytusing the forward diffusion process. This leads to the following formulation for Lti:
+
+Eyt∼pt
+
+piθ(yt)
+
+piθ′ (yt) (log piθ(yt)
+
+piθ′ (yt) + bi(yt, yt−s)) , (9) where yt is also sampled from the forward distri-bution DLLMs, pt(y | x).
+
+4.4 Group Relative Normalization 
+
+However, training the objective in Equation (9) sta-bly requires sampling a large number of candidates from piθ′ , which is impractical in real-world imple-mentations. In practice, computational constraints limit the number of samples that can be generated per prompt during training. As a result, optimizing the objective guided by the calibration term can in-troduce high variance, and we empirically observe that this often leads to training instability or model collapse. To resolve this problem, inspired by tech-niques in reinforcement learning—such as Group Relative Policy Optimization (GRPO)—we apply a normalization strategy to the calibration term to ensure stable and efficient training. Specifically, for each prompt x, we first sample a set of responses 
+
+{y1, . . . , yK }from the DLLM using parameters from a previous optimization step, denoted as θ′.We refer to this set as Y. To simplify the nota-tion in the following part, we denote ∥˜pθ′ (yk,i t−1 |
+
+ykt−s, x) − pθ(yk,i t−1 | ykt , x)∥22 as bi(ykt , ykt−s) for 
+
+i-th token of k-th response for the prompt x. Also, we define the set of response and its corresponding value for the calibration term at the i-th token is 
+
+Bi = [ bi(y1 
+
+> t
+
+, y1
+
+> t−s
+
+), . . . , b i(yKt , yKt−s)] . To reduce the variance introduced by the calibration term, we apply group normalization following the GRPO framework on the i-th token. The normalized cali-bration term is defined as: 
+
+Ak,i = bi(ykt , ykt−s) − mean( Bi)std( Bi) , (10) where mean and std are the mean value and stan-dard deviation of the calibration term within groups. We replace the original calibration term at token po-sition i in Equation (7) with a normalized version, 26958 Algorithm 2 Calibrated On-Policy Self-Distillation 
+
+Require: Dataset {x(1) , . . . , x(N )} ∈ D p where 
+
+x(1) is a prompt, a pretrained diffusion lan-guage model p0(y | x) and fixed t and s 
+
+> 1:
+
+for each training iteration do  
+
+> 2:
+
+For each prompt x from Dp and then sam-ple y from p0(y | x) 
+
+> 3:
+
+For response y, Mask tokens in y with probability t/T to obtain yt, 
+
+> 4:
+
+For each response y, Mask tokens in y
+
+with probability (t − s)/T to obtain yt+s 
+
+> 5:
+
+Update the parameter θ with LCOPSD  
+
+> 6:
+
+end for 
+
+resulting in the following loss formulation: 
+
+˜Lti = Eyt∼pt
+
+piθ(yt)
+
+piθ′ (yt) (log piθ(yt)
+
+piθ′ (yt) + Ak,i )) . (11) Similar to GRPO, this normalization helps stabi-lize the training process, as also supported by our empirical findings. Based on this, we propose to optimize the following objective for COPSD: 
+
+LCOPSD = Ey∼p0(·| x), t ∼U{ 0,T }
+
+> yt−s∼pt−s(·| y)
+
+˜Lti. (12) We put the details of our algorithm in Algorithm 2. 
+
+## 5 Experiment 
+
+In this section, we present the main experiment results with ablation studies and hyperparameter analysis, highlighting the performance of COPSD on human alignment and math or planning tasks. 
+
+5.1 Experimental Setup Datasets . We evaluate our methods on widely used datasets for Math, Planning and human align-ment tasks. Specifically, for human alignment tasks, we use the Reddit TL;DR summarization dataset (Völske et al., 2017) and the Anthropic-HH dataset (Bai et al., 2022). For math and planning tasks, we use the MATH (Lightman et al., 2023) and GSM8K (Cobbe et al., 2021) datasets. Addi-tionally, we include 4×4 Sudoku puzzles, which require constraint satisfaction and systematic rea-soning to correctly fill the grid with numbers. We use the accuracy of final answer for these tasks’ evaluation. Due to the low quality of data from MATH and GSM8k, it’s hard to further improve the performance of LLaDA models which may lead to overfitting issues. Therefore, for the SFT experi-ments in this paper, we use ground-truth data from the S1k dataset (Muennighoff et al., 2025), which provides high-quality supervision. Details of the datasets are provided in Appendix A.1. 
+
+Models . For all tasks and all experiments, we con-duct experiments using LLaDA-8B-Instruct (Nie et al., 2025) as our base models. 
+
+Baselines . We compare our model with base DLLM and self-distillation baseline methods on all tasks. Additionally, for reasoning tasks, we compare COPSD with models fine-tuned through SFT as well as with larger-scale LLMs. 
+
+Evaluation and Implementation Details . We evaluate performance on reasoning tasks by the ac-curacy of final answer for each math problems. For human alignment tasks, we compare the response between the trained models and base models with human evaluation. Specifically, we compare the proportion of responses that outperform those of the base model, referred to as the win rate. The remaining data is used for reinforcement learning. To evaluate performance, we use Claude 3.7 to compare responses from baseline or trained models against those generated by the SFT model, with win rate serving as the primary evaluation metric. 
+
+5.2 Comparison on Math and Planning tasks 
+
+Table 1 compares the performance of COPSD with other base models and self-distillation base-lines, evaluated on the Sudoku, MATH and GSM8k datasets. We conduct experiments using LLaDA-Instruction as backbone models. We firstly ob-serve that COPSD consistently outperforms the base model with different number of sampling to-kens for each step. For example, COPSD achieves a 61.4% improvement in relative performance on the Sudoku task when predicting 2 tokens simul-taneously, and it shows a similar level of improve-ment when predicting 4 tokens at once. This is be-cause the models can predict tokens more correctly at the early stage of the sampling step for diffu-sion models. More interestingly, we observe that our method, COPSD, achieves comparable perfor-mance when predicting 16 tokens simultaneously to that of the original base models predicting just 2 tokens, which significantly improves prediction efficiency.This further validates the effectiveness of our method, which aligns the distribution of early-step token predictions based on limited con-text with that of later-step predictions that leverage richer contextual information. By aligning these distributions, our approach enables more parallel token predictions, improving DLLM efficiency. 26959 Table 1: Model performance on Mathematics and Planning Benchmarks: Green values indicate best per-formance . The results demonstrate that COPSD consistently outperforms other models, applying consistently improves the starting checkpoint, and alone shows better performance than SFT.                                                                                       
+
+> Sudoku MATH500 GSM8k Model / # Tokens 24816 24816 24816
+> LLaDA-8B-Instruct 11.62 10.99 10.01 4.64 32.40 28.00 18.20 12.00 78.92 69.98 35.10 14.10 Base-Self 12.54 9.56 7.69 3.11 28.60 23.00 17.20 13.80 77.89 67.23 36.48 10.01 COPSD 18.75 18.31 10.03 9.35 34.60 29.20 18.00 12.20 80.74 73.24 40.66 15.77
+> LLaDA-8B-Instruct + SFT on S1k 14.11 13.87 3.81 1.57 33.4 24.60 10.80 5.00 79.45 66.49 17.51 1.82 + Base-Self 14.56 11.05 2.01 0.58 29.40 24.40 13.00 6.20 78.54 68.64 21.61 3.71 + COPSD 19.48 19.32 14.75 4.25 35.00 26.60 16.80 6.60 80.74 70.03 28.20 4.70
+
+Figure 2: Training Dynamics of Token Distribution Distance for MATH and Sudoku, where the y axis uses 
+
+bi(yt, yt−s) in Equation (5) to measure the distance gap between early and later tokens’ distributions. 
+
+Moreover, to further evaluate the effectiveness of our method, we incorporate standard fine-tuning techniques such as Supervised Fine-Tuning (SFT) using ground-truth data. We first observe that train-ing on high-quality reasoning data improves per-formance on math and planning datasets when pre-dicting two tokens simultaneously across all bench-marks. However, when predicting more tokens at once, the performance tends to decline compared to the original base models. Notably, when combined with SFT, we find that our method consistently enhances performance across various numbers of simultaneously predicted tokens. This verifies the potential of COPSD combined with SFT. Finally, we present the training dynamics of COPSD with respect to the distance bi(yt, yt−s)
+
+used in Equation (5), which is shown in Figure 2. These dynamics demonstrate that our model consis-tently reduces the distance between early and later timesteps, highlighting both the effectiveness and the characteristic training behavior of our method. 
+
+5.3 Comparison on Human Alignment tasks 
+
+Table 2 presents a comparison of win rates between our base models and various baselines on human alignment and summarization tasks. Specifically, we use the base model configured to generate two tokens at a time as the reference. We then evaluate models trained on top of this base by comparing their token generation outputs against those of the reference model. Notably, when generating two to-kens at a time using the model trained with COPSD, we observe a win rate exceeding 50%, indicating that COPSD improves model performance under the same generation setting. Furthermore, COPSD-trained models also outperform baseline models that generate more tokens in parallel, demonstrat-ing COPSD’s effectiveness in maintaining quality even with increased generation efficiency. In par-ticular, when generating 4 tokens at a time using COPSD on the Anthropic-HH dataset, the model achieves a win rate of 45.60%, which is not signifi-cantly lower than 50%. This suggests that COPSD can potentially match the performance of the base model generating 2 tokens at a time, thereby im-proving generation efficiency while preserving out-put quality. Moreover, we integrate our method with super-vised fine-tuning (SFT) on the TL;DR Summa-rization and Anthropic-HH datasets. We observe 26960 Table 2: Model performance on Human Alignment and Summarization Benchmarks with regard to Win Rate.                                                          
+
+> TL;DR Summarization Anthropic-HH Model / # Tokens 23482348
+> LLaDA-8B-Instruct -28.40 28.00 18.00 -45.90 44.20 36.20 Base-Self 43.20 20.40 16.40 10.80 51.40 43.20 40.60 37.40 COPSD 52.60 31.60 28.40 20.00 64.60 47.60 45.60 37.60
+> +SFT 73.00 64.80 61.20 41.00 46.20 39.80 35.20 28.80 +Base-Self 70.20 60.60 56.60 39.20 45.60 37.20 31.80 24.20 +COPSD 75.40 68.80 65.80 43.80 52.20 40.20 38.80 30.40
+
+Table 3: Ablation Studies on MATH500 datasets.                 
+
+> MATH500 Model / # Tokens 2348
+> LLaDA-8B-Instruct 32.40 28.00 18.00 12.00 COPSD-Random 33.20 28.60 17.60 11.60 COPSD 34.60 29.20 18.00 12.20
+
+that SFT provides limited improvement on the HH dataset, likely due to overfitting and the relatively lower quality of its data compared to the instruction-tuning data used for LLaDA-Instruct. In contrast, SFT on the TL;DR Summarization dataset signif-icantly boosts summarization performance. Fur-thermore, combining our method with SFT yields higher win rates on both datasets. In summary, this experiment further demonstrates the effectiveness of our method, showing that leveraging distribution information from later timesteps to calibrate earlier stages leads to improved performance. 
+
+5.4 Ablation Studies 
+
+In this section, we present an ablation study on the effect of randomly sampling the timestep ra-tio s/T , as described in Algorithm 2. Specifi-cally, we fix t/T at 0.9 and randomly sample s/T 
+
+from the range [0, 0.9]. We denote this variant as COPSD-Random and the results are summarized in Table 4 on the dataset MATH500. First, we ob-serve that COPSD-Random outperforms the base model LLaDA-Instruct during training, indicating that random sampling can be effective. However, it still underperforms compared to our proposed method, which uses fixed timesteps. This is likely because random sampling attempts to align distri-butions across all timesteps, making convergence more challenging and may require more optimiza-tion steps. In contrast, our approach focuses on minimizing the distance between specific early and 2 4 8 16 
+
+> Number of Tokens
+> 0
+> 5
+> 10
+> 15
+> 20
+> Accuracy (%)
+> Sudoku
+> s/T=0.1
+> s/T=0.3
+> s/T=0.5
+> s/T=0.7
+> s/T=0.8
+
+Figure 3: Performance comparison of COPSD with different values for s/T .
+
+later timesteps, leading to more stable and efficient training. Moreover, fixed timesteps do not imply masking the same tokens; instead, we randomly select different tokens to mask at each step. Thus, even with fixed timesteps, the model can dynami-cally learn diverse calibration information. There-fore, our design of fixing the timestep is impor-tant for efficient and effective training of COPSD. More ablation studies of our design are put into Appendix B.1. 
+
+5.5 Hyperparameter Analysis 
+
+In this section, we perform a hyperparameter anal-ysis on the time interval between early and later timestep token predictions. Specifically, we vary the ratio s/T with the set {0.1, 0.3, 0.5, 0.7, 0.8}
+
+by fixing t/T as 0.9. The results for different num-bers of predictions are shown in Figure 3. We observe that values between 0.5 and 0.7 yield the best performance. This suggests that medium val-ues of the hyperparameter, where the proportion of masked tokens is moderate rather than extreme, can achieve better performance. Overall, the method shows low sensitivity to this hyperparameter. 26961 6 Conclusion 
+
+In this paper, we propose Calibrated On-Policy Self-Distillation (COPSD) to address early-stage prediction errors in Diffusion Large Language Models (DLLMs), which arise from limited contex-tual information. COPSD distills a calibrated dis-tribution—derived from later decoding steps—into the original model, improving early predictions without requiring demonstration data. Experiments on math, planning, and RLHF tasks show that COPSD enhances both efficiency and effectiveness, particularly in parallel generation settings. COPSD also complements supervised fine-tuning, further boosting performance and offering a practical solu-tion for improving DLLM generation quality. We also conduct ablation studies and hyperparameter analyses to further understand our method. 
+
+## 7 Limitations 
+
+While COPSD demonstrates strong empirical per-formance across various tasks, it still relies on online data sampling—drawing samples from the current model during training. Future work could explore offline learning approaches or the use of pre-collected offline datasets to improve training efficiency and stability. We hope this work inspires new directions for advancing DLLMs’ training to-ward greater efficiency and effectiveness. 
+
+## References 
+
+Rishabh Agarwal, Nino Vieillard, Yongchao Zhou, Pi-otr Stanczyk, Sabela Ramos Garea, Matthieu Geist, and Olivier Bachem. 2024. On-policy distillation of language models: Learning from self-generated mistakes. In The twelfth international conference on learning representations .Arel. 2025. Arel’s sudoku generator. https://www. ocf.berkeley.edu/~arel/sudoku/main.html .Accessed: 2025-04-08. Jacob Austin, Daniel D Johnson, Jonathan Ho, Daniel Tarlow, and Rianne Van Den Berg. 2021. Structured denoising diffusion models in discrete state-spaces. 
+
+Advances in neural information processing systems ,34:17981–17993. Yuntao Bai, Andy Jones, Kamal Ndousse, Amanda Askell, Anna Chen, Nova DasSarma, Dawn Drain, Stanislav Fort, Deep Ganguli, Tom Henighan, and 1 others. 2022. Training a helpful and harmless assis-tant with reinforcement learning from human feed-back. arXiv preprint arXiv:2204.05862 .Andrew Campbell, Joe Benton, Valentin De Bortoli, Thomas Rainforth, George Deligiannidis, and Ar-naud Doucet. 2022. A continuous time framework for discrete denoising models. Advances in Neural Information Processing Systems , 35:28266–28279. Karl Cobbe, Vineet Kosaraju, Mohammad Bavarian, Mark Chen, Heewoo Jun, Lukasz Kaiser, Matthias Plappert, Jerry Tworek, Jacob Hilton, Reiichiro Nakano, and 1 others. 2021. Training verifiers to solve math word problems. arXiv preprint arXiv:2110.14168 .Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova. 2019. Bert: Pre-training of deep bidirectional transformers for language understand-ing. In Proceedings of the 2019 conference of the North American chapter of the association for com-putational linguistics: human language technologies, volume 1 (long and short papers) , pages 4171–4186. Abhimanyu Dubey, Abhinav Jauhri, Abhinav Pandey, Abhishek Kadian, Ahmad Al-Dahle, Aiesha Letman, Akhil Mathur, Alan Schelten, Amy Yang, Angela Fan, and 1 others. 2024. The llama 3 herd of models. 
+
+arXiv e-prints , pages arXiv–2407. Shansan Gong, Shivam Agarwal, Yizhe Zhang, Jiacheng Ye, Lin Zheng, Mukai Li, Chenxin An, Peilin Zhao, Wei Bi, Jiawei Han, and 1 others. 2024. Scaling dif-fusion language models via adaptation from autore-gressive models. arXiv preprint arXiv:2410.17891 .Shansan Gong, Ruixiang Zhang, Huangjie Zheng, Ji-atao Gu, Navdeep Jaitly, Lingpeng Kong, and Yizhe Zhang. 2025. Diffucoder: Understanding and im-proving masked diffusion models for code generation. 
+
+arXiv preprint arXiv:2506.20639 .Yuxian Gu, Li Dong, Furu Wei, and Minlie Huang. 2023. Minillm: Knowledge distillation of large language models. arXiv preprint arXiv:2306.08543 .Michael Gutmann and Aapo Hyvärinen. 2010. Noise-contrastive estimation: A new estimation principle for unnormalized statistical models. In Proceedings of the thirteenth international conference on artificial intelligence and statistics , pages 297–304. JMLR Workshop and Conference Proceedings. Dan Hendrycks, Collin Burns, Saurav Kadavath, Akul Arora, Steven Basart, Eric Tang, Dawn Song, and Jacob Steinhardt. 2024. Measuring mathematical problem solving with the math dataset, 2021. URL https://arxiv. org/abs/2103.03874 .Jonas Hübotter, Frederike Lübeck, Lejs Behric, An-ton Baumann, Marco Bagatella, Daniel Marta, Ido Hakimi, Idan Shenfeld, Thomas Kleine Buening, Carlos Guestrin, and 1 others. 2026. Reinforce-ment learning via self-distillation. arXiv preprint arXiv:2601.20802 .Jeonghye Kim, Xufang Luo, Minbeom Kim, Sang-mook Lee, Dohyung Kim, Jiwon Jeon, Dongsheng Li, and Yuqing Yang. 2026. Why does self-distillation 26962 (sometimes) degrade the reasoning capability of llms? 
+
+arXiv preprint arXiv:2603.24472 .Hunter Lightman, Vineet Kosaraju, Yuri Burda, Harri-son Edwards, Bowen Baker, Teddy Lee, Jan Leike, John Schulman, Ilya Sutskever, and Karl Cobbe. 2023. Let’s verify step by step. In The Twelfth Inter-national Conference on Learning Representations .Aaron Lou, Chenlin Meng, and Stefano Ermon. 2023. Discrete diffusion language modeling by estimating the ratios of the data distribution. Chenlin Meng, Kristy Choi, Jiaming Song, and Stefano Ermon. 2022. Concrete score matching: Generalized score matching for discrete data. Advances in Neural Information Processing Systems , 35:34532–34545. Niklas Muennighoff, Zitong Yang, Weijia Shi, Xi-ang Lisa Li, Li Fei-Fei, Hannaneh Hajishirzi, Luke Zettlemoyer, Percy Liang, Emmanuel Candès, and Tatsunori Hashimoto. 2025. s1: Simple test-time scaling. arXiv preprint arXiv:2501.19393 .Shen Nie, Fengqi Zhu, Chao Du, Tianyu Pang, Qian Liu, Guangtao Zeng, Min Lin, and Chongxuan Li. 2024. Scaling up masked diffusion models on text. 
+
+arXiv preprint arXiv:2410.18514 .Shen Nie, Fengqi Zhu, Zebin You, Xiaolu Zhang, Jingyang Ou, Jun Hu, Jun Zhou, Yankai Lin, Ji-Rong Wen, and Chongxuan Li. 2025. Large language dif-fusion models. arXiv preprint arXiv:2502.09992 .Jingyang Ou, Shen Nie, Kaiwen Xue, Fengqi Zhu, Ji-acheng Sun, Zhenguo Li, and Chongxuan Li. 2024. Your absorbing discrete diffusion secretly models the conditional distributions of clean data. arXiv preprint arXiv:2406.03736 .Mihir Prabhudesai, Menging Wu, Amir Zadeh, Kate-rina Fragkiadaki, and Deepak Pathak. 2025. Diffu-sion beats autoregressive in data-constrained settings. 
+
+arXiv preprint arXiv:2507.15857 .Subham Sahoo, Marianne Arriola, Yair Schiff, Aaron Gokaslan, Edgar Marroquin, Justin Chiu, Alexan-der Rush, and Volodymyr Kuleshov. 2024. Simple and effective masked diffusion language models. Ad-vances in Neural Information Processing Systems ,37:130136–130184. Subham Sekhar Sahoo, Justin Deschenaux, Aaron Gokaslan, Guanghan Wang, Justin Chiu, and Volodymyr Kuleshov. 2025. The diffusion duality. 
+
+arXiv preprint arXiv:2506.10892 .Jiaxin Shi, Kehang Han, Zhe Wang, Arnaud Doucet, and Michalis Titsias. 2024. Simplified and general-ized masked diffusion for discrete data. Advances in neural information processing systems , 37:103131– 103167. Jascha Sohl-Dickstein, Eric Weiss, Niru Mah-eswaranathan, and Surya Ganguli. 2015. Deep un-supervised learning using nonequilibrium thermo-dynamics. In International conference on machine learning , pages 2256–2265. pmlr. Yang Song and Diederik P Kingma. 2021. How to train your energy-based models. arXiv preprint arXiv:2101.03288 .Hugo Touvron, Louis Martin, Kevin Stone, Peter Al-bert, Amjad Almahairi, Yasmine Babaei, Nikolay Bashlykov, Soumya Batra, Prajjwal Bhargava, Shruti Bhosale, and 1 others. 2023. Llama 2: Open foun-dation and fine-tuned chat models. arXiv preprint arXiv:2307.09288 .Michael Völske, Martin Potthast, Shahbaz Syed, and Benno Stein. 2017. Tl; dr: Mining reddit to learn au-tomatic summarization. In Proceedings of the Work-shop on New Frontiers in Summarization , pages 59– 63. Guanghan Wang, Yair Schiff, Subham Sekhar Sahoo, and Volodymyr Kuleshov. 2025. Remasking discrete diffusion models with inference-time scaling. arXiv preprint arXiv:2503.00307 .Bangjun Xiao, Bingquan Xia, Bo Yang, Bofei Gao, Bowen Shen, Chen Zhang, Chenhong He, Chiheng Lou, Fuli Luo, Gang Wang, and 1 others. 2026. Mimo-v2-flash technical report. arXiv preprint arXiv:2601.02780 .Wenda Xu, Rujun Han, Zifeng Wang, Long T Le, Dhruv Madeka, Lei Li, William Yang Wang, Rishabh Agar-wal, Chen-Yu Lee, and Tomas Pfister. 2024. Specu-lative knowledge distillation: Bridging the teacher-student gap through interleaved sampling. arXiv preprint arXiv:2410.11325 .Zebin You, Shen Nie, Xiaolu Zhang, Jun Hu, Jun Zhou, Zhiwu Lu, Ji-Rong Wen, and Chongxuan Li. 2025. Llada-v: Large language diffusion models with visual instruction tuning. arXiv preprint arXiv:2505.16933 .Siyan Zhao, Devaansh Gupta, Qinqing Zheng, and Aditya Grover. 2025. d1: Scaling reasoning in diffu-sion large language models via reinforcement learn-ing. arXiv preprint arXiv:2504.12216 .Siyan Zhao, Zhihui Xie, Mengchen Liu, Jing Huang, Guan Pang, Feiyu Chen, and Aditya Grover. 2026. Self-distilled reasoner: On-policy self-distillation for large language models. arXiv preprint arXiv:2601.18734 .Fengqi Zhu, Rongzhen Wang, Shen Nie, Xiaolu Zhang, Chunwei Wu, Jun Hu, Jun Zhou, Jianfei Chen, Yankai Lin, Ji-Rong Wen, and 1 others. 2025a. Llada 1.5: Variance-reduced preference optimization for large language diffusion models. arXiv preprint arXiv:2505.19223 .Huaisheng Zhu, Zhengyu Chen, Shijie Zhou, Zhihui Xie, Yige Yuan, Shiqi Chen, Zhimeng Guo, Siyuan Xu, Hangfan Zhang, Vasant Honavar, and 1 others. 2025b. Simple denoising diffusion language models. 
+
+arXiv preprint arXiv:2510.22926 .26963 A Experimental Details 
+
+A.1 Details of Dataset 
+
+In this section, we provide detailed descriptions of datasets used in our experiments: 
+
+Anthropic-HH (Bai et al., 2022): The Anthropic Helpful and Harmless Dialogue dataset consists of 170,000 dialogues between humans and an auto-mated assistant. Each dialogue includes a human query and paired model responses, which are an-notated with ratings for both helpfulness and harm-lessness. This dataset is primarily used to evaluate single-turn dialogue performance. 
+
+Reddit TL;DR summarization (Völske et al., 2017): This dataset comprises a curated collec-tion of Reddit forum posts, specifically prepared for summarization tasks. In our experiment, we use Anthropic-HH and Red-dit TL;DR summarization datasets for RLHF tasks. And We prompt Claude-3.7 for zero-shot pair-wise evaluation (see Table 5 and 6). 
+
+Math-500 (Hendrycks et al., 2024): 500 samples with mathematical queries and their corresponding results for evaluation purpose. 
+
+GSM8k : This dataset comprises diverse grade-school math word problems designed to evaluate a model’s ability to perform multi-step mathematical reasoning. 
+
+Sudoku : For the 4 × 4 Sudoku task, we utilize the training dataset available at https://github.com/Black-Phoenix/4x4-Sudoku-Dataset, specifically the subset containing one million unique puzzles. This dataset was syntheti-cally generated using code from Arel (Arel, 2025). For evaluation purposes, we randomly generate 256 Sudoku puzzles using this generator. The reward is calculated as the proportion of correctly filled cells among those that were empty in the original puzzle. This evaluation protocol focuses on the model’s problem-solving ability rather than its capacity to copy pre-filled values. 
+
+## B Additional Experiments 
+
+B.1 Additional Ablation Studies 
+
+In this section, we present additional ablation re-sults analyzing key components of our model de-sign, with quantitative results summarized in Ta-ble 4. For the design choice of ignoring Z in Equa-tion 5, we find that retaining Z leads to notice-able performance degradation during training and results in unstable optimization; we denote this                      
+
+> Table 4: Additional Ablation Studies on Sudoku.
+> Sudoku Model / # Tokens 2348
+> COPSD w/o group normalization 8.50 6.10 4.10 3.22 COPSD with Z14.11 13.87 5.27 3.81 COPSD-Random 18.60 17.55 10.08 9.23 COPSD 18.75 18.31 10.03 9.35
+
+variant as COPSD with Z. Regarding timestep selection, our experiments show that using fixed timesteps achieves performance comparable to ran-domly sampled timesteps (denoted as COPSD-Random). Finally, omitting group normalization (denoted as COPSD w/o group normalization) re-moves a critical negative gradient component nec-essary for stable learning, causing the model to rapidly collapse to extremely poor performance. 26964 For the following dialogue history to a chatbot, which response is more helpful and harmless? Dialogue history: {dialogue history} Response 1: {Response 1} Response 2: {Response 2} FIRST provide a one-sentence comparison of the two responses and explain which you feel is more helpful and harmless. SECOND, on a new line, state only "1" or "2" to indicate which response is more helpful and harmless. Your response should use the format: Comparison: <one-sentence comparison and explanation> More helpful: <"1" or "2"> 
+
+> Table 5: Prompt for Claude-3.7 evaluation for the dialogue generation task on the Anthropic-HH dataset. {dialogue history}, {Response 1}, and {Response 2} are placeholders.
+
+Which of the following summaries does a better job of summarizing the most important points in the given forum post, without including unimportant or irrelevant details? A good summary is both precise and concise? Post: {post} Summary 1: {Summary 1} Summary 2: {Summary 2} FIRST provide a one-sentence comparison of the two summaries, explaining which you prefer and why. SECOND, on a new line, state only "1" or "2" to indicate your choice. Your response should use the format: Comparison: <one-sentence comparison and explanation> Preferred: <"1" or "2"> 
+
+> Table 6: Prompt for Claude-3.7 evaluation for the summarization task on the TL;DR Summarization dataset. {post}, {Summary 1}, and {Summary 2} are placeholders.
+
+26965

@@ -1,0 +1,512 @@
+Title: RadGazeGen: radiomics and gaze-guided chest X-ray generation using diffusion models
+
+URL Source: https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/
+
+Markdown Content:
+## [](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/)Abstract.
+
+### Purpose
+
+We present RadGazeGen, a framework for integrating experts’ eye gaze patterns and radiomic feature maps as controls within text-to-image diffusion models to enable high-fidelity medical image generation. Although recent text-to-image diffusion models have achieved impressive success, textual descriptions alone often fail to capture disease-specific details necessary for generating clinically accurate and anatomically faithful images.
+
+### Approach
+
+To address these limitations, RadGazeGen leverages radiologists’ eye gaze trajectories and radiomics feature descriptors as spatial and semantic controls in the diffusion process. Eye gaze patterns encode visuo-cognitive attention and spatial localization of subtle disease cues, whereas radiomics features capture subvisual phenotype characteristics such as texture, intensity, and shape. By combining these multimodal cues, the proposed framework guides the generative model toward anatomically consistent and disease-aware image synthesis. The quality of the generated images were evaluated using a board-certified radiologist.
+
+### Results
+
+RadGazeGen was evaluated on the REFLACX dataset for image generation quality and diversity. Furthermore, to assess its downstream clinical utility, the generated images were used for disease classification tasks on the CheXpert test set () and for long-tailed learning evaluation on the MIMIC-CXR-LT test set (), demonstrating high fidelity and diagnostic relevance of the synthesized images.
+
+### Conclusions
+
+By jointly conditioning on gaze and radiomic representations, RadGazeGen bridges the gap between human visual cognition and machine perception, improving both realism and clinical validity in medical image generation. This framework underscores the importance of incorporating anatomically grounded and disease-aware controls in diffusion-based medical image synthesis.
+
+**Keywords:** chest X-rays, diffusion models, disease classification, eye gaze, radiomics
+
+## [](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/)1. Introduction
+
+Current clinical applications of AI encounter significant hurdles such as data scarcity, missing modalities, and dataset imbalances, highlighting the importance for enhancing the generation of high-quality medical images to bolster automated patient diagnosis, prognosis, and to expedite clinical research. In the last few years, diffusion models have gained prominence in image generation.[1](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r1),[2](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r2) More recently, these models have made remarkable progress in conditional image generation, mainly in text-to-image (T2I) generation.[3](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r3)
+
+These models take text descriptions or captions as input and attempt to synthesize images that have maximum resemblance with the provided description.
+
+Recent T2I models trained on huge amounts of data have achieved state-of-the-art performance.[4](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r4) However, this type of textual conditioning has several limitations. In the case of complex textual structuring, i.e., when the text has a description of complex objects or ill-defined contents, the T2I diffusion models show poor image generation capabilities.[5](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r5) In addition, vice versa, to generate a complex image, the text description design is often ill-defined. Even in the case of a well-defined text description, the generated images from T2I models occasionally have missing objects, incorrect shapes, color, position, etc.[6](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r6) This problem stems from the fact that there is an inherent ambiguity of obviousness between text description and real-life images. A simple example is “an elephant and a bird flying” intuitively means that only the bird is flying. However, the ambiguity can be that in an unrealistic scenario both the elephant and the bird are flying. Hence, instead of generating an image where there is an elephant on the ground and a bird in the sky, the generated image shows both the elephant and bird flying.[5](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r5) This particular problem is in fact more common in the case of medical images. For example, if the radiologist text indicates that there is a presence of a certain abnormality, “enlarged cardiac mediastinum,” but it is not very specific about the location and severity, the generated CXR can have enlargement is any direction and may have less severe enlargement than anticipated. Hence, location and severity are critical to clinically accurate image generation. Even after several iterations of prompt design, the exact desired image is extremely difficult to generate. Another important problem is that radiology reports contain common disease related diagnostic information and often exclude any global anatomical or patient demographic information. Moreover, description of local changes in image patterns, and their relationship to the disease, are also not present in such reports. This limitation is a real challenge to medical image generation. This motivates us to explore other clinically relevant conditioning approaches.
+
+Generating images with the desired structure, texture, and attribute location may require several trials to design an unambiguous and clearly instructed prompt. To address this, additional controls are often fed to diffusion models to generate the desired structure.[7](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r7) These controls are fine-grained information that contain required structural, textural, and positional features to generate specific desired images. Images of edge maps, depth maps, pose skeletons, and segmentation maps can all be used as controls. Recently, remarkable progress has been made in this domain where more fine-grained additional controls such as spatial maps have demonstrated superior image generation capabilities.[8](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r8) However, in the case of medical image generation, these controls are not well-defined, and the field is unexplored.
+
+Medical image generation is a complex task because apart from generating high-quality images, the quality of generated anatomical structure and, more importantly, the precise representation of disease patterns are extremely critical. Current text-conditioned diffusion models fall short in effectively addressing these critical aspects of medical image generation. In medical imaging, radiomics features have long been used for various tasks involving disease diagnosis, prognosis, and treatment response assessment. Radiomics features are image transformations that capture a variety of properties of medical images pertaining to local and global changes in intensity distributions—in this process, the textural patterns of disease manifestation are quantified. In this work, we hypothesize that these different clinically-relevant radiomic feature maps can be used as specialized controls for accurate medical image generation.
+
+In clinical domains such as radiology and pathology, experts’ visual patterns have been shown to have an impact on medical image interpretation.[9](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r9)_–_[11](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r11) These eye gaze patterns harbor contextually rich visuo-cognitive data related to the occurrence and patterns of diseases.[12](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r12) Recently, several methods have shown that integrating gaze patterns into deep learning frameworks helps improve the model performance for several diagnostic tasks.[9](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r9),[10](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r10) In summary, eye gaze patterns may play a crucial role as controls for diffusion models, complementing text-based conditioning to generate disease pathologies in the relevant regions. Our next hypothesis is that the human visual attention (HVA) maps computed from these eye gaze patterns can be used as relevant controls to translate the disease occurrence and visual patterns into a diffusion model. In this work, we propose to integrate these eye gaze patterns into diffusion models for medical image generation. Previous works have explored medical image generation from text conditions where disease patterns generated can be unrealistic and not located in the desired regions. By integrating these gaze patterns, we aim to generate medical images with not just realistic disease patterns but ones where such patterns are in the regions where an expert is focusing during diagnostic interpretation.
+
+### 1.1. Summary of Motivation
+
+Owing to the ambiguity between the radiology text description and images, diffusion models face difficulty in generating realistic images with accurate disease patterns. In recent works in the nonmedical domain, the addition of spatial features as controls improves T2I generation capabilities. In medical image generation, by adding such controls, anatomical structure of the CXRs can be accurately generated; however, translating the disease patterns still remains a challenging problem.[13](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r13) Our work is based on the premise that, to translate the disease patterns and locations, the radiologists’ eye gaze fixations and radiomic feature maps can be used as clinically relevant controls.
+
+In this work, the radiomics filter maps are combined with HVA maps and are provided as controls to diffusion models. However, composing these filters as a single control is difficult; hence, we propose separate frameworks for radiomics filters maps and HVA maps. For training diffusion models with the radiomic filters maps, we design Radiomics ControlNet (Rad-CN) and for training diffusion models with the HVA maps, we design and Human Visual Attention ControlNet (or HVA-CN). The combined Rad-CN and HVA-CN make up our RadGazeGen architecture. We demonstrate the efficacy of our approach for several tasks. RadGazeGen outperforms other diffusion baselines, highlighting the importance of radiomic filters and HVA maps as controls to improve the clinical diagnostic quality of generated images. Furthermore, we use a pretrained disease classification model for inference on the generated images. We show that our generated images contains the disease patterns as in the training dataset distribution and achieve comparable AUCs on different disease pathologies; this is further qualitatively corroborated by our collaborating radiologists. Finally, we also show results on a long-tailed disease classification task where we generate additional CXRs of the medium and tail classes and train the classifier on the re-balanced data distribution. We observe that injection of our generated images improve the balanced accuracy and other metrics when compared with the injection of baseline generated images to the data distribution.
+
+### 1.2. Contributions
+
+The primary contributions of this work are as follows:
+
+*   •
+We propose a gaze-guided diffusion model RadGazeGen to generate disease pattern-preserving CXR images. This model comprises of two modules: Rad-CN, which takes radiomic feature maps as inputs to generate anatomically and texturally-aware CXR images. and HVA-CN, which takes radiologists’ eye gaze patterns and feeds the same to the Rad-CN to generate disease pattern and location-aware CXR images.
+
+*   •
+We demonstrate the performance of RadGazeGen for the classification of thoracic diseases and long-tailed classification tasks.
+
+In [Fig.1](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#f1), we show our RadGazeGen pipeline and compare it with existing methods. RadGazeGen takes both radiomics filter maps and HVA maps, which are computed from eye gaze patterns of radiologists, as control inputs and generates a CXR image.
+
+#### Fig. 1.
+
+![Image 1: Fig. 1](https://cdn.ncbi.nlm.nih.gov/pmc/blobs/6f4f/13285692/95f686a1e4f6/JMI-013-S11205-g001.jpg)
+
+(a)Baseline methods add generic controls (for example text) to the diffusion models for medical image generation. (b)Our method, RadGazeGen, combines different radiomics filter maps and lung segmentation mask with radiologist’s eye gaze patterns, and uses these controls for clinically accurate medical image generation.
+
+## [](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/)2. Related Works
+
+### 2.1. Eye-Gaze in Medical Image Analysis
+
+The eye gaze of experts has demonstrated immense potential in several medical applications such as disease classification [9](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r9),[10](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r10) and segmentation,[14](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r14) for various modalities, including, radiology,[15](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r15) pathology,[16](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r16) retinopathy,[17](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r17) and ECG.[18](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r18),[19](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r19) After successfully leveraging eye gaze patterns in general computer vision tasks such as object detection,[20](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r20),[21](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r21) image segmentation,[22](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r22)_–_[24](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r24) action localization,[25](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r25),[26](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r26) and activity recognition,[27](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r27),[28](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r28) recent applications have ventured into utilizing them in the clinical domain. Understanding gaze patterns of medical professionals, such as radiologists/pathologists, and providing this information as an auxiliary signal to ML models can potentially reduce misdiagnosis.[29](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r29) This claim was validated by recent works,[9](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r9),[10](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r10) which employed teacher–student knowledge distillation models to improve disease diagnosis. In this work, we propose a new framework of diffusion models that generate gaze-guided clinically relevant medical images.
+
+### 2.2. Text-to-Image Diffusion
+
+Since their introduction,[30](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r30) diffusion models have been applied extensively to image generation tasks.[1](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r1),[2](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r2) Latent diffusion models (LDMs) deal with latent spaces of the images to perform the diffusion steps.[3](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r3) Text-to-image diffusion models integrate text embeddings with image latent space embeddings using CLIP,[31](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r31) achieving state-of-the-art performance in image generation tasks. Recent commercial applications of text-to-image generations are DALL-E2[32](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r32),[33](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r33) and Midjourney.[34](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r34) Recently, LDMs have been used for different medical imaging modalities for a wide range of applications such as image-to-image translation,[35](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r35),[36](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r36) reconstruction,[37](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r37)_–_[44](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r44) denoising,[45](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r45),[46](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r46) registration,[47](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r47),[48](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r48) segmentation,[49](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r49)_–_[54](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r54) and classification.[55](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r55)_–_[57](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r57) Despite their overall success, the ambiguity between text descriptions and images in text-to-image diffusion models can severely impact the quality of generated images and often lead to suboptimal generations.[5](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r5)
+
+### 2.3. Controllable Diffusion Models
+
+Recently, diffusion models in which one or more controls are used are gaining traction. These controls help in generating custom and task-specific images. The controls such as color variation[58](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r58) and inpainting[33](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r33),[59](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r59) can be directly provided by the image diffusion process. Controllable diffusion models can be broadly classified into two categories: models trained from scratch[60](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r60) and finetuned lightweight adapters that are finetuned by freezing the pretrained T2I diffusion models.[7](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r7),[61](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r61) Composer[60](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r60) uses single or multiple conditions to generate images by training large diffusion models. T2I-Adapter,[61](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r61) GLIGEN,[62](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r62) and ControlNet[7](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r7) finetune an adapter from frozen large pretrained diffusion models. More recently, several methods such as UniControl[63](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r63) and UniControlNet[64](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r64) have been proposed where multiple controls are unified to generate more specific images with different styles and contents. Att-Adapter[65](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r65) and Multi-ControlNet[7](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r7) are variations of T2I-Adapter and ControlNet, respectively, where models trained with different conditions are fused to generate images from composite conditions. However, for medical image generation, the use of additional controls is still in its infancy. Given the diversity of modalities and downstream tasks in medical images, the design of controls in this domain depends largely on the specific modality and task. Medical image translation[13](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r13) is an important field of research that has immense clinical importance with applications ranging from generating multimodality images to data augmentations. However, this domain of image translation using diffusion models with additional controls is relatively unexplored.
+
+### 2.4. Radiomics
+
+Radiomics encompasses the computerized extraction of quantifiable data from radiological images, typically subtle radiographical features. These features, which capture morphological and textural attributes, have been shown to be effective in several clinical applications involving radiographs.[66](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r66),[67](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r67) The role of such clinically relevant descriptors in generative models is unexplored.
+
+In summary, there is no existing work that studies clinically relevant controls for radiology image generation. To address this limitation, we propose RadGazeGen, which uses radiomics filter maps and radiologists’ eye gaze patterns as controls to generate clinically accurate medical images.
+
+## [](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/)3. Method
+
+An overview of the proposed method is shown in [Fig.2](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#f2). In this work, we first train individual ControlNet (CN) models with different radiomics maps and segmentation masks as a control [shown in [Fig.2(a)](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#f2)]. Then, we perform zero-shot inference by combining two or more of these controls [shown in [Fig.2(b)](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#f2)]. The proposed method RadGazeGen comprises two main modules, namely, Rad-CN and HVA-CN. For Rad-CN training, the radiomics maps and the lung segmentation mask are combined to form unified controls. HVA maps are computed from the eye gaze patterns of radiologists. For HVA-CN training, these HVA maps in a specified manner are fed as controls to the trained Rad-CN.
+
+### Fig. 2.
+
+![Image 2: Fig. 2](https://cdn.ncbi.nlm.nih.gov/pmc/blobs/6f4f/13285692/75297ca6966c/JMI-013-S11205-g002.jpg)
+
+Overview of RadGazeGen pipeline. (a)Generated CXRs using radiomics filter maps (Canny, Gaussian-Laplacian, Sobel) and lung segmentation masks as conditioning controls. (b)Multicontrol fusion demonstrating combined Canny and Sobel filters with lung segmentation masks respectively for enhanced CXR generation. (c) Pipeline components: (1)hypothesis generation framework for control selection, (2)Rad-CN architecture employing radiomics filters for initial RadGazeGen module training, then (3)HVA-CN module applying hypotheses from (1) through hierarchical visual attention mechanisms to finalize model training.
+
+In this section, we start by introducing the preliminary concepts that are used in developing the methodology of the paper (Sec.[3.1](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#sec3.1)). In Sec.[3.2](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#sec3.2), we discuss the different components of the proposed methodology RadGazeGen. The primary components of RadGazeGen, Rad-CN is discussed in Sec.[3.2.1](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#sec3.2.1), and HVA-CN is discussed in Sec.[3.2.2](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#sec3.2.2). Finally, we discuss the inference of RadGazeGen in Sec.[3.2.3](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#sec3.2.3).
+
+### 3.1. Preliminary
+
+Diffusion probabilistic models, often referred to as diffusion models, are generative models that are parameterized forms of Markov chains trained using variational inference.[1](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r1) Let us consider an image input , the forward process is defined as adding Gaussian noise  to  according to a variance schedule , where  is the number of total time steps.
+
+(1)
+
+and the reverse process is defined as
+
+(2)
+
+The training is done using variational lower bound (ELBO). In our case, we train the stable diffusion (SD) model with chest X-rays (CXRs) as image , and the radiologist’s reports as text conditioning, , in a T2I diffusion manner. Radiologists eye gaze patterns, represented as , are collected when they scan a CXR during diagnosis. The radiologists also provide text transcripts after diagnosis. We compute HVA maps from , similar to the method described by Bhattacharya et al.[9](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r9) In short, the HVA maps are heatmaps computed by adding Gaussian blur to .
+
+### 3.2. RadGazeGen
+
+An overall pipeline of RadGazeGen is shown in [Fig.2](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#f2). We first train an SD model with CXRs and radiology reports as text conditions, . By doing this, the SD model is generalized for CXR images (represented as SD-CXR) and can be used for further finetuning to serve different medical image generation tasks. Details of Rad-CN and HVA-CN architecture are shown in [Fig.3](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#f3). Next, we discuss the two major components of RadGazeGen as follows.
+
+#### Fig. 3.
+
+![Image 3: Fig. 3](https://cdn.ncbi.nlm.nih.gov/pmc/blobs/6f4f/13285692/9fc4731630d0/JMI-013-S11205-g003.jpg)
+
+Overview of the Rad-CN and HVA-CN architecture. (a)Rad-CN architecture: adapts the frozen pre-trained SD model (initially trained on CXR images and paired radiology reports) from the MIMIC-CXR dataset. A trainable copy of the SD model is fine-tuned in a ControlNet framework, enabling text-to-image synthesis with radiomics filters as conditioning. (b)HVA-CN architecture: modifies the trained CN model with the hypotheses as conditioning.
+
+#### Algorithm 1.
+
+RadGazeGen pipeline.
+
+1: **Input:** CXR images , radiology reports , radiomics filters , gaze data , disease image bag
+2: **Output:** Generated CXR image
+3: Train stable diffusion using  to obtain SD-CXR
+4: **for** each image **do**
+5: Compute radiomics maps
+6: Sample timestep  and noise
+7: Add noise to latent
+8:
+9: Compute loss
+10: Update
+11: **end for**
+12: Compute HVA maps  from gaze data
+13: **for** each disease type **do**
+14: Threshold  to obtain mask
+15: **for** each image **do**
+16: Generate hypothesis
+17: **end for**
+18: Compute similarity
+19: Select best hypothesis
+20: **end for**
+21: **for** each selected hypothesis **do**
+22: Sample timestep  and noise
+23: Add noise to latent
+24:
+25: Compute loss
+26: Update
+27: **end for**
+28: Freeze
+29: Input controls
+30: Fuse models
+31: **for****do**
+32:
+33: **end for**
+34: **return** generated CXR image
+
+#### 3.2.1. Radiomics, ControlNet
+
+The Rad-CN module is used to finetune the SD-CXR with  different radiomics feature maps, , to generate radiomics-guided CXR images with a text condition . Here,  are computed by applying different radiomic filters to the CXR image . The objective of Rad-CN is to translate from  to real images  based on . In [Fig.2(c.2)](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#f2), we show the different  is fed to , which generates . The training loss is defined as
+
+(3)
+
+where  is time step,  is the noise at each time step , and  is the trainable parameter of Rad-CN.
+
+#### 3.2.2. Human visual attention, ControlNet
+
+Here, we discuss how eye gaze patterns are used as a control for CXR generation. HVA-CN [shown in [Fig.2(c.3)](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#f2)] has two major components: gaze-guided hypotheses generation and training based on the best hypotheses generated. First, we compute HVA maps,  from , shown in [Fig.4](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#f4). Here,  is the different disease types. These HVA maps are then used to generate multiple CXR hypotheses images. We then select the best hypothesis and use that as the gaze-guided control for HVA-CN training. A detailed discussion of these components is provided next.
+
+##### Fig. 4.
+
+![Image 4: Fig. 4](https://cdn.ncbi.nlm.nih.gov/pmc/blobs/6f4f/13285692/82f76344c273/JMI-013-S11205-g004.jpg)
+
+Hypothesis generation. HVA maps are thresholded to create masks, which are then mapped to various disease pathologies to generate hypotheses.
+
+##### Gaze-guided hypothesis generation
+
+These hypotheses are multiple generated CXRs based on a bag of images . This bag contains CXRs of  different thoracic diseases. To generate these hypotheses, first, we apply a threshold to , such that , where  are the - and -coordinates of the image. Here,  is the image obtained after the threshold, as shown in [Fig.4](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#f4). Then, we apply the bitwise AND operation to a set of images  and  as a binary mask ([Fig.4](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#f4)), such that . Finally, we obtain the gaze-guided hypotheses, represented as . From these multiple hypotheses, the best hypothesis is selected by comparing it with . The hypothesis with the maximum similarity score is finally selected, shown as . This score is calculated by computing the distance between the features ofsla ,  and , , shown as , shown in [Fig.2(c.1)](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#f2).
+
+##### Training
+
+The training of _HVA-CN_, represented as , as shown in [Fig.2(c.3)](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#f2)
+
+(4)
+
+where  is time step,  is the noise at each time step , and  is the trainable parameter of HVA-CN.
+
+#### 3.2.3. Inference
+
+During inference, the input set  is fed to fused  and , represented as . This is our proposed RadGazeGen architecture. The RadGazeGen module,  is expressed as
+
+(5)
+
+where  are the frozen parameters of Rad-CN and HVA-CN and  are the inference steps of the model. Now, we show that our model also facilitates inference using a subset of controls from the set  using the indicator function , and Eq.(5) can be rewritten as .
+
+## [](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/)4. Experiments and Results
+
+We use CXR images and free-text radiology reports from the MIMIC-CXR dataset for SD training. We use the eye-gaze data from publicly available Eye Gaze Data for Chest X-rays[68](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r68) () and REFLACX dataset[69](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r69) (). For evaluation, we use  CXRs from the REFLACX dataset. For classification experiments, we use the CheXpert test dataset (), and for long-tailed classification experiments, we use the MIMIC-CXR-LT dataset.[70](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r70) This dataset is divided into the training (), validation (), balanced test (), and test () set.
+
+### 4.1. Implementation
+
+#### 4.1.1. SD training
+
+We use CXR images of size  from the MIMIC-CXR dataset to finetune an SD v1.5 model. We train for 50,000 steps with a learning rate of  and batch size of 4. We use gradient checkpointing and mixed precision of “fp16.” The gradient accumulation steps are set to 4, and max_grad_norm is set to 1. Training is done on a single Quadro RTX 8000 (48 GB) GPU.
+
+#### 4.1.2. RadGazeGen training
+
+To train the different components of RadGazeGen, the two eye gaze datasets are used. For training, we use  CXRs by combining the entire first dataset with  CXRs and the samples for which only single radiologist eye gaze are collected from REFLACX (). We remove the overlapping samples from the first dataset. For testing, we use the remaining  from REFLACX dataset. First, we extract different radiomics filter maps using OpenCV and Sklearn libraries and lung segmentation from.[71](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r71) We then train Rad-CN with these radiomics filters and lung masks. The HVA maps are computed, as discussed in Sec.[3.2.2](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#sec3.2.2). We train the HVA-CN with these HVA maps. For training, we use  image size as input and train for 10 epochs with a batch size set to 4 and a learning rate of . We use mixed precision of “fp16,” and the gradient accumulation steps are set to 4.
+
+#### 4.1.3. Classification with generated images as test set
+
+We generate the captions for the test set of CheXpert using RGRG.[72](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r72) Radiomics maps are computed as described above, followed by the computation of HVA maps. The captions, radiomics filter maps, and HVA maps computed from the test set of CheXpert are used to generate CXRs using RadGazeGen. The pretrained DenseNet-121 model from TorchXRayVision[73](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r73) is used to predict the classes for the generated images.
+
+#### 4.1.4. Long-tailed (LT) classification
+
+For long-tailed classification, we use the MIMIC-CXR-LT dataset. We identify the medium and tail classes and randomly select text reports for these medium and tail classes from the MIMIC-CXR dataset. Note that there is no potential concern about data overlap. Then, we randomly select sets of radiomic filter maps and HVA maps and combine them with the texts. For each disease pathology in the medium and tail classes, we generate CXR images using this set as controls such that for each pathology the CXR count is , where  is the different medium and tail classes. In this way, all the classes in the MIMIC-CXR-LT dataset have  CXR images. A ResNet-50[74](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r74) model is then trained for LT classification.
+
+### 4.2. Quantitative Results
+
+In Sec.[4.2.1](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#sec4.2.1), we evaluate the quality of generated images compared with original images. In Sec.[4.2.2](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#sec4.2.2), we discuss the classification results on the CheXpert dataset. In Sec.[4.2.3](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#sec4.2.3), we discuss the long-tailed classification results on the MIMIC-CXR-LT dataset. Finally, in Sec.[4.2.4](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#sec4.2.4), we discuss the ablation analysis results.
+
+#### 4.2.1. Quality of image generation
+
+First, we discuss the quality and diversity of the generated images. We compare our proposed method with different SD, ControlNet, and MultiControlNet baselines. Here, MultiControlNet is a variant of ControlNet, which inputs multiple controls as inputs. In [Table 1](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#t002), we report the Fréchet inception distance (FID) scores for the generated images and compare with T2I-Adapter, ControlNet, and Multi-ControlNet for different radiomic maps and HVA controls. RadGazeGen outperforms the baselines on four out of five controls. Though T2I-Adapter achieves the best performance for canny edge filter maps as control, RadGazeGen outperforms ControlNet and MultiControlNet on all the controls ([Table 2](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#t003)). In [Table 3](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#t004), we use different quantitative metrics to assess the controllability. Structural similarity index measure (SSIM) is used for Canny, Sobel, and GL filter maps; mean intersection over union (mIoU) is used for segmentation maps overlap; and CLIP score is used to assess the generated content. RadGazeGen outperforms SD and ControlNet baselines on three out of five controls. From [Tables 1](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#t002) and [3](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#t004), we observe that ControlNet performs better than MultiControlNet on image quality and controllability, whereas RadGazeGen performs better than MultiControlNet when both the models are using multiple controls. These results suggest the strength of the composability of Rad-CN and HVA-CN modules for better-quality image generation. It is important to note that Sobel and Gaussian Laplacian maps primarily capture edge-based information rather than the full image structure; therefore, SSIM may yield relatively lower similarity scores when applied to such edge representations.
+
+##### Table 1.
+
+FID (↓) metric is shown for different radiomics filter maps, segmentation masks, and HVA controls. We compare with different baselines. Best results in bold.
+
+|  | Canny | Sobel | GL | Segmentation | HVA |
+| --- | --- | --- | --- | --- | --- |
+| T2I-Adapter | **1.94** | **2.64** | 3.43 | 3.10 | 3.53 |
+| ControlNet | 2.9338 | 2.9855 | 3.7689 | 2.6059 | 3.1240 |
+| MultiControl * * * | 3.1674 * * * | 3.1707 * * * | 2.9685 * * * | 4.6870 * * * | 3.0573 * * * |
+| RadGazeGen | 2.8697 | 2.9065 | **2.9111** | **2.5820** | **3.0021** |
+
+##### Table 2.
+
+Comparison of the proposed method with existing foundation models. We report FID and SSIM metrics. Best results in bold.
+
+|  | FID (↓) | SSIM (↑) |
+| --- | --- | --- |
+| MedFusion | **2.6187** | 0.0082 |
+| CXR-IRGen * * * | 3.3686 * * * | 0.0085 * * * |
+| Ours | 2.8697 | **0.70** |
+
+##### Table 3.
+
+Assessment of controllability using SSIM (↑), mIoU (↑), and CLIP-score (↑) for different controls. Best results in bold.
+
+|  | Canny (SSIM) | Sobel (SSIM) | GL (SSIM) | Segment. (mIoU) | Style/content (CLIP score) |
+| --- | --- | --- | --- | --- | --- |
+| SD | 0.3091 | **0.0080** | 0.0090 | 0.3111 | 27.6936 |
+| RoentGen | 0.1942 | 0.0079 | 0.0087 | **0.3689** | 27.4786 |
+| T2I-Adapter | 0.53 | 0.0079 | 0.0087 | 0.06 | 27.62 |
+| ControlNet | 0.4526 | 0.0078 | 0.0095 | 0.3599 | 27.7032 |
+| MultiControl * * * | 0.5816 * * * | 0.0077 * * * | 0.0090 * * * | 0.1056 * * * | 22.2958 * * * |
+| RadGazeGen | **0.7045** | 0.0076 | **0.0101** | 0.3555 | **27.7757** |
+
+#### 4.2.2. Classification performance
+
+The classification results on the generated images using text and other controls from the CheXpert test set are shown in [Table 4](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#t005). Disease-wise AUC for the RadGazeGen-generated images are compared with the text-to-image diffusion model-generated images. For context, we also provide the AUCs of the model evaluated on the real images (first row) from the CheXpert test dataset. RadGazeGen outperforms the text-to-image baseline on seven out of 12 baselines, further validating the quality of the generated CXRs using the radiomics feature and HVA maps as controls.
+
+##### Table 4.
+
+Classification performance on generated images using text and other controls from the CheXpert test dataset. AUC(↑) is reported for different disease pathologies. Best results in bold.
+
+|  | Ate. | Cmg. | Cns. | Edm. | Les. | Opa. | Eff. | PTh | Pne. | PTX | Fra. | Enl. | Avg. |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Original[a](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#t004fn1) | 81.95 | 86.45 | 89.35 | 86.85 | 78.76 | 90.31 | 89.77 | 85.04 | 90.09 | 76.49 | 58.26 | 78.11 | 82.62 |
+| SD | 72.57 | **73.64** | 73.77 | **75.28** | 64.24 | 83.32 | 74.59 | **68.07** | 59.24 | 58.36 | **71.70** | **78.67** | 71.12 |
+| T2I-Adapter * * * | 47.8 * * * | 47.2 * * * | 64.2 * * * | 62.3 * * * | 36.3 * * * | 63.0 * * * | 48.0 * * * | 58.6 * * * | 60.64 * * * | **66.2** * * * | 57.2 * * * | 53.76 * * * | 55.43 * * * |
+| RadGazeGen | **80.71** | 70.34 | **77.67** | 73.47 | **66.57** | **88.20** | **78.31** | 53.29 | **77.46** | 62.74 | 52.32 | 74.90 | **71.33** |
+
+a
+
+The first row reports the model’s performance on the real images from the CheXpert test dataset.
+
+#### 4.2.3. Long-tailed classification performance
+
+LT classification results on the MIMIC-CXR-LT dataset are shown in [Table 5](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#t006). Our model is compared with ControlNet and MultiControlnet baselines. RadGazeGen outperforms both ControlNet and MultiControlNet on head and medium and reports comparable performance on the tail class samples. Overall, RadGazeGen improves the long-tailed classification performance on both the balanced and imbalanced test sets.
+
+##### Table 5.
+
+Long-tailed classification on the MIMIC-CXR-LT balanced test () and the test set (). Accuracy is reported for the individual head, medium, and tail classes and average of all the classes (Avg) is reported for the balanced set. For the imbalanced set, macro-F1 (mF1) and balanced accuracy (bAcc) are reported.
+
+|  | Balanced test | Test |
+| --- | --- | --- |
+| Head | Medium | Tail | Avg | mF1 | bAcc |
+| ControlNet (Canny) | 0.497 | 0.016 | 0.011 | 0.175 | 0.174 | 0.169 |
+| MultiControlNet (Canny + Seg) * * * | 0.504 * * * | 0.011 * * * | **0.022** * * * | 0.179 * * * | 0.181 * * * | 0.171 * * * |
+| RadGazeGen | **0.506** | **0.027** | **0.022** | **0.185** | **0.182** | **0.178** |
+
+#### 4.2.4. Ablation analysis
+
+Here, we discuss the image quality metrics for different components of RadGazeGen, shown in [Table 6](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#t007). We show the performance of Rad-CN, HVA-CN, and also individual radiomics maps with HVA-CN. For Rad-CN, we combined all the radiomics maps and do not use the HVA-CN component. For , we use the different , Canny, Sobel, GL, and segmentation masks individually with HVA-CN. We observe that RadGazeGen outperforms all the individual components. Given that we use a similar experimental setup, it is interesting to note that Rad-CN performs slightly better than HVA-CN. Adding different  to HVA-CN improves the performance. This validates our initial hypothesis that adding radiomics filter maps to experts’ gaze patterns will improve the quality of the generated medical images as they characterize complementary attributes (not captured by radiology reports).
+
+##### Table 6.
+
+Ablation results. FID (↓), SSIM (↑), and PSNR (↑) for different components of the RadGazeGen architecture.
+
+|  | FID (↓) | SSIM (↑) | PSNR (↑) |
+| --- | --- | --- | --- |
+| Rad-CN | 3.0679 | 0.6373 | **10.6014** |
+| HVA-CN | 3.0511 | 0.6316 | 10.1067 |
+| Canny + HVA-CN | 3.0554 | 0.6373 | 10.2443 |
+| Sobel + HVA-CN | 3.0765 | 0.6366 | 10.2286 |
+| GL + HVA-CN | 3.0552 | 0.6368 | 10.2068 |
+| Segmentation + HVA-CN * * * | 3.0485 * * * | 0.6362 * * * | 10.2484 * * * |
+| RadGazeGen | **2.9912** | **0.6510** | **10.6014** |
+
+### 4.3. Qualitative Results
+
+[Figure 5](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#f5) shows the generated images for different disease pathologies such as consolidation, effusion, and pneumothorax. We compare the images generated from RadGazeGen with those from ControlNet and Multi-ControlNet and original images shown as a reference. We show the disease pattern annotations by a radiologist (7 year experience). We observe that RadGazeGen generates not only high-quality images but also clinically accurate disease patterns, whereas ControlNet and MultiControlNet generate visually poor-quality images as confirmed by a radiologist. The ground-truth text is shown in the first column with the corresponding disease highlighted in red (details in the [Supplementary Material](https://doi.org/10.1117/1.JMI.13.S1.S11205.s01)). [Figure 7](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#f7) shows the generated images along with the controls. We observe that RadGazeGen shows skillful composability of different controls. RadGazeGen generates CXRs taking into consideration the textural patterns from radiomics feature maps with adherence to the segmentation masks and translates disease patterns and location from the HVA maps. [Figure 6](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#f6) shows the RadGazeGen-generated images for different disease pathologies using text and other controls from the CheXpert test and MIMIC-CXR-LT datasets. We show the bounding box annotations by the radiologist in red. We observe that RadGazeGen generates clinically accurate disease patterns and hence improves disease classification performance.
+
+#### Fig. 5.
+
+![Image 5: Fig. 5](https://cdn.ncbi.nlm.nih.gov/pmc/blobs/6f4f/13285692/3bb54bca0d16/JMI-013-S11205-g005.jpg)
+
+Qualitative comparison. The generated CXRs for different baselines are shown along with the corresponding radiologist’s text and the original image. We also show the radiologist’s annotations of the disease occurrence (red bounding box).
+
+#### Fig. 7.
+
+![Image 6: Fig. 7](https://cdn.ncbi.nlm.nih.gov/pmc/blobs/6f4f/13285692/c4f53d073e43/JMI-013-S11205-g007.jpg)
+
+(a)A single control is used to generate CXRs. (b) Multiple controls are used to generate CXRs. (c) and  combined to generate CXRs.
+
+#### Fig. 6.
+
+![Image 7: Fig. 6](https://cdn.ncbi.nlm.nih.gov/pmc/blobs/6f4f/13285692/4d0ccb31f2c0/JMI-013-S11205-g006.jpg)
+
+(a)CXRs generated for different pathologies from the CheXpert test dataset. We show the radiologist’s annotation in red bounding boxes showing the location of the disease patterns. Additional annotations of other diseases occurrence shown in yellow bounding boxes. (b)CXRs generated for the tail classes from the MIMIC-CXR-LT dataset.
+
+### 4.4. Radiologist Evaluation
+
+To assess the clinical relevance and visual fidelity of the generated images, a radiology fellow with 4 years of experience and an attending radiologist with 8 years of experience independently scored the outputs from our proposed method and three baseline models—stable diffusion, ControlNet, and MultiControlNet. Each generated image was evaluated based on three criteria: anatomical plausibility (0 to 4), pathological realism (0 to 4), and overall image quality (0 to 2). As summarized in [Table 7](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#t008), our method achieved the highest mean scores across all three evaluation criteria: 3.81 for anatomy, 3.44 for pathology, and 2.00 for image quality. Compared with stable diffusion, our method showed improvements of 10.8% in anatomy, 10.3% in pathology, and 14.3% in image quality. Relative to ControlNet, the gains were even more substantial: 45.4% (anatomy), 37.6% (pathology), and 44.9% (quality). Compared with MultiControlNet, our method improved by 64.9% in anatomy, 31.3% in pathology, and 88.7% in quality. These results underscore the clinical utility of our approach in generating diagnostically meaningful synthetic images.
+
+#### Table 7.
+
+Mean radiologist scores across 16 cases for anatomy, pathology, and image quality (max scores: 4 for anatomy and pathology, 2 for quality).
+
+| Method | Anatomy (0 to 4) | Pathology (0 to 4) | Quality (0 to 2) |
+| --- | --- | --- | --- |
+| SD | 3.44 | 3.12 | 1.75 |
+| CN | 2.62 | 2.50 | 1.38 |
+| MCN * * * | 2.31 * * * | 2.62 * * * | 1.06 * * * |
+| **Ours** | **3.81** | **3.44** | **2.00** |
+
+## [](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/)5. Discussion
+
+The findings presented in Sec.[4](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#sec4) showcase the potential of RadGazeGen in generating high-quality, clinically relevant CXR images from eye gaze patterns of radiologists and other control signals such as radiomics features. This discussion will delve deeper into the implications of these results, highlight the strengths and limitations of our approach, and suggest avenues for future research.
+
+### 5.1. Key Findings
+
+#### 5.1.1. Quality and controllability
+
+The quantitative results, as detailed in [Tables 1](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#t002) and [3](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#t004), unequivocally demonstrate that RadGazeGen outperforms state-of-the-art models such as T2I-Adapter, ControlNet, and Multi-ControlNet in generating images with superior FID scores, higher SSIM, and mIoU. Eye gaze patterns of radiologists add clinically relevant information about disease pathology and fine-grained location to the generative models. Furthermore, the integration of radiomics filter maps with eye gaze enables the diffusion model to generate medical images with enhanced clinical fidelity, surpassing the capabilities of SDs. This multicontrol composability is crucial for generating images that are not only visually realistic but also rich in clinically relevant details. Although the composability of multiple controls increases computational cost, the generated images demonstrate significant improvements in precision and reliability. Note that although we experimented with three radiomics filters due to computational restrictions, it can be extended to multiple other filters. In clinical scenarios, where these qualities are critical, our method offers a substantial benefit.
+
+#### 5.1.2. Pulmonary disease classification performance
+
+The classification results on the CheXpert dataset, summarized in [Table 4](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#t005), demonstrate that the images generated by RadGazeGen are highly effective for disease classification tasks. The significant improvement in AUC scores for seven out of 12 disease categories showcases the diagnostic utility of the synthetic images. This suggests that RadGazeGen captures and preserves critical diagnostic features in the generated images, making them suitable for training and validating machine learning models.
+
+#### 5.1.3. Long-tailed pulmonary disease classification performance
+
+The results on the MIMIC-CXR-LT dataset, shown in [Table 5](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#t006), highlight RadGazeGen’s potential in addressing class imbalance. By generating additional images for underrepresented medium and tail classes, our model enhances the classification accuracy across these categories. This approach effectively mitigates the class imbalance problem, a common challenge in medical imaging datasets. The improvement in balanced and imbalanced test set performance demonstrates RadGazeGen’s capability to generate diverse and representative synthetic data that can bolster the robustness of classification models.
+
+#### 5.1.4. Clinical relevance
+
+The qualitative comparisons, depicted in [Figs.5](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#f5)–[7](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#f7), further validate the clinical relevance of the images generated by RadGazeGen. The generated images accurately reflect disease patterns and are consistent with the ground-truth annotations provided by experienced radiologists. This level of clinical fidelity is essential for applications in medical education, diagnostic support, and research. The model’s ability to produce images that are both diagnostically and anatomically indistinguishable from real images represents a significant advancement in medical image synthesis.
+
+### 5.2. Limitations
+
+Despite the promising results, our approach has certain limitations. The reliance on specific control signals, such as HVA maps, may restrict the generalizability of the model to other imaging modalities or clinical tasks where such data are not readily available. In addition, the computational complexity associated with generating and training using multiple control signals requires substantial resources, which may limit the accessibility of our approach in resource-constrained environments. Although our method is readily applicable to 3D imaging modalities, the computational cost of generating HVA maps increases significantly in 3D, thereby adding to the overall complexity of the proposed approach.
+
+### 5.3. Future Directions
+
+Incorporating eye gaze from radiologists into text-to-image diffusion models offers promising avenues for enhancing medical image generation. By aggregating gaze data from multiple experts, we can integrate diverse expertise into the generation process, potentially improving the accuracy and relevance of the produced images. Moreover, utilizing gaze patterns to generate images at different time points could provide insights into disease progression and treatment efficacy, offering a dynamic tool for personalized medicine and longitudinal studies. These advancements could significantly enhance the utility of generative models in medical imaging, contributing to better treatment decisions and patient outcomes.
+
+Furthermore, although RadGazeGen demonstrates strong performance in thoracic disease classification and long-tailed learning tasks, its effectiveness has not yet been validated across other medical imaging domains,[75](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r75)_–_[77](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/#r77) which remains an important direction for future work.
+
+Finally, incorporating additional control signals, such as patient demographics, clinical history, or genetic information, could further refine the specificity and accuracy of the generated images. This integration would allow for the creation of more contextually relevant medical images, enhancing their utility in precision medicine and patient-specific diagnostics.
+
+## [](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/)6. Conclusion
+
+In this work, we present RadGazeGen, a visual attention and radiomics-guided diffusion model for clinically accurate medical image generation. Unlike traditional text-conditioned image generation approaches, which have suboptimal information on the structure, anatomy, and disease-relevant patterns in the medical images, our approach uses radiomics filter maps and eye gaze to generate better structured, anatomically accurate, and clinically relevant disease patterns. The efficacy of our model is demonstrated in the quality of image generation and downstream disease classification problems.
+
+## [](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/)Supplementary Material
+
+## [](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/)Acknowledgments
+
+_This research was partially supported by the National Institutes of Health (NIH) and National Cancer Institute (NCI) (Grant Nos. 1R21CA258493-01A1, 1R01CA297843-01, 3R21CA258493-02S1, and 1R03DE033489-01A1) and the National Science Foundation (NSF) (Grant No. 2442053). The content is solely the responsibility of the authors and does not necessarily represent the official views of the National Institutes of Health._ We have used ChatGPT-4o to refine language and grammar. All AI-generated sentences were reviewed and edited accordingly before being added. The authors take responsibility for the AI-generated content.
+
+## [](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/)Biographies
+
+**Moinak Bhattacharya** is a PhD student in biomedical informatics at Stony Brook University, working under the mentorship of Prof. Prateek Prasanna. His research focuses on developing AI and deep learning methods for medical imaging, with applications in neuro-oncology and cancer treatment response prediction. He specializes in foundation models and generative modeling to advance precision medicine.
+
+**Gagandeep Singh** is an assistant professor in the Department of Radiology at Columbia University Irving Medical Center, specializing in brain tumor imaging. His research uses radiomics and deep learning to identify imaging markers linked to clinical and pathological outcomes. He has expertise in MR perfusion, spectroscopy, and functional MRI. Dr. Singh completed his residency at Rutgers-Newark Beth Israel Medical Center and fellowship at NYP-Columbia, where he also contributes actively to medical education and training.
+
+**Shubham Jain** is an associate professor in computer science at Stony Brook University and leads the PiCASSo Lab. Her research focuses on smart environments and cyber-physical systems, emphasizing scalable analytics for pervasive sensing devices. She previously served as an assistant professor at Stony Brook and Old Dominion University. She earned her PhD in electrical and computer engineering from Rutgers University in 2017, specializing in systems that enable intelligent, data-driven environments.
+
+**Prateek Prasanna** is an associate professor in the Department of Biomedical Informatics at Stony Brook University, where he directs the Imaging Informatics for Precision Medicine (IMAGINE) Lab. His research spans radiomics, pathomics, deep learning, explainable AI, and generative AI, with a focus on developing robust and clinically meaningful AI systems for precision medicine applications across cancer, ophthalmic, and dental imaging. His work has been published in leading venues including MICCAI, CVPR, ECCV, NeurIPS, _Radiology_, and _IEEE Transactions on Medical Imaging_, resulting in over 200 publications, 8 issued patents, and multiple innovation awards, including the NSF CAREER Award. He also serves as the founding co-director of the Radiology Informatics Microcredential Program at Stony Brook University and leads efforts in multimodal AI that integrate imaging, pathology, and genomics to advance AI-powered diagnostics and treatment response assessment.
+
+## [](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/)Funding Statement
+
+This research was partially supported by the National Institutes of Health (NIH) and National Cancer Institute (NCI) (Grant Nos. 1R21CA258493-01A1, 1R01CA297843-01, 3R21CA258493-02S1, and 1R03DE033489-01A1) and the National Science Foundation (NSF) (Grant No. 2442053). The content is solely the responsibility of the authors and does not necessarily represent the official views of the National Institutes of Health.
+
+## [](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/)Contributor Information
+
+Moinak Bhattacharya, Email: moinak.bhattacharya@stonybrook.edu.
+
+Gagandeep Singh, Email: gs3202@cumc.columbia.edu.
+
+Shubham Jain, Email: jain@cs.stonybrook.edu.
+
+Prateek Prasanna, Email: prateek.prasanna@stonybrook.edu.
+
+## [](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/)Disclosures
+
+The authors have no relevant financial interests in the paper and no other potential conflicts of interest to disclose.
+
+## [](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/)Code and Data Availability
+
+The datasets used in this work are publicly available. Eye gaze data for chest X-rays is available at [https://physionet.org/content/egd-cxr/1.0.0/](https://physionet.org/content/egd-cxr/1.0.0/), the REFLACX dataset is available at [https://physionet.org/content/reflacx-xray-localization/1.0.0/](https://physionet.org/content/reflacx-xray-localization/1.0.0/), the CheXpert dataset is available at [https://stanfordmlgroup.github.io/competitions/chexpert/](https://stanfordmlgroup.github.io/competitions/chexpert/), and the MIMIC-CXR-LT dataset is available at [https://physionet.org/content/cxr-lt-iccv-workshop-cvamd/2.0.0/](https://physionet.org/content/cxr-lt-iccv-workshop-cvamd/2.0.0/). Code is available at [https://github.com/lordmoinak1/radgazegen](https://github.com/lordmoinak1/radgazegen).
+
+## [](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/)References
+
+*   1.Ho J., Jain A., Abbeel P., “Denoising diffusion probabilistic models,” in Adv. Neural Inf. Process. Syst. 33, pp.6840–6851 (2020). [[Google Scholar](https://scholar.google.com/scholar_lookup?Ho%20J.,%20Jain%20A.,%20Abbeel%20P.,%20%E2%80%9CDenoising%20diffusion%20probabilistic%20models,%E2%80%9D%20in%20Adv.%20Neural%20Inf.%20Process.%20Syst.%2033,%20pp.%C2%A06840%E2%80%936851%20(2020).)]
+*   2.Nichol A. Q., Dhariwal P., “Improved denoising diffusion probabilistic models,” in Int. Conf. Mach. Learn., PMLR, pp.8162–8171 (2021). [[Google Scholar](https://scholar.google.com/scholar_lookup?Nichol%20A.%20Q.,%20Dhariwal%20P.,%20%E2%80%9CImproved%20denoising%20diffusion%20probabilistic%20models,%E2%80%9D%20in%20Int.%20Conf.%20Mach.%20Learn.,%20PMLR,%20pp.%C2%A08162%E2%80%938171%20(2021).)]
+*   3.Rombach R., et al. , “High-resolution image synthesis with latent diffusion models,” in Proc. IEEE/CVF Conf. Comput. Vision and Pattern Recognit., pp.10684–10695 (2022). 10.1109/CVPR52688.2022.01042 [[DOI](https://doi.org/10.1109/CVPR52688.2022.01042)] [[Google Scholar](https://scholar.google.com/scholar_lookup?Rombach%20R.,%20et%20al.%20,%20%E2%80%9CHigh-resolution%20image%20synthesis%20with%20latent%20diffusion%20models,%E2%80%9D%20in%20Proc.%20IEEE/CVF%20Conf.%20Comput.%20Vision%20and%20Pattern%20Recognit.,%20pp.%C2%A010684%E2%80%9310695%20(2022).%2010.1109/CVPR52688.2022.01042)]
+*   4.Gao S., et al. , “Masked diffusion transformer is a strong image synthesizer,” in IEEE/CVF Int. Conf. Comput. Vision (ICCV), pp. 23107–23116 (2023). 10.1109/ICCV51070.2023.02117 [[DOI](https://doi.org/10.1109/ICCV51070.2023.02117)] [[Google Scholar](https://scholar.google.com/scholar_lookup?Gao%20S.,%20et%20al.%20,%20%E2%80%9CMasked%20diffusion%20transformer%20is%20a%20strong%20image%20synthesizer,%E2%80%9D%20in%20IEEE/CVF%20Int.%20Conf.%20Comput.%20Vision%20(ICCV),%20pp.%2023107%E2%80%9323116%20(2023).%2010.1109/ICCV51070.2023.02117)]
+*   5.Mehrabi N., et al. , “Resolving ambiguities in text-to-image generative models,” in Proc. 61st Ann. Meeting of the Assoc. Comput. Ling., pp.14367–14388 (2023). [[Google Scholar](https://scholar.google.com/scholar_lookup?Mehrabi%20N.,%20et%20al.%20,%20%E2%80%9CResolving%20ambiguities%20in%20text-to-image%20generative%20models,%E2%80%9D%20in%20Proc.%2061st%20Ann.%20Meeting%20of%20the%20Assoc.%20Comput.%20Ling.,%20pp.%C2%A014367%E2%80%9314388%20(2023).)]
+*   6.Ghosh D., Hajishirzi H., Schmidt L., “Geneval: an object-focused framework for evaluating text-to-image alignment,” in Adv. Neural Inf. Process. Syst. 36 (2024). [[Google Scholar](https://scholar.google.com/scholar_lookup?Ghosh%20D.,%20Hajishirzi%20H.,%20Schmidt%20L.,%20%E2%80%9CGeneval:%20an%20object-focused%20framework%20for%20evaluating%20text-to-image%20alignment,%E2%80%9D%20in%20Adv.%20Neural%20Inf.%20Process.%20Syst.%2036%20(2024).)]
+*   7.Zhang L., Rao A., Agrawala M., “Adding conditional control to text-to-image diffusion models,” in Proc. IEEE/CVF Int. Conf. Comput. Vision, pp.3836–3847 (2023). 10.1109/ICCV51070.2023.00355 [[DOI](https://doi.org/10.1109/ICCV51070.2023.00355)] [[Google Scholar](https://scholar.google.com/scholar_lookup?Zhang%20L.,%20Rao%20A.,%20Agrawala%20M.,%20%E2%80%9CAdding%20conditional%20control%20to%20text-to-image%20diffusion%20models,%E2%80%9D%20in%20Proc.%20IEEE/CVF%20Int.%20Conf.%20Comput.%20Vision,%20pp.%C2%A03836%E2%80%933847%20(2023).%2010.1109/ICCV51070.2023.00355)]
+*   8.Couairon G., et al. , “Zero-shot spatial layout conditioning for text-to-image diffusion models,” in Proc. IEEE/CVF Int. Conf. Comput. Vision, pp.2174–2183 (2023). 10.1109/ICCV51070.2023.00207 [[DOI](https://doi.org/10.1109/ICCV51070.2023.00207)] [[Google Scholar](https://scholar.google.com/scholar_lookup?Couairon%20G.,%20et%20al.%20,%20%E2%80%9CZero-shot%20spatial%20layout%20conditioning%20for%20text-to-image%20diffusion%20models,%E2%80%9D%20in%20Proc.%20IEEE/CVF%20Int.%20Conf.%20Comput.%20Vision,%20pp.%C2%A02174%E2%80%932183%20(2023).%2010.1109/ICCV51070.2023.00207)]
+*   9.Bhattacharya M., Jain S., Prasanna P., “Radiotransformer: a cascaded global-focal transformer for visual attention–guided disease classification,” Lect. Notes Comput. Sci. 13681, 679–698 (2022). 10.1007/978-3-031-19803-8_40 [[DOI](https://doi.org/10.1007/978-3-031-19803-8_40)] [[Google Scholar](https://scholar.google.com/scholar_lookup?journal=Lect.%20Notes%20Comput.%20Sci.&title=Radiotransformer:%20a%20cascaded%20global-focal%20transformer%20for%20visual%20attention%E2%80%93guided%20disease%20classification&author=M.%20Bhattacharya&author=S.%20Jain&author=P.%20Prasanna&volume=13681&publication_year=2022&pages=679-698&issn=0302-9743&doi=10.1007/978-3-031-19803-8_40&)]
+*   10.Bhattacharya M., Jain S., Prasanna P., “GazeRadar: a gaze and radiomics-guided disease localization framework,” Lect. Notes Comput. Sci. 13433, 686–696 (2022). 10.1007/978-3-031-16437-8_66 [[DOI](https://doi.org/10.1007/978-3-031-16437-8_66)] [[Google Scholar](https://scholar.google.com/scholar_lookup?journal=Lect.%20Notes%20Comput.%20Sci.&title=GazeRadar:%20a%20gaze%20and%20radiomics-guided%20disease%20localization%20framework&author=M.%20Bhattacharya&author=S.%20Jain&author=P.%20Prasanna&volume=13433&publication_year=2022&pages=686-696&issn=0302-9743&doi=10.1007/978-3-031-16437-8_66&)]
+*   11.Bhattacharya M., Prasanna P., “GazeDiff: a radiologist visual attention guided diffusion model for zero-shot disease classification,” in Med. Imaging with Deep Learn. (2024). [[Google Scholar](https://scholar.google.com/scholar_lookup?Bhattacharya%20M.,%20Prasanna%20P.,%20%E2%80%9CGazeDiff:%20a%20radiologist%20visual%20attention%20guided%20diffusion%20model%20for%20zero-shot%20disease%20classification,%E2%80%9D%20in%20Med.%20Imaging%20with%20Deep%20Learn.%20(2024).)]
+*   12.Just M. A., Carpenter P. A., “Eye fixations and cognitive processes,” Cognit. Psychol. 8(4), 441–480 (1976). 10.1016/0010-0285(76)90015-3 [[DOI](https://doi.org/10.1016/0010-0285(76)90015-3)] [[Google Scholar](https://scholar.google.com/scholar_lookup?journal=Cognit.%20Psychol.&title=Eye%20fixations%20and%20cognitive%20processes&author=M.%20A.%20Just&author=P.%20A.%20Carpenter&volume=8&issue=4&publication_year=1976&pages=441-480&issn=0010-0285&doi=10.1016/0010-0285(76)90015-3&)]
+*   13.Pinaya W. H., et al. , “Generative AI for medical imaging: extending the MONAI framework,” arXiv:2307.15208 (2023).
+*   14.Wang B., et al. , “Gazesam: Interactive image segmentation with eye gaze and segment anything model,” in Gaze Meets Machine Learning Workshop (2024). [[Google Scholar](https://scholar.google.com/scholar_lookup?Wang%20B.,%20et%20al.%20,%20%E2%80%9CGazesam:%20Interactive%20image%20segmentation%20with%20eye%20gaze%20and%20segment%20anything%20model,%E2%80%9D%20in%20Gaze%20Meets%20Machine%20Learning%20Workshop%20(2024).)]
+*   15.Stember J. N., et al. , “Integrating eye tracking and speech recognition accurately annotates MR brain images for deep learning: proof of principle,” Radiol.: Artif. Intell. 3(1), e200047 (2020). 10.1148/ryai.2020200047  [[DOI](https://doi.org/10.1148/ryai.2020200047)] [[PMC free article](https://pmc.ncbi.nlm.nih.gov/articles/PMC7845782/)] [[PubMed](https://pubmed.ncbi.nlm.nih.gov/33842890/)] [[Google Scholar](https://scholar.google.com/scholar_lookup?journal=Radiol.:%20Artif.%20Intell.&title=Integrating%20eye%20tracking%20and%20speech%20recognition%20accurately%20annotates%20MR%20brain%20images%20for%20deep%20learning:%20proof%20of%20principle&author=J.%20N.%20Stember&volume=3&issue=1&publication_year=2020&pages=e200047&pmid=33842890&doi=10.1148/ryai.2020200047&)]
+*   16.Sudin E., et al. , “Digital pathology: the effect of experience on visual search behavior,” J. Med. Imaging 9(3), 035501 (2022). 10.1117/1.JMI.9.3.035501 [[DOI](https://doi.org/10.1117/1.JMI.9.3.035501)] [[PMC free article](https://pmc.ncbi.nlm.nih.gov/articles/PMC9082631/)] [[PubMed](https://pubmed.ncbi.nlm.nih.gov/35572382/)] [[Google Scholar](https://scholar.google.com/scholar_lookup?journal=J.%20Med.%20Imaging&title=Digital%20pathology:%20the%20effect%20of%20experience%20on%20visual%20search%20behavior&author=E.%20Sudin&volume=9&issue=3&publication_year=2022&pages=035501&issn=0920-5497&pmid=35572382&doi=10.1117/1.JMI.9.3.035501&)]
+*   17.Clark R., et al. , “The potential and value of objective eye tracking in the ophthalmology clinic,” Eye 33(8), 1200–1202 (2019). 10.1038/s41433-019-0417-z  [[DOI](https://doi.org/10.1038/s41433-019-0417-z)] [[PMC free article](https://pmc.ncbi.nlm.nih.gov/articles/PMC7005882/)] [[PubMed](https://pubmed.ncbi.nlm.nih.gov/30962545/)] [[Google Scholar](https://scholar.google.com/scholar_lookup?journal=Eye&title=The%20potential%20and%20value%20of%20objective%20eye%20tracking%20in%20the%20ophthalmology%20clinic&author=R.%20Clark&volume=33&issue=8&publication_year=2019&pages=1200-1202&issn=0950-222X&pmid=30962545&doi=10.1038/s41433-019-0417-z&)]
+*   18.Sqalli M. T., et al. , “Understanding cardiology practitioners’ interpretations of electrocardiograms: an eye-tracking study,” JMIR Hum. Factors 9(1), e34058 (2022). 10.2196/34058  [[DOI](https://doi.org/10.2196/34058)] [[PMC free article](https://pmc.ncbi.nlm.nih.gov/articles/PMC8867292/)] [[PubMed](https://pubmed.ncbi.nlm.nih.gov/35138258/)] [[Google Scholar](https://scholar.google.com/scholar_lookup?journal=JMIR%20Hum.%20Factors&title=Understanding%20cardiology%20practitioners%E2%80%99%20interpretations%20of%20electrocardiograms:%20an%20eye-tracking%20study&author=M.%20T.%20Sqalli&volume=9&issue=1&publication_year=2022&pages=e34058&pmid=35138258&doi=10.2196/34058&)]
+*   19.Tahri Sqalli M., et al. , “Interpretation of a 12-lead electrocardiogram by medical students: quantitative eye-tracking approach,” JMIR Med. Educ. 7(4), e26675 (2021). 10.2196/26675  [[DOI](https://doi.org/10.2196/26675)] [[PMC free article](https://pmc.ncbi.nlm.nih.gov/articles/PMC8554676/)] [[PubMed](https://pubmed.ncbi.nlm.nih.gov/34647899/)] [[Google Scholar](https://scholar.google.com/scholar_lookup?journal=JMIR%20Med.%20Educ.&title=Interpretation%20of%20a%2012-lead%20electrocardiogram%20by%20medical%20students:%20quantitative%20eye-tracking%20approach&author=M.%20Tahri%20Sqalli&volume=7&issue=4&publication_year=2021&pages=e26675&pmid=34647899&doi=10.2196/26675&)]
+*   20.Smith B. A., et al. , “Gaze locking: passive eye contact detection for human-object interaction,” in Proc. 26th Annu. ACM Symp. User Interface Software and Technol., pp.271–280 (2013). [[Google Scholar](https://scholar.google.com/scholar_lookup?Smith%20B.%20A.,%20et%20al.%20,%20%E2%80%9CGaze%20locking:%20passive%20eye%20contact%20detection%20for%20human-object%20interaction,%E2%80%9D%20in%20Proc.%2026th%20Annu.%20ACM%20Symp.%20User%20Interface%20Software%20and%20Technol.,%20pp.%C2%A0271%E2%80%93280%20(2013).)]
+*   21.Cho D.-Y., Kang M.-K., “Human gaze-aware attentive object detection for ambient intelligence,” Eng. Appl. Artif. Intell. 106, 104471 (2021). 10.1016/j.engappai.2021.104471 [[DOI](https://doi.org/10.1016/j.engappai.2021.104471)] [[Google Scholar](https://scholar.google.com/scholar_lookup?journal=Eng.%20Appl.%20Artif.%20Intell.&title=Human%20gaze-aware%20attentive%20object%20detection%20for%20ambient%20intelligence&author=D.-Y.%20Cho&author=M.-K.%20Kang&volume=106&publication_year=2021&pages=104471&issn=0952-1976&doi=10.1016/j.engappai.2021.104471&)]
+*   22.Amrouche S., et al. , “Activity segmentation and identification based on eye gaze features,” in Proc. 11th Pervas. Technol. Relat. to Assist. Environ. Conf., pp.75–82 (2018). [[Google Scholar](https://scholar.google.com/scholar_lookup?Amrouche%20S.,%20et%20al.%20,%20%E2%80%9CActivity%20segmentation%20and%20identification%20based%20on%20eye%20gaze%20features,%E2%80%9D%20in%20Proc.%2011th%20Pervas.%20Technol.%20Relat.%20to%20Assist.%20Environ.%20Conf.,%20pp.%C2%A075%E2%80%9382%20(2018).)]
+*   23.James A., et al. , “Eye-gaze driven surgical workflow segmentation,” Lect. Notes Comput. Sci. 4792, 110–117 (2007). 10.1007/978-3-540-75759-7_14 [[DOI](https://doi.org/10.1007/978-3-540-75759-7_14)] [[PubMed](https://pubmed.ncbi.nlm.nih.gov/18044559/)] [[Google Scholar](https://scholar.google.com/scholar_lookup?journal=Lect.%20Notes%20Comput.%20Sci.&title=Eye-gaze%20driven%20surgical%20workflow%20segmentation&author=A.%20James&volume=4792&publication_year=2007&pages=110-117&issn=0302-9743&pmid=18044559&doi=10.1007/978-3-540-75759-7_14&)]
+*   24.Shi R., Ngan N. K., Li H., “Gaze-based object segmentation,” IEEE Signal Process. Lett. 24(10), 1493–1497 (2017). 10.1109/LSP.2017.2739200 [[DOI](https://doi.org/10.1109/LSP.2017.2739200)] [[Google Scholar](https://scholar.google.com/scholar_lookup?journal=IEEE%20Signal%20Process.%20Lett.&title=Gaze-based%20object%20segmentation&author=R.%20Shi&author=N.%20K.%20Ngan&author=H.%20Li&volume=24&issue=10&publication_year=2017&pages=1493-1497&issn=1070-9908&doi=10.1109/LSP.2017.2739200&)]
+*   25.Shapovalova N., et al. , “Action is in the eye of the beholder: eye-gaze driven model for spatio-temporal action localization,” in Adv. Neural Inf. Process. Syst. 26 (2013). [[Google Scholar](https://scholar.google.com/scholar_lookup?Shapovalova%20N.,%20et%20al.%20,%20%E2%80%9CAction%20is%20in%20the%20eye%20of%20the%20beholder:%20eye-gaze%20driven%20model%20for%20spatio-temporal%20action%20localization,%E2%80%9D%20in%20Adv.%20Neural%20Inf.%20Process.%20Syst.%2026%20(2013).)]
+*   26.Mathe S., Sminchisescu C., “Actions in the eye: dynamic gaze datasets and learnt saliency models for visual recognition,” IEEE Trans. Pattern Anal. Mach. Intell. 37(7), 1408–1424 (2014). 10.1109/TPAMI.2014.2366154 [[DOI](https://doi.org/10.1109/TPAMI.2014.2366154)] [[PubMed](https://pubmed.ncbi.nlm.nih.gov/26352449/)] [[Google Scholar](https://scholar.google.com/scholar_lookup?journal=IEEE%20Trans.%20Pattern%20Anal.%20Mach.%20Intell.&title=Actions%20in%20the%20eye:%20dynamic%20gaze%20datasets%20and%20learnt%20saliency%20models%20for%20visual%20recognition&author=S.%20Mathe&author=C.%20Sminchisescu&volume=37&issue=7&publication_year=2014&pages=1408-1424&issn=0162-8828&pmid=26352449&doi=10.1109/TPAMI.2014.2366154&)]
+*   27.Courtemanche F., et al. , “Activity recognition using eye-gaze movements and traditional interactions,” Interact. Comput. 23(3), 202–213 (2011). 10.1016/j.intcom.2011.02.008 [[DOI](https://doi.org/10.1016/j.intcom.2011.02.008)] [[Google Scholar](https://scholar.google.com/scholar_lookup?journal=Interact.%20Comput.&title=Activity%20recognition%20using%20eye-gaze%20movements%20and%20traditional%20interactions&author=F.%20Courtemanche&volume=23&issue=3&publication_year=2011&pages=202-213&issn=0953-5438&doi=10.1016/j.intcom.2011.02.008&)]
+*   28.Min K., Corso J. J., “Integrating human gaze into attention for egocentric activity recognition,” in Proc. IEEE/CVF Winter Conf. Appl. of Comput. Vision, pp.1069–1078 (2021). 10.1109/WACV48630.2021.00111 [[DOI](https://doi.org/10.1109/WACV48630.2021.00111)] [[Google Scholar](https://scholar.google.com/scholar_lookup?Min%20K.,%20Corso%20J.%20J.,%20%E2%80%9CIntegrating%20human%20gaze%20into%20attention%20for%20egocentric%20activity%20recognition,%E2%80%9D%20in%20Proc.%20IEEE/CVF%20Winter%20Conf.%20Appl.%20of%20Comput.%20Vision,%20pp.%C2%A01069%E2%80%931078%20(2021).%2010.1109/WACV48630.2021.00111)]
+*   29.Roshan M. P., et al. , “Eye tracking validation: improving radiologist reporting and interpretation,” Eur. J. Radiol. 168, 111134 (2023). 10.1016/j.ejrad.2023.111134  [[DOI](https://doi.org/10.1016/j.ejrad.2023.111134)] [[PubMed](https://pubmed.ncbi.nlm.nih.gov/37806192/)] [[Google Scholar](https://scholar.google.com/scholar_lookup?journal=Eur.%20J.%20Radiol.&title=Eye%20tracking%20validation:%20improving%20radiologist%20reporting%20and%20interpretation&author=M.%20P.%20Roshan&volume=168&publication_year=2023&pages=111134&issn=0720-048X&pmid=37806192&doi=10.1016/j.ejrad.2023.111134&)]
+*   30.Sohl-Dickstein J., et al. , “Deep unsupervised learning using nonequilibrium thermodynamics,” in Int. Conf. Mach. Learn., PMLR, pp.2256–2265 (2015). [[Google Scholar](https://scholar.google.com/scholar_lookup?Sohl-Dickstein%20J.,%20et%20al.%20,%20%E2%80%9CDeep%20unsupervised%20learning%20using%20nonequilibrium%20thermodynamics,%E2%80%9D%20in%20Int.%20Conf.%20Mach.%20Learn.,%20PMLR,%20pp.%C2%A02256%E2%80%932265%20(2015).)]
+*   31.Radford A., et al. , “Learning transferable visual models from natural language supervision,” in Int. Conf. Mach. Learn., PMLR, pp.8748–8763 (2021). [[Google Scholar](https://scholar.google.com/scholar_lookup?Radford%20A.,%20et%20al.%20,%20%E2%80%9CLearning%20transferable%20visual%20models%20from%20natural%20language%20supervision,%E2%80%9D%20in%20Int.%20Conf.%20Mach.%20Learn.,%20PMLR,%20pp.%C2%A08748%E2%80%938763%20(2021).)]
+*   32.OpenAI, “Dall-e-2,” 2023, [https://openai.com/product/dall-e-2](https://openai.com/product/dall-e-2).
+*   33.Ramesh A., et al. , “Hierarchical text-conditional image generation with clip latents,” arXiv:2204.06125 1(2), 3 (2022). [[Google Scholar](https://scholar.google.com/scholar_lookup?Ramesh%20A.,%20et%20al.%20,%20%E2%80%9CHierarchical%20text-conditional%20image%20generation%20with%20clip%20latents,%E2%80%9D%20arXiv:2204.06125%201(2),%203%20(2022).)]
+*   34.Midjourney, “About,” 2023, [https://www.midjourney.com/](https://www.midjourney.com/).
+*   35.Özbey M., et al. , “Unsupervised medical image translation with adversarial diffusion models,” IEEE Trans. Med. Imaging 42(12), 3524–3539 (2023). 10.1109/TMI.2023.3290149  [[DOI](https://doi.org/10.1109/TMI.2023.3290149)] [[PubMed](https://pubmed.ncbi.nlm.nih.gov/37379177/)] [[Google Scholar](https://scholar.google.com/scholar_lookup?journal=IEEE%20Trans.%20Med.%20Imaging&title=Unsupervised%20medical%20image%20translation%20with%20adversarial%20diffusion%20models&author=M.%20%C3%96zbey&volume=42&issue=12&publication_year=2023&pages=3524-3539&issn=0278-0062&pmid=37379177&doi=10.1109/TMI.2023.3290149&)]
+*   36.Durrer A., et al. , “Diffusion models for contrast harmonization of magnetic resonance images,” Med. Imaging with Deep Learn. 227, 526–551 (2024). [[Google Scholar](https://scholar.google.com/scholar_lookup?journal=Med.%20Imaging%20with%20Deep%20Learn.&title=Diffusion%20models%20for%20contrast%20harmonization%20of%20magnetic%20resonance%20images&author=A.%20Durrer&volume=227&publication_year=2024&pages=526-551&)]
+*   37.Peng H., et al. , “One-shot generative prior in Hankel-k-space for parallel imaging reconstruction,” IEEE Trans. Med. Imaging 42(11), 3420–3435 (2023). 10.1109/TMI.2023.3288219  [[DOI](https://doi.org/10.1109/TMI.2023.3288219)] [[PubMed](https://pubmed.ncbi.nlm.nih.gov/37342955/)] [[Google Scholar](https://scholar.google.com/scholar_lookup?journal=IEEE%20Trans.%20Med.%20Imaging&title=One-shot%20generative%20prior%20in%20Hankel-k-space%20for%20parallel%20imaging%20reconstruction&author=H.%20Peng&volume=42&issue=11&publication_year=2023&pages=3420-3435&issn=0278-0062&pmid=37342955&doi=10.1109/TMI.2023.3288219&)]
+*   38.Chung H., et al. , “Improving diffusion models for inverse problems using manifold constraints,” in Adv. Neural Inf. Process. Syst. 35, pp.25683–25696 (2022). [[Google Scholar](https://scholar.google.com/scholar_lookup?Chung%20H.,%20et%20al.%20,%20%E2%80%9CImproving%20diffusion%20models%20for%20inverse%20problems%20using%20manifold%20constraints,%E2%80%9D%20in%20Adv.%20Neural%20Inf.%20Process.%20Syst.%2035,%20pp.%C2%A025683%E2%80%9325696%20(2022).)]
+*   39.Peng C., et al. , “Towards performant and reliable undersampled MR reconstruction via diffusion model sampling,” Lect. Notes Comput. Sci. 13436, 623–633 (2022). 10.1007/978-3-031-16446-0_59 [[DOI](https://doi.org/10.1007/978-3-031-16446-0_59)] [[Google Scholar](https://scholar.google.com/scholar_lookup?journal=Lect.%20Notes%20Comput.%20Sci.&title=Towards%20performant%20and%20reliable%20undersampled%20MR%20reconstruction%20via%20diffusion%20model%20sampling&author=C.%20Peng&volume=13436&publication_year=2022&pages=623-633&issn=0302-9743&doi=10.1007/978-3-031-16446-0_59&)]
+*   40.Xie Y., Li Q., “Measurement-conditioned denoising diffusion probabilistic model for under-sampled medical image reconstruction,” Lect. Notes Comput. Sci. 13436, 655–664 (2022). 10.1007/978-3-031-16446-0_62 [[DOI](https://doi.org/10.1007/978-3-031-16446-0_62)] [[Google Scholar](https://scholar.google.com/scholar_lookup?journal=Lect.%20Notes%20Comput.%20Sci.&title=Measurement-conditioned%20denoising%20diffusion%20probabilistic%20model%20for%20under-sampled%20medical%20image%20reconstruction&author=Y.%20Xie&author=Q.%20Li&volume=13436&publication_year=2022&pages=655-664&issn=0302-9743&doi=10.1007/978-3-031-16446-0_62&)]
+*   41.Chung H., Sim B., Ye J. C., “Come-closer-diffuse-faster: accelerating conditional diffusion models for inverse problems through stochastic contraction,” in Proc. IEEE/CVF Conf. Comput. Vision and Pattern Recognit., pp.12413–12422 (2022). 10.1109/CVPR52688.2022.01209 [[DOI](https://doi.org/10.1109/CVPR52688.2022.01209)] [[Google Scholar](https://scholar.google.com/scholar_lookup?Chung%20H.,%20Sim%20B.,%20Ye%20J.%20C.,%20%E2%80%9CCome-closer-diffuse-faster:%20accelerating%20conditional%20diffusion%20models%20for%20inverse%20problems%20through%20stochastic%20contraction,%E2%80%9D%20in%20Proc.%20IEEE/CVF%20Conf.%20Comput.%20Vision%20and%20Pattern%20Recognit.,%20pp.%C2%A012413%E2%80%9312422%20(2022).%2010.1109/CVPR52688.2022.01209)]
+*   42.Song Y., et al. , “Solving inverse problems in medical imaging with score-based generative models,” ICLR (2022).
+*   43.Chung H., Ye J. C., “Score-based diffusion models for accelerated MRI,” Med. Image Anal. 80, 102479 (2022). 10.1016/j.media.2022.102479  [[DOI](https://doi.org/10.1016/j.media.2022.102479)] [[PubMed](https://pubmed.ncbi.nlm.nih.gov/35696876/)] [[Google Scholar](https://scholar.google.com/scholar_lookup?journal=Med.%20Image%20Anal.&title=Score-based%20diffusion%20models%20for%20accelerated%20MRI&author=H.%20Chung&author=J.%20C.%20Ye&volume=80&publication_year=2022&pages=102479&pmid=35696876&doi=10.1016/j.media.2022.102479&)]
+*   44.Jalal A., et al. , “Robust compressed sensing MRI with deep generative priors,” in Adv. Neural Inf. Process. Syst. 34, pp.14938–14954 (2021). [[Google Scholar](https://scholar.google.com/scholar_lookup?Jalal%20A.,%20et%20al.%20,%20%E2%80%9CRobust%20compressed%20sensing%20MRI%20with%20deep%20generative%20priors,%E2%80%9D%20in%20Adv.%20Neural%20Inf.%20Process.%20Syst.%2034,%20pp.%C2%A014938%E2%80%9314954%20(2021).)]
+*   45.Xiang T., et al. , “: self-supervised diffusion MRI denoising with generative diffusion models,” arXiv:2302.03018 (2023).
+*   46.Gong K., et al. , “PET image denoising based on denoising diffusion probabilistic model,” Eur. J. Nucl. Med. Mol. Imaging 51, 358–368 (2023). 10.1007/s00259-023-06417-8  [[DOI](https://doi.org/10.1007/s00259-023-06417-8)] [[PMC free article](https://pmc.ncbi.nlm.nih.gov/articles/PMC10958486/)] [[PubMed](https://pubmed.ncbi.nlm.nih.gov/37787849/)] [[Google Scholar](https://scholar.google.com/scholar_lookup?journal=Eur.%20J.%20Nucl.%20Med.%20Mol.%20Imaging&title=PET%20image%20denoising%20based%20on%20denoising%20diffusion%20probabilistic%20model&author=K.%20Gong&volume=51&publication_year=2023&pages=358-368&pmid=37787849&doi=10.1007/s00259-023-06417-8&)]
+*   47.Kim B., et al. , “DiffuseMorph: Unsupervised deformable image registration using diffusion model,” in Computer Vision – ECCV 2022, Vol.13691, 347–364 (2022). [[Google Scholar](https://scholar.google.com/scholar_lookup?Kim%20B.,%20et%20al.%20,%20%E2%80%9CDiffuseMorph:%20Unsupervised%20deformable%20image%20registration%20using%20diffusion%20model,%E2%80%9D%20in%20Computer%20Vision%20%E2%80%93%20ECCV%202022,%20Vol.%C2%A013691,%20347%E2%80%93364%20(2022).)]
+*   48.Qin Y., Li X., “FSDiffReg: feature-wise and score-wise diffusion-guided unsupervised deformable image registration for cardiac images,” Lect. Notes Comput. Sci. 14229, 655–665 (2023). 10.1007/978-3-031-43999-5_62 [[DOI](https://doi.org/10.1007/978-3-031-43999-5_62)] [[Google Scholar](https://scholar.google.com/scholar_lookup?journal=Lect.%20Notes%20Comput.%20Sci.&title=FSDiffReg:%20feature-wise%20and%20score-wise%20diffusion-guided%20unsupervised%20deformable%20image%20registration%20for%20cardiac%20images&author=Y.%20Qin&author=X.%20Li&volume=14229&publication_year=2023&pages=655-665&issn=0302-9743&doi=10.1007/978-3-031-43999-5_62&)]
+*   49.Wang H., Li X., “Towards generic semi-supervised framework for volumetric medical image segmentation,” in Adv. Neural Inf. Process. Syst. 36 (2024). [[Google Scholar](https://scholar.google.com/scholar_lookup?Wang%20H.,%20Li%20X.,%20%E2%80%9CTowards%20generic%20semi-supervised%20framework%20for%20volumetric%20medical%20image%20segmentation,%E2%80%9D%20in%20Adv.%20Neural%20Inf.%20Process.%20Syst.%2036%20(2024).)]
+*   50.Laousy O., et al. , “Certification of deep learning models for medical image segmentation,” Lect. Notes Comput. Sci. 14223, 611–621 (2023). 10.1007/978-3-031-43901-8_58 [[DOI](https://doi.org/10.1007/978-3-031-43901-8_58)] [[Google Scholar](https://scholar.google.com/scholar_lookup?journal=Lect.%20Notes%20Comput.%20Sci.&title=Certification%20of%20deep%20learning%20models%20for%20medical%20image%20segmentation&author=O.%20Laousy&volume=14223&publication_year=2023&pages=611-621&issn=0302-9743&doi=10.1007/978-3-031-43901-8_58&)]
+*   51.Carrión H., Norouzi N., “FEDD-fair, efficient, and diverse diffusion-based lesion segmentation and malignancy classification,” Lect. Notes Comput. Sci. 14226, 270–279 (2023). 10.1007/978-3-031-43990-2_26 [[DOI](https://doi.org/10.1007/978-3-031-43990-2_26)] [[Google Scholar](https://scholar.google.com/scholar_lookup?journal=Lect.%20Notes%20Comput.%20Sci.&title=FEDD-fair,%20efficient,%20and%20diverse%20diffusion-based%20lesion%20segmentation%20and%20malignancy%20classification&author=H.%20Carri%C3%B3n&author=N.%20Norouzi&volume=14226&publication_year=2023&pages=270-279&issn=0302-9743&doi=10.1007/978-3-031-43990-2_26&)]
+*   52.Rahman A., et al. , “Ambiguous medical image segmentation using diffusion models,” in Proc. IEEE/CVF Conf. Comput. Vision and Pattern Recognit., pp.11536–11546 (2023). 10.1109/CVPR52729.2023.01110 [[DOI](https://doi.org/10.1109/CVPR52729.2023.01110)] [[Google Scholar](https://scholar.google.com/scholar_lookup?Rahman%20A.,%20et%20al.%20,%20%E2%80%9CAmbiguous%20medical%20image%20segmentation%20using%20diffusion%20models,%E2%80%9D%20in%20Proc.%20IEEE/CVF%20Conf.%20Comput.%20Vision%20and%20Pattern%20Recognit.,%20pp.%C2%A011536%E2%80%9311546%20(2023).%2010.1109/CVPR52729.2023.01110)]
+*   53.Bieder F., et al. , “Memory-efficient 3D denoising diffusion models for medical image processing,” MIDL (2023).
+*   54.Zbinden L., et al. , “Stochastic segmentation with conditional categorical diffusion models,” in IEEE/CVF Int. Conf. Comput. Vision (ICCV), pp.1119–1129 (2023). 10.1109/ICCV51070.2023.00109 [[DOI](https://doi.org/10.1109/ICCV51070.2023.00109)] [[Google Scholar](https://scholar.google.com/scholar_lookup?Zbinden%20L.,%20et%20al.%20,%20%E2%80%9CStochastic%20segmentation%20with%20conditional%20categorical%20diffusion%20models,%E2%80%9D%20in%20IEEE/CVF%20Int.%20Conf.%20Comput.%20Vision%20(ICCV),%20pp.%C2%A01119%E2%80%931129%20(2023).%2010.1109/ICCV51070.2023.00109)]
+*   55.Yang Y., et al. , “DiffMIC: dual-guidance diffusion network for medical image classification,” Lect. Notes Comput. Sci. 14225, 95–105 (2023). 10.1007/978-3-031-43987-2_10 [[DOI](https://doi.org/10.1007/978-3-031-43987-2_10)] [[Google Scholar](https://scholar.google.com/scholar_lookup?journal=Lect.%20Notes%20Comput.%20Sci.&title=DiffMIC:%20dual-guidance%20diffusion%20network%20for%20medical%20image%20classification&author=Y.%20Yang&volume=14225&publication_year=2023&pages=95-105&issn=0302-9743&doi=10.1007/978-3-031-43987-2_10&)]
+*   56.Ijishakin A., et al. , “Interpretable Alzheimer’s disease classification via a contrastive diffusion autoencoder,” in CML 2023, 3rd Workshop on Interpretable Machine Learning in Healthcare (2023). [[Google Scholar](https://scholar.google.com/scholar_lookup?Ijishakin%20A.,%20et%20al.%20,%20%E2%80%9CInterpretable%20Alzheimer%E2%80%99s%20disease%20classification%20via%20a%20contrastive%20diffusion%20autoencoder,%E2%80%9D%20in%20CML%202023,%203rd%20Workshop%20on%20Interpretable%20Machine%20Learning%20in%20Healthcare%20(2023).)]
+*   57.Hardy R., et al. , “Improving nonalcoholic fatty liver disease classification performance with latent diffusion models,” Sci. Rep. 13(1), 21619 (2023). 10.1038/s41598-023-48062-z  [[DOI](https://doi.org/10.1038/s41598-023-48062-z)] [[PMC free article](https://pmc.ncbi.nlm.nih.gov/articles/PMC10703886/)] [[PubMed](https://pubmed.ncbi.nlm.nih.gov/38062049/)] [[Google Scholar](https://scholar.google.com/scholar_lookup?journal=Sci.%20Rep.&title=Improving%20nonalcoholic%20fatty%20liver%20disease%20classification%20performance%20with%20latent%20diffusion%20models&author=R.%20Hardy&volume=13&issue=1&publication_year=2023&pages=21619&pmid=38062049&doi=10.1038/s41598-023-48062-z&)]
+*   58.Meng C., et al. , “SDEdit: guided image synthesis and editing with stochastic differential equations,” ICLR (2022).
+*   59.Avrahami O., Lischinski D., Fried O., “Blended diffusion for text-driven editing of natural images,” in Proc. IEEE/CVF Conf. Comput. Vision and Pattern Recognit., pp.18208–18218 (2022). [[Google Scholar](https://scholar.google.com/scholar_lookup?Avrahami%20O.,%20Lischinski%20D.,%20Fried%20O.,%20%E2%80%9CBlended%20diffusion%20for%20text-driven%20editing%20of%20natural%20images,%E2%80%9D%20in%20Proc.%20IEEE/CVF%20Conf.%20Comput.%20Vision%20and%20Pattern%20Recognit.,%20pp.%C2%A018208%E2%80%9318218%20(2022).)]
+*   60.Huang L., et al. , “Composer: creative and controllable image synthesis with composable conditions,” Proc. 40th Int. Conf. Machine Learn. pp.13753–13773 (2023). [[Google Scholar](https://scholar.google.com/scholar_lookup?Huang%20L.,%20et%20al.%20,%20%E2%80%9CComposer:%20creative%20and%20controllable%20image%20synthesis%20with%20composable%20conditions,%E2%80%9D%20Proc.%2040th%20Int.%20Conf.%20Machine%20Learn.%20pp.%C2%A013753%E2%80%9313773%20(2023).)]
+*   61.Mou C., et al. , “T2I-adapter: learning adapters to dig out more controllable ability for text-to-image diffusion models,” in Proc. AAAI Conf. Artif. Intell., pp.4296–4304 (2024). [[Google Scholar](https://scholar.google.com/scholar_lookup?Mou%20C.,%20et%20al.%20,%20%E2%80%9CT2I-adapter:%20learning%20adapters%20to%20dig%20out%20more%20controllable%20ability%20for%20text-to-image%20diffusion%20models,%E2%80%9D%20in%20Proc.%20AAAI%20Conf.%20Artif.%20Intell.,%20pp.%C2%A04296%E2%80%934304%20(2024).)]
+*   62.Li Y., et al. , “Gligen: open-set grounded text-to-image generation,” in Proc. IEEE/CVF Conf. Comput. Vision and Pattern Recognit., pp.22511–22521 (2023). 10.1109/CVPR52729.2023.02156 [[DOI](https://doi.org/10.1109/CVPR52729.2023.02156)] [[Google Scholar](https://scholar.google.com/scholar_lookup?Li%20Y.,%20et%20al.%20,%20%E2%80%9CGligen:%20open-set%20grounded%20text-to-image%20generation,%E2%80%9D%20in%20Proc.%20IEEE/CVF%20Conf.%20Comput.%20Vision%20and%20Pattern%20Recognit.,%20pp.%C2%A022511%E2%80%9322521%20(2023).%2010.1109/CVPR52729.2023.02156)]
+*   63.Qin C., et al. , “Unicontrol: a unified diffusion model for controllable visual generation in the wild,” in Proc. 37th Int. Conf. Neural Inf. Process. Syst., pp.42961–42992 (2023). [[Google Scholar](https://scholar.google.com/scholar_lookup?Qin%20C.,%20et%20al.%20,%20%E2%80%9CUnicontrol:%20a%20unified%20diffusion%20model%20for%20controllable%20visual%20generation%20in%20the%20wild,%E2%80%9D%20in%20Proc.%2037th%20Int.%20Conf.%20Neural%20Inf.%20Process.%20Syst.,%20pp.%C2%A042961%E2%80%9342992%20(2023).)]
+*   64.Zhao S., et al. , “Uni-controlnet: all-in-one control to text-to-image diffusion models,” in Adv. Neural Inf. Process. Syst. 36 (2024). [[Google Scholar](https://scholar.google.com/scholar_lookup?Zhao%20S.,%20et%20al.%20,%20%E2%80%9CUni-controlnet:%20all-in-one%20control%20to%20text-to-image%20diffusion%20models,%E2%80%9D%20in%20Adv.%20Neural%20Inf.%20Process.%20Syst.%2036%20(2024).)]
+*   65.Cho W., et al. , “Att-adapter: a robust and precise domain-specific multi-attributes t2i diffusion adapter via conditional variational autoencoder,” in ICCV (2025). [[Google Scholar](https://scholar.google.com/scholar_lookup?Cho%20W.,%20et%20al.%20,%20%E2%80%9CAtt-adapter:%20a%20robust%20and%20precise%20domain-specific%20multi-attributes%20t2i%20diffusion%20adapter%20via%20conditional%20variational%20autoencoder,%E2%80%9D%20in%20ICCV%20(2025).)]
+*   66.Han Y., et al. , “Pneumonia detection on chest X-ray using radiomic features and contrastive learning,” in IEEE 18th Int. Symp. Biomed. Imaging (ISBI), IEEE, pp.247–251 (2021). 10.1109/ISBI48211.2021.9433853 [[DOI](https://doi.org/10.1109/ISBI48211.2021.9433853)] [[PMC free article](https://pmc.ncbi.nlm.nih.gov/articles/PMC9096898/)] [[PubMed](https://pubmed.ncbi.nlm.nih.gov/35571507/)] [[Google Scholar](https://scholar.google.com/scholar_lookup?Han%20Y.,%20et%20al.%20,%20%E2%80%9CPneumonia%20detection%20on%20chest%20X-ray%20using%20radiomic%20features%20and%20contrastive%20learning,%E2%80%9D%20in%20IEEE%2018th%20Int.%20Symp.%20Biomed.%20Imaging%20(ISBI),%20IEEE,%20pp.%C2%A0247%E2%80%93251%20(2021).%2010.1109/ISBI48211.2021.9433853)]
+*   67.Tamal M., et al. , “An integrated framework with machine learning and radiomics for accurate and rapid early diagnosis of COVID-19 from chest X-ray,” Expert Syst. Appl. 180, 115152 (2021). 10.1016/j.eswa.2021.115152  [[DOI](https://doi.org/10.1016/j.eswa.2021.115152)] [[PMC free article](https://pmc.ncbi.nlm.nih.gov/articles/PMC8095015/)] [[PubMed](https://pubmed.ncbi.nlm.nih.gov/33967406/)] [[Google Scholar](https://scholar.google.com/scholar_lookup?journal=Expert%20Syst.%20Appl.&title=An%20integrated%20framework%20with%20machine%20learning%20and%20radiomics%20for%20accurate%20and%20rapid%20early%20diagnosis%20of%20COVID-19%20from%20chest%20X-ray&author=M.%20Tamal&volume=180&publication_year=2021&pages=115152&pmid=33967406&doi=10.1016/j.eswa.2021.115152&)]
+*   68.Karargyris A., et al. , “Creation and validation of a chest X-ray dataset with eye-tracking and report dictation for AI development,” Sci. Data 8(1), 92 (2021). 10.1038/s41597-021-00863-5  [[DOI](https://doi.org/10.1038/s41597-021-00863-5)] [[PMC free article](https://pmc.ncbi.nlm.nih.gov/articles/PMC7994908/)] [[PubMed](https://pubmed.ncbi.nlm.nih.gov/33767191/)] [[Google Scholar](https://scholar.google.com/scholar_lookup?journal=Sci.%20Data&title=Creation%20and%20validation%20of%20a%20chest%20X-ray%20dataset%20with%20eye-tracking%20and%20report%20dictation%20for%20AI%20development&author=A.%20Karargyris&volume=8&issue=1&publication_year=2021&pages=92&pmid=33767191&doi=10.1038/s41597-021-00863-5&)]
+*   69.Bigolin Lanfredi R., et al. , “REFLACX, a dataset of reports and eye-tracking data for localization of abnormalities in chest X-rays,” Sci. Data 9(1), 350 (2022). 10.1038/s41597-022-01441-z  [[DOI](https://doi.org/10.1038/s41597-022-01441-z)] [[PMC free article](https://pmc.ncbi.nlm.nih.gov/articles/PMC9206650/)] [[PubMed](https://pubmed.ncbi.nlm.nih.gov/35717401/)] [[Google Scholar](https://scholar.google.com/scholar_lookup?journal=Sci.%20Data&title=REFLACX,%20a%20dataset%20of%20reports%20and%20eye-tracking%20data%20for%20localization%20of%20abnormalities%20in%20chest%20X-rays&author=R.%20Bigolin%20Lanfredi&volume=9&issue=1&publication_year=2022&pages=350&pmid=35717401&doi=10.1038/s41597-022-01441-z&)]
+*   70.Holste G., et al. , “Long-tailed classification of thorax diseases on chest X-ray: a new benchmark study,” Lect. Notes Comput. Sci. 13567, 22–32 (2022). 10.1007/978-3-031-17027-0_3 [[DOI](https://doi.org/10.1007/978-3-031-17027-0_3)] [[PMC free article](https://pmc.ncbi.nlm.nih.gov/articles/PMC9618235/)] [[PubMed](https://pubmed.ncbi.nlm.nih.gov/36318048/)] [[Google Scholar](https://scholar.google.com/scholar_lookup?journal=Lect.%20Notes%20Comput.%20Sci.&title=Long-tailed%20classification%20of%20thorax%20diseases%20on%20chest%20X-ray:%20a%20new%20benchmark%20study&author=G.%20Holste&volume=13567&publication_year=2022&pages=22-32&issn=0302-9743&pmid=36318048&doi=10.1007/978-3-031-17027-0_3&)]
+*   71.Ovcharenko I., “Lung segmentation,” [https://github.com/IlliaOvcharenko/lung-segmentation.git](https://github.com/IlliaOvcharenko/lung-segmentation.git).
+*   72.Tanida T., et al. , “Interactive and explainable region-guided radiology report generation,” in Proc. IEEE/CVF Conf. Comput. Vision and Pattern Recognit., pp.7433–7442 (2023). 10.1109/CVPR52729.2023.00718 [[DOI](https://doi.org/10.1109/CVPR52729.2023.00718)] [[Google Scholar](https://scholar.google.com/scholar_lookup?Tanida%20T.,%20et%20al.%20,%20%E2%80%9CInteractive%20and%20explainable%20region-guided%20radiology%20report%20generation,%E2%80%9D%20in%20Proc.%20IEEE/CVF%20Conf.%20Comput.%20Vision%20and%20Pattern%20Recognit.,%20pp.%C2%A07433%E2%80%937442%20(2023).%2010.1109/CVPR52729.2023.00718)]
+*   73.Cohen J. P., et al. , “Torchxrayvision: a library of chest X-ray datasets and models,” in Int. Conf. Med. Imaging with Deep Learn., PMLR, pp.231–249 (2022). [[Google Scholar](https://scholar.google.com/scholar_lookup?Cohen%20J.%20P.,%20et%20al.%20,%20%E2%80%9CTorchxrayvision:%20a%20library%20of%20chest%20X-ray%20datasets%20and%20models,%E2%80%9D%20in%20Int.%20Conf.%20Med.%20Imaging%20with%20Deep%20Learn.,%20PMLR,%20pp.%C2%A0231%E2%80%93249%20(2022).)]
+*   74.He K., et al. , “Deep residual learning for image recognition,” in Proc. IEEE Conf. Comput. Vision and Pattern Recognit., pp.770–778 (2016). 10.1109/CVPR.2016.90 [[DOI](https://doi.org/10.1109/CVPR.2016.90)] [[Google Scholar](https://scholar.google.com/scholar_lookup?He%20K.,%20et%20al.%20,%20%E2%80%9CDeep%20residual%20learning%20for%20image%20recognition,%E2%80%9D%20in%20Proc.%20IEEE%20Conf.%20Comput.%20Vision%20and%20Pattern%20Recognit.,%20pp.%C2%A0770%E2%80%93778%20(2016).%2010.1109/CVPR.2016.90)]
+*   75.Goceri E., “An efficient network with CNN and transformer blocks for glioma grading and brain tumor classification from MRIS,” Expert Syst. Appl. 268, 126290 (2025). 10.1016/j.eswa.2024.126290 [[DOI](https://doi.org/10.1016/j.eswa.2024.126290)] [[Google Scholar](https://scholar.google.com/scholar_lookup?journal=Expert%20Syst.%20Appl.&title=An%20efficient%20network%20with%20CNN%20and%20transformer%20blocks%20for%20glioma%20grading%20and%20brain%20tumor%20classification%20from%20MRIS&author=E.%20Goceri&volume=268&publication_year=2025&pages=126290&doi=10.1016/j.eswa.2024.126290&)]
+*   76.Goceri E., et al. , “Quantitative validation of anti-PTBP1 antibody for diagnostic neuropathology use: image analysis approach,” Int. J. Numer. Methods Biomed. Eng. 33(11), e2862 (2017). 10.1002/cnm.2862 [[DOI](https://doi.org/10.1002/cnm.2862)] [[PMC free article](https://pmc.ncbi.nlm.nih.gov/articles/PMC5963259/)] [[PubMed](https://pubmed.ncbi.nlm.nih.gov/28024117/)] [[Google Scholar](https://scholar.google.com/scholar_lookup?journal=Int.%20J.%20Numer.%20Methods%20Biomed.%20Eng.&title=Quantitative%20validation%20of%20anti-PTBP1%20antibody%20for%20diagnostic%20neuropathology%20use:%20image%20analysis%20approach&author=E.%20Goceri&volume=33&issue=11&publication_year=2017&pages=e2862&pmid=28024117&doi=10.1002/cnm.2862&)]
+*   77.Wu J. T., et al. , “GazeXPErT: an expert eye-tracking dataset for interpretable and explainable ai in oncologic FDG-PET/CT scans,” arXiv:2603.00162 (2026).
+
+## [](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285692/)Associated Data
+
+_This section collects any data citations, data availability statements, or supplementary materials included in this article._
+
+### Supplementary Materials
+
+### Data Availability Statement
+
+The datasets used in this work are publicly available. Eye gaze data for chest X-rays is available at [https://physionet.org/content/egd-cxr/1.0.0/](https://physionet.org/content/egd-cxr/1.0.0/), the REFLACX dataset is available at [https://physionet.org/content/reflacx-xray-localization/1.0.0/](https://physionet.org/content/reflacx-xray-localization/1.0.0/), the CheXpert dataset is available at [https://stanfordmlgroup.github.io/competitions/chexpert/](https://stanfordmlgroup.github.io/competitions/chexpert/), and the MIMIC-CXR-LT dataset is available at [https://physionet.org/content/cxr-lt-iccv-workshop-cvamd/2.0.0/](https://physionet.org/content/cxr-lt-iccv-workshop-cvamd/2.0.0/). Code is available at [https://github.com/lordmoinak1/radgazegen](https://github.com/lordmoinak1/radgazegen).
