@@ -1,0 +1,714 @@
+Title: EmpiriGraph-Psy: A Dataset and LLM Pipeline for Extracting Empirical Relation Graphs from Psychology Abstracts
+
+URL Source: https://arxiv.org/pdf/2606.08362
+
+Published Time: Tue, 09 Jun 2026 00:55:18 GMT
+
+Number of Pages: 17
+
+Markdown Content:
+# EmpiriGraph-Psy: A Dataset and LLM Pipeline for Extracting Empirical Relation Graphs from Psychology Abstracts 
+
+Danqin Zhao α, ∗ Yicun Liu β, ∗ Xingwei Tan γ Thomas T. Hills αα Department of Psychology, University of Warwick  
+
+> β
+
+Mathematical Sciences Institute, The Australian National University  
+
+> γ
+
+School of Computer Science, University of Sheffield 
+
+{Danqin.Zhao,T.T.Hills}@warwick.ac.uk u7579143@anu.edu.au Xingwei.Tan@sheffield.ac.uk  
+
+> ∗
+
+Equal contribution. 
+
+Abstract 
+
+Existing scientific relation extraction bench-marks mainly target domains such as com-puter science, where entities are tasks, methods, datasets, materials, or metrics. This leaves a gap in variable-oriented empirical fields such as psychology, where findings are expressed as relations among constructs, measurements, interventions, and outcomes. We introduce variable-centered empirical graph extraction, the task of mapping scientific abstracts to typed graphs whose nodes are normalized variables and whose edges represent empirical and hi-erarchical relations. To support this task, we construct EmpiriGraph-Psy, a benchmark of 210 psychology abstracts annotated by domain-trained annotators with normalized variables, concept hierarchies, empirical relation types, and validation states. We evaluate frontier and open-weight LLMs using both direct extrac-tion and a staged graph-construction pipeline that separates variable extraction, normaliza-tion, hierarchy construction, evidence selec-tion, relation extraction, and edge validation. The staged pipeline substantially outperforms direct extraction, with the best configuration achieving a macro-F1 of 0.74. Error analysis shows that moderation relations and concept hierarchies remain the most challenging cases, highlighting the difficulty of extracting higher-order empirical claims and implicit abstraction structure from scientific abstracts. 1
+
+1 Introduction 
+
+Scientific relation extraction aims to identify con-cepts and relations from unstructured research text and represent them as structured graphs. Exist-ing benchmarks have largely focused on computer science and NLP papers (e.g., Gábor et al. 2018) , where scientific entities are typically tasks, datasets, models, and metrics. While these schemas support   
+
+> 1Experimental code: https://github.com/ foxxis-dq828/EmpiriGraph-Psy
+
+model comparison and evaluation, they are less suited to variable-oriented empirical fields such as psychology, social science, and health research. In these disciplines, knowledge is often organized around variables and their empirical relations, in-cluding covariation, intervention–effects, mecha-nisms, and contextual conditions. In this paper, we construct a corpus of psychol-ogy abstracts because psychology is a representa-tive variable-oriented empirical field: its findings are commonly expressed as relations among such variable relations. For example, abstracts may re-port associations between leadership and personal-ity (e.g., Andersen 2006), effects of psychological interventions on patient outcomes (e.g., Anderson and Ozakinci 2018), or moderation by family envi-ronment in the relation between genetic risk and be-havior (e.g., Cadoret et al. 1995). Extracting such relations can support the construction of variable-centered knowledge graphs for a broad range of empirical disciplines. It further enables large-scale evidence synthesis and historical analyses of how variables and theories emerge, stabilize, change, or disappear across the literature. Variable-centered graph extraction poses chal-lenges beyond standard entity and relation extrac-tion. First, variable mentions require semantic nor-malization: the same construct may be expressed through synonyms, abbreviations, measurement in-struments, or theoretically related terms. Second, empirical findings are often stated at multiple levels of abstraction. An abstract may relate broad con-structs while also specifying relations among their finer-grained dimensions, as illustrated in Figure 1. Flattening these levels loses theoretical struc-ture, while treating them as unrelated variables fragments the evidence. Third, relation classifi-cation requires contextual reasoning, including dis-tinguishing associational, directional, mechanistic, and moderational claims, and identifying whether a relation is validated, hypothesized, or null. These 1
+
+> arXiv:2606.08362v1 [cs.IR] 6 Jun 2026 Figure 1: Illustration of the variable-centered relational graph extraction task. The input abstract is transformed into a typed variable graph, where the upper layer represents higher-level constructs and the lower layer represents finer-grained variables or dimensions. Edges capture associational, mechanistic, moderational, and hierarchical relations.
+
+challenges call for an extraction framework that jointly models variable identification, normaliza-tion, hierarchy, evidence grounding, and relation classification. We address these challenges with a multi-stage LLM pipeline that decomposes graph construction into variable extraction, semantic normalization, hierarchy construction, evidence selection, relation extraction, and edge validation. This decomposi-tion follows the structure of the annotation task: variables are first identified and canonicalized, hier-archical edges explicitly encode abstraction struc-ture, and empirical edges are classified as associ-ational, mechanistic, or moderational with their directionality and validation status. To evaluate predicted graphs, we use a structure-first alignment procedure inspired by maximum common subgraph matching. Rather than relying on surface overlap between variable names, this evaluation aligns predicted and gold graphs under partial node matching and measures whether asso-ciational, mechanistic, moderational, and hierarchi-cal edges are recovered with the correct validation status. This allows us to separate structural graph recovery from surface variation in variable naming. Our contributions are as follows: • We introduce Empirical Research Knowledge Graph Extraction, a variable-centered task for mapping empirical research abstracts into typed graphs over normalized variables. • We construct EmpiriGraph-Psy, a benchmark of 210 psychology abstracts annotated with normalized variables, validation states, and associational, mechanistic, moderational, and hierarchical relations. • We propose a multi-stage LLM pipeline for Empirical Research Knowledge Graph Extrac-tion and show that it substantially outperforms direct prompting across multiple LLMs. • We introduce a structure-first graph evalua-tion framework that aligns predicted and gold graphs under partial node matching and mea-sures typed edge recovery. 
+
+2 Related Work 
+
+2.1 Relation Extraction from Scientific Materials 
+
+Recent studies have extensively explored the role of NLP techniques in extracting, organizing, and syn-thesizing scientific findings from large-scale aca-demic corpora(Wang et al., 2020; Chen et al., 2021; Li et al., 2025; Katz et al., 2024). As noted by Zhao 2et al. (2024), the number of scientific publications has grown exponentially, making it increasingly infeasible for researchers to manually discover and synthesize important scientific facts embedded in unstructured text. In this context, relation extrac-tion (RE), which aims to automatically identify structured relations among scientific entities, serves as an important infrastructure for the science of science, supporting applications such as scientific knowledge graph construction, text summarization, and scientific leaderboard construction(Luan et al., 2018; Mondal et al., 2021; Dagdelen et al., 2024; Hou et al., 2019; ¸ Sahinuç et al., 2024). Early scientific relation extraction studies can be traced to SEMEVAL-2017(Augenstein et al., 2017; Luan et al., 2017), which introduces a cross-domain scientific keyphrase tagging task, identi-fying TASK, PROCESS and MATERIAL spans across Computer Science, Materials Science, and Physics to capture domain-specific scientific con-cepts from text. Later benchmarks expanded scien-tific relation extraction with richer schemas for sci-entific entities and relations, including fine-grained relation types in SemEval-2018 Task 7 and joint entity–relation–coreference annotation in SciERC (Gábor et al., 2018; Luan et al., 2018). More re-cently, SciNLP extends scientific information ex-traction from abstracts to full-text NLP papers, an-notating 60 ACL long papers with fine-grained task ,
+
+method , dataset , and metric entities and 11 rela-tion types, including UsedFor , EvaluatedOn , Mea-suredBy , and CompareWith (Duan et al., 2025). Despite the progression of scientific information extraction, existing benchmarks show that entity recognition and type classification are compara-tively tractable, while relation discovery remains the main bottleneck. In SemEval-2018 Task 7, sys-tems perform better when candidate relation in-stances are given, but drop when they must both identify and classify relations from raw abstracts (Gábor et al., 2018). This gap is even more pro-nounced in full-text settings, where related entities may be separated by longer contexts (Duan et al., 2025). Meanwhile, existing studies on scientific re-lation extraction mostly focus on NLP or computer science papers, with a smaller line of work consid-ering other domains. For example, biomedical rela-tion extraction (Bio-RE) identifies relations among biomedical entities, such as chemical–disease and gene–disease relations (Shang et al., 2025), while chemistry and materials science studies extract chemical reaction data (Guo et al., 2022) and mate-rial synthesis procedures (Yang et al., 2022). 
+
+2.2 LLM in Relation Extraction 
+
+LLMs exhibit in-context learning (Min et al., 2022) and achieve promising results across many NLP tasks such as text classification, fact retrieval, and natural language inference (Brown et al., 2020; Wei et al., 2022a). Recent studies further show that LLMs exhibit competitive performance on relation extraction tasks under instruction-tuned settings, in some cases approaching or surpass-ing standard fully supervised methods (Wan et al., 2023; Wadhwa et al., 2023; Tan et al., 2025). LLM has also widely applied in scientific relation ex-traction across different disciplines including ma-terials science (Dagdelen et al., 2024; Foppiano et al., 2024) and biomedicine, where they facilitate structured knowledge acquisition from scientific literature (Shang et al., 2025; Laskar et al., 2025). Specifically, Chain-of-Thought (CoT) prompting has emerged as an effective mechanism for im-proving reasoning-intensive NLP tasks by elicit-ing intermediate reasoning steps from LLMs (Wei et al., 2022b; Wadhwa et al., 2023). It improves relation extraction performance by enhancing rela-tion grounding and aligning dispersed textual ev-idence with candidate relations, thereby mitigat-ing the aforementioned limitations of conventional supervised approaches in relation discovery (Ma et al., 2023; Wadhwa et al., 2023). These findings suggest that LLMs provide a promising approach for extracting empirical relations which requires contextual understanding and nuanced semantic reasoning. Despite these strengths, no existing LLMs relation extraction system focus on scien-tific abstraction, and adapting LLMs to this task is non-trivial. We thus apply LLMs to extract em-pirical research knowledge graphs from scientific abstracts. 
+
+3 Background 
+
+In this section, we define the task of Empirical Research Knowledge Graph Extraction. Given a scientific text document X containing n tokens, the goal of the task is to create a graph G = ( V, E ),where V denotes a set of vertices representing sci-entific variables or constructs and E denotes a set of edges representing the relationships between the variables. We distinguish between empirical rela-tion edges and conceptual edges. Empirical edges describe substantive relationships among variables, 3including associational, mechanistic, and condi-tional relations. Conceptual edges depict abstrac-tion relations between higher-level constructs and lower-level variables, dimensions, or indicators. An edge is denoted as (vi, r, v j ), where vi is the head node, vj is the tail node, and r is the relation between the two nodes. Relation r ∈ R is assigned with one of the categories in the following label set: 
+
+R = {Associational , Mechanistic ,
+
+Moderational , Hierarchical }. (1) An associational edge describes that the head node vi and the tail node vj covary or are corre-lated, without specifying a causal or mechanistic relationship between them, such as a correlation, covariation, or a group difference associated with 
+
+vi, without claiming that vi mechanistically affects 
+
+vj .A mechanistic edge is annotated when the text further explains the mechanism underlying the co-variance between vi and vj , such that variable vi
+
+affects, predicts, influences, enables, or otherwise has a directional effect on variable vj .A conditional edge is annotated when a third variable vk conditions an established relationship between variables, such as vi → vj , by altering its strength, direction, or statistical significance. This edge type primarily captures moderation or interaction effects.A conditional relation in which 
+
+vk moderates the relationship vi → vj is encoded in the knowledge graph as (vk, Conditional, v i)
+
+and (vk, Conditional, v j ).For each empirical edge, we further annotate its validation state, using three labels: validated , null ,and hypothesized . An edge is labeled as validated 
+
+when the text reports that the relationship is sup-ported by the study’s empirical results. An edge is labeled as null when the relationship is tested but not supported, such as when the abstract reports an insignificant effect. An edge is labeled as hy-pothesized when the relationship is proposed as a hypothesis or expected, but the text does not report empirical evidence confirming or rejecting it. A major annotation ambiguity arises because abstracts often reports variable relationships at dif-ferent levels of abstraction. For example, as illus-trated in Figure 1 (b), the abstract first describes how ethical leader indirectly influence employee’s behavior , and then specifies two concrete forms of 
+
+employee’s behavior – unethical decision and de-viant behavior . In this case, employees’ behavior is annotated as a higher-level construct, representing the main research objects, while unethical decision 
+
+and deviant behavior are annotated as lower-level variables or specific behavioral outcomes. We introduce hierarchy edges for representing such abstraction relations. A hierarchy edge con-nects a higher-level construct to a lower-level vari-able. The former includes constructs, theoretical categories, or research objects, while the latter denotes a more specific dimension, indicator, or measurement of that construct. The lower-level graph retains all specific relationships between dif-ferent dimensions of a construct or specific mea-surements. The higher-level graph collapses lower-level variables into their corresponding higher-level constructs, yielding a more abstract representation of the theoretical relationships among constructs. Such multi-level coding allows for different lev-els of analytic purposes. For downstream projects such as synthesizing research findings into a knowl-edge graph, higher-level relational graphs provide descriptions of main research objects and relation-ships. While for analyzing historical changes in scientific findings, a complete relational graph will retain the organization of relationships in the ab-stract. 
+
+4 Dataset and Human Annotation 
+
+4.1 Abstract Corpus Construction 
+
+We collect a corpus of abstracts from psychology journals. Since the frequency, density, and linguis-tic realization of different relation types may vary substantially across historical periods, we designed a stratified sample with broad temporal coverage rather than sampling only from recent publications. Our dataset covers abstracts from six psychology journals with long publication histories, relatively high 5-year impact factors, and represents different subfields of psychology. We include only original author-written abstracts and exclude retrospectively added machine-generated abstracts. 
+
+4.2 Data Collection and Validation 
+
+Three annotators participated in the project. All annotators were psychology students at either the PhD or undergraduate level. Annotations were conducted using a customized annotation platform built on top of Label Studio. The details can be found in Appendix A.1. Prior to the formal an-notation phase, all coders received training on the coding scheme and completed a qualification task 4Figure 2: Overview of the proposed variable-centered relational graph extraction pipeline. The system maps a scientific abstract into a structured variable graph through variable extraction, normalization and hierarchy construction, evidence sentence extraction, graph construction, and edge validation. 
+
+consisting of 10 abstracts. These materials were used only for training and were excluded from the final coding dataset. After coders passed this initial training stage, they proceeded to the formal annota-tion task. During annotation, the coding guidelines were iteratively discussed and refined through team discussions. Gold graphs were constructed through a two-stage process. First, the three annotators jointly covered the full corpus of 210 abstracts, with a 50-abstract subset independently annotated by all three coders for reliability assessment. Second, after agreement analysis, the annotations were re-viewed by the annotator team. Disagreements in variable boundaries, variable normalization, hier-archy edges, relation types, and validation-state labels were discussed and resolved. The resulting reviewed annotations were used as the final gold graphs for model evaluation. 
+
+5 Methodology 
+
+5.1 Pipeline 
+
+Figure 2 shows the overall structure of the pro-posed pipeline. We decompose graph construction into five sequential subtasks: variable extraction, variable normalization and hierarchy construction, evidence sentence extraction, empirical relation-ship extraction, and validation. Each stage pro-duces a structured intermediate output, which is then passed to the next stage as context. Below we summarize the role of each stage. Deductive Task 
+
+> Step 1: Variable Extraction
+> In Step 1, the model identifies candidate variables from the abstract and proposes normalized variable spans/names. This stage emphasizes variable identi-fication because downstream stages cannot recover variables that are never extracted.
+> Step 2: Variable Normalization and Hierarchy Construction
+> In Step 2, the system builds a variable hierarchy and performs canonicalization. Practically, this stage merges near-duplicate mentions, links higher-level and lower-level variables, and enforces a consistent variable vocabulary for later relation extraction.
+> Step 3: Evidence Sentence Extraction
+> In Step 3, the model selects evidence-bearing sen-tences likely to contain relational information with reference of the variable list generated from Step 2. This acts as an information bottleneck that improves precision by reducing distracting context and forc-ing the model to justify edge decisions from explicit textual evidence.
+> Step 4: Graph Construction
+> In Step 4, the model predicts and classifies empiri-cal relations among variables (Associational, Mech-
+
+5anistic, Moderational), producing the initial graph structure. 
+
+> Step 5: Edge Validation
+> In Step 5, the system re-validates extracted edges and relation attributes, correcting likely false positives and improving accuracy. This final pass functions as a consistency and quality-control stage before evalua-tion.
+
+5.2 Graph Evaluation 
+
+Exact node-label matching is unsuitable because the same scientific variable may be expressed by different surface forms across annotators or models. We therefore evaluate graphs using a structure-first alignment. The gold graph G refers to the final-ized human-annotated graph produced through the procedure described in Section 4.2. Let the gold graph be G = ( VG, E G) and the predicted graph be P = ( VP , E P ), where each edge is directed and typed: 
+
+e = ( u, v, τ ), τ ∈ T . (2) We search for an injective partial mapping 
+
+ϕ : VG → VP ∪ {∅} , (3) where ∅ denotes an unmatched gold node. A gold edge (u, v, τ ) ∈ EG is counted as matched if 
+
+ϕ(u)̸ = ∅, ϕ (v)̸ = ∅, (ϕ(u), ϕ (v), τ ) ∈ EP . (4) The alignment is chosen to maximize typed edge overlap:            
+
+> ϕ⋆= arg max
+> ϕ|{ (u, v, τ )∈EG: ( ϕ(u), ϕ (v), τ )∈EP}| .
+> (5)
+
+Let m⋆ be the number of matched edges under 
+
+ϕ⋆. We then compute precision, recall, and F1 score based on m⋆, |EP |.We report three complementary views: Mtyped ,computed on the full directed typed graphs; Mhigher ,computed after projecting both graphs onto higher-level nodes; and Magnostic , computed after collaps-ing all edge types into a single undirected relation type. Optimization details, preprocessing, per-type scores, and complexity analysis are provided in Appendix A.3. Because the goal of this paper is graph extrac-tion rather than node-label normalization, we treat node alignment as an auxiliary component of graph-level evaluation. Nevertheless, since the structure-first metric may align nodes with different sur-face forms, we further validate the aligned node pairs in Appendix A.5. Across all aligned node pairs, the mean embedding-based cosine similarity is 0.735 . Manual inspection of 100 stratified ran-domly sampled pairs found that 87 pairs referred to the same variable or construct. This suggests that most structure-aligned node pairs are semantically valid, although a minority of alignments remain noisy. 
+
+6 Experiment 
+
+6.1 Baseline 
+
+We first constructed a direct-prompting baseline by providing GPT-5.4 with a general task descrip-tion, edge-type definitions, and the desired out-put format, and asking it to generate the complete graph in a single step. To evaluate whether explicit task decomposition improves Empirical Research Knowledge Graph Extraction, we compared three GPT-5.4-based settings: direct one-step prompting, a collapsed pipeline prompt that describes all five stages within a single request, and the full staged pipeline in which the five stages are executed as separate requests. We then evaluated the full staged pipeline across several high-performing large language models se-lected with reference to the LLM leaderboard rea-soning index ranking 2: GPT-5.2, GPT-5.4, Claude Sonnet 4.6, Claude Opus 4.7, DeepSeek V4 Pro, and Gemini 3 Flash. We additionally included GPT-4o as a lower-cost comparison model that has been widely-used in annotation tasks. All model outputs were evaluated using the same structural graph eval-uation protocol. 
+
+6.2 Results 
+
+We evaluate the model performance by applying the graph structural evaluation method (Section 5.2) between the gold graph and the model-predicted graphs. The performance of our production model is reported in Table 1. We produced both micro and macro F1 scores for the best models (GPT-5.4 + GPT-5.2). Micro F1 is produced by pooling the edges and then com-puted as a whole, whereas macro F1 is computed by averaging the F1 over each abstract. Our best model (GPT-5.4 for Step 1, 5; GPT-5.2 for the rest) achieved a micro F1 of 0.72 and a macro F1 of 0.74 .This is only slightly lower than our mean F1 score reported in inter-annotator agreement by human annotators. Our model performs well on extracting 
+
+> 2https://llm-stats.com/
+
+6Type Micro / Pooled Edges Macro / Per Abstract Human LLM Matched Precision Recall F1 Mean Precision Mean Recall Mean F1                                                                
+
+> Mechanistic 759 757 583 0.770 0.768 0.769 0.829 0.826 0.798
+> Associational 282 297 206 0.694 0.730 0.712 0.725 0.742 0.711 Moderational 253 187 151 0.807 0.597 0.686 0.728 0.619 0.639 Hierarchical 418 417 272 0.652 0.651 0.651 0.690 0.668 0.662 Higher-Level Graph 768 800 570 0.713 0.742 0.727 0.743 0.789 0.732 Type-Agnostic Graph 1712 1658 1261 0.761 0.737 0.748 0.813 0.815 0.779 Full Graph 1712 1658 1212 0.731 0.708 0.719 0.767 0.771 0.736
+
+Table 1: Structural evaluation of LLM-generated graphs against human-annotated gold graphs. Micro metrics are computed by pooling all edges across abstracts; we aggregate the total number of human-coded edges, LLM-predicted edges, and matched edges, and then compute precision, recall, and F1 from these corpus-level counts. Macro metrics are computed at the abstract level: precision, recall, and F1 are first calculated separately for each abstract and then averaged across abstracts. 
+
+mechanistic and associational relationships. How-ever, it performs less satisfactorily on extracting moderational and hierarchical relationships. No-tably, moderational and hierarchical edges are in-trinsically harder: the former requires higher-order reasoning beyond binary relation extraction, while the latter requires implicit taxonomic abstraction over variable mentions (Luan et al., 2018; Jia et al., 2019). We further assessed the robustness of model per-formance across journals and publish periods, see Appendix 5. This suggests that the model general-izes well across abstracts from different historical periods, despite potential changes in writing style, reporting conventions, and terminology over time. Extraction performance is highly stable across pe-riod, with all F1 score above 0.71 . The perfor-mance varied more across journals, with journal-level F1 ranging from 0.67 to 0.81 .
+
+6.3 Model Comparison 
+
+Table 2 reports model performance under direct prompting and the proposed pipeline. The direct-prompting baseline obtains balanced but relatively low scores, with an F1 of 0.530 . In contrast, all pipeline-based configurations outperform the baseline. The combined GPT-5.2 + GPT-5.4 con-figuration achieves the best overall performance, with 0.767 precision, 0.771 recall, and 0.736 F1. Among single-model configurations, GPT-5.4 per-forms best, reaching an F1 of 0.694 , followed by GPT-5.2 with an F1 of 0.679 .Different models exhibit distinct error profiles. Gemini 3 Flash achieves the highest recall ( 0.782 )but substantially lower precision, suggesting a tendency to over-generate relations. By contrast, DeepSeek V4 Pro and GPT-4o are more precision-oriented but recover fewer correct relations. We further compare direct prompting, chain-of-thought prompting, and the final staged pipeline using GPT-5.4. This comparison shows a clear improvement from direct prompting to chain-of-thought prompt-ing and then to the staged pipeline, indicating that explicit decomposition improves graph extraction quality beyond model choice alone. Overall, the results show that the proposed pipeline improves the extraction relative to one-step prompting, and that combining GPT-5.2 and GPT-5.4 provides the best precision–recall balance.                                  
+
+> Model Precision Recall F1
+> GPT-5.4 (Direct Prompt) 0.566 0.606 0.528 GPT-5.2 + GPT-5.4 0.767 0.771 0.736
+> GPT-5.4 0.754 0.714 0.694 GPT-5.4 (Single Step CoT) 0.691 0.698 0.658 GPT-5.2 0.700 0.726 0.679 GPT-4o 0.738 0.508 0.551 Claude Opus 4.7 0.700 0.651 0.635 Claude Sonnet 4.6 0.660 0.736 0.652 Gemini 3 Flash 0.536 0.782 0.598 Deepseek V4 Pro 0.757 0.619 0.641
+> Note. The model variants are gpt-4o, gpt-5.2, gpt-5.4, claude-sonnet-4.6, claude-opus-4.7, gemini-3-flash, deepseek-v4-pro accordingly. All parameters (i.e., reasoning level, verbosity) are set to ’low’ where applicable.
+
+Table 2: Performance (macro-averaged) comparison of different models with respect to the gold graph. 
+
+6.4 Error Analysis 
+
+In addition to Table 1, Figure 3 presents a detailed confusion matrix and breakdown between the gold and predicted edge types. Hierarchy has the highest FN rate (27.4%) — the model misses more than one in four hierarchy edges. This edge type re-7quires inferring that one construct is a component of another, a structural inference rarely made ex-plicit in abstracts. Moderation has the highest type confusion rate (15.3%) — nearly one-sixth of mod-eration edges are recovered under the wrong type, most often as directional. This reflects the inherent ambiguity of moderation language and the model’s tendency to simplify three-way interactions. Di-rectional has the lowest type confusion (2.3%) and a moderate FN rate, reflecting its dominant fre-quency and clearer linguistic markers (e.g., "pre-dicted", "mediated", "caused"). Correlational edges are nearly balanced in FN/FP (10.2% vs. 9.8%), suggesting the model neither systematically over-nor under-produces correlational relationships, but does occasionally impose directionality (8.3% type confusion). FP rates are uniformly lower than FN rates across all types, indicating the model is more likely to miss a relationship than to hallucinate one—a desirable conservative bias for downstream knowledge-graph construction. 
+
+> Figure 3: Confusion matrix of LLM-predicted edge types against gold graph edge types and error breakdown by edge types.
+
+7 Conclusion 
+
+This study introduced EmpriGraph-Psy, a dataset and LLM pipeline for extracting empirical relation graphs from psychology abstracts. We explored how variable-centered scientific findings can be rep-resented as graphs. We further demonstrated that decomposing graph construction into variable ex-traction, normalization, evidence selection, relation extraction, and validation substantially improves LLM performance over direct prompting. The best pipeline achieved strong graph-level extraction per-formance ( F 1 = 0 .74 ), approaching human agree-ment and showing stable results across publication periods. EmpiriGraph-Psy provides a benchmark and extraction framework for constructing empiri-cal knowledge graphs in psychology, and offers a reference framework for information extraction in broader variable-oriented empirical fields. 
+
+Limitations 
+
+The current dataset is limited to psychology ab-stracts. Although the dataset covers multiple psy-chology subfields and a broad historical period, it remains unclear whether the proposed workflow generalizes to other disciplines such as health sci-ence or biology, where abstracts may follow differ-ent writing conventions and reporting styles. Future work could extend the workflow of Empirical Re-search Knowledge Graph Extraction to additional domains to assess the cross-disciplinary robustness of the proposed pipeline. Our work focuses on extracting empirical and conceptual relationships and evaluating whether LLM-based pipelines can recover such graph struc-tures from abstracts. The current annotation scheme does not include other important scientific components such as samples, methods, statistical procedures, or tasks. Future work may therefore integrate our LLM workflow with prior NLP-based scientific information extraction methods to con-struct more complete scientific knowledge graphs. 
+
+Acknowledgments 
+
+This work is funded by an UK ESRC Grant to the University of Warwick Centre for Competi-tive Advantage in the Global Economy (CAGE). XT is supported by the EPSRC [grant number EP/Y009800/1], through funding from Responsible AI UK (KP0016) as a Keystone project. 8References 
+
+Jon Aarum Andersen. 2006. Leadership, personality and effectiveness. The Journal of Socio-Economics ,35(6):1078–1091. Niall Anderson and Gozde Ozakinci. 2018. Effective-ness of psychological interventions to improve qual-ity of life in people with long-term conditions: rapid systematic review of randomised controlled trials. 
+
+BMC Psychology , 6(1):11. Isabelle Augenstein, Mrinal Das, Sebastian Riedel, Lakshmi Vikraman, and Andrew McCallum. 2017. Semeval-2017 task 10: Scienceie – extracting keyphrases and relations from scientific publications. In Proceedings of the 11th International Workshop on Semantic Evaluation (SemEval-2017) , pages 546– 555, Vancouver, Canada. Association for Computa-tional Linguistics. Tom B. Brown, Benjamin Mann, Nick Ryder, Melanie Subbiah, Jared Kaplan, and 1 others. 2020. Language models are few-shot learners. Advances in Neural Information Processing Systems , 33:1877–1901. Remi J. Cadoret, William R. Yates, E. Troughton, G. Woodworth, and Mark A. Stewart. 1995. Genetic-environmental interaction in the genesis of aggres-sivity and conduct disorders. Archives of General Psychiatry , 52(11):916–924. Xiuying Chen, Hind Alamro, Mingzhe Li, Shen Gao, Xi-angliang Zhang, Dongyan Zhao, and Rui Yan. 2021. Capturing relations between scientific papers: An abstractive model for related work section generation. In Proceedings of the 59th Annual Meeting of the Association for Computational Linguistics and the 11th International Joint Conference on Natural Lan-guage Processing (Volume 1: Long Papers) , pages 6068–6077, Online. Association for Computational Linguistics. John Dagdelen, Alexander Dunn, Sanghoon Lee, Nicholas Walker, Andrew S. Rosen, Gerbrand Ceder, Kristin A. Persson, and Anubhav Jain. 2024. Struc-tured information extraction from scientific text with large language models. Nature Communications ,15(1):1418. Decheng Duan, Yingyi Zhang, Jitong Peng, and Chengzhi Zhang. 2025. Scinlp: A domain-specific benchmark for full-text scientific entity and relation extraction in nlp. In Proceedings of the 2025 Con-ference on Empirical Methods in Natural Language Processing , pages 14473–14486, Suzhou, China. As-sociation for Computational Linguistics. Luca Foppiano, Guillaume Lambard, Toshiyuki Ama-gasa, and Masashi Ishii. 2024. Mining experimental data from materials science literature with large lan-guage models: an evaluation study. Science and Tech-nology of Advanced Materials: Methods , 4:2356506. Kata Gábor, Davide Buscaldi, Anne-Kathrin Schu-mann, Behrang QasemiZadeh, Haïfa Zargayouna, and Thierry Charnois. 2018. Semeval-2018 task 7: Semantic relation extraction and classification in sci-entific papers. In Proceedings of The 12th Inter-national Workshop on Semantic Evaluation , pages 679–688, New Orleans, Louisiana. Association for Computational Linguistics. Jiang Guo, A. Santiago Ibanez-Lopez, Hanyu Gao, Vic-tor Quach, Connor W. Coley, Klavs F. Jensen, and Regina Barzilay. 2022. Automated chemical reaction extraction from scientific literature. Journal of Chem-ical Information and Modeling , 62(9):2035–2045. Yufang Hou, Charles Jochim, Martin Gleize, Francesca Bonin, and Debasis Ganguly. 2019. Identification of tasks, datasets, evaluation metrics, and numeric scores for scientific leaderboards construction. In 
+
+Proceedings of the 57th Annual Meeting of the Asso-ciation for Computational Linguistics , pages 5203– 5213, Florence, Italy. Association for Computational Linguistics. Robin Jia, Cliff Wong, and Hoifung Poon. 2019. Document-level n-ary relation extraction with mul-tiscale representation learning. In Proceedings of the 2019 Conference of the North American Chap-ter of the Association for Computational Linguistics: Human Language Technologies , pages 3693–3704, Minneapolis, Minnesota. Association for Computa-tional Linguistics. Uri Katz, Mosh Levy, and Yoav Goldberg. 2024. Knowl-edge navigator: Llm-guided browsing framework for exploratory search in scientific literature. In Find-ings of the Association for Computational Linguistics: EMNLP 2024 , pages 8838–8855, Miami, Florida, USA. Association for Computational Linguistics. Md Tahmid Rahman Laskar, Israt Jahan, Elham Dolatabadi, Chun Peng, Enamul Hoque, and Jimmy Xiangji Huang. 2025. Improving auto-matic evaluation of large language models (LLMs) in biomedical relation extraction via LLMs-as-the-judge. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Vol-ume 1: Long Papers) , pages 25483–25497, Vienna, Austria. Association for Computational Linguistics. Pengjiang Li, Zaitian Wang, Xinhao Zhang, Ran Zhang, Lu Jiang, Pengfei Wang, and Yuanchun Zhou. 2025. Scitopic: Enhancing topic discovery in scientific literature through advanced llm. arXiv preprint arXiv:2508.20514 .Yi Luan, Luheng He, Mari Ostendorf, and Hannaneh Hajishirzi. 2017. Scientific information extraction with semi-supervised neural tagging. In Proceed-ings of the 2017 Conference on Empirical Methods in Natural Language Processing , pages 2641–2651, Copenhagen, Denmark. Association for Computa-tional Linguistics. Yi Luan, David Wadden, Luheng He, Amy Shah, Mari Ostendorf, and Hannaneh Hajishirzi. 2018. Multi-task identification of entities, relations, and coref-erence for scientific knowledge graph construction. 
+
+9In Proceedings of the 2018 Conference on Empiri-cal Methods in Natural Language Processing , pages 3219–3232, Brussels, Belgium. Association for Com-putational Linguistics. Xilai Ma, Jing Li, and Min Zhang. 2023. Chain of thought with explicit evidence reasoning for few-shot relation extraction. In Findings of the Association for Computational Linguistics: EMNLP 2023 , pages 2334–2352, Singapore. Association for Computa-tional Linguistics. Ciaran McCreesh, Patrick Prosser, and James Trim-ble. 2017. A partitioning algorithm for maximum common subgraph problems. In Proceedings of the Twenty-Sixth International Joint Conference on Arti-ficial Intelligence , pages 712–719. International Joint Conferences on Artificial Intelligence Organization. Sewon Min, Mike Lewis, Hannaneh Hajishirzi, and Luke Zettlemoyer. 2022. Rethinking the role of demonstrations: What makes in-context learning work? In Proceedings of the 2022 Conference on Empirical Methods in Natural Language Processing ,pages 11048–11064, Abu Dhabi, United Arab Emi-rates. Association for Computational Linguistics. Ishani Mondal, Yufang Hou, and Charles Jochim. 2021. End-to-end construction of NLP knowledge graph. In Findings of the Association for Computational Linguistics: ACL-IJCNLP 2021 , pages 1885–1895, Online. Association for Computational Linguistics. Samba Ndojh Ndiaye and Christine Solnon. 2011. Cp models for maximum common subgraph problems. In Principles and Practice of Constraint Program-ming – CP 2011 , pages 637–644. Springer. Furkan ¸ Sahinuç, Thy Thy Tran, Yulia Grishina, Yufang Hou, Bei Chen, and Iryna Gurevych. 2024. Effi-cient performance tracking: Leveraging large lan-guage models for automated construction of scien-tific leaderboards. In Proceedings of the 2024 Con-ference on Empirical Methods in Natural Language Processing , pages 7963–7977, Miami, Florida, USA. Association for Computational Linguistics. Yufei Shang, Yanrong Guo, Shijie Hao, and Richang Hong. 2025. Biomedical relation extraction via adap-tive document-relation cross-mapping and concept unique identifier. Preprint , arXiv:2501.05155. Xingwei Tan, Yuxiang Zhou, Gabriele Pergola, and Yulan He. 2025. Cascading large language models for salient event graph generation. arXiv preprint arXiv:2406.18449 .Somin Wadhwa, Silvio Amir, and Byron C. Wallace. 2023. Revisiting relation extraction in the era of large language models. In Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 15566– 15589, Toronto, Canada. Association for Computa-tional Linguistics. Zhen Wan, Fei Cheng, Zhuoyuan Mao, Qianying Liu, Haiyue Song, Jiwei Li, and Sadao Kurohashi. 2023. GPT-RE: In-context learning for relation extrac-tion using large language models. arXiv preprint arXiv:2305.02105 .Kuansan Wang, Zhihong Shen, Chiyuan Huang, Chieh-Hsi Wu, Darrin Eide, and Yuxiao Dong. 2020. Microsoft academic graph: When experts are not enough. Quantitative Science Studies , 1(1):396–413. Jason Wei, Yi Tay, Rishi Bommasani, Colin Raffel, and 1 others. 2022a. Finetuned language models are zero-shot learners. In International Conference on Learning Representations .Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Brian Ichter, Fei Xia, Ed H. Chi, Quoc V. Le, and Denny Zhou. 2022b. Chain-of-thought prompt-ing elicits reasoning in large language models. In 
+
+Advances in Neural Information Processing Systems ,volume 35, pages 24824–24837. Xianjun Yang, Ya Zhuo, Julia Zuo, Xinlu Zhang, Stephen Wilson, and Linda Petzold. 2022. PcMSP: A dataset for scientific action graphs extraction from polycrystalline materials synthesis procedure text. In 
+
+Findings of the Association for Computational Lin-guistics: EMNLP 2022 . Association for Computa-tional Linguistics. Xiaoyan Zhao, Yang Deng, Min Yang, Lingzhi Wang, Rui Zhang, Hong Cheng, Wai Lam, Ying Shen, and Ruifeng Xu. 2024. A comprehensive survey on rela-tion extraction: Recent advances and new frontiers. 
+
+ACM Computing Surveys .
+
+10 A Appendix 
+
+A.1 Dataset and Human Annotations Dataset The final annotated dataset included ab-stracts from the following six journals: Journal of Applied Psychology , Journal of Consulting and Clinical Psychology , Journal of Counseling Psy-chology , Journal of Educational Psychology , Jour-nal of Experimental Psychology: General , and Be-haviour Research and Therapy . Our inclusion crite-ria were: (1) peer-reviewed journal articles and (2) empirical studies. Therefore, literature reviews, let-ters, meta-analyses, and other non-empirical stud-ies were excluded from the dataset. For each jour-nal, we sampled five abstracts from every 10-year period between the 1960s and 2025. The final dataset therefore consisted of 210 abstracts in total, including 30 abstracts per decade and 35 abstracts from each journal. 
+
+Human Annotation Three annotators partici-pated in the project. One coder (A) was an un-dergraduate student in Psychology, and the other two coders (B, C) were PhD students in Psychol-ogy. Annotators participated under different project arrangements, including compensated research as-sistance and unpaid project participation. The an-notating interface can be found in Figure 4. The annotation interface extended Label Studio with custom modules for relational graph annotation. Annotators could highlight variable spans, mod-ify normalized variable names in the region panel, assign relation types in the relations panel, and visually inspect the resulting relationship graph rendered in the sidebar after submission. 
+
+Annotation Guideline Annotators followed a detailed annotation guideline. The guideline in-structed human annotators to proceed through the following steps: (1) locate sentences in the abstract that contain information about key concepts, i.e., variables, and empirical relationships tested or re-ported in the article; (2) identify variables that were empirically examined in the study; (3) code hier-archical relationships between variables when one variable was presented as a subtype, component, di-mension, indicator, or more specific measurement of a broader construct; (4) annotate the four re-lation types; (5) assign a validation-state label to each empirical relation, using validated , null , or 
+
+hypothesized ; and (6) canonicalize variable names by merging synonyms and coreferential mentions. The full annotation guideline is provided in the anonymous repository linked in the abstract. 
+
+Inter-annotator Agreement As reported in Ta-ble 3, pairwise agreement was highest between Coder A and Coder C, both of whom were Psy-chology PhD students, with an F1 score of .82 and Cohen’s κ of .60. Comparisons involving Coder B, the Psychology undergraduate student, showed slightly lower but broadly comparable agreement.                   
+
+> Coder comparison F1 Kappa
+> Coder A vs. Coder B 0.717 Cohen’s κ= 0 .566
+> Coder A vs. Coder C 0.777 Cohen’s κ= 0 .590
+> Coder B vs. Coder C 0.830 Cohen’s κ= 0 .559
+> All three coders —Fleiss’ κ= 0 .632
+> Table 3: Inter-annotator agreement among the three human coders on the 50-article overlap set. Pairwise F1 treats the second coder in each comparison as the reference annotation.
+
+To remain compatible with the access conditions of the original source materials, the released dataset does not redistribute copyrighted abstract text. In-stead, we release metadata identifiers and the de-rived annotation layer, including normalized vari-ables, empirical relation edges, hierarchy edges, validation states, and dataset splits. The annotation layer is released under a research-compatible open license, such as CC BY 4.0, while accompanying code is released separately under an open-source software license. The intended use of the dataset is research on scientific information extraction, em-pirical relation extraction, knowledge graph con-struction, and model evaluation. The dataset is not intended for clinical, legal, policy, or individual-level decision-making, nor for making evaluative claims about specific authors, participants, journals, or institutions. 
+
+A.2 Model Performance Across Journals and Periods 
+
+We assessed the robustness of model performance across journals and publish periods. As shown in Tables 4, extraction performance is highly stable across period, with all F1 score above 0.71 . This suggests that the model generalizes well across abstracts from different historical periods, despite potential changes in writing style, reporting con-ventions, and terminology over time. The perfor-mance varied more across journals, see Tables 5, with journal-level F1 ranging from 0.67 to 0.81 .11 Figure 4: The user interface of annotation task 
+
+The strongest performance was observed for 
+
+Journal of Consulting and Clinical Psychology 
+
+(JCCP; F 1 = 0 .807 ), which also showed the high-est precision ( 0.863 ) and high recall ( 0.806 ). In contrast, performance was lowest for Behaviour Re-search and Therapy (BRT; F 1 = 0 .669 ) and Jour-nal of Experimental Psychology: General (JEP:G; 
+
+F 1 = 0 .694 ). We additionally examined the aver-age number of edges and the distribution of edge types across journals. Lower-performing journals did not systematically contain more edges, nor did they contain a higher proportion of difficult edge types, such as moderational or hierarchical edges. This suggests that differences in journal-level per-formance are unlikely to arise from differences in graph complexity or relation-type composition. Instead, the variation is more likely attributable to journal-specific reporting styles, such as differ-ences in how explicitly relations are stated or how consistently variables are described. Overall, the results indicate that the proposed extraction pipeline is temporally robust, with con-sistently strong performance across publication pe-riods, while journal-level variation remains a more important source of performance heterogeneity. 
+
+A.3 Graph Evaluation Details 
+
+We evaluate each predicted graph against a gold graph in two stages: node alignment followed by 
+
+> Figure 5: Edge Type Composition by Journal
+
+edge scoring under multiple evaluation views. 
+
+Preprocessing. After the final complete graphs are formed in Step 5, we apply a set of preprocess-ing rules before evaluation. These rules program-matically propagate relationships from lower-level to higher-level nodes and remove duplicate relation-ships. This improves consistency across annotators and models, and reduces errors caused by the com-plexity of manual annotation. 
+
+Graph representation. Let the gold graph be 
+
+G = ( VG, E G) and the predicted graph be P =(VP , E P ). Edges are directed and typed: 
+
+e = ( u, v, τ ), τ ∈ T , (6) 12 Year Range Abstracts Precision Recall F1                             
+
+> 1960–1970 30 0.818 0.782 0.789 1970–1980 30 0.717 0.804 0.718 1980–1990 30 0.763 0.751 0.721 1990–2000 30 0.769 0.719 0.710 2000–2010 30 0.744 0.809 0.745 2010–2020 30 0.777 0.782 0.743 2020–2025 30 0.779 0.749 0.729
+
+Table 4: Average edge-level precision, recall, and F1 scores across year ranges.                             
+
+> Journal Abstracts Precision Recall F1
+> BRT 35 0.716 0.695 0.669 JAP 35 0.798 0.749 0.758 JCCP 35 0.863 0.806 0.807 JCP 35 0.753 0.765 0.723 JEP 35 0.760 0.818 0.768 JEP:G 35 0.711 0.791 0.694
+> Note. BRT = Behaviour Research and Therapy; JAP = Journal of Applied Psychology; JCCP = Journal of Consulting and Clinical Psychology; JCP = Journal of Counseling Psychology; JEP = Journal of Educational Psychology; JEP:G = Journal of Experimental Psychology: General.
+
+Table 5: Average edge-level precision, recall, and F1 scores across journals. 
+
+where 
+
+T = {hierarchy , directional ,
+
+correlational , moderation }. (7) 
+
+Node alignment objective. We search for a par-tial mapping 
+
+ϕ : VG → VP ∪ {∅} , (8) where ∅ indicates an unmatched gold node. The mapping is injective over non-empty assignments: 
+
+ϕ(u) = ϕ(v)̸ = ∅ ⇒ u = v. (9) Thus, no two gold nodes can be matched to the same predicted node, while multiple gold nodes may remain unmatched. A gold edge (u, v, τ ) ∈ EG is matched if and only if 
+
+ϕ(u)̸ = ∅, ϕ(v)̸ = ∅, (ϕ(u), ϕ (v), τ ) ∈ EP .
+
+(10) Define 
+
+M (ϕ) = |{ (u, v, τ ) ∈ EG : ( ϕ(u), ϕ (v), τ ) ∈ EP }| .
+
+(11) We optimize 
+
+ϕ⋆ = arg max  
+
+> ϕ
+
+M (ϕ). (12) This alignment is structure-first. Since the same variable may be realized in an abstract by multiple surface forms, annotators may not produce mutu-ally consistent node labels unless the variable inven-tory is specified in advance. Under this mapping, nodes with different surface forms may neverthe-less be aligned when their typed relational roles are compatible under ϕ.
+
+Search algorithm. Exact optimization of the alignment objective is combinatorial, so we use a branch-and-bound solver with a greedy warm start. First, we compute a greedy initial mapping 
+
+ϕ0, yielding an incumbent score B = M (ϕ0). We then run depth-first search over partial mappings 
+
+ϕd.At each search state, we compute the number of already matched edges C(ϕd) and an admissible upper bound U (ϕd) on the number of additional gold edges that could still be matched by any com-pletion of ϕd. We use only safe pruning: a branch is pruned when 
+
+C(ϕd) + U (ϕd) ≤ B, (13) because even the best possible completion of that branch cannot improve the incumbent. This pruning cannot remove any alignment that could achieve a higher score, provided that U (ϕd) is an admissible upper bound. In our implementation, U (ϕd) is computed type-wise. For each relation type τ ∈ T , let RτG(ϕd) be the number of currently unmatched gold edges of type τ whose endpoints are not ruled out by the partial mapping, and let RτP (ϕd) be the number of available predicted edges of type τ that could still be used by unmapped or consistently mapped endpoints. The number of additional matches of type τ cannot exceed 
+
+min( RτG(ϕd), R τP (ϕd)) . (14) Thus, we use 
+
+U (ϕd) = X 
+
+> τ∈T
+
+min( RτG(ϕd), R τP (ϕd)) . (15) This bound is conservative: it may overestimate the number of additional matches because it ignores some joint compatibility constraints, but it never underestimates the maximum number of matches achievable by a completion. It is therefore safe for pruning. Whenever a complete mapping with a higher score is found, the incumbent B and the best 13 mapping are updated. Because search efficiency depends on node order, we run several ordering strategies, including degree-descending, degree-ascending, label order, and seeded random orders, and retain the best incumbent found: 
+
+M ⋆ = max  
+
+> s∈S
+
+Ms, (16) where Ms is the best score found under strategy s.A timeout is enforced per strategy. If any strat-egy terminates exhaustively, its result is optimal under the specified objective, since the ordering af-fects only the search order and not the search space. Under timeout, the solver is anytime: it returns the best incumbent found so far, and the resulting alignment score is a lower bound on the optimal alignment score. 
+
+Edge scoring. Let mG = |EG|, mP = |EP |,and m⋆ = M (ϕ⋆). We compute: 
+
+P = m⋆
+
+mP
+
+, R = m⋆
+
+mG
+
+, F1 = 2PR P + R .
+
+(17) These are the complete-graph structural scores un-der the active evaluation view. For typed evaluation, we also compute per-type scores. For each τ ∈ T , define: 
+
+EτG = {(u, v ) : ( u, v, τ ) ∈ EG}, (18) 
+
+EτP = {(x, y ) : ( x, y, τ ) ∈ EP }, (19) and 
+
+Mτ = |{ (u, v ) ∈ EτG : ( ϕ⋆(u), ϕ ⋆(v)) ∈ EτP }| .
+
+(20) Then 
+
+Pτ = Mτ
+
+|EτP | , Rτ = Mτ
+
+|EτG| , F1 τ = 2P τ Rτ
+
+Pτ + R τ
+
+.
+
+(21) 
+
+Evaluation views. We report three complemen-tary alignment scores: Mtyped , computed on the full graphs with directed, typed edges; Mhigher , com-puted after projecting both graphs onto higher-level nodes by removing lower-level hierarchy children and hierarchy edges; and Magnostic , computed on the full graphs after collapsing all edge types into a single undirected relation type. 
+
+Positive-edge scoring. For validated-only analy-sis, define 
+
+E+ 
+
+> G
+
+= {e ∈ EG : val( e) = validated }, (22) 
+
+E+ 
+
+> P
+
+= {e ∈ EP : val( e) = validated }. (23) We then apply the same alignment and scoring procedure to (VG, E + 
+
+> G
+
+) and (VP , E + 
+
+> P
+
+).
+
+Algorithm 1 Safe branch-and-bound alignment for typed directed graphs 
+
+Require: Gold graph G = ( VG, E G), predicted graph P = ( VP , E P ), edge types T , node or-der strategy s
+
+Ensure: Best partial mapping ϕ⋆ and matched-edge count M ⋆ 
+
+> 1:
+
+ϕ0 ← GREEDY ALIGN (G, P, s ) 
+
+> 2:
+
+B ← M (ϕ0) 
+
+> 3:
+
+ϕ⋆ ← ϕ0 
+
+> 4:
+
+O ← ORDER NODES (VG, s ) 
+
+> 5:
+
+procedure SEARCH (d, ϕ d) 
+
+> 6:
+
+C ← MATCHED EDGES (ϕd, E G, E P ) 
+
+> 7:
+
+U ← UPPER BOUND (ϕd, E G, E P , T ) 
+
+> 8:
+
+if C + U ≤ B then  
+
+> 9:
+
+return ▷ safe pruning  
+
+> 10:
+
+end if  
+
+> 11:
+
+if d = |O| then  
+
+> 12:
+
+if C > B then  
+
+> 13:
+
+B ← C 
+
+> 14:
+
+ϕ⋆ ← ϕd 
+
+> 15:
+
+end if  
+
+> 16:
+
+return  
+
+> 17:
+
+end if  
+
+> 18:
+
+u ← O[d] 
+
+> 19:
+
+for all x ∈ VP not already used by ϕd do  
+
+> 20:
+
+ϕ′ ← ϕd ∪ { u 7 → x} 
+
+> 21:
+
+SEARCH (d + 1 , ϕ ′) 
+
+> 22:
+
+end for  
+
+> 23:
+
+ϕ′ ← ϕd ∪ { u 7 → ∅}  
+
+> 24:
+
+SEARCH (d + 1 , ϕ ′) 
+
+> 25:
+
+end procedure  
+
+> 26:
+
+SEARCH (0, ∅) 
+
+> 27:
+
+return ϕ⋆, B 
+
+Complexity. Let n = |VG|, m = |VP |, eG =
+
+|EG|, eP = |EP |, and K = |S|. Preprocessing operations, including canonicalization, deduplica-tion, type filtering, and hierarchy transforms, are near-linear in edge count per graph in practice. For alignment, the worst-case complexity is com-binatorial: 
+
+O
+
+
+
+> min( n,m )
+
+X
+
+> k=0
+
+nk
+
+ m!(m − k)! 
+
+ . (24) Branch-and-bound often reduces the number of ex-plored states substantially, but it does not change the worst-case complexity class. Across K order-ing strategies, the complexity is O(K ·Tsearch ), with 
+
+Tsearch capped by the timeout per strategy. 14 Space per graph pair is O(n + m + eG + eP )
+
+for graph structures, adjacency, and hashed edge sets, plus O(n + m) search-state overhead. At corpus scale, with A independent graph pairs and 
+
+W workers, wall-clock runtime is approximately 
+
+Twall ≈
+
+PAi=1 Ti
+
+W + parallel overhead . (25) 
+
+Implementation note. The method is related to maximum common subgraph and maximum com-mon edge-subgraph formulations, which search for structurally consistent correspondences between graphs under injective node mappings (McCreesh et al., 2017; Ndiaye and Solnon, 2011). However, our evaluator optimizes a task-specific objective: maximum typed-directed edge overlap under an injective partial node mapping. It is not a classi-cal induced-MCS objective, because non-edges are not required to be preserved and extra predicted edges are penalized through precision rather than through the alignment constraint. The branch-and-bound solver is exact when search terminates ex-haustively; under timeout, it behaves as an anytime solver and returns the best incumbent found. 
+
+A.4 Algorithm for Inter-coder Agreement Pairwise Cohen’s kappa. For two raters A, B ,collect labels {yA(i), y B (i)}Ni=1 across all aligned node-pair items. Let npq be confusion counts over classes p, q ∈ C , and N = P 
+
+> p,q
+
+npq . Observed agreement: 
+
+Po = 1
+
+N
+
+X
+
+> c∈C
+
+ncc . (26) Chance agreement from marginals: 
+
+Pe = X
+
+> c∈C
+
+ nc·
+
+N
+
+  n·c
+
+N
+
+
+
+. (27) Cohen’s kappa: 
+
+κ = Po − Pe
+
+1 − Pe
+
+. (28) We report pairwise κ for all rater pairs (e.g., A-B,
+
+A-Gold, B-Gold). 
+
+Three-rater Fleiss’ kappa. For three-rater agree-ment, we use the gold graph as pivot: compute 
+
+ϕG→A and ϕG→B , keep gold nodes mapped to both raters, then form undirected node pairs on those shared gold nodes. Each item has three labels 
+
+(yG, y A, y B ). Let m = 3 raters, K = |C| = 5 , N
+
+items, and nij the number of raters assigning item 
+
+i to class j. Per-item agreement: 
+
+Pi = 1
+
+m(m − 1) 
+
+> K
+
+X
+
+> j=1
+
+nij (nij − 1) . (29) Mean observed agreement: 
+
+¯P = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+Pi. (30) Category prevalence: 
+
+pj = 1
+
+N m 
+
+> N
+
+X
+
+> i=1
+
+nij . (31) Chance agreement: 
+
+¯Pe =
+
+> K
+
+X
+
+> j=1
+
+p2 
+
+> j
+
+. (32) Fleiss’ kappa: 
+
+κF = ¯P − ¯Pe
+
+1 − ¯Pe
+
+. (33) 
+
+A.4.1 Intercoder Agreement via MCS-Aligned Node-Pair Labels 
+
+We compute intercoder agreement on graph anno-tations using a two-stage protocol: structural node alignment followed by multiclass kappa on aligned node pairs. 
+
+Why alignment is required. Coders may use different surface names or granularity for conceptu-ally similar variables. Direct string-based matching would therefore underestimate agreement. To make coder labels comparable, we first align nodes struc-turally using the same MCS-style logic used in our graph structural evaluation pipeline. 
+
+Graphs and labels. For each article, each human coder provides a preprocessed directed typed graph 
+
+G = ( V, E ), with edge types in 
+
+T = {hierarchy , directional ,
+
+correlational , moderation }. (34) Preprocessing is identical to the main graph evalua-tion workflow (correlation canonicalization, hierar-chy handling, deduplication, and relation-priority collapse). 15 MCS-style node alignment. Given two rater graphs G1 = ( V1, E 1) and G2 = ( V2, E 2), we estimate an injective mapping 
+
+ϕ : V1 → V2 (35) that maximizes typed directed edge consistency. For a candidate ϕ,
+
+M (ϕ) = |{ (u, v, τ ) ∈ E1 : ( ϕ(u), ϕ (v), τ ) ∈ E2}| .
+
+(36) We use a greedy multi-order approximation: run greedy mapping under several node orders (degree-descending, degree-ascending, label order, seeded random orders), then select the mapping with the largest M (ϕ):
+
+ϕ⋆ = arg max 
+
+> ϕ∈Φgreedy
+
+M (ϕ). (37) This reuses the same MCS-inspired structural matching principle as the main evaluator. 
+
+Agreement unit construction. After alignment, agreement is computed over ordered node pairs 
+
+among mapped nodes: 
+
+U = {(u, v ) : u, v ∈ dom( ϕ⋆), u ̸ = v}. (38) Each ordered pair (u, v ) ∈ U is one agreement item. If m = |dom( ϕ⋆)|, the article contributes 
+
+m(m − 1) (39) items. Using ordered pairs preserves directional orientation: the item (u, v ) is distinct from (v, u ).
+
+5-class directed pair label. Each ordered pair receives one class from 
+
+C = {none , hierarchy , directional ,
+
+correlational , moderation }. (40) For rater 1, the label for (u, v ) is determined by the directed edge from u to v in G1. For rater 2, the corresponding label is determined by the directed edge from ϕ⋆(u) to ϕ⋆(v) in G2. If no edge is present in the relevant direction, the label is 
+
+none . If multiple relation types are present for the same ordered pair, we assign a single label by the following priority: 
+
+directional ≻ correlational ≻
+
+moderation ≻ hierarchy ≻ none . (41) Thus, each rater contributes one nominal label per aligned ordered node pair, and disagreements in edge direction are reflected as label disagreements. 
+
+Interpretation. Because kappa is computed af-ter MCS-aligned node correspondence, it measures agreement on relation coding decisions under struc-tural correspondence rather than agreement on ex-act variable strings. Since agreement units are or-dered node pairs, the statistic is sensitive to both relation type and directional orientation. 
+
+Complexity. Let n1 = |V1|, n2 = |V2|, e1 =
+
+|E1|, e2 = |E2|, and |S| node-order strategies. Per article, alignment cost is approximately 
+
+O(|S| · n1n2 · d) , (42) where d is local edge-consistency check cost with hashed edge lookups. If m = |dom( ϕ⋆)|, directed pair-label construction is 
+
+O(m(m − 1)) = O(m2). (43) Kappa computation over N total directed-pair items and fixed K = 5 classes is linear in N . Thus corpus-level time is additive over articles: 
+
+> A
+
+X
+
+> a=1
+
+
+
+T (a) 
+
+> align
+
++ O(m2
+
+> a
+
+)
+
+
+
+, (44) with memory dominated by graph structures, map-pings, and label vectors: 
+
+O(|V | + |E| + N ). (45) 
+
+A.5 Node Validation 
+
+Because the graph-structural evaluation aligns nodes by maximizing matched typed directed edges rather than by directly comparing node labels, we conduct an additional validation of the node corre-spondences induced by the common graph. This analysis asks whether structurally aligned node pairs also tend to be semantically similar at the label level. If structurally aligned nodes were fre-quently semantically unrelated, the reported edge-level F1 could be inflated by graph-theoretic coin-cidences rather than reflecting meaningful relation extraction. Table 6 and Figure 6 show the cosine similarity distribution for gold–predicted node pairs appear-ing in the common graph. Across all aligned node pairs, the mean embedding-based cosine similar-ity is 0.735 . The majority of aligned pairs fall in the moderate-to-exact similarity range, suggesting that the MCS-derived alignment is usually pairing variables with related meanings rather than merely matching nodes with compatible graph positions. 16 Cosine similarity tier Count Share               
+
+> ≥0.9exact 444 37.9% 0.7–0.9 high 256 21.9% 0.5–0.7 moderate 228 19.5% 0.3–0.5 weak 140 12.0%
+> <0.3low 103 8.8%
+> Table 6: Distribution of embedding-based cosine simi-larities between structurally aligned gold and predicted node labels.
+> Figure 6: Distribution of cosine similarities between structurally aligned gold and predicted node labels.
+
+We further stratify aligned node pairs by embedding-based cosine similarity and then ran-domly sample 100 pairs in proportion to the ob-served tier distribution. Human inspection of this sample assesses whether aligned nodes refer to the same empirical variable or construct despite surface-form differences. In this sample, 87 pairs were judged to refer to the same variable or con-struct. Almost all cosine similarity ≥ 0.5 pairs refer to the same construct. About one-third of the 
+
+0.3 − 0.5 similarity tier node pairs are correctly paired; an example is ’general working model of attachment’ and ’attachment variables,’ yielding cosine similarity of 0.35 but refer to the same vari-able in the abstract. All < 0.3 sample pairs are incorrectly paired in reality. This result supports the validity of the typed-directed edge F1 metric: most matched edges are evaluated over semanti-cally corresponding variable pairs, even though node-label similarity is not used as the primary alignment objective.      
+
+> Edge Type Mean Cosine Similarity
+> Mechanistic 0.732 Associational 0.752 Moderational 0.764 Hierarchical 0.727
+> Table 7: Edge type cosine similarity derived by averag-ing node similarity from both sides of the edge.
+
+Table 7 reports edge-level cosine similarity by relation type, computed by averaging the cosine similarities of the two aligned node pairs form-ing each matched edge. The mean similarities are broadly comparable across relation types, ranging from 0.727 for hierarchical edges to 0.764 for mod-erational edges. This suggests that the structural alignment procedure produces semantically plausi-ble node correspondences across all relation cate-gories, rather than relying on a single relation type with unusually high label similarity. Hierarchi-cal edges show the lowest mean similarity, which is expected because they often connect broader constructs with finer-grained variables or measure-ments. Overall, the node-pair cosine analysis and man-ual validation provide a validity check for the struc-tural evaluation procedure. Since the primary align-ment objective does not use node-label similarity, the observed semantic similarity among common-graph node pairs suggests that the structural match-ing procedure usually recovers meaningful node correspondences. Therefore, the reported graph F1 can be interpreted as a relation-extraction score over largely semantically aligned variables, rather than as an artifact of arbitrary node matching. 
+
+A.6 AI Assistance Statement 
+
+The manuscript was written by the authors. Chat-GPT (https://chat.openai.com/ ) was used only for language polishing. Claude Code was used for coding assistance such as debugging dur-ing implementation. Code and final manuscript were checked and verified by the authors. 17
