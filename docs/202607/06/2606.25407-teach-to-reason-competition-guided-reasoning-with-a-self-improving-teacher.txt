@@ -1,0 +1,2453 @@
+Title: Teach-to-Reason: Competition-Guided Reasoning with a Self-Improving Teacher
+
+URL Source: https://arxiv.org/pdf/2606.25407
+
+Published Time: Thu, 25 Jun 2026 00:32:03 GMT
+
+Number of Pages: 29
+
+Markdown Content:
+# Teach-to-Reason: Competition-Guided Reasoning with a Self-Improving Teacher 
+
+Xiao Han 1, Hao Liu 1,†,‡, Zhimin Bao 1, Jile Jiao 1, Yue Wang 1, Hui Guo 1, Xiaofeng Mou 1, Yi Xu 1,†
+
+> 1
+
+AIRC, Midea Group {hanxiao36, liuhao249, baozm8, jiaojl5, wangyue184, guohui55, mouxf, xuyi42}@midea.com 
+
+> †
+
+Corresponding Author, ‡Project Leader 
+
+Abstract 
+
+Chest X-ray visual question answering (CXR VQA) requires models not only to predict correct answers, but also to produce reliable medical reasoning. However, existing reinforcement-learning-based training typically relies on answer-level rewards, which are often too coarse to improve chain-of-thought (CoT) quality and can become ineffective when group-level advantages collapse to zero. We propose Teach-to-Reason (T2R) , a framework that introduces comparison-based supervision into CoT optimization through a self-improving Teacher and a competition-guided Reasoner . As the Teacher is iteratively strengthened via self-competition, the Reasoner is optimized against progressively stronger Teacher-generated references. We further introduce a case-wise reward design that preserves the original reward-induced positive/negative partition when it is informative, and restores supervision from competition scores when the original reward signal degenerates. Experiments on multiple CXR open-ended VQA benchmarks show that T2R consistently outperforms strong baselines, indicating that comparison-based supervision, when integrated in a controlled and principled manner, provides a more effective training signal for reasoning optimization. 
+
+Keywords: Competition-Guided Reasoning, Self-Improving Teacher, Reasoning, Large Language Models 
+
+Date: June 25, 2026 
+
+Correspondence: Hao Liu, Yi Xu 
+
+Code: https://github.com/midea-ai/Teach2Reason/ 
+
+1 Introduction 
+
+Chest X-ray visual question answering (CXR VQA) aims to answer clinically relevant questions grounded in chest radiographs, and has become an important testbed for medical multimodal understanding and reasoning [ 1 –4 ]. Unlike general-domain VQA, CXR VQA requires not only correct answers, but also reliable medical rationales that justify those answers. In clinical settings, an apparently correct prediction may still rely on fragile, accidental, or clinically implausible reasoning. As a result, improving intermediate reasoning quality—rather than optimizing answer accuracy alone—is a central challenge in CXR VQA [5, 6]. 
+
+> arXiv:2606.25407v1 [cs.CV] 24 Jun 2026
+
+Recent reinforcement-learning-based approaches have shown promise in improving reasoning ability in LLMs, but existing RL/RLVR-style training typically relies on answer-level rewards, such as whether the final answer is correct or satisfies a verifiable constraint [ 7 – 11 ]. Such signals are effective for optimizing final outcomes, yet they provide only weak supervision on the quality of the chain of thought (CoT) [ 12 ] itself. In particular, answer-level rewards are often too coarse to continuously shape reasoning quality, and when task rewards become identical within a group, the corresponding group-level advantage can degenerate to zero, making the training signal sparse or ineffective. A natural alternative is to directly reward CoTs using fixed rules [ 13 ] or an LLM-as-a-Judge [ 14 ], but these approaches depend on predefined criteria and can quickly become sparse once the model learns to satisfy them [15, 16]. Motivated by these limitations, we propose Teach-to-Reason (T2R) , a framework that introduces comparison-based supervision into CoT optimization for CXR VQA through an iteratively improved Teacher and a competition-guided 
+
+Reasoner . In T2R, the Teacher generates reference CoTs, while the Reasoner is the model used for final VQA inference. The Teacher is improved stage by stage through self-competition , and the Reasoner is optimized against progressively stronger Teacher-generated references. Compared with rule-based judge rewards, this design continually refreshes the supervision target as the Teacher evolves, making comparison-based supervision more adaptive and less susceptible to early saturation [17–19]. A second key ingredient of T2R is its reward design. We do not want additional CoT supervision to overwrite or destabilize the original positive/negative partition induced by the task reward within each GRPO group. Instead, T2R follows a case-wise principle: when the task reward already induces a meaningful partition, we preserve it and use competition scores only to refine the relative ordering within each side of the partition; when the task reward becomes completely uninformative and the group-level advantage degenerates to zero, we use competition scores to recover the partition and directly construct the final training signal. In this way, T2R preserves the original reward-induced preference whenever it is informative, while restoring supervision when the original signal collapses. Thus, T2R does not replace the task reward with competition scores; rather, it augments the original partition with finer-grained and more persistent supervision. We evaluate T2R on Qwen3-VL-Instruct models at the 2B and 4B scales [ 20 ] across multiple CXR open-ended VQA benchmarks. The results show consistent improvements over strong baselines. In summary, our main contributions are as follows: • We propose Teach-to-Reason (T2R) , a training framework for CXR VQA that combines iterative Teacher self-competition with competition-guided Reasoner optimization to improve CoT quality. • We introduce a case-wise reward design that preserves the original positive/negative partition induced by task rewards within each group, uses competition scores only for within-partition refinement, and recovers supervision when the task reward becomes degenerate. • Extensive experiments on multiple CXR open-ended VQA benchmarks demonstrate that T2R outperforms strong baselines, including RLVR, Frozen Teacher, and Judge Reward, and is accompanied by denser and more persistent comparison-based supervision during training. 
+
+2 Related Work 
+
+CXR and Medical VQA. Medical visual question answering has been studied through benchmarks such as VQA-RAD [ 1 ], VQA-Med [ 21 ], PathVQA [ 22 ], and SLAKE [ 2], and more recently through larger chest-radiology resources such as MIMIC-Ext-MIMIC-CXR-VQA [ 3] and RexVQA [ 4]. Prior work has also explored stronger medical VQA architectures, multimodal pretraining, and medical multimodal foundation models, including MMBERT [23 ], M 3AE [ 24 ], BiomedCLIP [ 25 ], LLaVA-Med [ 26 ], Med-Flamingo [ 27 ], and MedGemma [ 28 ]. Together, these efforts have substantially advanced medical VQA benchmarks, model architectures, and multimodal medical modeling [ 29 ]. However, they have mainly focused on answer prediction, dataset construction, or general medical multimodal modeling, while the explicit optimization of chain-of-thought (CoT) quality in CXR VQA remains relatively underexplored.                     
+
+> 2A: Why answer-only rewards are insufficient C: Teacher-to-Reason training process
+> Teacher i
+> Teacher i+1
+> Reasoner i-1
+> Reasoner i
+> Frozen
+> Teacher i
+> snapshot frozen
+> from Teacher i
+> �reference
+> CoTs
+> current
+> CoT
+> current
+> CoT
+> compare
+> compare
+> final
+> reward
+> final
+> reward
+> Teacher update
+> Reasoner update
+> D: Reward design
+> positive
+> negative
+> original distribution
+> positive
+> negative
+> finer-grained ranking original advantages
+> collapse to zero
+> recover supervision
+> B: Competition-aware advantage construction
+> Question: Pneumonia?
+> Baseline Reasoner
+> multiple sampled responses
+> Reasoner Chain / CoT
+> No
+> Yes
+> Unclear
+> Likely
+> Final Answer
+> weak CoT
+> supervision
+> coarse-grained &
+> sparse preference
+> signal
+> model update from
+> answer-only reward
+> Task Rewards
+> (��)
+> raw advantage
+> (��
+> ���)
+> Degenerate
+> group?
+> (��
+> ���=0, ∀ �)
+> current CoT �reference
+> CoTs
+> compare
+> comparison score
+> (��
+> ���)
+> No Yes
+> preserve
+> partition
+> ((�+,�−) ← ��
+> ���)
+> recover
+> partition
+> ((�+,�−) ← ��
+> ���)
+> base advantage
+> (��
+> ����)
+> within-group bonus
+> ((�+,�−,��
+> ���) → ∆ �
+> ���)
+> final advantage
+> (reward)
+> (��
+> �����=��
+> ����+∆�
+> ���)
+> (��
+> �����=��
+> ����)
+
+Figure 1 Overview of Teach-to-Reason (T2R). (A) Answer-only rewards provide only coarse and sparse supervision, making them insufficient for improving CoT quality in CXR VQA. (B) T2R constructs competition-aware advantages by preserving the original group partition when task rewards are informative, and recovering supervision from competition scores when the group advantage collapses to zero. (C) During training, the Teacher is iteratively improved via self-competition, and the Reasoner is optimized against progressively stronger Teacher-generated reference CoTs. (D) This yields denser and more informative training signals for CoT optimization. 
+
+Reasoning Optimization with RL and Judge-Based Supervision. Recent post-training methods have improved reasoning through preference optimization and RL/RLVR-style training [ 7– 11 ]. Yet these approaches often rely on answer- or outcome-level supervision, which is typically too coarse to shape intermediate CoT quality [6 , 30 , 31 ]. A more direct line of work supervises reasoning with rubrics [ 13 , 32 –36 ], LLM-as-a-Judge signals [ 15 , 14 ], or self-rewarding schemes [ 16 ]. However, such methods still assign scores to individual CoTs through predefined criteria or judge-based scoring, which may encourage criterion satisfaction but can provide limited signal for continual improvement. We instead replace direct CoT scoring with pairwise comparison, using it as a fine-grained supervision signal that can sustain informative optimization pressure throughout training. 
+
+Self-Evolving Supervision for Reasoning. Recent work has explored how language models can improve with limited external annotation by turning their own generations, feedback, or interactions into learning signals. This includes bootstrapping from self-generated rationales, critiques, and reflections [ 17 –19 ], learning from model-generated rewards or self-distilled feedback [ 16 , 37 ], and constructing new tasks, preferences, or curricula through self-play, role-based competition, or environment-grounded interaction [ 38 –45 ]. These works suggest that supervision for reasoning need not remain static, but can be generated, filtered, or strengthened during learning. T2R extends the self-evolving paradigm to continual CoT optimization through an iteratively improved Teacher . Rather than relying on direct self-refinement or self-scoring alone, T2R enables the Teacher to strengthen itself via self-competition, and uses its progressively improved CoTs to continuously guide a separate Reasoner . In this way, T2R uses Teacher self-evolution to drive continual improvement of the Reasoner , with progressively stronger Teacher-generated CoTs providing an evolving source of supervision for CoT optimization. 
+
+3 Methodology 
+
+3.1 Framework and Competition Scores Model Roles. Our framework consists of two models: a Reasoner and a Teacher . At a high level, the Teacher provides stronger reasoning references during training, while the Reasoner is the VQA model ultimately trained for inference. 
+
+3The Reasoner is the target VQA model in our framework. Given an image-question pair (Ii, Q i), it generates a chain-of-thought (CoT) together with an answer: 
+
+( ˆCrea  
+
+> i
+
+, ˆAi) ∼ πrea  
+
+> θ
+
+(Ii, Q i). (1) The Teacher is used only during training. Given the image, question, reference answer, and report context, it generates higher-quality reference CoTs: ˆCtea  
+
+> i
+
+∼ πtea  
+
+> ϕ
+
+(Ii, Q i, A ∗ 
+
+> i
+
+, D i), (2) where A∗ 
+
+> i
+
+is the reference answer and Di denotes the radiology report or other contextual document. Rather than serving as the final VQA predictor, the Teacher provides reasoning references for the Reasoner and improves its own CoT quality through self-competition. 
+
+Comparison-Based Scoring. We use an LLM-as-a-Judge to compare the quality of two candidate reasoning chains. Given two CoTs C1 and C2, we define 
+
+fcomp (C1, C 2) = 1[C1 ≻ C2], (3) where C1 ≻ C2 means that C1 is judged better than C2 in terms of reasoning correctness, internal consistency, answer alignment, and answer support. To mitigate position bias, we randomize the order of the two CoTs in the judge prompt. Additional implementation details of the pairwise CoT comparison are provided in Appendix A.1. For the Reasoner, given K Teacher-generated reference CoTs { ˆCtea  
+
+> i,k
+
+}Kk=1 , we define the competition score as 
+
+srea  
+
+> i
+
+= 1
+
+K
+
+> K
+
+X
+
+> k=1
+
+fcomp ( ˆCrea  
+
+> i
+
+, ˆCtea  
+
+> i,k
+
+), srea  
+
+> i
+
+∈ [0 , 1] . (4) This score is the average win rate of the current Reasoner CoT against Teacher-generated reference CoTs. Analogously, we define the Teacher self-competition score stea  
+
+> i
+
+by comparing the current Teacher output against K CoTs { ¯Ctea  
+
+> i,k
+
+}Kk=1 
+
+sampled from a frozen Teacher snapshot. 
+
+3.2 Reasoner Objective Design Principle. We use afinal  
+
+> i
+
+as the group-wise training signal for the GRPO update. When the base reward is informative, it determines the positive and negative samples, while competition scores only refine the relative ordering within each subset; otherwise, we rely on competition scores to directly construct the final training signal. 
+
+Base Reward. For a GRPO group of size G, let I = {1, . . . , G }. We first define the base task reward as 
+
+˜rrea  
+
+> i
+
+= mfmt 
+
+> i
+
+ 1 + 1[ ˆAi = A∗ 
+
+> i
+
+], (5) where mfmt  
+
+> i
+
+∈ { 0, 1} indicates whether the output follows the required format. We then compute the raw advantage induced by the base reward: 
+
+araw  
+
+> i
+
+= ˜ rrea  
+
+> i
+
+− 1
+
+G
+
+> G
+
+X
+
+> j=1
+
+˜rrea  
+
+> j
+
+. (6) This naturally induces a pair of base-reward-guided subsets, 
+
+P+ = {i ∈ I : araw  
+
+> i
+
+> 0}, P− = {i ∈ I : araw  
+
+> i
+
+< 0}. (7) We distinguish two cases accordingly. If P+ ∪ P −̸ = ∅, then the base reward already induces a non-trivial group-wise preference, and we treat the group as non-degenerate. If P+ = P− = ∅, then all raw advantages are zero and the base reward is degenerate, in which case we instead rely on competition scores to construct the final training signal. 
+
+> 4
+
+Non-Degenerate Case. If the base reward is non-degenerate, we directly use the subsets P+ and P− induced by 
+
+araw  
+
+> i
+
+, and employ competition scores only to refine the relative ordering within each subset. Specifically, we define the subset-wise standardized patterns 
+
+p+ 
+
+> i
+
+= srea  
+
+> i
+
+− μrea +
+
+σrea +
+
+, i ∈ P +, p− 
+
+> i
+
+= srea  
+
+> i
+
+− μrea 
+
+> −
+
+σrea 
+
+> −
+
+, i ∈ P −, (8) where μrea + , σ rea + and μrea  
+
+> −
+
+, σ rea  
+
+> −
+
+are the mean and standard deviation of the competition scores within P+ and P−,respectively. Based on these patterns, we define the group-wise competition bonus as 
+
+∆rea  
+
+> i
+
+=
+
+(ηrea + p+ 
+
+> i
+
+, i ∈ P +,ηrea  
+
+> −
+
+p− 
+
+> i
+
+, i ∈ P −, (9) where ηrea + ≥ 0 and ηrea  
+
+> −
+
+≥ 0 control the bonus strength on the positive and negative sides. To preserve the sign induced by the base reward, we define 
+
+ηrea + = α min  
+
+> i∈P +, p +
+> i<0
+
+araw 
+
+> i
+
+−p+
+
+> i
+
+, ηrea  
+
+> −
+
+= α min  
+
+> i∈P −, p −
+> i>0
+
+−araw 
+
+> i
+
+p−
+
+> i
+
+, (10) where α ∈ (0 , 1) controls the safety margin. The final advantage is then 
+
+afinal  
+
+> i
+
+= araw  
+
+> i
+
++ ∆ rea  
+
+> i
+
+. (11) 
+
+Degenerate Case. If the base reward is degenerate, it induces no non-trivial preference within the group. In this case, we construct the partition directly from the competition scores srea  
+
+> i
+
+. For a candidate threshold τ , we define 
+
+P−(τ ) = {i ∈ I : srea  
+
+> i
+
+≤ τ }, P+(τ ) = {i ∈ I : srea  
+
+> i
+
+> τ }. (12) Among all candidate thresholds, we choose the largest feasible τ satisfying 
+
+X 
+
+> i∈P −(τ)
+
+srea  
+
+> i
+
+< γ X 
+
+> i∈P +(τ)
+
+srea  
+
+> i
+
+, (13) where γ > 0 is a hyperparameter. If no feasible threshold exists, we set the final advantage of the whole group to zero. Otherwise, after obtaining the induced subsets P+ and P−, we reconstruct the final training signal from the competition scores. We first globally center the scores: 
+
+pi = srea  
+
+> i
+
+− μrea , μrea = 1
+
+G
+
+> G
+
+X
+
+> j=1
+
+srea  
+
+> j
+
+. (14) To make the reconstructed signal consistent with the induced partition, we then shift only the positive subset: 
+
+ˆpi =
+
+(pi + λ, i ∈ P +,pi, i ∈ P −. (15) Here λ is chosen as the minimum feasible shift that preserves the positive/negative structure implied by the partition: 
+
+λmin = max 
+
+
+
+− G
+
+|P −| min  
+
+> i∈P +
+
+pi, G
+
+|P +| max  
+
+> i∈P −
+
+pi
+
+
+
+, λ = max( λmin , 0) , (16) with the derivation deferred to Appendix C. We then define the final advantage as 
+
+afinal  
+
+> i
+
+= ˆ pi − 1
+
+G
+
+> G
+
+X
+
+> j=1
+
+ˆpj . (17) 
+
+> 5
+
+3.3 Teacher Objective 
+
+The Teacher is trained to generate higher-quality CoTs that serve as stronger reasoning references for Reasoner optimization. We therefore define its reward as 
+
+rtea  
+
+> i
+
+= mfmt 
+
+> i
+
+ 1 + stea 
+
+> i
+
+, (18) where mfmt  
+
+> i
+
+∈ { 0, 1} enforces output format validity and stea  
+
+> i
+
+encourages improved reasoning quality through self-competition. Thus, the Teacher is optimized to maximize reasoning quality subject to valid formatting. 
+
+3.4 Training Procedure 
+
+We initialize the Teacher and the Reasoner from the same pretrained weights, denoted by T0 and R0, respectively. We first obtain T1 by freezing T0 as a reference model ˜T0 and updating T0 against ˜T0 via self-competition for K
+
+optimization steps. Training then proceeds iteratively. At iteration i, we freeze the current Teacher Ti as ˜Ti and use it as the shared reference model for both Teacher and Reasoner updates. Conditioned on the same ˜Ti, the Teacher is updated via self-competition to obtain Ti+1 , while the Reasoner is updated against Teacher-generated reference CoTs to obtain Ri;both updates are performed for K optimization steps. This yields the paired updates 
+
+Ti → T i+1 , Ri−1 → R i.
+
+Repeating this procedure for T iterations produces a sequence of Reasoner models R1, . . . , RT .This training schedule is efficient because Teacher improvement is driven entirely by self-competition and does not depend on the current Reasoner. Consequently, Teacher and Reasoner updates are naturally decoupled through the same frozen Teacher reference. An overview of the training pipeline is shown in Figure 1. 
+
+4 Experiments 
+
+4.1 Experimental Setup Models and Training Data. We use Qwen3-VL-Instruct [ 20 ] as the base model and conduct experiments at the 2B and 4B scales. Unless otherwise specified, the Teacher and the Reasoner at each scale are initialized from the same pretrained checkpoint. Our training data is derived from RexVQA [ 4 ], a single-choice chest X-ray VQA dataset. For training efficiency, we randomly sample 67K instances. To reduce the format gap between training and evaluation, we convert 13.4K samples (approximately 20%) into open-ended form by removing the answer options, while keeping the remaining samples in their original single-choice format. 
+
+Training Details. Unless otherwise specified, we use a GRPO group size of 16 and a batch size of 128. For competition scoring, we set the number of Teacher-generated reference CoTs to K = 10 per sample. The safety coefficient is set to α = 0 .9, and the degenerate-case threshold is set to γ = 0 .3. During training, both pairwise CoT comparison and open-ended answer verification are performed using Qwen3-4B-Instruct-2507 [46]. To instantiate the staged training framework, we partition the 67K training set into four disjoint splits: split 0 contains one-half of the data, while splits 1–3 each contain one-sixth. Let T0 and Rinit denote the Teacher and Reasoner initialized from the same pretrained model. We first train Rinit with RLVR on split 0 for one epoch to obtain R0.Starting from T0, we then train the Teacher via self-competition on splits 1–3 to obtain T1, T2, T3. Starting from R0,the Reasoner is subsequently optimized stage by stage on splits 1–3 against these progressively improved Teacher models, yielding R1, R2, R3. Additional hyperparameter settings and prompt details are provided in Appendix B. 
+
+> 6
+
+Baselines. In addition to Teach-to-Reason (T2R) , we compare against three baselines. All Reasoner variants are initialized from the same R0 and are further trained on splits 1–3 with matched GRPO hyperparameters and training budgets, so that all methods use the same overall data budget over splits 0–3. 
+
+RLVR Only starts from R0 and continues RLVR on splits 1–3 without additional CoT supervision. Frozen Teacher 
+
+starts from R0 and optimizes the Reasoner on splits 1–3 against Teacher-generated reference CoTs, while keeping the Teacher fixed as T0 throughout. Judge Reward replaces pairwise comparison with a binary CoT-quality signal assigned by an LLM judge according to predefined acceptability criteria. Full details of the judging criteria, prompt design, and reward formulation for Judge Reward are provided in Appendix A.3. 
+
+Evaluation. We evaluate our method on six CXR open-ended VQA benchmarks: Medical-CXR-VQA [ 47 ], VQA-RAD [ 1 ], SLAKE [ 2 ], MIMIC-CXR-VQA [ 48 ], Covid19_heywhale [ 49 ], and Chest_X-Ray_PA [ 50 ]. To ensure a consistent evaluation protocol, we retain only the CXR open-ended VQA subset from each dataset. For answer evaluation, we use Qwen3-235B-A22B [ 46 ] as the judge. Given the question, ground-truth answer, and model prediction, the judge determines whether the prediction is correct. To improve robustness, each prediction is judged five times independently, and the final correctness label is determined by majority vote. The evaluation prompt and judge hyperparameters are provided in Appendix A.2. All evaluated VQA models decode with greedy search. Unless otherwise specified, we report accuracy on all benchmarks. 
+
+4.2 Main Results 
+
+Table 1 summarizes the main benchmark results at the 2B and 4B scales. For T2R, we report three Reasoner models, denoted by T2R-R1 , T2R-R2 , and T2R-R3 , corresponding to R1, R2, and R3, respectively. Figure 2 further shows the training dynamics of competition scores and the ratio of groups with non-zero advantages, while Figure 3 visualizes the activation of degenerate-case handling during training. Additional qualitative comparisons of generated CoTs are provided in Appendix D. 
+
+Overall Performance. T2R shows the strongest overall performance under both the 2B and 4B settings. At 2B, at least one T2R model achieves the best result on five out of six datasets, with SLAKE as the only exception, where 
+
+Judge Reward performs best. At 4B, T2R again attains the best or tied-best result on five out of six datasets; the only exception is Medical-CXR-VQA, where Frozen Teacher performs best. Overall, these results indicate that comparison-guided optimization yields robust gains across diverse CXR VQA benchmarks. 
+
+Effect of Iterative Teacher Improvement. Iteratively improving the Teacher is more effective than using a frozen Teacher. As shown in Table 1, T2R achieves stronger best-case performance than Frozen Teacher under both the 2B and 4B settings. Figure 2(a) is consistent with this trend: both the T2R Teacher and the T2R Reasoner exhibit a stage-wise drop-and-recovery pattern, reflecting the introduction of progressively stronger comparison targets at each stage. In contrast, the Reasoner trained with Frozen Teacher gradually saturates, suggesting that a fixed Teacher provides increasingly limited comparison-based supervision over time. 
+
+Supervision Density During Training. T2R yields denser and more persistent supervision signals than RLVR Only , Judge Reward , and Frozen Teacher . As shown in Figure 2(b), RLVR Only maintains a consistently low ratio of groups with non-zero advantages, while Judge Reward and Frozen Teacher both decline over training. By contrast, T2R rises quickly and remains at the highest level in later stages, indicating that iterative Teacher improvement sustains a substantially larger fraction of trainable groups throughout optimization. This is consistent with the stronger benchmark performance of T2R in Table 1. 
+
+Impact of Degenerate-Case Handling. Figure 3 shows that degenerate-case handling is not merely activated occasionally, but remains highly engaged throughout T2R training. Under T2R, the ratio of successfully triggered groups rises quickly and stays close to the overall ratio of degenerate groups, indicating that the proposed design 
+
+> 7
+
+Table 1 Main results on six CXR open-ended VQA benchmarks. Best results within each model scale and dataset are shown in bold. Rows corresponding to Teach-to-Reason (T2R) are shaded in light gray and report different Reasoner stages. 
+
+Scale Method Datasets Med-CXR VQA-RAD SLAKE MIMIC-CXR Covid19 CXR-PA 2B 
+
+Base Model 15 .94 31 .69 52 .87 12 .98 22 .64 31 .72 
+
+RLVR Only 16 .87 30 .18 53.92 11 .85 21 .69 20 .32 
+
+Judge Reward 28.00 35 .84 56.02 17 .53 15 .66 27 .04 
+
+Frozen Teacher 21 .74 40 .37 52 .35 20 .88 31 .88 32 .20 
+
+T2R-R1 22 .50 41.28 52 .35 20 .55 39.43 34 .64 
+
+T2R-R2 27 .51 40 .90 53.92 22.17 30 .56 36.98 T2R-R3 31.73 43.18 50 .78 23.87 40.37 37.57 4B 
+
+Base Model 21 .74 40 .37 58 .11 20 .45 26 .22 41 .22 
+
+RLVR Only 21 .34 41 .13 56 .84 22 .67 28 .86 35 .81 
+
+Judge Reward 22 .38 41 .26 56 .54 23 .09 29 .24 36 .40 
+
+Frozen Teacher 24.41 42 .01 64.92 25.85 27 .54 38 .59 
+
+T2R-R1 21 .27 38 .63 61.25 19 .82 40 .56 42 .25 
+
+T2R-R2 22 .87 46.96 64.92 25 .61 49.43 45.32 
+
+T2R-R3 23.23 42.42 60 .73 28.04 41.37 43.85 1 87 174 261 
+
+Update Steps   
+
+> 0.0
+> 0.5
+> 1.0
+> Competition Score
+> Stage 1 Stage 2 Stage 3
+> T2R Reasoner
+> Teacher
+> Frozen Teacher
+
+(a) Competition Scores 1 87 174 261 
+
+Update Steps    
+
+> 0.0
+> 0.5
+> 1.0
+> Ratio of Non-Degenerate  Stage 1 Stage 2 Stage 3
+> RLVR Only
+> Judge Reward
+> Frozen Teacher
+> T2R
+
+(b) Non-zero Advantage 
+
+Figure 2 Training dynamics of (a) competition scores for the T2R Reasoner, the T2R Teacher, and Frozen Teacher, and (b) the ratio of groups with non-zero advantages for RLVR Only, Judge Reward, Frozen Teacher, and T2R. 
+
+effectively restores supervision when the original group reward collapses. In contrast, under Frozen Teacher , the trigger ratio gradually decreases over time despite the continued presence of degenerate groups. This pattern highlights the importance of iterative Teacher improvement for sustaining supervision in degenerate groups. 
+
+4.3 Ablation Study    
+
+> 8187 174 261
+
+Update Steps   
+
+> 0.0
+> 0.5
+> 1.0
+> Ratio of Groups
+> Stage 1 Stage 2 Stage 3
+> Degenerate Case
+> Successful Trigger
+
+(a) T2R 1 87 174 261 
+
+Update Steps    
+
+> 0.0
+> 0.5
+> 1.0
+> Ratio of Groups
+> Stage 1 Stage 2 Stage 3
+> Degenerate Case
+> Successful Trigger
+
+(b) Frozen Teacher 
+
+Figure 3 Degenerate-case statistics during training. (a) Ratios of degenerate groups and successfully activated degenerate-case handling groups during T2R training. (b) The same statistics for Frozen Teacher. 1 87 174 261 
+
+Update Steps   
+
+> 0.0
+> 0.5
+> 1.0
+> Competition Score
+> Stage 1 Stage 2 Stage 3
+> Frozen Teacher ( 0)
+> Frozen Teacher ( 1)
+> Frozen Teacher ( 2)
+> Frozen Teacher ( 3)
+
+Figure 4 Competition score dynamics under different fixed Teachers in Frozen Teacher setting. 
+
+Effect of γ.We study the effect of the threshold hyperparameter γ in degenerate-case partitioning. Table 2 reports results under the 2B set-ting, where each entry is the mean accuracy of the three Reasoner models 
+
+R1, R2, R3 on the corresponding benchmark. Overall, γ = 0 .3 achieves the best trade-off, yielding the best result on four out of six datasets. The role of γ is to control how aggressively degenerate groups are partitioned using competition scores. Larger values make the partition more permissive, so some samples that are not clearly inferior may still be assigned to the negative subset, reducing the reliability of the reconstructed training signal. Smaller values make the partition more conservative, so some potentially useful degenerate groups may fail to trigger the reconstruction mechanism. Consistent with this intuition, overly large values ( γ = 0 .6, 0.9) perform worse overall, while an overly small value such as γ = 0 .1 is slightly better on a few datasets but remains less favorable. We therefore adopt γ = 0 .3
+
+as the default setting. 
+
+Component Ablation. We ablate the main competition-based components of T2R in Table 4. Degenerate Handling 
+
+retains only the competition-guided partition and supervision recovery in degenerate groups. Non-Degenerate Bonus 
+
+retains only the sign-preserving bonus in non-degenerate groups. Direct Competition Reward removes the case-wise design and instead directly injects the competition score into the training reward: 
+
+˜rrea  
+
+> i
+
+= mfmt 
+
+> i
+
+ 1 + srea  
+
+> i
+
++ 1[ ˆAi = A∗ 
+
+> i
+
+]. (19) As shown in Table 4, Degenerate Handling yields larger gains than Non-Degenerate Bonus on most datasets, suggesting that a major part of T2R’s improvement comes from recovering supervision in degenerate groups. By contrast, Non-Degenerate Bonus still improves over RLVR Only on most datasets, indicating that within-group refinement is helpful but not the dominant source of gain. Meanwhile, Direct Competition Reward , although stronger than Base Model and RLVR Only , remains weaker than both Degenerate Handling and the full T2R . This suggests that competition scores are most effective when incorporated into the reward in a controlled and principled way, rather than being directly injected into the original reward. 
+
+Importance of a Comparable Teacher. We use the Frozen Teacher setting to study how Teacher strength affects Reasoner training, by fixing the Teacher as T0, T1, T2, or T3. Figure 4 shows that the Reasoner’s competition score    
+
+> 9Table 2 Ablation on the threshold hyperparameter γfor degenerate-group partitioning.
+
+γ Med-CXR VQA-RAD SLAKE MIMIC-CXR Covid-19 CXR-PA 
+
+0.1 28.11 41.00 51.96 22.16 34.21 37.26 
+
+0.3 27.24 41.78 52.35 22.19 36.78 36.39 0.6 26.73 36.59 51.48 21.80 35.33 36.24 0.9 27.01 38.61 50.25 21.64 33.86 35.16  
+
+> Table 3 Effect of Teacher strength in the Frozen Teacher setting.
+
+Tea-cher Med-CXR VQA-RAD SLAKE MIMIC-CXR Covid-19 CXR-PA 
+
+T0 21.74 40.37 52.35 20.88 31.88 32.20 
+
+T1 23.78 37.50 51.30 19.70 34.90 34.88 
+
+T2 18.03 32.19 55.49 13.57 18.30 25.14 
+
+T3 17.52 33.33 51.30 13.31 22.64 24.26        
+
+> Table 4 Component ablations under the 2B setting. Degenerate Handling keeps only degenerate-case handling, Non-Degenerate Bonus keeps only the non-degenerate bonus, and Direct Competition Reward directly injects competition scores into the reward.
+
+Method Med-CXR VQA-RAD SLAKE MIMIC-CXR Covid19 CXR-PA 
+
+Base Model 15 .94 31 .69 52.87 12 .98 22 .64 31 .72 
+
+RLVR Only 16 .87 30 .18 53.92 11 .85 21 .69 20 .32 
+
+Degenerate Handling 28.50 40.62 51 .30 21.20 45.71 35.07 Non-Degenerate Bonus 20 .94 31 .69 53.92 12 .52 20 .93 25 .58 
+
+Direct Competition Reward 26 .55 38 .74 51 .04 21 .14 33 .77 34 .63 
+
+T2R (ours) 27.24 41.78 52 .35 22.19 36.78 36.39                                
+
+> Table 5 CoT quality analysis via SFT distillation under the 2B setting.
+> Method Med-CXR VQA-RAD SLAKE MIMIC-CXR Covid19 CXR-PA
+> RLVR Only 13 .79 28 .03 51 .30 14 .28 23 .96 22 .07
+> Judge Reward 21 .40 33 .71 51 .83 16 .94 27 .73 26 .60
+> Frozen Teacher 23.71 36.36 56.54 20.99 27.90 32.98 T2R-R3 26.44 39.77 56.02 21.28 30.75 33.04
+
+increases over training when the fixed Teacher is T0 or T1, but remains near zero when it is T2 or T3. Consistently, Table 3 shows that T0 and T1 yield much better results. These observations suggest that effective comparison-based supervision requires a Teacher of comparable difficulty: if the Teacher is too strong, the comparison signal becomes overly sparse, leaving little room for the Reasoner to improve. This also motivates the stage-wise design of T2R, where the Teacher is updated after each stage so that it remains comparable to the current Reasoner. 
+
+4.4 CoT Quality Analysis via SFT Distillation 
+
+We further analyze the quality of the generated CoT + answer rollouts through an SFT distillation protocol. Specifically, we randomly sample 20K inputs from the 67K training set and use RLVR Only , Judge Reward , Frozen Teacher , and 
+
+T2R-R3 to generate one rollout per input using greedy decoding. Each rollout set is then used to supervise the same Qwen3-VL-2B-Instruct student model for one epoch under identical initialization and identical SFT hyperparameters. The resulting students are evaluated on the same six CXR open-ended VQA benchmarks. Although this protocol does not measure CoT quality in complete isolation, it provides a more controlled proxy than directly asking an LLM to compare CoTs, which may be affected by position bias, length bias, and judge preference. If the rollouts from one method consistently yield a stronger student under the same SFT budget, this provides evidence that its generated supervision is of higher practical quality. 
+
+> 10
+
+Table 5 shows a clear progression across the four rollout sources. RLVR Only yields the weakest student across the six benchmarks, suggesting that improving answers alone is insufficient for producing high-quality reasoning traces and that explicit CoT supervision is necessary. Both Frozen Teacher and T2R-R3 then consistently outperform 
+
+Judge Reward , indicating that comparison-based supervision is more effective than direct judge-based reward for improving CoT quality. Finally, among the comparison-based methods, T2R-R3 further outperforms Frozen Teacher 
+
+on most benchmarks, suggesting that iterative Teacher refinement further improves the quality of the generated CoTs, as reflected by the stronger student distilled from T2R-R3 rollouts. 
+
+5 Conclusion 
+
+We presented Teach-to-Reason (T2R) , a training framework for CXR VQA in which an iteratively self-improving Teacher provides progressively stronger references for a comparison-guided Reasoner, while the original reward-induced partition is preserved whenever it is informative and supervision is restored from competition scores when the original signal degenerates. More broadly, T2R suggests a new training paradigm in which comparison , rather than direct score assignment, serves as the reward signal for reinforcement learning. In this work, comparison is used only to judge which CoT is better overall, but the same idea could be extended much further by defining multiple finer-grained comparisons, each tied to a specific rule, preference, or task requirement. Moreover, this paradigm is not limited to CoT optimization: it can in principle be applied to other model outputs, such as solution strategies, plans, code, or other structured outputs, pointing toward more controllable RL-based training through customizable comparison signals. 
+
+References 
+
+[1] Jason J Lau, Soumya Gayen, Asma Ben Abacha, and Dina Demner-Fushman. A dataset of clinically generated visual questions and answers about radiology images. Scientific data , 5(1):180251, 2018. [2] Bo Liu, Li-Ming Zhan, Li Xu, Lin Ma, Yan Yang, and Xiao-Ming Wu. Slake: A semantically-labeled knowledge-enhanced dataset for medical visual question answering. In 2021 IEEE 18th international symposium on biomedical imaging (ISBI) ,pages 1650–1654. IEEE, 2021. [3] Seongsu Bae, Daeun Kyung, Jaehee Ryu, Eunbyeol Cho, Gyubok Lee, Sunjun Kweon, Jungwoo Oh, Lei JI, Eric Chang, Tackeun Kim, et al. Mimic-ext-mimic-cxr-vqa: a complex, diverse, and large-scale visual question answering dataset for chest x-ray images. PhysioNet , 2024. [4] Ankit Pal, Jung-Oh Lee, Xiaoman Zhang, Malaikannan Sankarasubbu, Seunghyeon Roh, Won Jung Kim, Meesun Lee, and Pranav Rajpurkar. Rexvqa: A large-scale visual question answering benchmark for generalist chest x-ray understanding. In 
+
+Biocomputing 2026: Proceedings of the Pacific Symposium , pages 251–264. World Scientific, 2025. [5] Xiaotang Gai, Chenyi Zhou, Jiaxiang Liu, Yang Feng, Jian Wu, and Zuozhu Liu. Medthink: A rationale-guided framework for explaining medical visual question answering. In Findings of the Association for Computational Linguistics: NAACL 2025 , pages 7438–7450, 2025. [6] Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Fei Xia, Ed Chi, Quoc V Le, Denny Zhou, et al. Chain-of-thought prompting elicits reasoning in large language models. Advances in neural information processing systems , 35: 24824–24837, 2022. [7] Long Ouyang, Jeffrey Wu, Xu Jiang, Diogo Almeida, Carroll Wainwright, Pamela Mishkin, Chong Zhang, Sandhini Agarwal, Katarina Slama, Alex Ray, et al. Training language models to follow instructions with human feedback. Advances in neural information processing systems , 35:27730–27744, 2022. [8] Rafael Rafailov, Archit Sharma, Eric Mitchell, Christopher D Manning, Stefano Ermon, and Chelsea Finn. Direct preference optimization: Your language model is secretly a reward model. Advances in neural information processing systems , 36: 53728–53741, 2023. [9] Zhihong Shao, Peiyi Wang, Qihao Zhu, Runxin Xu, Junxiao Song, Xiao Bi, Haowei Zhang, Mingchuan Zhang, YK Li, Yang Wu, et al. Deepseekmath: Pushing the limits of mathematical reasoning in open language models. arXiv preprint arXiv:2402.03300 , 2024. 
+
+> 11
+
+[10] Daya Guo, Dejian Yang, Haowei Zhang, Junxiao Song, Peiyi Wang, Qihao Zhu, Runxin Xu, Ruoyu Zhang, Shirong Ma, Xiao Bi, et al. Deepseek-r1 incentivizes reasoning in llms through reinforcement learning. Nature , 645(8081):633–638, 2025. [11] Aaron Jaech, Adam Kalai, Adam Lerer, Adam Richardson, Ahmed El-Kishky, Aiden Low, Alec Helyar, Aleksander Madry, Alex Beutel, Alex Carney, et al. Openai o1 system card. arXiv preprint arXiv:2412.16720 , 2024. [12] Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Fei Xia, Ed Chi, Quoc V Le, Denny Zhou, et al. Chain-of-thought prompting elicits reasoning in large language models. Advances in neural information processing systems , 35: 24824–24837, 2022. [13] Anisha Gunjal, Anthony Wang, Elaine Lau, Vaskar Nath, Yunzhong He, Bing Liu, and Sean Hendryx. Rubrics as rewards: Reinforcement learning beyond verifiable domains. arXiv preprint arXiv:2507.17746 , 2025. [14] Jiawei Gu, Xuhui Jiang, Zhichao Shi, Hexiang Tan, Xuehao Zhai, Chengjin Xu, Wei Li, Yinghan Shen, Shengjie Ma, Honghao Liu, et al. A survey on llm-as-a-judge. The Innovation , 2024. [15] Lianmin Zheng, Wei-Lin Chiang, Ying Sheng, Siyuan Zhuang, Zhanghao Wu, Yonghao Zhuang, Zi Lin, Zhuohan Li, Dacheng Li, Eric Xing, et al. Judging llm-as-a-judge with mt-bench and chatbot arena. Advances in neural information processing systems , 36:46595–46623, 2023. [16] Weizhe Yuan, Richard Yuanzhe Pang, Kyunghyun Cho, Xian Li, Sainbayar Sukhbaatar, Jing Xu, and Jason E Weston. Self-rewarding language models. In Forty-first International Conference on Machine Learning , 2024. [17] Eric Zelikman, Yuhuai Wu, Jesse Mu, and Noah Goodman. Star: Bootstrapping reasoning with reasoning. Advances in Neural Information Processing Systems , 35:15476–15488, 2022. [18] Aman Madaan, Niket Tandon, Prakhar Gupta, Skyler Hallinan, Luyu Gao, Sarah Wiegreffe, Uri Alon, Nouha Dziri, Shrimai Prabhumoye, Yiming Yang, et al. Self-refine: Iterative refinement with self-feedback. Advances in neural information processing systems , 36:46534–46594, 2023. [19] Noah Shinn, Federico Cassano, Ashwin Gopinath, Karthik Narasimhan, and Shunyu Yao. Reflexion: Language agents with verbal reinforcement learning. Advances in neural information processing systems , 36:8634–8652, 2023. [20] Shuai Bai, Yuxuan Cai, Ruizhe Chen, Keqin Chen, Xionghui Chen, Zesen Cheng, Lianghao Deng, Wei Ding, Chang Gao, Chunjiang Ge, et al. Qwen3-vl technical report. arXiv preprint arXiv:2511.21631 , 2025. [21] Asma Ben Abacha, Sadid A Hasan, Vivek V Datla, Dina Demner-Fushman, and Henning Müller. Vqa-med: Overview of the medical visual question answering task at imageclef 2019. In Proceedings of CLEF (Conference and Labs of the Evaluation Forum) 2019 Working Notes . 9-12 September 2019, 2019. [22] Xuehai He, Yichen Zhang, Luntian Mou, Eric Xing, and Pengtao Xie. Pathvqa: 30000+ questions for medical visual question answering. arXiv preprint arXiv:2003.10286 , 2020. [23] Yash Khare, Viraj Bagal, Minesh Mathew, Adithi Devi, U Deva Priyakumar, and CV Jawahar. Mmbert: Multimodal bert pretraining for improved medical vqa. In 2021 IEEE 18th international symposium on biomedical imaging (ISBI) , pages 1033–1036. IEEE, 2021. [24] Zhihong Chen, Yuhao Du, Jinpeng Hu, Yang Liu, Guanbin Li, Xiang Wan, and Tsung-Hui Chang. Multi-modal masked autoencoders for medical vision-and-language pre-training. In International Conference on Medical Image Computing and Computer-Assisted Intervention , pages 679–689. Springer, 2022. [25] Sheng Zhang, Yanbo Xu, Naoto Usuyama, Hanwen Xu, Jaspreet Bagga, Robert Tinn, Sam Preston, Rajesh Rao, Mu Wei, Naveen Valluri, et al. Biomedclip: a multimodal biomedical foundation model pretrained from fifteen million scientific image-text pairs. arXiv preprint arXiv:2303.00915 , 2023. [26] Chunyuan Li, Cliff Wong, Sheng Zhang, Naoto Usuyama, Haotian Liu, Jianwei Yang, Tristan Naumann, Hoifung Poon, and Jianfeng Gao. Llava-med: Training a large language-and-vision assistant for biomedicine in one day. Advances in Neural Information Processing Systems , 36:28541–28564, 2023. 
+
+> 12
+
+[27] Michael Moor, Qian Huang, Shirley Wu, Michihiro Yasunaga, Yash Dalmia, Jure Leskovec, Cyril Zakka, Eduardo Pontes Reis, and Pranav Rajpurkar. Med-flamingo: a multimodal medical few-shot learner. In Machine learning for health (ML4H) ,pages 353–367. PMLR, 2023. [28] Andrew Sellergren, Sahar Kazemzadeh, Tiam Jaroensri, Atilla Kiraly, Madeleine Traverse, Timo Kohlberger, Shawn Xu, Fayaz Jamil, Cían Hughes, Charles Lau, et al. Medgemma technical report. arXiv preprint arXiv:2507.05201 , 2025. [29] Zhihong Lin, Donghao Zhang, Qingyi Tao, Danli Shi, Gholamreza Haffari, Qi Wu, Mingguang He, and Zongyuan Ge. Medical visual question answering: A survey. Artificial Intelligence in Medicine , 143:102611, 2023. [30] Jonathan Uesato, Nate Kushman, Ramana Kumar, Francis Song, Noah Siegel, Lisa Wang, Antonia Creswell, Geoffrey Irving, and Irina Higgins. Solving math word problems with process-and outcome-based feedback. arXiv preprint arXiv:2211.14275 ,2022. [31] Hunter Lightman, Vineet Kosaraju, Yuri Burda, Harrison Edwards, Bowen Baker, Teddy Lee, Jan Leike, John Schulman, Ilya Sutskever, and Karl Cobbe. Let’s verify step by step. In The twelfth international conference on learning representations ,2023. [32] Rahul K Arora, Jason Wei, Rebecca Soskin Hicks, Preston Bowman, Joaquin Quiñonero-Candela, Foivos Tsimpourlas, Michael Sharman, Meghan Shah, Andrea Vallone, Alex Beutel, et al. Healthbench: Evaluating large language models towards improved human health. arXiv preprint arXiv:2505.08775 , 2025. [33] Zenan Huang, Yihong Zhuang, Guoshan Lu, Zeyu Qin, Haokai Xu, Tianyu Zhao, Ru Peng, Jiaqi Hu, Zhanming Shen, Xiaomeng Hu, et al. Reinforcement learning with rubric anchors. arXiv preprint arXiv:2508.12790 , 2025. [34] Rulin Shao, Akari Asai, Shannon Zejiang Shen, Hamish Ivison, Varsha Kishore, Jingming Zhuo, Xinran Zhao, Molly Park, Samuel G Finlayson, David Sontag, et al. Dr tulu: Reinforcement learning with evolving rubrics for deep research. arXiv preprint arXiv:2511.19399 , 2025. [35] Junkai Zhang, Zihao Wang, Lin Gui, Swarnashree Mysore Sathyendra, Jaehwan Jeong, Victor Veitch, Wei Wang, Yunzhong He, Bing Liu, and Lifeng Jin. Chasing the tail: Effective rubric-based reward modeling for large language model post-training. 
+
+arXiv preprint arXiv:2509.21500 , 2025. [36] Yang Zhou, Sunzhu Li, Shunyu Liu, Wenkai Fang, Kongcheng Zhang, Jiale Zhao, Jingwen Yang, Yihe Zhou, Jianwei Lv, Tongya Zheng, et al. Breaking the exploration bottleneck: Rubric-scaffolded reinforcement learning for general llm reasoning. arXiv preprint arXiv:2508.16949 , 2025. [37] Jonas Hübotter, Frederike Lübeck, Lejs Behric, Anton Baumann, Marco Bagatella, Daniel Marta, Ido Hakimi, Idan Shenfeld, Thomas Kleine Buening, Carlos Guestrin, et al. Reinforcement learning via self-distillation. arXiv preprint arXiv:2601.20802 , 2026. [38] Zixiang Chen, Yihe Deng, Huizhuo Yuan, Kaixuan Ji, and Quanquan Gu. Self-play fine-tuning converts weak language models to strong language models. arXiv preprint arXiv:2401.01335 , 2024. [39] Wenkai Fang, Shunyu Liu, Yang Zhou, Kongcheng Zhang, Tongya Zheng, Kaixuan Chen, Mingli Song, and Dacheng Tao. Serl: Self-play reinforcement learning for large language models with limited data. arXiv preprint arXiv:2505.20347 , 2025. [40] Andrew Zhao, Yiran Wu, Yang Yue, Tong Wu, Quentin Xu, Matthieu Lin, Shenzhi Wang, Qingyun Wu, Zilong Zheng, and Gao Huang. Absolute zero: Reinforced self-play reasoning with zero data. arXiv preprint arXiv:2505.03335 , 2025. [41] Bo Liu, Chuanyang Jin, Seungone Kim, Weizhe Yuan, Wenting Zhao, Ilia Kulikov, Xian Li, Sainbayar Sukhbaatar, Jack Lanchantin, and Jason Weston. Spice: Self-play in corpus environments improves reasoning. arXiv preprint arXiv:2510.24684 , 2025. [42] Hongliang Lu, Yuhang Wen, Pengyu Cheng, Ruijin Ding, Jiaqi Guo, Haotian Xu, Chutian Wang, Haonan Chen, Xiaoxi Jiang, and Guanjun Jiang. Search self-play: Pushing the frontier of agent capability without supervision. arXiv preprint arXiv:2510.18821 , 2025. [43] Jingyu Zhang, Haozhu Wang, Eric Michael Smith, Sid Wang, Amr Sharaf, Mahesh Pasupuleti, Benjamin Van Durme, Daniel Khashabi, Jason Weston, and Hongyuan Zhan. The alignment waltz: Jointly training agents to collaborate for safety. arXiv preprint arXiv:2510.08240 , 2025. 
+
+> 13
+
+[44] Yicheng He, Chengsong Huang, Zongxia Li, Jiaxin Huang, and Yonghui Yang. Visplay: Self-evolving vision-language models from images. arXiv preprint arXiv:2511.15661 , 2025. [45] Huan-ang Gao, Jiayi Geng, Wenyue Hua, Mengkang Hu, Xinzhe Juan, Hongzhang Liu, Shilong Liu, Jiahao Qiu, Xuan Qi, Yiran Wu, et al. A survey of self-evolving agents: On path to artificial super intelligence. arXiv preprint arXiv:2507.21046 ,1, 2025. [46] An Yang, Anfeng Li, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chang Gao, Chengen Huang, Chenxu Lv, et al. Qwen3 technical report. arXiv preprint arXiv:2505.09388 , 2025. [47] Xinyue Hu, Lin Gu, Kazuma Kobayashi, X Hu, L Gu, K Kobayashi, L Liu, M Zhang, T Harada, RM Summers, et al. Medical-cxr-vqa dataset: A large-scale llm-enhanced medical dataset for visual question answering on chest x-ray images, 2025. [48] Seongsu Bae, Daeun Kyung, Jaehee Ryu, Eunbyeol Cho, Gyubok Lee, Sunjun Kweon, Jungwoo Oh, Lei Ji, Eric Chang, Tackeun Kim, et al. Ehrxqa: A multi-modal question answering dataset for electronic health records with chest x-ray images. 
+
+Advances in Neural Information Processing Systems , 36:3867–3880, 2023. [49] Muhammad EH Chowdhury, Tawsifur Rahman, Amith Khandakar, Rashid Mazhar, Muhammad Abdul Kadir, Zaid Bin Mahbub, Khandakar Reajul Islam, Muhammad Salman Khan, Atif Iqbal, Nasser Al Emadi, et al. Can ai help in screening viral and covid-19 pneumonia? Ieee Access , 8:132665–132676, 2020. [50] A Asraf and Z Islam. Covid19 pneumonia and normal chest x-ray pa dataset. mendeley data v1 (2021), 2021. 
+
+> 14
+
+A LLM-as-a-Judge Details 
+
+Unless otherwise specified, we use Qwen3-4B-Instruct-2507 as the judge model and deploy it with vLLM , using 
+
+max_model_len=32768 , gpu_mem_util=0.9 , max_tokens=2048 , temperature=0.7 , and top_p=0.9 . Across all judging tasks, the model is required to return a valid XML response with a task-specific label in the <result> field. For binary yes/no judging tasks, if the XML output is malformed or the <result> field is invalid, we apply a unified fallback rule: if the decoded response contains the substring >no< in a case-insensitive manner, we assign no ; otherwise, we assign yes .
+
+A.1 CoT Comparison for Competition Scoring 
+
+For pairwise CoT comparison during training, the judge receives a chest X-ray report, an exam question, the official correct answer, and two candidate reasoning traces. It is asked to determine which reasoning trace is overall better, based on content quality rather than length. The comparison criteria include reasoning correctness, internal consistency, answer alignment, answer support, relevance, restraint, and clarity. The comparison prompt is shown in Figure 5. To mitigate position bias, the two candidate CoTs are randomly assigned to the prompt slots {reason_a} and 
+
+{reason_b} . The judge must return exactly one winner, either A or B; tie outputs are not allowed. After decoding, the predicted label is mapped back to the original ordering of the compared CoTs before computing the comparison outcome. For this task, malformed XML outputs or invalid <result> labels are discarded rather than repaired. After filtering invalid comparisons, we compute the competition score using the retained valid outputs. The Reasoner competition score is 
+
+srea  
+
+> i
+
+= 1
+
+K
+
+> K
+
+X
+
+> k=1
+
+fcomp ( ˆCrea  
+
+> i
+
+, ˆCtea  
+
+> i,k
+
+), srea  
+
+> i
+
+∈ [0 , 1] , (20) and the Teacher self-competition score is defined analogously as 
+
+stea  
+
+> i
+
+= 1
+
+K
+
+> K
+
+X
+
+> k=1
+
+fcomp ( ˆCtea  
+
+> i
+
+, ¯Ctea  
+
+> i,k
+
+), stea  
+
+> i
+
+∈ [0 , 1] . (21) 
+
+A.2 Open-Ended Answer Judging 
+
+For open-ended answer grading, the judge receives a radiology report, an open-ended question, a reference answer, and a predicted answer, and determines whether the prediction should be considered correct. The prompt instructs the judge to ground its decision primarily in the radiology report, while using the reference answer to identify the core medical elements required by the question. The grading prompt is shown in Figure 6. 
+
+Training-time setting. During training, we use the default judge model and configuration described above. Each sample is judged once, and the judge is required to return a binary decision with <result> equal to either yes or no .When the XML output is malformed or the label is invalid, we apply the unified fallback rule so that each training sample yields a binary supervision signal. 
+
+Final-evaluation setting. At final evaluation time, we replace the default judge with a stronger model, 
+
+Qwen3-235B-A22B , while keeping the same prompt template and per-run decoding configuration. Each sample is judged five times independently, and the final label is determined by majority vote over the five binary decisions. The same fallback rule is applied to each run before aggregation. This repeated-judging strategy stabilizes the final LLM-as-a-Judge decision and reduces evaluation variance. 
+
+> 15
+
+# Prompt template used for pairwise CoT comparison 
+
+You will be given a chest X-ray exam question, a corresponding radiology report, the official correct answer, and two different reasoning traces (labeled A and B). Both 
+
+reasoning traces attempt to explain how one could arrive at the official answer based on the chest X-ray and the question. 
+
+Your task: after fully understanding the case and the question, compare reasoning A and reasoning B, decide which one is overall better, and briefly explain your judgment. 
+
+【Available information 】
+
+* Radiology report (reflects the true findings and diagnostic thinking for this case): 
+
+{report} 
+
+* Exam question: 
+
+{question} 
+
+* Official correct answer: 
+
+{answer} 
+
+* Reasoning A: 
+
+{reason_a} 
+
+* Reasoning B: 
+
+{reason_b} 
+
+【Overall evaluation principle 】
+
+Your judgment of which reasoning is “better ” must be based on content quality, not on length, word count, number of sentences, or superficial level of detail. 
+
+* Do not judge a reasoning trace as better simply because it is longer, more verbose, or appears more detailed; 
+
+* Do not judge a reasoning trace as worse simply because it is shorter; 
+
+* A shorter reasoning trace can be better if it is more accurate, more consistent with the imaging findings, and more logically focused; 
+
+* A longer reasoning trace should not be rewarded if it contains redundancy, repetition, irrelevant discussion, unsupported speculation, or incorrect reasoning; 
+
+* You must compare A and B based only on the quality of their content: correctness, relevance, reasoning quality, restraint, and clarity. Length itself must not be treated as 
+
+an advantage or disadvantage. 
+
+【Evaluation criteria 】
+
+When comparing A and B, you should consider the following aspects. It is allowed that both have flaws; you only need to choose the relatively better one. 
+
+1. Correctness and consistency 
+
+* Does the reasoning logically support the official answer {answer}, instead of drifting toward a different answer? 
+
+* Is it broadly consistent with the radiology report in terms of imaging findings and diagnostic direction? 
+
+* Does it avoid obvious medical errors or reasoning that conflicts with basic chest imaging knowledge? 
+
+2. Use of evidence and reasoning chain 
+
+* Does it clearly build on plausible key findings that one could see on the chest X-ray, rather than just restating the answer or giving vague comments? 
+
+* Does it show a reasonable reasoning flow, for example: 
+
+“inspect the image → describe key abnormalities/locations/extent → relate to the question → rule out less likely options → reach the conclusion ”?
+
+* Is the reasoning coherent and causal, rather than fragmented and disjointed? 
+
+3. Information use and restraint 
+
+* Does it focus on the findings and information that are actually relevant to this specific question, instead of introducing large amounts of unrelated content? 
+
+* Does it avoid clearly inventing findings or test results that are not supported by the image or the case? 
+
+* If it implicitly aligns with ideas present in the radiology report, does it remain compatible with the spirit of the report, and does it sound like it could come from reading the 
+
+film rather than obviously “quoting the report ”?
+
+* Does it avoid unnecessary elaboration added merely to sound more complete? Relevant and useful content matters more than more content. 
+
+4. Clarity of expression 
+
+* Is the language clear and easy to understand? 
+
+* Does it clearly explain why the official answer makes sense, rather than merely restating the conclusion? 
+
+* Is it concise but effective, without losing focus through excessive expansion? 
+
+【Special instructions for comparison 】
+
+* This is a quality comparison, not a length comparison; 
+
+* Length should be treated only as a surface characteristic, not as a scoring factor by itself; 
+
+* A longer reasoning trace only deserves credit if the additional content is genuinely correct, relevant, necessary, and helpful to the reasoning process; 
+
+* If the extra length mainly consists of repetition, vague expansion, irrelevant content, or unsupported details, that should count against it rather than in its favor; 
+
+* If A and B are close in quality, prefer the one that is more accurate, more focused, and better grounded in key findings, rather than defaulting to the longer one. 
+
+【Output requirements 】
+
+1. Internally compare reasoning A and B using the above criteria, and decide which one is overall better. 
+
+2. Then output your decision and justification in XML format, with root tag <response> and two child tags: 
+
+* <reason>: briefly explain how you compared A and B, in which aspects A is better or B is better, and why you finally chose one over the other. 
+
+* <result>: write only a single capital letter, “A” or “B”, indicating which reasoning you judge to be better overall. 
+
+Important: 
+
+* Do NOT output anything outside the XML structure; 
+
+* Inside <result>, output only a single capital letter A or B, without quotes or any extra text; 
+
+* In <reason>, do not use “longer ” or “shorter ” itself as the main justification unless you explicitly connect it to an actual content-level strength or weakness. 
+
+Please output in the following format: 
+
+```xml 
+
+<response> 
+
+<reason>(briefly describe your comparison and justification, e.g., which reasoning is more consistent with the report and the official answer, which has a more coherent 
+
+chain of thought, whether there are obvious medical mistakes, etc.)</reason> 
+
+<result>(write A or B here, corresponding to the reasoning you consider better)</result> 
+
+</response> 
+
+``` 
+
+Your output: Figure 5 Prompt template used for pairwise CoT comparison in the LLM-as-a-Judge module. The two candidate reasoning traces are randomly assigned to slots A and B to reduce position bias. 
+
+16 Prompt template for grading of open-ended answers 
+
+You are now acting as a grading examiner for chest radiology open-ended exam questions. 
+
+Your task: 
+
+Given a 【chest X-ray report 】, an 【open-ended question 】, a 【reference (ground truth) answer 】 and a 【student answer 】,
+
+decide whether the student ’s answer should be considered correct, and briefly explain your reasoning. 
+
+【Information 】
+
+1. Chest X-ray report (Report) 
+
+- This is the factual basis for the case. 
+
+- If the reference answer or the student answer conflicts with the report, the report has the highest priority for judging medical correctness. 
+
+2. Reference answer (Ground Truth) 
+
+- Provided by the instructor; it reflects the key information that the question is intended to test. 
+
+- You should extract the core medical elements from it (e.g. abnormal findings, diagnosis, location, cause, extent, severity, management advice). 
+
+3. Student answer (Pred) 
+
+- The wording may differ from the reference answer. 
+
+- As long as the medical meaning is equivalent or very close, and it does not contradict the report, it can be graded as correct. 
+
+【Grading principles 】
+
+You must decide a binary result (yes/no) based on the following: 
+
+1. Focus on what the question is asking for 
+
+- First, understand what type of information the question explicitly asks: 
+
+- e.g. “most likely diagnosis ”, “main abnormal finding ”, “location of the lesion ”, “possible cause ”, “severity ”, “management step ”, etc. 
+
+- The reference answer shows what the instructor really wants the student to provide. 
+
+2. Identify the core elements in the reference answer 
+
+- The reference answer may contain one or several key points: 
+
+- If the question asks for “main diagnosis / main abnormality / most important change ”, the student answer should at least cover that main core element; minor omissions 
+
+may be acceptable. 
+
+- If the question explicitly asks for “all major abnormalities / list all …” , then missing any important element should usually be treated as not fully correct (result = "no"). 
+
+3. When to mark the student as correct (result = "yes") 
+
+- The student ’s answer matches the core meaning of the reference answer: 
+
+- Synonyms, paraphrases, and equivalent medical terminology are acceptable; 
+
+- Shorter wording is acceptable if it still captures the key medical content. 
+
+- The student answer must NOT: 
+
+- Present a diagnosis/finding/location/cause that clearly contradicts the report or the reference answer; 
+
+- Be overly vague (e.g. “something is wrong ”, “there is an abnormality ”) while the question expects a specific diagnosis or finding; 
+
+- Make clear mistakes on crucial aspects (e.g. wrong side, wrong structure, wrong type of pathology, wrong severity grade). 
+
+4. When to mark the student as incorrect (result = "no") 
+
+- The student answer misses the key information required by the question; 
+
+- The main content of the student answer conflicts with the reference answer and/or the report; 
+
+- The answer is too general or ambiguous and does not demonstrate actual understanding of the required specific point; 
+
+- The answer contains serious medical errors, even if some parts sound similar to the reference. 
+
+5. Leniency vs strictness 
+
+- Do not require exact wording; judge based on medical meaning. 
+
+- Be tolerant of minor phrasing differences that do not affect correctness. 
+
+- Be strict regarding the main diagnostic direction, key location, main abnormality type, key cause, and other crucial elements. 
+
+【Output format 】
+
+1. First complete your reasoning internally; do NOT output your intermediate thoughts. 
+
+2. Then output exactly one XML code block, wrapped in ```xml, with the following structure: 
+
+```xml 
+
+<response> 
+
+<reason>Use 2–5 sentences in English to briefly explain why you judged the student answer as correct or incorrect. Mention what the question asks for, what the core 
+
+elements of the reference answer are, and whether the student answer matches them or contains clear errors/omissions.</reason> 
+
+<result>yes or no (lowercase only)</result> 
+
+</response> 
+
+```` 
+
+3. Do NOT output anything outside this XML code block. No extra explanations, no additional code blocks. 
+
+---
+
+【Chest X-ray report 】
+
+{report} 
+
+---
+
+【Open-ended question 】
+
+{question} 
+
+---
+
+【Reference (ground truth) answer 】
+
+{ground_truth} 
+
+---
+
+【Student answer 】
+
+{pred} 
+
+---
+
+Based on the above information and grading principles, decide whether the student ’s answer should be considered correct, 
+
+and return your XML response strictly following the required format. 
+
+Your Prediction: Figure 6 Prompt template used for LLM-as-a-Judge grading of open-ended answers. The judge determines whether the predicted answer is medically correct given the radiology report, the question, and the reference answer. 
+
+17 Prompt template used for reasoning quality assessment 
+
+You will be given a chest X-ray exam question, a corresponding radiology report, the official correct answer, and one reasoning trace (chain of thought) for solving this 
+
+question. 
+
+Your task: using all this information, decide whether this reasoning trace is “acceptable ” or “not acceptable ”, and explain your judgment. Here, “acceptable ” means that the 
+
+reasoning can reasonably serve as a reliable, instructive solution process for this question. 
+
+【Available information 】
+
+- Radiology report (can be regarded as the imaging “ground truth ” for this case): 
+
+{report} 
+
+- Exam question: 
+
+{question} 
+
+- Official correct answer: 
+
+{answer} 
+
+- Reasoning to be evaluated: 
+
+{reason} 
+
+【Evaluation criteria – key dimensions 】
+
+1. Consistency with the official answer 
+
+- Does the reasoning ultimately support the given official answer {answer} (at least not contradict it in meaning)? 
+
+- Does it clearly explain why this answer is reasonable, rather than implicitly suggesting that some other answer would be more appropriate? 
+
+2. Medical consistency with the case/report 
+
+- Do the imaging findings, abnormalities, diagnostic tendencies, etc. mentioned in the reasoning broadly match the radiology report in terms of direction and key facts? 
+
+- Does it avoid conclusions that are clearly opposite to the report or strongly violate basic chest imaging knowledge (e.g., treating obviously normal structures as severe 
+
+pathology, or claiming an abnormality is completely absent when the report clearly states it is present)? 
+
+3. Completeness and plausibility of the reasoning chain 
+
+- Does it present a genuine reasoning process, rather than just a bare conclusion or a single sentence explanation? 
+
+- Does it cover most of the following elements: 
+
+“inspect the image → describe key findings → analyze in light of the question → rule out less likely possibilities → arrive at a conclusion that matches the official 
+
+answer ”?
+
+- Is the reasoning coherent and causal, instead of fragmented and logically unclear? 
+
+4. Proper use of information 
+
+- Does it mainly rely on findings that could reasonably be observed on the chest X-ray and on the information in the question, rather than inventing non-existent tests or 
+
+imaging features? 
+
+- Does it avoid obviously copying phrases from the radiology report, or explicitly revealing that it saw the report/answer (e.g., “the report states …” , “the correct answer 
+
+is …” )? 
+
+- Even if it is aligned with the spirit of the report, it should read like reasoning based on image interpretation, not like quoting the report as the main justification. 
+
+5. Clarity of explanation 
+
+- Is the language clear enough that someone with basic medical background can understand what the reasoning is saying? 
+
+- Does it stay focused on what this particular question is asking, without long digressions into irrelevant content? 
+
+6. Language quality and readability 
+
+- Is the text reasonably fluent, with basically correct grammar, and without so many typos, nonsense words, or scrambled word order that it becomes hard to understand? 
+
+- Check whether the main language of the reasoning is English: 
+
+- It may include some non-English technical terms or abbreviations, but the majority of the text should be readable English. 
+
+- If most of the reasoning is in another language, or consists largely of gibberish/garbled characters, it should be judged as not acceptable. 
+
+【Decision rule (you make the final call) 】
+
+You should integrate all the above dimensions and decide whether the reasoning is “acceptable ”:
+
+- If overall the reasoning is medically sound, logically reasonable, supports the official answer, does not seriously violate the constraints (e.g., does not blatantly quote the 
+
+report or admit to knowing the official answer), and the language quality is basically acceptable, you may judge it as **yes (acceptable) **.
+
+- If there are serious problems —such as strong conflict with the report and basic medical knowledge, failure to support the official answer, extremely chaotic or incoherent 
+
+logic, explicit signs of “I saw the report/answer and I ’m explaining backwards ”, or very poor language/mostly non-English so that it is hard to read —then you should judge it 
+
+as **no (not acceptable) **.
+
+- Minor imperfections or slightly suboptimal wording are allowed; the key question is whether it can reasonably function as a trustworthy “standard reasoning process ” for 
+
+this question. 
+
+【Output requirements 】
+
+1. First, complete your internal evaluation, then provide your judgment and justification in XML format. 
+
+2. Use <response> as the root tag, with two child tags: 
+
+- <reason>: briefly explain, in natural English, why you consider the reasoning acceptable or not acceptable. You may mention both strengths and major flaws. 
+
+- <result>: write yes or no, indicating your final judgment on the reasoning trace. 
+
+Important: 
+
+- Do NOT output anything outside the XML structure. 
+
+- Inside <result>, you must output only the lowercase word yes or no, without quotes or any other characters. 
+
+Please output in the following format: 
+
+```xml 
+
+<response> 
+
+<reason>(Explain your basis and reasoning here, e.g., whether it matches the official answer and the report, whether the reasoning is complete and coherent, whether 
+
+there are obvious medical errors or signs of having seen the report/answer, and whether the language is readable and mainly in English.)</reason> 
+
+<result>(write yes or no here)</result> 
+
+</response> 
+
+``` 
+
+Your Predict: Figure 7 Prompt template used for reasoning quality assessment in auxiliary reward construction. The judge determines whether a reasoning trace can serve as an acceptable and reliable solution process for the given chest X-ray question. 
+
+18 A.3 Reasoning Quality Assessment for Auxiliary Reward 
+
+In the comparative experiments, we additionally consider a Judge Reward baseline, in which an LLM evaluates whether a single reasoning trace is acceptable and converts this judgment into an auxiliary reward signal. Specifically, given a radiology report, an exam question, the official correct answer, and one reasoning trace, the judge determines whether the reasoning can serve as a medically sound, logically coherent, and pedagogically reliable solution process for the question. The corresponding prompt is shown in Figure 7. The judge returns a binary XML decision with <result> equal to either yes or no . We map this decision to 
+
+sjudge  
+
+> i
+
+∈ { 0, 1}, (22) where yes corresponds to sjudge  
+
+> i
+
+= 1 and no corresponds to sjudge  
+
+> i
+
+= 0 . This binary signal is then used to construct the reward in the judge-reward baseline: 
+
+˜rrea  
+
+> i
+
+= mfmt 
+
+> i
+
+ 1 + sjudge  
+
+> i
+
++ 1[ ˆAi = A∗ 
+
+> i
+
+]. (23) The prompt asks the judge to evaluate the reasoning in terms of answer consistency, medical consistency with the report, coherence and plausibility of the reasoning process, proper use of available information, clarity of explanation, and overall readability. In essence, a reasoning trace is accepted only when it is broadly consistent with both the report and the official answer, follows a coherent and medically plausible reasoning process, avoids obvious factual conflicts or unsupported speculation, and remains readable. As in training-time open-ended answer judging, malformed XML outputs or invalid <result> labels are handled by the same fallback rule described above. Each reasoning trace is judged once in this setting. 
+
+B Training Details 
+
+B.1 Training Setup 
+
+We optimize both the Reasoner and the Teacher with GRPO under the staged training scheme described in Section 3.4. Unless otherwise specified, all compared methods share the same GRPO training pipeline and hyperparameter configuration, and differ only in the reward/objective design. All experiments are conducted on two compute nodes, each equipped with 8 NVIDIA L40 GPUs (48GB): one node is dedicated to RL training, and the other serves as a unified reward-service node. The training node is used for model optimization. The reward-service node hosts one Teacher instance for reference CoT generation and multiple Qwen3-4B-Instruct-2507 judge instances for pairwise CoT comparison and open-ended answer judging. Reward requests are managed through a unified Ray-based service with batched scheduling and inference. During RL training, we use the GRPO objective together with KL regularization against the reference policy. The main reproduction-relevant hyperparameters are summarized in Table 6. For reference CoT generation, the frozen Teacher at each stage, denoted by ˜Ti, is served as a separate inference instance on the reward-service node. For each training sample, it generates K = 10 reference CoTs using nucleus sampling with temperature 0.7 and top-p = 0 .95 . We set the maximum generation length to 4096 tokens. For image preprocessing, we use a pixel range of [262144 , 524288] to control the visual input resolution. These settings are shared across Teacher reference generation in all T2R stages.                                       
+
+> 19 Table 6 Key hyperparameters used in staged GRPO training. Unless otherwise specified, these settings are shared across the Teacher, the Reasoner, and all comparison methods; differences arise only from the reward/objective design.
+> Category Setting Value
+> Algorithm Objective GRPO KL regularization enabled KL coefficient 1×10 −2
+> Rollout Rollouts per prompt 16 Temperature 1.0 Top-p1.0 Data Train rollout batch size 128 Max prompt length 5120 Max response length 1024 Optimization Learning rate 1×10 −6
+> Weight decay 1×10 −2
+> Optimizer AdamW (bf16) Max gradient norm 1.0 Gradient checkpointing enabled Vision tower freezing disabled Padding-free training enabled Dynamic batching enabled Training Epochs per stage/split 1System RL training node 1 node, 8 ×NVIDIA L40 (48GB) Reward-service node 1 node, 8 ×NVIDIA L40 (48GB) Teacher reference instance 1 GPU instance Judge instances 7 GPU instances of Qwen3-4B-Instruct-2507
+> Reward serving unified Ray-based scheduling and request dispatch
+
+B.2 Reasoner Prompt 
+
+The Reasoner prompt is instantiated from three placeholders: {question} , {question_type} , and 
+
+{question_type_desc} . Here, {question} denotes the exam question, while {question_type} and 
+
+{question_type_desc} specify the question type and the corresponding answer-format instruction. For open-ended questions, {question_type} is set to Open Ended Question , and the answer-format instruction requires a short free-text answer. For single-choice questions, {question_type} is set to Single Choice Question ,and the answer-format instruction requires the model to output only the letter of the correct option, without brackets, quotation marks, or additional text. These fields are inserted into a unified prompt template that requires the model to return a single XML response containing both a <reason> field and an <answer> field. The full prompt template is shown in Figure 8. 
+
+B.3 Teacher Prompt 
+
+The Teacher prompt is instantiated from five placeholders: {question} , {question_type} ,
+
+{question_type_desc} , {answer} , and {report} . Here, {question} denotes the exam question, 
+
+{question_type} and {question_type_desc} specify the question type and the corresponding answer-format instruction, {answer} is the official correct answer, and {report} is the radiology report for the same case. Unlike the Reasoner, the Teacher is prompted to reconstruct a medically sound reasoning process while using the radiology report and the official answer only as alignment signals. The generated reasoning must be written as if 
+
+> 20
+
+the model had access only to the chest X-ray image and the exam question. Accordingly, the Teacher is explicitly instructed not to mention the radiology report, not to quote the official answer, and not to present the reasoning as a reverse explanation of a known conclusion. As in the Reasoner prompt, the question type and the corresponding answer-format instruction are included to align the generated reasoning with the downstream task setting. For open-ended questions, the prompt specifies a short free-text answer format; for single-choice questions, it specifies that the correct option should be represented by its letter only. These instructions are used only for task alignment and should not be explicitly referenced in the generated reasoning. The Teacher is required to return a single XML response containing one <response> field, which stores the full reasoning trace in continuous natural English. The full prompt template is shown in Figure 9. Prompt template for Reasoner        
+
+> You will be given one or more chest X-ray images and an exam question. First, carefully inspect the X-ray image(s), then combine your observations with the question to
+> reason step by step and produce a final answer.
+> Important requirements:
+> - In your reasoning, it is recommended (but not mandatory) to follow a natural sequence such as: “inspect the image(s) →describe key findings →analyze these findings in
+> the context of the question →reach a conclusion ”. The exact wording can be fully free-form and does not need to follow any fixed template.
+> - The reasoning should clearly explain what you see on the image(s), what these findings imply, and how they lead step by step to your final answer. Do not invent imaging
+> findings or test results that are not actually supported by the X-ray image(s).
+> Additional notes:
+> - Question type: {question_type}.
+> - The expected answer format for this type is described as follows (this is only to constrain the format of <answer>; you do not need to mention it in your reasoning):
+> {question_type_desc}
+> Question:
+> {question}
+> Based on what you see on the chest X-ray image(s) and the question, produce your response as a single XML structure in the following format:
+> ```xml
+> <response>
+> <reason>(fill in the complete reasoning here, in natural English as a continuous description)</reason>
+> <answer>(fill in the final answer here, and make sure its format matches the requirement)</answer>
+> </response>
+> ````
+> Do not output anything outside this XML code block.
+> Your Output:
+
+Figure 8 Prompt template used for Reasoner training. The prompt includes the exam question, the question type, and the corresponding answer-format instruction, and requires the model to return a single XML response containing both <reason> and 
+
+<answer> .
+
+C Detailed Derivations for the Reasoner Objective 
+
+C.1 Non-Degenerate Case 
+
+In the non-degenerate case, the base reward already induces a non-trivial group-wise preference through 
+
+araw 
+
+i = ˜ rrea 
+
+i − 1
+
+G
+
+GX
+
+j=1 
+
+˜rrea 
+
+j , (24) which defines the subsets 
+
+P+ = {i ∈ I : araw 
+
+i > 0}, P− = {i ∈ I : araw 
+
+i < 0}. (25) In this case, the competition bonus is introduced only to refine the relative ordering within each subset; it should not alter the positive/negative partition induced by araw 
+
+i . We therefore verify that the proposed scaling preserves the sign of the base-reward advantage. 
+
+21 Prompt template for Teacher 
+
+You will be given a chest X-ray exam question, the corresponding CXR (chest X-ray) image, a radiology report for the same case, and the official correct answer. Your task 
+
+is to reconstruct a reasonable reasoning process for solving this question. 
+
+**Important requirements: **
+
+- In the written reasoning, you must pretend that you only see the question and the chest X-ray itself. You do *not * see the radiology report, and you do *not * know the 
+
+official answer in advance. 
+
+- The radiology report and the official answer are only for you to use “in the background ”: they help you keep your reasoning medically sound and ensure that your final 
+
+conclusion is consistent with the official answer. 
+
+- Do **not ** mention phrases like “the report says …” , “according to the report …” , “because the correct answer is …” in your reasoning, and do not make it look like you are 
+
+reverse-explaining a known answer. 
+
+- In the reasoning, it is recommended (but not strictly required) to follow a natural sequence such as: 
+
+“inspect the image → describe key findings → combine with the question to analyze → reach a conclusion ”.
+
+The exact wording and structure can be fully free-form; there is no fixed template. 
+
+**Additional notes: **
+
+* Question type: {question_type} 
+
+* The expected answer format for this type is (for your internal alignment only; do not mention it in the reasoning): 
+
+{question_type_desc} 
+
+Question: 
+
+{question} 
+
+Official correct answer (only for aligning your final conclusion; do not quote it in the reasoning text): 
+
+{answer} 
+
+Radiology report for this chest X-ray (only to help you understand the true case; do not explicitly quote or paraphrase it in the reasoning text): 
+
+{report} 
+
+Please write a complete reasoning process as if you were answering the question while reading the film, and output exactly one XML block in the following format: 
+
+```xml 
+
+<response>(write the full reasoning here in continuous natural English, without mentioning the report or the “official answer ”)</response> 
+
+``` 
+
+Your output: Figure 9 Prompt template used for Teacher training. The Teacher receives the exam question, question type, official correct answer, and radiology report, and is required to reconstruct a medically sound reasoning process while writing as if only the image and the question were observed. The output must be a single XML response containing a <response> field. 
+
+For i ∈ P + and i ∈ P −, we define the subset-wise standardized patterns 
+
+p+
+
+i = srea 
+
+i − μrea +
+
+σrea +
+
+, p−
+
+i = srea 
+
+i − μrea 
+
+−
+
+σrea 
+
+−
+
+. (26) We assume that the corresponding within-subset standard deviation is nonzero; when it vanishes, the competition bonus on that subset is set to zero. The competition bonus is 
+
+∆rea 
+
+i =
+
+
+
+ηrea + p+
+
+i , i ∈ P +,ηrea 
+
+− p−
+
+i , i ∈ P −,
+
+0, i / ∈ P + ∪ P −,
+
+(27) and the final advantage is 
+
+afinal 
+
+i = araw 
+
+i + ∆ rea 
+
+i . (28) To preserve the sign induced by the base reward, the scaling coefficients are defined as 
+
+ηrea + = α min 
+
+i∈P +, p +
+
+i <0
+
+araw 
+
+i
+
+−p+
+
+i
+
+, ηrea 
+
+− = α min 
+
+i∈P −, p −
+
+i >0
+
+−araw 
+
+i
+
+p−
+
+i
+
+, (29) where α ∈ (0 , 1) . If the constraining set {i ∈ P + : p+
+
+i < 0} is empty, we set ηrea + = 0 ; similarly, if {i ∈ P − : p−
+
+i > 0}
+
+is empty, we set ηrea 
+
+− = 0 .
+
+22 We now verify that this construction preserves the sign of araw  
+
+> i
+
+.
+
+Positive subset. Let i ∈ P +. Then araw  
+
+> i
+
+> 0. If p+ 
+
+> i
+
+≥ 0, we have 
+
+afinal  
+
+> i
+
+= araw  
+
+> i
+
++ ηrea + p+ 
+
+> i
+
+≥ araw  
+
+> i
+
+> 0, (30) so the sign is preserved automatically. It remains to consider the constraining case p+ 
+
+> i
+
+< 0. Since 
+
+min  
+
+> j∈P +, p +
+> j<0
+
+araw 
+
+> j
+
+−p+
+
+> j
+
+≤ araw 
+
+> i
+
+−p+
+
+> i
+
+, (31) it follows that 
+
+ηrea + = α min  
+
+> j∈P +, p +
+> j<0
+
+araw 
+
+> j
+
+−p+
+
+> j
+
+≤ α araw 
+
+> i
+
+−p+
+
+> i
+
+. (32) Because p+ 
+
+> i
+
+< 0, multiplying both sides by p+ 
+
+> i
+
+reverses the inequality: 
+
+ηrea + p+ 
+
+> i
+
+≥ − αa raw  
+
+> i
+
+. (33) Hence, 
+
+afinal  
+
+> i
+
+= araw  
+
+> i
+
++ ηrea + p+ 
+
+> i
+
+≥ (1 − α)araw  
+
+> i
+
+> 0, (34) where the strict inequality follows from α ∈ (0 , 1) and araw  
+
+> i
+
+> 0.
+
+Negative subset. Let i ∈ P −. Then araw  
+
+> i
+
+< 0. If p− 
+
+> i
+
+≤ 0, we have 
+
+afinal  
+
+> i
+
+= araw  
+
+> i
+
++ ηrea  
+
+> −
+
+p− 
+
+> i
+
+≤ araw  
+
+> i
+
+< 0, (35) so the sign is again preserved automatically. Now consider the constraining case p− 
+
+> i
+
+> 0. Since 
+
+min  
+
+> j∈P −, p −
+> j>0
+
+−araw 
+
+> j
+
+p−
+
+> j
+
+≤ −araw 
+
+> i
+
+p−
+
+> i
+
+, (36) we obtain 
+
+ηrea  
+
+> −
+
+= α min  
+
+> j∈P −, p −
+> j>0
+
+−araw 
+
+> j
+
+p−
+
+> j
+
+≤ α −araw 
+
+> i
+
+p−
+
+> i
+
+. (37) Since p− 
+
+> i
+
+> 0, multiplying by p− 
+
+> i
+
+preserves the inequality: 
+
+ηrea  
+
+> −
+
+p− 
+
+> i
+
+≤ − αa raw  
+
+> i
+
+. (38) Therefore, 
+
+afinal  
+
+> i
+
+= araw  
+
+> i
+
++ ηrea  
+
+> −
+
+p− 
+
+> i
+
+≤ (1 − α)araw  
+
+> i
+
+< 0, (39) again because α ∈ (0 , 1) and araw  
+
+> i
+
+< 0.Combining the two subset analyses, we conclude that the competition bonus refines the within-subset ordering without changing the sign induced by the base reward. In particular, afinal  
+
+> i
+
+> 0 for all i ∈ P +, afinal  
+
+> i
+
+< 0 for all i ∈ P −, and 
+
+afinal  
+
+> i
+
+= 0 for all i / ∈ P + ∪ P −. Thus, the proposed bonus is sign-preserving and cannot alter the positive/negative assignment induced by the base reward. 
+
+> 23
+
+C.2 Degenerate Case 
+
+In the degenerate case, all samples in the group receive the same base reward, so 
+
+araw  
+
+> i
+
+= 0 , ∀i ∈ I . (40) Hence, the base reward induces no non-trivial group-wise preference, and the final advantage must be reconstructed directly from the competition scores. For a candidate threshold τ , we define 
+
+P−(τ ) = {i ∈ I : srea  
+
+> i
+
+≤ τ }, P+(τ ) = {i ∈ I : srea  
+
+> i
+
+> τ }. (41) We consider candidate thresholds drawn from the ordered values of {srea  
+
+> i
+
+}Gi=1 . Among all thresholds that induce non-empty subsets on both sides, we choose the largest feasible τ satisfying 
+
+X 
+
+> i∈P −(τ)
+
+srea  
+
+> i
+
+< γ X 
+
+> i∈P +(τ)
+
+srea  
+
+> i
+
+, (42) where γ > 0 is a hyperparameter. If no feasible threshold exists, we set 
+
+afinal  
+
+> i
+
+= 0 , ∀i ∈ I . (43) We therefore consider only the feasible case, which yields induced subsets P+ and P−.We first globally center the competition scores: 
+
+pi = srea  
+
+> i
+
+− μrea , μrea = 1
+
+G
+
+> G
+
+X
+
+> j=1
+
+srea  
+
+> j
+
+. (44) By construction, GX
+
+> i=1
+
+pi = 0 . (45) To obtain a reconstructed signal that is both zero-mean and sign-consistent with the induced partition, we shift only the positive subset: 
+
+ˆpi =
+
+(pi + λ, i ∈ P +,pi, i ∈ P −. (46) Let 
+
+m = |P +|, n = |P −|, m + n = G. (47) The group mean of {ˆpi}Gi=1 is then 
+
+1
+
+G
+
+> G
+
+X
+
+> i=1
+
+ˆpi = 1
+
+G
+
+> G
+
+X
+
+> i=1
+
+pi + mλ 
+
+!
+
+= mλ G . (48) The final advantage is defined as 
+
+afinal  
+
+> i
+
+= ˆ pi − 1
+
+G
+
+> G
+
+X
+
+> j=1
+
+ˆpj . (49) To ensure consistency with the induced partition, we require 
+
+afinal  
+
+> i
+
+≥ 0, ∀i ∈ P +, (50) and 
+
+afinal  
+
+> i
+
+≤ 0, ∀i ∈ P −. (51) 
+
+> 24
+
+Positive subset constraint. For i ∈ P +,
+
+afinal  
+
+> i
+
+= ˆ pi − 1
+
+G
+
+> G
+
+X
+
+> j=1
+
+ˆpj = pi + λ − mλ G = pi + nG λ. (52) Hence, the non-negativity constraint reduces to 
+
+pi + nG λ ≥ 0 ⇐⇒ λ ≥ − Gn pi. (53) To satisfy this for all i ∈ P +, it is sufficient to require 
+
+λ ≥ − Gn min  
+
+> i∈P +
+
+pi. (54) 
+
+Negative subset constraint. For i ∈ P −,
+
+afinal  
+
+> i
+
+= ˆ pi − 1
+
+G
+
+> G
+
+X
+
+> j=1
+
+ˆpj = pi − mλ G . (55) Hence, the non-positivity constraint reduces to 
+
+pi − mλ G ≤ 0 ⇐⇒ λ ≥ Gm pi. (56) To satisfy this for all i ∈ P −, it is sufficient to require 
+
+λ ≥ Gm max  
+
+> i∈P −
+
+pi. (57) Combining the two subset constraints, the minimum feasible shift is 
+
+λmin = max 
+
+
+
+− G
+
+|P −| min  
+
+> i∈P +
+
+pi, G
+
+|P +| max  
+
+> i∈P −
+
+pi
+
+
+
+, (58) and we set 
+
+λ = max( λmin , 0) . (59) With this choice of λ, the reconstructed final advantage is zero-mean at the group level and sign-consistent with the partition induced by the competition scores. It therefore provides a valid replacement training signal when the original group-level advantage collapses to zero. 
+
+D Qualitative Case Studies 
+
+We provide qualitative examples in Figure 10–12 to compare the reasoning traces generated by RLVR Only , Judge Reward , Frozen Teacher , and T2R-R3 . Across these examples, different supervision signals are associated with visibly different CoT structures. RLVR Only tends to produce answer-oriented rationales with limited intermediate analysis, which is consistent with its lack of explicit CoT-level supervision. Judge Reward improves local fluency and coherence, but the resulting reasoning often remains relatively brief and stops after identifying a few relevant findings. Frozen Teacher further encourages more organized rationales, including explicit summaries of key findings. In contrast, T2R-R3 more consistently follows a complete reasoning pattern: it first analyzes the chest X-ray findings, then summarizes the relevant evidence, evaluates the candidate options when applicable, and finally derives the answer from the accumulated observations. 
+
+> 25
+
+This qualitative pattern is consistent with the training signal provided by T2R. Directly judging a single CoT with an LLM can encourage the model to satisfy the predefined acceptability criteria in the judge prompt (Figure 7), but such supervision may become less informative as the model adapts to these criteria. By contrast, T2R relies on pairwise comparison against reference CoTs produced by a Teacher that is itself improved through self-competition. As the reference CoTs become stronger, the Reasoner continues to receive relative preference signals that favor more grounded, structured, and option-aware reasoning. These examples therefore suggest that comparison-based supervision can improve not only final answer prediction, but also the organization and reliability of the generated CoT. 
+
+E Limitations and Future Work 
+
+T2R inherits several limitations from its reliance on LLM-as-a-Judge supervision. First, the quality of the comparison signal depends on the judge model having sufficient instruction-following ability and reliable reasoning capability. If the judge produces biased or inaccurate comparisons, the Reasoner may be optimized toward suboptimal preferences. Second, T2R introduces additional computational cost. To compute competition scores, the Teacher first generates 
+
+K reference CoTs for each Reasoner output, and an LLM judge then performs pairwise comparisons between the generated CoTs. This requires substantially more inference than standard RLVR or direct reward-based training. In our implementation, we mitigate this overhead by deploying a separate reward-service node and using Ray-based request dispatch, but improving the efficiency of comparison-based training remains an important direction. Another limitation is that our current comparison prompt aggregates multiple criteria into a single overall judgment of which CoT is better. While this design is simple and effective, real-world medical reasoning often involves multiple distinct requirements, such as evidence grounding, answer support, logical consistency, restraint, and task-specific clinical preferences. A promising future direction is therefore to decompose the unified comparison into multiple finer-grained comparison dimensions, each associated with a specific rule or requirement and potentially assigned a different weight. This could make the supervision signal more explicit, controllable, and better aligned with practical clinical needs. Finally, this work applies T2R only to CoT optimization for CXR VQA. However, the underlying idea is more general: comparison-based supervision can in principle be applied to other model outputs, such as solution strategies, planning traces, code, or other structured responses. Extending T2R beyond medical VQA and designing task-specific comparison schemes for broader forms of model output are promising directions for future work. 
+
+F Broader Impacts 
+
+This work studies reinforcement-learning-based reasoning optimization for chest X-ray visual question answering. Its potential positive impact is to improve the reliability and interpretability of medical multimodal models by encouraging more evidence-grounded and coherent reasoning traces. Such techniques may be useful for developing decision-support systems, medical education tools, or research assistants that provide more transparent intermediate reasoning. At the same time, this work also has potential risks. Models trained with T2R may still produce incorrect answers or medically implausible rationales, and LLM-as-a-Judge supervision may introduce biases or failure modes from the judge model. In clinical settings, incorrect or overconfident reasoning could negatively affect decision-making if used without expert oversight. Therefore, the models and methods studied in this paper should not be used as standalone clinical decision systems. Any practical deployment would require careful validation on diverse populations, monitoring for bias and failure cases, privacy-preserving data handling, and use under the supervision of qualified medical professionals. 
+
+> 26
+
+## Co T Examples 
+
+What is the most likely diagnosis 
+
+based on the chest X-ray images? 
+
+A. Rib fracture 
+
+B. Bone lesion 
+
+C. None of the above 
+
+D. Pneumothorax 
+
+Inspecting the chest X-ray image(s), the most critical observation is the complete absence of any abnormal radiopaque (white) or radiolucent (dark) density within the bony 
+
+thoracic structures —specifically, the ribs, clavicles, and vertebrae. There are no fractures, no lucent (dark) areas indicating bone destruction, and no discontinuity or 
+
+separation of any rib margin. All ribs appear intact, with smooth, continuous cortical margins and normal radiopacity throughout their entire length. The costochondral 
+
+junctions (where ribs meet the costal cartilage) are unremarkable —no displacement, separation, or periosteal reaction is visible. This is a defining feature of a "normal" 
+
+chest X-ray: no structural disruption of the bony thorax. 
+
+Key findings: 
+
+- **No rib fractures **: No breakage, no lucent lines, no separated or angulated ribs. Every rib shows a complete, continuous cortical outline. This is inconsistent with 
+
+rib fracture, which would manifest as either a lucent line (gap) along a rib segment or a radiolucent fracture line (e.g., a crack or separation). 
+
+- **No bone lesion **: There is no localized area of increased or decreased opacity (e.g., sclerotic or lytic lesion), no periosteal reaction, no cortical thinning, and no 
+
+bone destruction or abnormal bone formation (e.g., osteolytic or osteoblastic changes). The bone density is uniform throughout the thoracic skeleton. This rules out bone 
+
+lesion, which would show either: 
+
+- A localized radiodense area (sclerosis) or 
+
+- A radiolucent area (lysis) in the bone cortex. 
+
+- **No pneumothorax **: The costophrenic angles (where the diaphragm meets the costal margin) are sharp and well-defined. There is no visible visceral pleural line 
+
+with absence of peripheral lung markings, which is the definitive radiographic sign of pneumothorax. The diaphragm is intact and shows normal contour, with no flattening, 
+
+elevation, or deep sulcus sign. This confirms the absence of pneumothorax. 
+
+Now evaluating the answer choices: 
+
+- **A: Rib fracture ** → Clearly contradicted. Rib fractures produce radiolucent lines along the bone cortex (visible as a break or gap), which are absent here. The ribs 
+
+are uniformly radiopaque with no breaks or separation. Therefore, A is definitively incorrect. 
+
+- **B: Bone lesion ** → Also definitively ruled out. A bone lesion would produce either: 
+
+- A localized radiodense area (sclerosis) or 
+
+- A radiolucent area (lysis) in the cortex. 
+
+Neither is present. The entire thoracic bone architecture is normal in density and continuity. Thus, B is incorrect. 
+
+- **C: None of the above ** → This is the only option that remains consistent with the imaging findings. Since both A and B are directly falsified by the X-ray, and no 
+
+other diagnosis is supported by the image, this is the only logically valid conclusion. The image shows no structural abnormality in the bony thorax, which is precisely what 
+
+“none of the above ” describes. 
+
+- **D: Pneumothorax ** → This is explicitly ruled out by the absence of the radiographic hallmark: **a visible visceral pleural line with absent peripheral lung markings **.
+
+The costophrenic angles are sharp and well-defined, and there is no visible pleural line, no absent peripheral lung markings, no pleural effusion, and no deep sulcus sign. 
+
+Therefore, D is definitively incorrect. 
+
+In summary, all clinical and radiographic criteria point unambiguously to a completely normal thoracic skeletal anatomy. The absence of any radiolucent or radiodense 
+
+changes in the ribs, clavicles, and vertebrae, combined with the absence of a visible pleural line or peripheral loss of lung markings, is incompatible with rib fracture, bone 
+
+lesion, or pneumothorax. Thus, the only possible diagnosis consistent with the X-ray findings is “None of the above. ”
+
+Upon inspection of the chest X-ray images, the radiographic appearance shows a normal chest with no visible signs of a fracture in the ribs. There are no signs of a bone 
+
+lesion, which would be indicated by an abnormality in the bone structure. The lung fields appear clear with no evidence of air in the pleural space, which would be a sign of 
+
+pneumothorax. The image does not show any evidence of a rib fracture, as there are no breaks or deformities in the ribs. Therefore, the most likely diagnosis based on the 
+
+chest X-ray images is that there is no fracture or lesion. 
+
+Inspecting the chest X-ray image(s), there are no visible signs of rib fractures, such as broken or deformed ribs, which would be indicated by fractures or angulation. There 
+
+is no evidence of a pneumothorax, as the lung fields appear clear and there are no signs of air in the pleural space (such as a collapsed lung or a visible shift of the 
+
+mediastinum). The image does not show any abnormal bone density or lesion that would suggest a bone lesion, such as a tumor or osteolytic change. The radiographic 
+
+appearance is consistent with normal anatomy and no pathological findings are present. Therefore, the most likely diagnosis based on the X-ray findings is none of the 
+
+listed conditions. The absence of any structural abnormalities in the ribs, lungs, or pleural space rules out rib fracture, bone lesion, and pneumothorax. This leads to the 
+
+conclusion that the most appropriate answer is "None of the above" because none of the listed conditions are supported by the image findings. 
+
+Key findings from the X-ray: 
+
+- No visible rib fractures: The ribs appear intact with normal spacing and no signs of breakage or displacement. 
+
+- No pneumothorax: The lung fields are clear and the costophrenic angles are sharp, indicating no air in the pleural space. 
+
+- No bone lesion: There is no evidence of a mass, osteolytic changes, or abnormal bone density. 
+
+- Normal anatomical structures: The heart shadow and diaphragm are in normal positions with no abnormal shift. 
+
+Given that none of the listed conditions (A: Rib fracture, B: Bone lesion, D: Pneumothorax) are supported by the radiographic findings, the correct answer is C: None 
+
+of the above. 
+
+Inspecting the chest X-ray images, there are no visible signs of a rib fracture, such as a broken or displaced rib, which would typically show a fracture line or a deformity in 
+
+the bone. There is also no evidence of a pneumothorax, which would be indicated by a visible air collection in the pleural space, which is not apparent in the image. 
+
+Furthermore, there is no visible bone lesion, such as a mass or a focal abnormality in the bone. The image appears to show a normal chest cavity with no signs of air in the 
+
+pleural space or a fracture. The structures of the ribs and the lungs appear intact and are not showing any signs of abnormality. 
+
+RLVR Only 
+
+Judge Reward 
+
+Frozen Teacher 
+
+T2R-R3 Figure 10 Qualitative comparison of CoTs generated by different models. 
+
+27 Co T Examples 
+
+What specific finding is observed in the 
+
+lungs on this chest X-ray image? 
+
+A. Cardiomegaly 
+
+B. Pulmonary consolidation 
+
+C. Pleural effusion 
+
+D. Slight hyperaeration 
+
+Inspecting the chest X-ray image, the most prominent and consistent finding is the **slight increase in lung transparency (hyperaeration) **, specifically visible as a **mild 
+
+increase in radiolucency ** in the lung fields —particularly noticeable in the lower lobes and costophrenic angles. This is best described as “slight hyperaeration, ” which is 
+
+characterized by: 
+
+- **Preserved costophrenic angle sharpness ** (i.e., the angle between the diaphragm and the chest wall is not blunted), which is preserved in the lower zones. 
+
+- **Increased radiolucency ** (lower density) in the lung fields, especially in the lower lung zones, without blunting of the costophrenic margins or the presence of 
+
+pleural fluid levels. 
+
+- **No blunting of costophrenic or costodiaphragmatic angles **, which would be expected in pleural effusion, while consolidation would more typically appear as focal 
+
+or lobar increased opacity within the lung field. 
+
+Now, evaluating the choices: 
+
+- **A: Cardiomegaly ** – This would manifest as an enlarged cardiac silhouette, particularly an increased cardiothoracic ratio. The cardiac borders are **not enlarged **
+
+or displaced; the cardiothoracic ratio is **within normal limits **. No cardiac enlargement is seen. Thus, A is ruled out. 
+
+- **B: Pulmonary consolidation ** – This would present as **focal or lobar increased opacity in the lung parenchyma **, often with **loss of normal radiolucency ** and 
+
+sometimes with **air bronchograms **. The image clearly shows **no focal air-space opacity **; instead, the lung fields remain relatively radiolucent and the costophrenic 
+
+margins remain sharp and well-defined. This is a key distinguishing feature: **no focal opacity = not consolidation **. Therefore, B is incorrect. 
+
+- **C: Pleural effusion ** – This would cause **blunting of the costophrenic or costodiaphragmatic angles ** (typically at least one is blunted), often with **loss of 
+
+sharpness ** of the costophrenic margins or a meniscus-like basal opacity. The image shows **no blunting **—the costophrenic angles remain clearly defined and sharp, 
+
+and there is no pleural fluid level or basal opacity. Therefore, C is ruled out. 
+
+- **D: Slight hyperaeration ** – This exactly matches the observed radiographic pattern: **increased lung transparency (radiolucency) ** in the lower lung zones, with 
+
+**preserved costophrenic angles ** and **no blunting **. This is consistent with slight hyperaeration: the lung parenchyma is aerated but slightly more radiolucent than 
+
+normal, with no structural distortion. All other features (e.g., preserved costophrenic angles, no fluid levels, no blunting) are consistent with this diagnosis. 
+
+The entire radiographic pattern —**preserved costophrenic angles, increased radiolucency in lower lung zones, and no blunting **—is most consistent with **slight 
+
+hyperaeration **. None of the other choices produce a radiographic pattern that matches the image as well. The other choices (cardiomegaly, consolidation, pleural effusion) 
+
+are clinically and radiographically not favored by the findings shown. 
+
+Therefore, the correct and best-supported interpretation of the image is **D: Slight hyperaeration **.
+
+Upon inspection of the chest X-ray image, the lung fields appear clear and well-defined. There are no signs of abnormal shadows, masses, or fluid accumulation in the 
+
+pleural space. The lung markings are visible and appear normal, without evidence of consolidation or opacification. The heart size appears within normal limits, and there is 
+
+no obvious enlargement. The diaphragm is visible and appears to be in a normal position. The overall lung appearance is consistent with normal aerated lung tissue. There 
+
+is no evidence of hyperinflation, which would typically be seen in conditions like COPD or asthma. The image does not show signs of pleural effusion, such as a blunting of 
+
+the costophrenic angles or a fluid-filled space. The presence of a slight hyperaeration is not indicated by the image, as there are no areas of increased opacity or darkening 
+
+in the lung fields. The image does not show any signs of cardiomegaly, which would be indicated by an enlarged heart shadow. Therefore, the most likely finding is a 
+
+normal appearance of the lungs with no specific abnormalities. 
+
+Inspecting the chest X-ray image, the lung fields appear to have increased radiolucency, particularly in the lower lobes, which is indicative of a relatively normal or slightly 
+
+increased air content in the lungs. There is no evidence of consolidation (which would show as a dense, white area), pleural effusion (which would appear as a blunting of 
+
+the costophrenic angle or fluid in the pleural space), or significant cardiomegaly (which would be visible as an enlarged heart silhouette). The most prominent observation is 
+
+the slight increase in the air content of the lungs, which is consistent with a "slight hyperaeration" – a term used to describe a mild increase in lung volume or air content, 
+
+typically seen in the absence of significant disease. 
+
+Key findings on the image include: 
+
+- The lung fields show a subtle increase in radiolucency, especially in the lower zones, which is characteristic of slight hyperaeration. 
+
+- There is no evidence of a dense opacity, which would suggest consolidation. 
+
+- The heart size is within normal limits, with no apparent enlargement (i.e., no cardiomegaly). 
+
+- The costophrenic angles are sharp and clear, indicating no pleural effusion. 
+
+These findings are consistent with a "slight hyperaeration," which is a term used to describe a mild increase in lung volume or air content, typically seen in the 
+
+absence of significant disease. This is the only finding that is directly and clearly observed on the chest X-ray image and aligns with the question. 
+
+When analyzing the options: 
+
+- A: Cardiomegaly is not present; the heart appears normal in size. 
+
+- B: Pulmonary consolidation is not present; there is no dense, white area in the lung fields. 
+
+- C: Pleural effusion is not present; the costophrenic angles are sharp and clear. 
+
+- D: Slight hyperaeration matches the observed radiolucency in the lungs, particularly in the lower lobes, and is the most accurate description of the finding. 
+
+Therefore, the specific finding observed in the lungs is "slight hyperaeration." 
+
+Inspecting the chest X-ray image, the lungs appear to have a relatively clear view with no obvious signs of consolidation, effusion, or significant mass. The lung fields are 
+
+visible with no apparent dark areas that would suggest pulmonary consolidation. The diaphragm is in its normal position, and the heart appears to be within normal limits. 
+
+There is a subtle appearance of increased lung transparency, particularly in the lower and upper lung zones, which could be indicative of slight hyperaeration. This is a 
+
+common finding in some patients with mild respiratory conditions, such as those with asthma or other chronic conditions, but it is not a severe condition. The 
+
+bronchovascular markings are visible and do not show signs of significant narrowing or thickening. There is no evidence of pleural effusion, which would typically present 
+
+as a fluid level or blunting of the costophrenic angles. The heart is not enlarged, and there are no signs of cardiomegaly. Therefore, the most likely finding is slight 
+
+hyperaeration. 
+
+RLVR Only 
+
+Judge Reward 
+
+Frozen Teacher 
+
+T2R-R3 Figure 11 Qualitative comparison of CoTs generated by different models. 
+
+28 Co T Examples 
+
+Given the presence of a right upper lobe 
+
+mass and the clinical history, what is the 
+
+most likely diagnosis? 
+
+A. Primary lung cancer 
+
+B. Pneumonia 
+
+C. Pulmonary embolism 
+
+D. Tuberculosis 
+
+Inspecting the chest X-ray image, the most prominent finding is a well-defined, radiopaque mass located in the right upper lobe (RUL). Key radiographic characteristics 
+
+include: 
+
+1. **Localized density **: The mass is homogenous and uniformly dense (appearing white) with no air bronchograms or cavitation —this rules out pneumonic (air-filled) 
+
+or embolic (gas-filled) lesions. 
+
+2. **Well-circumscribed contour **: The mass has a sharp, defined border against the adjacent lung parenchyma, a hallmark of primary malignancy rather than 
+
+infectious or inflammatory processes. 
+
+3. **No surrounding vascular or pleural changes **: There is no blunting of the costophrenic angle, no pleural effusion, no mediastinal shift, and no interstitial 
+
+thickening —features absent in pneumonia (which typically shows bronchial air bronchograms and consolidation), pulmonary embolism (which shows vascular calcification 
+
+or ground-glass opacities), or tuberculosis (which often presents with cavitation, hilar lymphadenopathy, and coarse reticular opacities). 
+
+4. **Absence of cavitation or cavitation-like structure **: The mass is solid and non-cavitating —consistent with a primary neoplasm, not a tuberculous lesion that may 
+
+evolve into cavitation. 
+
+Now analyzing the clinical history (though not fully described in the prompt), the presence of a **right upper lobe mass ** in a patient with no signs of systemic infection 
+
+(no fever, no pleural effusion, no lymphadenopathy), and **no evidence of embolic signs ** (e.g., wedge-shaped opacities, vascular calcifications), strongly supports a 
+
+**primary lung tumor **.
+
+Comparing this to the answer choices: 
+
+- **A: Primary lung cancer ** → perfectly matches all radiographic features: well-defined, solid, non-cavitating mass in RUL with no surrounding inflammatory or 
+
+vascular signs. This is the most consistent diagnosis with the imaging findings. 
+
+- **B: Pneumonia ** → would show consolidation with bronchial air bronchograms (visible as hazy opacities extending into bronchi), and typically bilateral or multifocal. 
+
+The absence of these features, especially the lack of air bronchograms and clear lung field margins, rules out pneumonia. 
+
+- **C: Pulmonary embolism ** → would show vascular calcifications (e.g., in the pulmonary arteries), wedge-shaped opacities, or ground-glass opacities with central air 
+
+bronchograms. None of these are present; the image shows only a solid, non-vascular mass. 
+
+- **D: Tuberculosis ** → would typically show cavitation (even if partial), hilar lymphadenopathy (especially in the upper lobes), and coarse reticular opacities with 
+
+possible pleural thickening. The absence of cavitation, lymphadenopathy, and reticulonodular opacities makes this diagnosis entirely inconsistent with the X-ray. 
+
+Therefore, the radiographic evidence —specifically the **solid, well-circumscribed, non-cavitating mass in the right upper lobe with no associated inflammatory or 
+
+vascular changes **—is **uniquely consistent with primary lung cancer **. All other options are clinically and radiologically infeasible given the absence of supporting 
+
+features. The only diagnosis that fully accounts for all observed findings is primary lung cancer. 
+
+The chest X-ray image shows a distinct opacity in the right upper lobe, which is consistent with a mass lesion. The presence of a mass in the right upper lobe is a key 
+
+finding that would suggest a primary lung tumor. The lesion appears as a well-defined, dense area with a clear boundary, which is typical of a primary lung cancer. The 
+
+clinical history, although not fully detailed, is likely to include symptoms such as cough, chest pain, or weight loss, which are common in lung cancer. Other options such as 
+
+pneumonia or tuberculosis typically present with different radiographic features (e.g., consolidation or infiltrate, or specific patterns on imaging), and pulmonary embolism is 
+
+typically associated with signs of vascular obstruction, which are not visible here. Therefore, the most likely diagnosis is primary lung cancer. 
+
+Inspecting the chest X-ray image, the most notable finding is a well-defined mass in the right upper lobe of the lung. This mass appears as a rounded opacity without 
+
+evidence of surrounding consolidation, cavitation, or pleural effusion. The mass is not associated with other typical signs of pneumonia (such as consolidation or interstitial 
+
+opacities), nor does it show the typical features of a pulmonary embolism (e.g., pulmonary artery opacities, or signs of right heart strain). There is no evidence of active 
+
+tuberculosis (e.g., cavitation, pleural thickening, or specific radiographic signs like hilar lymphadenopathy). The radiographic appearance is consistent with a primary lung 
+
+tumor, which is most commonly a primary lung cancer. The mass is not associated with any signs of infection or inflammation. The clinical history, which includes a known 
+
+diagnosis of lung cancer, further supports the diagnosis of primary lung cancer. The imaging findings are most consistent with a primary lung tumor, which is the most likely 
+
+diagnosis given the presence of a right upper lobe mass and the absence of other pathologies. 
+
+Key findings: 
+
+- A clearly defined, solitary mass in the right upper lobe. 
+
+- No signs of secondary processes (e.g., pneumonia, embolism, or TB). 
+
+- The mass is not associated with pleural effusion or bronchial obstruction. 
+
+- No evidence of cavitation, which is typical of tuberculosis. 
+
+- The appearance is consistent with a primary neoplasm rather than a secondary process. 
+
+The most likely diagnosis is primary lung cancer because the imaging features —specifically a solitary mass in the right upper lobe —are highly consistent with a 
+
+primary tumor. Other options are less likely: 
+
+- Pneumonia: typically shows consolidation or infiltrates, which are not seen here. 
+
+- Pulmonary embolism: would show signs of vascular obstruction, such as pulmonary artery opacities or signs of right heart strain, which are absent. 
+
+- Tuberculosis: shows specific radiographic features such as cavitation, pleural thickening, and hilar lymphadenopathy, which are not present. 
+
+Therefore, the most likely diagnosis is primary lung cancer. 
+
+Inspecting the chest X-ray image, there is a visible mass in the right upper lobe. This finding is significant because it is a key diagnostic feature. The presence of a mass in 
+
+the right upper lobe is not consistent with typical presentations of pneumonia or pulmonary embolism, which are usually characterized by different patterns such as 
+
+consolidation or signs of vascular occlusion, respectively. Tuberculosis, while it can present with a mass, typically shows more granulomatous changes and often has a 
+
+history of chronic infection and exposure to mycobacteria. However, the clinical history is important in differentiating between these conditions. The fact that the mass is 
+
+located in the right upper lobe suggests a possible malignancy, as this region is a common site for primary lung cancers. The appearance of the mass is not consistent with 
+
+the typical features of infection or embolism. Therefore, given the clinical context and the imaging findings, the most likely diagnosis is a primary lung cancer. 
+
+RLVR Only 
+
+Judge Reward 
+
+Frozen Teacher 
+
+T2R-R3 Figure 12 Qualitative comparison of CoTs generated by different models. 
+
+29
