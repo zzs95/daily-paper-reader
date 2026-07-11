@@ -1,0 +1,272 @@
+Title: GRCD: Grounded Region Change Detection for Multi-Finding Chest X-Ray Pairs
+
+URL Source: https://arxiv.org/pdf/2607.02719
+
+Published Time: Tue, 07 Jul 2026 00:09:21 GMT
+
+Number of Pages: 17
+
+Markdown Content:
+> arXiv:2607.02719v1 [cs.CV] 2 Jul 2026
+
+ARANYA, NAJAFIRAD, DESAI: GRCD 1
+
+# GRCD: Grounded Region Change Detection for Multi-Finding Chest X-Ray Pairs 
+
+OFM Riaz Rahman Aranya 
+
+ofmriazrahman.aranya@utsa.edu 
+
+Peyman Najafirad 
+
+peyman.najafirad@utsa.edu 
+
+Kevin Desai 
+
+kevin.desai@utsa.edu 
+
+Department of Computer Science The University of Texas at San Antonio San Antonio, Texas, USA 
+
+Abstract 
+
+Radiologists routinely compare current and prior chest X-rays to track disease pro-gression, producing follow-up reports that describe multiple findings, each localised to an anatomical region and annotated with a temporal change status. Existing automated methods either generate reports from a single image without modelling temporal con-text, or incorporate temporal information but do not ground their outputs spatially. The few approaches that combine temporal reasoning with spatial grounding are restricted to single-finding descriptions, leaving multi-finding reports with mixed change direc-tions unaddressed. We present GRCD, a framework for grounded report generation from chest X-ray pairs in the multi-finding setting. We first construct a rigorously cleaned dataset of temporal chest X-ray pairs by identifying and correcting two systematic la-belling errors in the source annotations. We then introduce a Region-Guided Change Token module that encodes per-region temporal change across anatomical structures and injects this signal into a language model through a dual-pathway strategy combining prepended spatial tokens with gated cross-attention. On a multi-finding test set, GRCD outperforms existing baselines on text generation and clinical accuracy metrics, with gains in change detection. Ablation studies confirm that the dual-pathway design out-performs either integration strategy in isolation on text and clinical metrics, and that region-level change encoding is necessary for multi-finding generation. Code is avail-able at https://github.com/UTSA-VIRLab/GRCD 
+
+# 1 Introduction 
+
+Chest radiography is the most frequently performed diagnostic imaging examination worldwide. In routine clinical practice, radiologists do not interpret chest X-rays (CXRs) in isolation; they compare each new study against one or more prior images from the same patient to assess disease progression, treatment response, or post-procedural status. The re-sulting follow-up report describes multiple findings, each localised to an anatomical region and annotated with a temporal change status such as worsened , improved , or stable . Produc-ing these reports is time-consuming and cognitively demanding, and the growing volume of imaging studies has made automated decision-support tools increasingly desirable. Existing work on automated CXR report generation falls into three groups, each address-ing part of this problem but not all of it. Single-image methods [8, 13, 15, 20] generate fluent 
+
+© 2026. The copyright of this document resides with its authors. It may be distributed unchanged freely in print or electronic forms. 2 ARANYA, NAJAFIRAD, DESAI: GRCD 
+
+Figure 1: GRCD (Ours) generates structured multi-finding reports with distinct change labels (worsened, improved, stable) and grounded bounding boxes, while TRACE [2] collapses to a single repeated label across all regions. reports but cannot describe how findings have changed relative to a prior study. Temporal methods [16, 23, 25, 28] compare current and prior images but do not ground their outputs spatially. Grounded methods [5, 7, 24] localise findings with bounding boxes but operate on single time points. TRACE [2] combines temporal reasoning with spatial grounding but is restricted to single-finding descriptions, whereas real follow-up reports contain multiple findings with mixed change directions. The multi-finding setting introduces challenges absent from single-finding generation: the model must track change across many anatomical regions simultaneously, resolve over-lapping bounding boxes, and maintain clinical coherence across a variable number of output sentences. We show empirically that a model without explicit region-level encoding col-lapses into repetitive output when faced with this task. As illustrated in Fig. 1, TRACE produces only a single repeated finding type, while our proposed GRCD correctly identifies multiple change types with distinct grounded regions within the same study. In this paper, we present GRCD, a framework for grounded temporal report generation that handles the clinically realistic multi-finding setting. Our contributions are: • The first model to generate multi-finding temporal reports with per-finding spatial grounding and change labels. • A three-tier data cleaning pipeline that identifies and corrects two systematic errors in Chest ImaGenome temporal pairs, yielding a 40,250-pair benchmark. • A Region-Guided Change Token (RGCT) module with dual-pathway integration that we show is necessary for multi-finding generation. 
+
+# 2 Related Work 
+
+Radiology report generation. Early work framed the task as image captioning, using CNN encoders paired with RNN or Transformer decoders [8]. The adoption of large vision-language models has since improved both fluency and clinical accuracy. CXR-LLaVA [13] and RaDialog [20] fine-tune the LLaVA architecture for chest radiograph interpretation, with RaDialog adding a structured pathology module for interactive report editing. CheXagent [9] scales up to 8B parameters and trains across 28 CXR-specific tasks including report gener-ation, visual question answering, and disease classification. Uni-Med [30] takes a multi-task approach with a shared architecture that handles six medical tasks through connector ARANYA, NAJAFIRAD, DESAI: GRCD 3
+
+mixture-of-experts. LLM-RG4 [26] accepts diverse input configurations including multi-view and longitudinal images through adaptive token fusion. While these methods produce increasingly fluent reports, none of them explicitly model how findings change between a prior and current study. 
+
+Temporal CXR analysis. In clinical practice, radiologists compare the current study with prior images, yet most generation methods condition on only a single image. BioViL-T [4] introduced a CNN-Transformer hybrid pre-trained with a temporal contrastive objective that captures progression patterns, though it does not generate full reports. Among generation methods, HERGen [25] integrates up to five prior studies through a group causal transformer with curriculum learning. TiBiX [21] explores bidirectional generation, producing both re-ports from image pairs and synthetic images from reports, using temporal tokens to encode visit intervals. MLRG [16] applies multi-view contrastive learning with a tokenised absence encoding for missing priors. DDaTR [23] captures temporal differences through dynamic feature alignment and difference-aware residual modules. CXRMate [18] takes a simpler approach, conditioning generation on the prior study’s report as a prompt. Libra [28] adds a temporal alignment connector to a multimodal LLM for paired-image reasoning. All of these methods produce free-text reports without spatial grounding. TRACE [2] is the only prior work to combine temporal reasoning with bounding-box grounding, but it handles only one finding per sample, whereas clinical reports routinely contain multiple co-occurring findings. 
+
+Region-aware and grounded generation. Grounding each finding in the image provides spatial explainability and allows radiologists to verify model outputs directly. Tanida et al. [24] detect anatomical regions with Faster R-CNN and generate per-region sentences us-ing a fine-tuned GPT-2. ChEX [17] supports interactive use, accepting textual prompts or user-drawn bounding boxes to generate region-specific descriptions. MedVersa [29] handles detection, segmentation, and grounded report generation within a single foundation model. MAIRA-2 [5] generates inline bounding-box coordinates for each finding and proposes Rad-Fact, an LLM-based framework for evaluating grounded factuality. PadChest-GR [7] con-tributes a bilingual dataset with radiologist-drawn bounding boxes for training and evalua-tion. These grounded methods all operate on a single time point and do not capture interval change. Our RGCT module takes a different approach: it uses the fixed anatomical vo-cabulary of Chest ImaGenome [27] to pool region-level features from a pre-trained temporal encoder, giving the language model a per-region change signal alongside spatial coordinates. 
+
+# 3 Dataset 
+
+We construct our dataset from MIMIC-CXR v2.1.0 [12] and the Chest ImaGenome v1.0 silver dataset [27]. We use the same sources and the same official Chest ImaGenome patient-level splits as TRACE [2], but address two problems with TRACE’s pair-construction pipeline: (1) AP retakes from a single exam are paired as if they were a prior/current compar-ison because they share the same StudyOrder index, and (2) Chest ImaGenome’s NLP-derived comparison cues fabricate NEW or RESOLVED events whenever a persistent finding is simply omitted from a follow-up report. The following subsections describe how we con-struct temporal pairs, identify two systematic errors in the standard pipeline, and detail the cleaning procedure that produces the final benchmark. 
+
+3.1 From Scene Graphs to Temporal Pairs 
+
+For each patient, Chest ImaGenome provides scene graphs with a StudyOrder index encoding the chronological order of their studies. Each patient’s studies are sorted by this 4 ARANYA, NAJAFIRAD, DESAI: GRCD 
+
+index, and a temporal pair (Ip, Ic) is formed from every adjacent pair of studies, so a patient with n studies contributes n − 1 pairs. Summed over the 63,945 patients with at least two studies, this construction produces a naïve set of 179,365 pairs. This is the construction used by TRACE [2] and, to our knowledge, by other Chest ImaGenome-based temporal bench-marks. Figure 2 summarizes the cleaning pipeline: same-study removal, Tier-3 filtering, and patient-split assignment. The remaining subsections detail each stage. 
+
+Figure 2: Dataset construction pipeline. (a) Pair-level filtering: 243,310 scene graphs from Chest ImaGenome are paired into 179,365 temporal pairs, then filtered by removing same-study duplicates ( −25,175), pairs containing any Tier-3 finding ( −112,824), and pairs out-side the official MIMIC-CXR patient splits ( −1,116), yielding 40,250 pairs (28,155 train / 4,128 val / 7,967 test). (b) Finding-level tier composition across findings in the 154,190 unique pairs (594,661 findings; 3.9 findings per pair on average): Tier 1 findings (176,489; 29.7%) have direct NLP comparison cues, Tier 2a (95,330; 16.0%) are rescued by keyword matching, Tier 2b (57,409; 9.7%) are rescued by temporal interpolation, and Tier 3 (265,433; 44.6%) lack evidence and trigger pair removal. A pair is removed if it contains any Tier-3 finding, so the 44.6% finding-level Tier-3 rate translates to 73.2% of pairs being dropped. 
+
+3.2 Issue 1: Same-Study AP Retakes 
+
+10.8% of Chest ImaGenome studies contain two or more images, all of which are AP retake views (the radiographer repeated the exposure for quality, not a second exam). These duplicates share a StudyOrder value, and StudyOrder -based pairing has no way to tell them apart from a real prior/current pair. When such a duplicate lands in the middle of a patient’s sequence, the naïve pair construction produces a “temporal” pair whose two images come from the same exam, the same minute, and the same report. 25,175 pairs, or 14.0% of the naïve set, are of this form. A concrete example: subject p10934092 , study s54010992 , two AP DICOMs taken at the same timestamp (Figure 3). Both images share one report, which describes a Dobb-hoff tube placement and makes no comparison statement at all. A model trained on this pair cannot learn anything useful, because the two scene graphs are identical up to patient posi-tioning. We filter all such pairs with a one-line check in the pairing loop: 
+
+prior_sg.study_id ̸ = curr_sg.study_id .
+
+3.3 Issue 2: Silent NLP Absence, and the Three-Tier Fix 
+
+Chest ImaGenome attaches NLP-extracted comparison cues to scene-graph findings, tag-ging them as worsened , improved , or no change . Any pipeline that relies solely on these cues (including TRACE [2]) is implicitly restricted to those three labels. A finding that appears or disappears from a patient’s scene graphs without a cue is silently dropped. We find that 77% of raw NEW/RESOLVED transitions in Chest ImaGenome are of this silent kind (computed as the fraction of all finding-level NEW/RESOLVED transitions that lack any attached com-parison cue in the source scene graph). 94,117 per-patient gaps exhibit the resulting flicker, ARANYA, NAJAFIRAD, DESAI: GRCD 5
+
+Figure 3: A same-study AP retake misidentified as a temporal pair. Both images be-long to a single exam (subject p10934092 , study s54010992 ) and share one radi-ology report. Such pairs carry no temporal information and are removed by requiring 
+
+prior_study_id ̸ = current_study_id , eliminating 25,175 pairs (14.0%). even for physically irreversible findings: the clavicle-fracture gap rate is 62.4%, the rib-fracture rate 58.7%, and the spinal-fracture rate 50.5%. Our cleaning pipeline must handle 
+
+new and resolved transitions, so we cannot rely on the cue-only filter. We classify every finding in every pair into one of three tiers (Figure 4): 
+
+Tier 1 (confidence 1.0): a Chest ImaGenome comparison cue is attached to the finding. The 
+
+Figure 4: One real example per confidence tier. Each row shows the temporal CXR pair (Study 1 and Study 2), the finding and its textual evidence, and the pipeline’s label decision. 
+
+Tier 1 : an explicit NLP comparison cue is attached to the finding. Tier 2a : the cue is missing, but the keyword resolved in the current report recovers the label. Tier 2b :the cue is missing and no keyword is found, but the finding is present in both the preceding (Study 1) and following (Study 3) exams with no negation in between, so the gap is relabeled as persistent by temporal interpolation. Tier 3 : no cue, no keyword, and no successful bracketing; the finding is dropped from supervision. 6 ARANYA, NAJAFIRAD, DESAI: GRCD 
+
+cue directly supplies the label. 
+
+Tier 2 (confidence 0.7–0.85): the cue is missing, but we recover the label from textual evidence. Tier 2a uses keywords ( new , resolved , developed ) in the current report or explicit negation in the prior. Tier 2b uses temporal interpolation: if a finding is present before the gap and after the gap with no negation in the middle, the middle must be a silent miss, and the finding is relabeled as persistent. 
+
+Tier 3 (confidence ≤ 0.5): a finding appears or disappears with no textual evidence in either report. We drop these. Pairs in which every finding is Tier 1 or Tier 2 are kept (41,366 pairs, 26.8% of the post-same-study pool). The remaining 112,824 pairs contain at least one unverified Tier-3 finding and are dropped. We validate this decision in Section 6: adding the rejected pairs back to training as weakly-supervised data degrades NLG metrics by up to 15.6% on the clean test set. 
+
+3.4 Structured Output Format 
+
+After cleaning, each pair is annotated with a structured report consisting of two sections: findings visible in the prior image and findings in the current image, each tagged with a re-gion name, a bounding box, and (for the current section) one of three change classes (stable, worsening, or improvement). Figure 5 shows a real example from our test set. 
+
+Figure 5: A real multi-finding test pair (subject p13613806 ) that exercises every mecha-nism of the cleaning pipeline: three different output classes (worsening, improving, stable), three of the six underlying change labels (new, resolved, persistent), and three of the four confidence tiers (Tier 1 direct cue, Tier 2a keyword, Tier 2b interpolation). Bounding boxes on Study 2 are color-coded by finding. Boxes are normalized to [0, 1]; for new findings the box is taken from the current image, for resolved from the prior, otherwise from the current with prior as fallback. 
+
+3.5 Dataset Statistics and Audit 
+
+Of the 41,366 clean pairs, we apply the official Chest ImaGenome patient-level splits and remove 1,116 pairs from patients not in any split or with missing images, yielding 40,250 pairs partitioned into 28,155 training, 4,128 validation, and 7,967 test pairs, covering 41 ARANYA, NAJAFIRAD, DESAI: GRCD 7
+
+Figure 6: Overview of the GRCD architecture. A prior and current CXR pair are encoded by a frozen BioViL-T encoder into spatial feature maps. The RGCT module crops 25 anatom-ical regions from both feature maps, compares them across time, and produces 25 change tokens. Six tokens corresponding to key anatomical regions (lungs, heart, mediastinum, costophrenic angles) are prepended to the LLM input, while all 25 are injected via gated cross-attention at every fourth decoder layer. The LLM also receives 392 projected visual tokens from BioViL-T. The model decodes a structured report with inline bounding boxes grounding each finding to a region in the current image. distinct pathology types. The cleaning pipeline classifies findings into six underlying change types (stable, persistent, worsened, improved, new, resolved) to determine label reliability. For generation, these map to three output classes: stable (stable or persistent), worsening 
+
+(worsened or new), and improvement (improved or resolved). Table 1 gives the per-class finding counts across splits. Table 1: Per-class finding counts across train, validation, and test splits.                     
+
+> Split Stable Worsening Improvement Total Train (28,155 pairs) 68,955 30,733 35,711 135,399 Val (4,128 pairs) 9,913 4,248 5,455 19,616 Test (7,967 pairs) 19,594 8,353 9,793 37,740 Total (40,250 pairs) 98,462 43,334 50,959 192,755
+
+We validate the final splits with an automated audit that checks for same-study and same-image leaks, bounding-box range violations, duplicate finding entries, and misplaced tem-poral labels ( e.g . new findings in the prior section). All checks pass on all 40,250 samples. Patient-level partitioning is inherited from the official Chest ImaGenome splits, ensuring no patient appears in more than one subset. 
+
+# 4 Method 
+
+Figure 6 gives an overview of the GRCD architecture. The model receives a prior CXR 
+
+Ip and a current CXR Ic along with 25 anatomical bounding boxes from Chest ImaGenome for each image, and is trained to generate the structured output format defined in Section 3. The pipeline has three components: (i) a frozen BioViL-T [4] temporal vision encoder, (ii) a 
+
+Region-Guided Change Token (RGCT) module, and (iii) an autoregressive LLM decoder. The following subsections describe each component and the training procedure in detail. 
+
+4.1 Task Formulation 
+
+For each pair we form an input sequence [Trgct ; Vp; Vc; Tprompt ], where Vp, Vc ∈ R196 ×d
+
+(14 ×14 spatial grid) are patch tokens projected from the prior image and the temporally-8 ARANYA, NAJAFIRAD, DESAI: GRCD 
+
+fused current image, Trgct ∈ R6×d are six prepended change tokens (Section 4.3), and d=4096 is the LLM hidden size. The model is trained autoregressively on the structured target; the box delimiters <box> , commas, and digit tokens are treated as ordinary text and decoded by the LLM head. 
+
+4.2 Region-Guided Change Tokens (RGCT) 
+
+BioViL-T is a temporal vision encoder that takes both images simultaneously, so its output for the current image already captures what changed from the prior. Concretely, BioViL-T encodes (Ic, Ip) jointly into a feature map Fc ∈ R512 ×14 ×14 and encodes Ip alone into Fp of the same shape. For each of R=25 anatomical regions with normalized bounding box br, we crop a region feature by bilinear sampling on a 2 ×2 grid inside br and averaging: 
+
+fr(F) = 14
+
+> 2
+
+# ∑ 
+
+> i,j=1
+
+GridSample  F, br
+
+
+
+> i j
+
+. (1) We then concatenate the prior, current, and difference features for each region: 
+
+xr =  fr(Fp); fr(Fc); fr(Fc)−fr(Fp)  ∈ R1536 . (2) The 25 region descriptors pass through an inter-region self-attention block (8 heads) so that information can flow across regions (e.g., a worsening left-lung opacity can inform the right-lung token). We denote the refined descriptors as ˆ xr. Each is then projected to the LLM hidden space and combined with a learnable embedding that identifies which region it rep-resents: 
+
+tr = MLP (ˆxr) + er, er ∈ Rd . (3) Three auxiliary heads also operate on ˆ xr: (i) a change classifier that predicts a multi-hot label over {improved, worsened, stable} for each region, (ii) a binary finding detector that predicts whether each region carries an active finding and also gates the cross-attention keys and values (Section 4.3), and (iii) a grounding head that regresses a normalized [0, 1]4 bounding box per region. All three provide auxiliary supervision during training (Section 4.4). 
+
+4.3 Dual-Pathway Integration 
+
+The 25 change tokens reach the LLM through two complementary pathways. 
+
+Pathway A selects the six tokens corresponding to the six key anatomical regions P =
+
+{right lung , left lung , cardiac silhouette , mediastinum , left costophrenic , right costophrenic }
+
+and prepends them to the LLM input sequence. Because these tokens participate in the full self-attention of every decoder layer, they give the model a direct, coarse-grained spatial signal that is important for grounding accuracy (Section 6). 
+
+Pathway B inserts a Flamingo-style [1] gated cross-attention block at every fourth de-coder layer (8 blocks across 32 layers, at indices {3, 7, . . . , 31 }). Each block normalizes the hidden states h, attends with 8 heads to the full 25-token bank T ∈ R25 ×d scaled by the finding-detector probabilities σ (d), and adds the result back through a tanh-gated residual: 
+
+h ← h + tanh (γ)Wo Attn (Wqh, Wk(T⊙σ (d)) , Wv(T⊙σ (d))) , (4) where γ is a learnable scalar initialized to zero so the block has no effect at the start of training, and Wq,Wk,Wv use a 256-dimensional bottleneck to keep the parameter count low. The two pathways are complementary: cross-attention lets every decoder layer access all 25 regions, while the six prepended tokens provide a persistent spatial anchor at the input ARANYA, NAJAFIRAD, DESAI: GRCD 9
+
+boundary. The ablation in Section 6 shows that removing either pathway hurts performance: dropping the prepended tokens reduces grounding accuracy, and dropping cross-attention reduces text quality. 
+
+4.4 Training 
+
+We initialize the vision projector, RGCT encoder, and LoRA adapters from a cross-attention-only variant trained on the same 28,155 pairs (Section 6), then fine-tune for 5 epochs. LoRA rank is 128 ( α=256, dropout 0 .05), applied to all linear layers of the LLM (Vicuna-7B-v1.5 [10]); the vision tower stays frozen throughout. We use AdamW with bf16 mixed precision, weight decay 0, gradient clipping at 1 .0, and a cosine learning-rate sched-ule with 3% warm-up. We assign separate learning rates to each parameter group: 2 .5×10 −4
+
+for the LoRA adapters, 1 ×10 −4 for the RGCT encoder and the cross-attention blocks, and 2×10 −5 for the vision-language projector. The per-device batch size is 32 with no gradient accumulation, giving an effective global batch size of 128. The total loss is the sum of the autoregressive language-modeling loss and three auxiliary terms: (i) a focal BCE loss for the change classifier (focusing parameter γ f =2.0, weight 0.3), masked by per-label confidence so that only Tier-1 and high-confidence Tier-2 labels contribute gradients; (ii) a focal BCE loss for the finding detector (weight 0 .5); and (iii) a CIoU loss for the grounding head (weight 0 .1). All three auxiliary terms drop well below the language-modeling loss within the first epoch. 
+
+# 5 Experiments 
+
+5.1 Setup and Metrics 
+
+We evaluate on the 7,967 test pairs from the cleaned benchmark described in Section 3. Each test sample contains on average 4.7 findings across multiple regions (higher than the 3.9 pre-cleaning average in Figure 2 because Tier-3 filtering preferentially removes pairs with fewer findings), and 31% of samples contain findings with different change labels within the same study. We generate outputs using greedy decoding and parse the structured text to extract findings, change labels, regions, and bounding boxes. Inline <box> coordinates are stripped before computing clinical metrics. All GRCD results are reported as the mean and standard deviation over three training runs with different random seeds. We measure performance along four dimensions. • Natural Language Generation : BLEU-4 [19], METEOR [3], and ROUGE-L [14], computed at the sentence level over the full structured output. • Clinical accuracy : CheXbert F1-micro [22] and RadGraph F1 [11], which extract pathology labels and medical entities from the generated text and compare them against the reference. • Grounding : mean Intersection-over-Union (IoU) and the fraction of findings with IoU > 0.5, computed by matching each predicted bounding box to the closest reference box. • Change detection : report-level accuracy (whether the dominant 3-class change label matches) and RGCT region-level accuracy (whether the classifier’s per-region predic-tions match the ground truth). 
+
+Comparison with TRACE. To ensure a fair comparison, we evaluate the publicly released TRACE model [2] on our 7,967-sample multi-finding test set using the same greedy decod-ing and metric pipeline. 10 ARANYA, NAJAFIRAD, DESAI: GRCD 
+
+Retrieval baseline. Following Boag et al . [6], we include a nearest-neighbour retrieval baseline: each test image is encoded with the frozen BioViL-T encoder and the training-set report with the highest cosine similarity is copied as the prediction. This provides a non-learned lower bound; any trained model should exceed copy-from-training performance. 
+
+5.2 Main Results 
+
+Table 2 compares GRCD against three baselines, all evaluated on the same 7,967 multi-finding test set: a BioViL-T classifier (MLP trained on frozen region features), TRACE (re-evaluated on our data), and a nearest-neighbour retrieval baseline. Table 2: Main results on the 7,967 multi-finding test set. BioViL-T Clf = MLP on frozen BioViL-T region features (change detection only). Retrieval = nearest-neighbour by BioViL-T image embedding [6]. TRACE = re-evaluated on our test set [2]. GRCD = mean ± std over 3 seeds. Best values are bolded .                                        
+
+> Metric BioViL-T Clf Retrieval TRACE GRCD
+> Natural language generation
+> BLEU-4 —0.273 0.078 0.398 ±0.003 METEOR —0.374 0.213 0.494 ±0.003 ROUGE-L —0.376 0.176 0.493 ±0.003
+> Clinical accuracy
+> CheXbert F1 —0.368 0.175 0.567 ±0.009 RadGraph F1 —0.353 0.222 0.473 ±0.002
+> Grounding
+> Mean IoU ——0.545 0.540 ±0.005 IoU >0.5 ——64.0% 61.4 ±0.5%
+> Change detection
+> Report-level 37.6% —39.8% 53.3 ±0.2% Balanced acc. ∗46.6% —35.7% 50.0 ±0.3%
+> ∗Mean per-class recall; majority baseline (always predict stable) = 33.3%.
+
+GRCD outperforms all baselines across text and clinical metrics: BLEU-4 improves from 0.078 (TRACE) and 0.273 (retrieval) to 0.398, CheXbert F1 from 0.175 / 0.368 to 0.567, and RadGraph F1 from 0.222 / 0.353 to 0.473. The retrieval baseline outperforms TRACE on NLG metrics, confirming that TRACE’s single-finding output format is mismatched to the multi-finding evaluation. For change detection, GRCD achieves 53.3% report-level accuracy and 50.0% balanced accuracy, outperforming all three baselines. The BioViL-T classifier, which operates on the same frozen visual features but bypasses the LLM, achieves 46.6% balanced accuracy, indicating that the visual encoder captures meaningful change signals but the language model contributes an additional 3.4 percentage points by reasoning over findings in context. Grounding accuracy is comparable between TRACE and GRCD on the same test set (IoU >0.5: 64.0% vs. 61.4%), though TRACE produces bounding boxes for only 3,552 of 7,967 samples while GRCD covers 4,161. 
+
+5.3 Per-Class and Per-Region Analysis 
+
+Table 3 breaks down change-detection performance by class and by evaluation level. The RGCT classifier operates on visual features and produces balanced results across the three classes, with stable achieving the highest F1 (0.673). Table 4 shows finding-level accuracy per anatomical region. The cardiac silhouette is the easiest region (57.2%), likely because cardiomegaly is a visually distinct and frequent finding. The lung regions are the most difficult (44.9–46.1%), reflecting the diversity of pathologies that overlap spatially in the lungs. Table 5 stratifies the same accuracy by pathol-ogy type: consolidation (58.4%) and enlarged cardiac silhouette (57.1%) are easiest, while ARANYA, NAJAFIRAD, DESAI: GRCD 11 
+
+Table 3: Per-class change-detection performance. RGCT reports classifier-level precision, recall, and F1 over 3 classes. Text reports finding-level accuracy after matching predicted findings to references by (finding, region).                  
+
+> RGCT classifier Text Class PRF1 Acc. Worsened 0.588 0.404 0.479 61.2% Improved 0.649 0.494 0.561 52.9% Stable 0.654 0.694 0.673 35.9%
+
+pleural effusion (43.5%) and pneumothorax (42.0%) are hardest. Table 4: Finding-level change-detection accuracy per anatomical region.               
+
+> Region Findings Acc. Cardiac silhouette 880 57.2% Right lung 6,460 46.1% Left lung 6,546 44.9% R. costophrenic 3,014 44.7% L. costophrenic 3,085 43.7% Overall 20,007 45.6%
+
+Table 5: Change-detection accuracy stratified by pathology type. Only pathologies with 
+
+≥100 matched findings are shown. Accuracy is computed on findings correctly matched by (finding, region).                 
+
+> Pathology Matched Acc. Consolidation 113 58.4% Enlarged cardiac silhouette 879 57.1% Atelectasis 2,071 48.9% Pulmonary edema 1,023 45.7% Lung opacity 9,451 44.7% Pleural effusion 6,126 43.5% Pneumothorax 169 42.0%
+
+Decomposing the compound metric. The finding-level accuracy in Table 4 is a compound metric: a prediction is counted correct only if the finding type, anatomical region, and change label all match the reference simultaneously. We decompose it into two stages to isolate where errors occur. In the first stage, the model must generate the correct (finding, region) pair regardless of change label. The model achieves 53.1% recall (20,041 of 37,740 reference findings are matched) and 57.2% precision (20,041 of 35,022 predictions match a reference). In the second stage, among the 20,041 correctly matched findings, 45.5% receive the correct change label. Per-class accuracy reveals that the model detects worsening reliably (61.2%) and improvement moderately (52.9%), but struggles to confirm stability (35.9%), where it tends to over-predict change. The low stable accuracy accounts for most of the gap between the compound metric (45.6%) and the model’s actual ability to detect directional change. 
+
+5.4 Qualitative Results 
+
+Figure 7 shows three test examples that illustrate the model’s strengths and failure modes. In the success case (a), GRCD correctly identifies all findings and change labels with well-localized bounding boxes. In the partial-success case (b), the model correctly localizes sta-ble findings but misses a worsening pneumothorax, defaulting to stability when directional change is subtle. In the failure case (c), the model localizes findings to the correct regions but reverses the direction of change. This reversal pattern accounts for a substantial share 12 ARANYA, NAJAFIRAD, DESAI: GRCD 
+
+of errors, suggesting that distinguishing improvement from worsening remains the primary challenge. 
+
+Figure 7: Qualitative examples from the test set. Each row shows the prior CXR, the current CXR with ground-truth boxes, and the current CXR with predicted boxes. Bounding-box colours indicate change type: red = worsening, green = improving, blue = stable. In the report text, green highlights denote sentences that match the reference and red highlights denote mismatches. (a) All five findings and change labels are correct. (b) Four stable find-ings are correct, but a worsening pneumothorax is missed and an atelectasis is hallucinated. (c) Improving pulmonary edema is predicted as worsening, reversing the direction of change while localizing to the correct regions. 
+
+# 6 Ablation Studies 
+
+Table 6 summarises the ablation experiments. All variants are evaluated on the same 7,967-sample test set; differences between rows are therefore attributable to the stated archi-tectural change. Table 6: Ablation study. All variants evaluated on the same 7,967-sample test set (single seed per configuration; Row D corresponds to seed 1 of the 3-seed main result). A: no RGCT (vision + LLM only). B: 6-region prepend-only. C: 25-region cross-attention only. 
+
+D: full GRCD (dual pathway).                          
+
+> Config BLEU-4 METEOR CheXbert IoU >0.5 ChgDet A: No RGCT 0.007 0.067 0.062 —37.6 B: 6-reg, prepend 0.362 0.467 0.570 64.2 51.6 C: 25-reg, cross-att 0.394 0.476 0.512 57.9 54.4
+> D: 25-reg, dual 0.402 0.498 0.576 61.8 53.6
+
+RGCT and integration strategy. Row A removes RGCT entirely, leaving only the frozen BioViL-T visual tokens and the LLM. Without region-level change information, the model produces repetitive single-sentence outputs with near-zero NLG scores and no bounding ARANYA, NAJAFIRAD, DESAI: GRCD 13 
+
+boxes. This confirms that RGCT is essential for multi-finding generation: the LLM cannot learn to produce structured output from global visual features alone. Row B adds six macro-region tokens prepended to the input sequence. This restores full generation ability and achieves the best grounding accuracy (64.2% IoU >0.5), because the prepended tokens give the decoder a strong spatial signal at every layer. Row C replaces prepending with gated cross-attention over all 25 regions. Text quality improves (BLEU-4: 0.362 to 0.394) and change detection reaches its peak (54.4%), but grounding drops to 57.9%, indicating that cross-attention alone provides a weaker spatial signal to the decoder. Row D combines both pathways. This recovers grounding (+3.9pp over Row C) while achieving the best text and clinical scores. The two mechanisms are complementary: prepended tokens supply direct spatial cues, while cross-attention lets the decoder selectively query all 25 regions during generation. The choice between configurations involves a trade-off: Row B achieves the best grounding (64.2% IoU >0.5) while Row D achieves the best text and clinical scores. We select Row D as the default because multi-finding report quality is the primary objective. 
+
+Effect of data cleaning. Training on a larger but noisier superset (the 28,155 clean training pairs plus 49,717 Tier-3-containing pairs from the training split, i.e. the training portion of the 112,824 pairs dropped in Section 3.3, totalling 77,872 pairs) drops METEOR from 0.467 to 0.394 (15.6% degradation) and ROUGE-L from 0.449 to 0.416 (7.3%), even with a two-stage fine-tuning schedule. Noisy samples teach the model to under-generate findings. This motivates the strict three-tier cleaning pipeline: retaining only high-confidence pairs is more valuable than increasing training-set size with unreliable labels. 
+
+Number of regions. Expanding from 6 macro regions to 25 Chest ImaGenome regions lets the model ground findings to specific sub-regions (aortic knob, hilar structures, individual lung zones) not addressable with coarse tokens. The benefit is concentrated in text and clinical metrics; the smaller boxes are individually harder to localise, partly explaining the IoU gap between Rows B and D. 
+
+# 7 Discussion 
+
+Grounding accuracy. On the same multi-finding test set, GRCD and TRACE achieve comparable sample-level grounding (IoU >0.5: 61.4% vs. 64.0%), though GRCD covers more samples (4,161 vs. 3,552 of 7,967). The high IoU in the original TRACE paper (90.2%) reflects its single-finding evaluation, where each sample has exactly one predicted and one reference box. In the multi-finding setting, we report the maximum IoU across all predicted and reference box pairs per sample. This metric grows increasingly generous with more findings: samples with a single reference box achieve 51.3% IoU >0.5, while those with 7+ boxes reach 70.4% due to more candidate matches. A stricter per-finding metric that matches predictions to references within the same anatomical region confirms the true difficulty: region-matched mean IoU drops from 0.444 (single-finding) to 0.195 (7+ findings), showing that localizing individual findings among overlapping regions is substantially harder than the single-finding case. 
+
+Data quality over quantity. The data-cleaning ablation (Section 6) shows that training on a larger but noisier superset degrades performance by up to 15.6% even after a clean 14 ARANYA, NAJAFIRAD, DESAI: GRCD 
+
+fine-tuning stage. This finding underscores that, for temporal tasks built on silver annota-tions, careful curation matters more than scale. The three-tier pipeline we describe removes 25,175 same-study retakes and retains only pairs whose change labels pass both all-clean and interpolated-clean checks, reducing the training set to 28K pairs but yielding consis-tently stronger models. 
+
+Limitations. The Chest ImaGenome annotations are silver-standard, generated by an NLP pipeline applied to radiology reports. Despite our three-tier cleaning, residual label noise persists: 77% of new and resolved labels lack direct textual evidence, and NLP-driven label flickering affects even clinically irreversible findings. Additionally, region tokens are defined by rectangular bounding boxes, which are a coarse approximation of anatomical boundaries; pixel-level segmentation masks could provide a tighter spatial signal. 
+
+Broader impact. GRCD is intended as a decision-support tool to assist radiologists, not to replace them. Automated temporal reports could reduce dictation time and flag missed changes, but clinical deployment would require prospective validation, regulatory approval, and a human-in-the-loop workflow to verify each generated report before it enters the medi-cal record. 
+
+# 8 Conclusion 
+
+We presented GRCD, a region-aware framework for grounded temporal radiology report generation. By combining a region-change encoder with a dual-pathway integration strat-egy that both prepends spatial tokens and applies gated cross-attention, GRCD generates multi-finding reports with inline bounding boxes grounded to specific anatomical regions. On a rigorously cleaned subset of MIMIC-CXR, the model achieves a BLEU-4 of 0.398, CheXbert F1 of 0.567, and RadGraph F1 of 0.473 (averaged over three seeds), outperform-ing TRACE on the same test set across all text and clinical metrics. Ablation experiments confirm that the dual pathway outperforms either integration strategy alone on text and clini-cal metrics, and that strict data cleaning is essential for silver-annotation tasks. We hope that the dataset-cleaning methodology and the dual-pathway architecture provide useful building blocks for future work on temporal medical-image understanding. 
+
+# References 
+
+[1] Jean-Baptiste Alayrac, Jeff Donahue, Pauline Luc, Antoine Miech, Iain Barr, Yana Hasson, Karel Lenc, Arthur Mensch, Katie Millican, Malcolm Reynolds, Roman Ring, Eliza Rutherford, Serkan Cabi, Tengda Han, Zhitao Gong, Sina Samangooei, Marianne Monteiro, Jacob Menick, Sebastian Borgeaud, Andrew Brock, Aida Nematzadeh, Sa-hand Sharifzadeh, Mikołaj Bi´ nkowski, Ricardo Barreira, Oriol Vinyals, Andrew Zisser-man, and Karen Simonyan. Flamingo: a visual language model for few-shot learning. In Advances in Neural Information Processing Systems , 2022. [2] OFM Riaz Rahman Aranya and Kevin Desai. TRACE: Temporal radiology with anatomical change explanation for grounded X-ray report generation. In International Conference on Pattern Recognition (ICPR) , 2026. arXiv:2602.02963. [3] Satanjeev Banerjee and Alon Lavie. METEOR: An automatic metric for MT evaluation with improved correlation with human judgments. In Proceedings of the ACL Work-shop on Intrinsic and Extrinsic Evaluation Measures for Machine Translation and/or Summarization , pages 65–72, 2005. ARANYA, NAJAFIRAD, DESAI: GRCD 15 
+
+[4] Shruthi Bannur, Stephanie Hyland, Qianchu Liu, Fernando Pérez-García, Maximil-ian Ilse, Daniel C. Castro, Benedikt Boecking, Harshita Sharma, Kenza Bouzid, Anja Thieme, Anton Schwaighofer, Maria T. Wetscherek, Matthew P. Lungren, Aditya Nori, Javier Alvarez-Valle, and Ozan Oktay. Learning to exploit temporal structure for biomedical vision-language processing. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pages 15016–15027, 2023. [5] Shruthi Bannur, Kenza Bouzid, Daniel C. Castro, Anton Schwaighofer, Anja Thieme, Sam Bond-Taylor, Maximilian Ilse, Fernando Pérez-García, Valentina Salvatelli, Harshita Sharma, Felix Meissen, Mercy Ranjit, Shaury Srivastav, Julia Gong, Noel C. F. Codella, Fabian Falck, Ozan Oktay, Matthew P. Lungren, Maria T. Wetscherek, Javier Alvarez-Valle, and Stephanie L. Hyland. MAIRA-2: Grounded radiology report generation. arXiv preprint arXiv:2406.04449 , 2024. [6] William Boag, Tzu-Ming Harry Hsu, Matthew McDermott, Gabriela Berner, Emily Alesentzer, and Peter Szolovits. Baselines for chest X-ray report generation. In 
+
+Proceedings of the Machine Learning for Health NeurIPS Workshop , volume 116 of 
+
+PMLR , pages 126–140, 2020. [7] Daniel C. Castro, Aurelia Bustos, Shruthi Bannur, Stephanie L. Hyland, Kenza Bouzid, Maria T. Wetscherek, Maria Dolores Sánchez-Valverde, Lara Jaques-Pérez, Lourdes Pérez-Rodríguez, Kenji Takeda, Jose-Maria Salinas, Javier Alvarez-Valle, Joaquín Galant Herrero, and Antonio Pertusa. PadChest-GR: A bilingual chest X-ray dataset for grounded radiology report generation. NEJM AI , 2024. [8] Zhihong Chen, Yan Song, Tsung-Hui Chang, and Xiang Wan. Generating radiology reports via memory-driven Transformer. In Proceedings of the 2020 Conference on Em-pirical Methods in Natural Language Processing (EMNLP) , pages 1439–1449, 2020. [9] Zhihong Chen, Maya Varma, Jean-Benoit Delbrouck, Magdalini Paschali, Louis Blankemeier, Dave Van Veen, Jeya Maria Jose Valanarasu, Alaa Youssef, Joseph Paul Cohen, Eduardo Pontes Reis, Emily B. Tsai, Andrew Johnston, Cameron Olsen, Tan-ishq Mathew Abraham, Sergios Gatidis, Akshay S. Chaudhari, and Curtis Langlotz. CheXagent: Towards a foundation model for chest X-ray interpretation. In Findings of the Association for Computational Linguistics: EMNLP 2024 , 2024. [10] Wei-Lin Chiang, Zhuohan Li, Zi Lin, Ying Sheng, Zhanghao Wu, Hao Zhang, Lianmin Zheng, Siyuan Zhuang, Yonghao Zhuang, Joseph E. Gonzalez, Ion Sto-ica, and Eric P. Xing. Vicuna: An open-source chatbot impressing GPT-4 with 90%* ChatGPT quality. LMSYS Blog , 2023. URL https://lmsys.org/blog/ 2023-03-30-vicuna/ .[11] Saahil Jain, Ashwin Agrawal, Adriel Saporta, Steven Q.H. Truong, Chanh D. Duber, Tristan Bui, Pierre Chambon, Yuhao Zhang, Matthew P. Lungren, Andrew Y. Ng, Cur-tis P. Langlotz, and Pranav Rajpurkar. RadGraph: Extracting clinical entities and rela-tions from radiology reports. In Advances in Neural Information Processing Systems, Track on Datasets and Benchmarks , 2021. [12] Alistair E.W. Johnson, Tom J. Pollard, Seth J. Berkowitz, Nathaniel R. Greenbaum, Matthew P. Lungren, Chih-ying Deng, Roger G. Mark, and Steven Horng. MIMIC-CXR, a de-identified publicly available database of chest radiographs with free-text reports. Scientific Data , 6(1):317, 2019. 16 ARANYA, NAJAFIRAD, DESAI: GRCD 
+
+[13] Seowoo Lee, Minjae Kim, Jiho Shin, Byung-Hoon Choi, Sangjoon Shin, and Gil-Sun Hong. CXR-LLaVA: a multimodal large language model for interpreting chest X-ray images. European Radiology , 2024. [14] Chin-Yew Lin. ROUGE: A package for automatic evaluation of summaries. In Text Summarization Branches Out , pages 74–81, 2004. [15] Haotian Liu, Chunyuan Li, Qingyang Wu, and Yong Jae Lee. Visual instruction tuning. In Advances in Neural Information Processing Systems , 2023. [16] Kang Liu, Zhuoqi Ma, Xiaolu Kang, Yunan Li, Kun Xie, Zhicheng Jiao, and Qiguang Miao. Enhanced contrastive learning with multi-view longitudinal data for chest X-ray report generation. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2025. [17] Philip Müller, Georgios Kaissis, and Daniel Rueckert. ChEX: Interactive localization and region description in chest X-rays. In European Conference on Computer Vision (ECCV) , 2024. [18] Aaron Nicolson, Jason Dowling, Douglas Anderson, and Bevan Koopman. CXRMate: Longitudinal chest X-ray report generation using encoder-to-decoder models. Infor-matics in Medicine Unlocked , 2024. [19] Kishore Papineni, Salim Roukos, Todd Ward, and Wei-Jing Zhu. BLEU: a method for automatic evaluation of machine translation. In Proceedings of the 40th Annual Meeting of the Association for Computational Linguistics , pages 311–318, 2002. [20] Chantal Pellegrini, Ege Özsoy, Benjamin Busam, Nassir Navab, and Matthias Keicher. RaDialog: A large vision-language model for radiology report generation and conver-sational assistance. In Findings of the Association for Computational Linguistics: ACL 2024 , 2024. [21] Santosh Sanjeev, Fadillah Adamsyah Maani, Arsen Abzhanov, Vijay Ram Papineni, Ibrahim Almakky, Bartłomiej W. Papie˙ z, and Mohammad Yaqub. TiBiX: Leveraging temporal information for bidirectional X-ray and report generation. In MICCAI Work-shop on Deep Generative Models (DGM4MICCAI) , 2024. [22] Akshay Smit, Saahil Jain, Pranav Rajpurkar, Anuj Pareek, Andrew Y. Ng, and Matthew P. Lungren. CheXbert: Combining automatic labelers and expert annota-tions for accurate radiology report labeling using BERT. In Proceedings of the 2020 Conference on Empirical Methods in Natural Language Processing (EMNLP) , pages 1500–1519, 2020. [23] Shanshan Song, Hui Tang, Honglong Yang, and Xiaomeng Li. DDaTR: Dynamic difference-aware temporal residual network for longitudinal radiology report genera-tion. IEEE Transactions on Medical Imaging , 2025. [24] Tim Tanida, Philip Müller, Georgios Kaissis, and Daniel Rueckert. Interactive and ex-plainable region-guided radiology report generation. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pages 7433–7442, 2023. ARANYA, NAJAFIRAD, DESAI: GRCD 17 
+
+[25] Fuying Wang, Shenghui Du, and Lequan Yu. HERGen: Elevating radiology report gen-eration with longitudinal data. In European Conference on Computer Vision (ECCV) ,2024. [26] Zhuhao Wang, Yihua Sun, Zhuoyang Li, Xuhang Yang, Fang Chen, and Hongen Liao. LLM-RG4: Flexible and factual radiology report generation across diverse input con-texts. In Proceedings of the AAAI Conference on Artificial Intelligence , 2025. [27] Joy T. Wu, Nkechinyere N. Agu, Ismini Lourentzou, Arjun Sharma, Joseph A. Paguio, Jasper S. Yao, Edward C. Dee, William Mitchell, Satyananda Kashyap, Andrea Gio-vannini, Leo Anthony Celi, and Mehdi Moradi. Chest ImaGenome dataset for clinical reasoning. In Advances in Neural Information Processing Systems, Track on Datasets and Benchmarks , 2021. [28] Xi Zhang, Zaiqiao Meng, Jake Lever, and Edmond S. L. Ho. Libra: Leveraging tem-poral images for biomedical radiology analysis. In Findings of the Association for Computational Linguistics: ACL 2025 , 2025. [29] Hong-Yu Zhou, Julian Acosta, Subathra Adithan, Suvrankar Datta, Eric J. Topol, and Pranav Rajpurkar. MedVersa: A generalist learner for multifaceted medical image interpretation. NEJM AI , 2024. [30] Xun Zhu, Ying Zhang, Haoran Wang, Yankai Wang, Hongzhi Li, and Meng Zhang. Uni-Med: A unified medical generalist foundation model for multi-task learning via connector-moe. In Advances in Neural Information Processing Systems , 2024.
