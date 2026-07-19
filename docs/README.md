@@ -6,59 +6,57 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：📧 2026-07-18
-- 运行时间：2026-07-18 21:48:06 UTC
+- 最新运行日期：📧 2026-07-19
+- 运行时间：2026-07-19 22:10:14 UTC
 - 运行状态：成功
-- 本次总论文数：20
-- 精读区：20
+- 本次总论文数：19
+- 精读区：19
 - 速读区：0
 
 ### 今日简报（AI）
-今日精读 20 篇前沿医学文献，深度聚焦癌症精准诊疗与并发症筛查。
-重点关注 CT 影像组学对胰腺癌手术切除率的预测价值，以及 YEARS 算法在癌症患者肺栓塞诊断中的临床实证。
-建议关注影像组学与临床决策路径的结合，以提升复杂病症的预后评估准确性。
-- 详情：[/202607/18/README](/202607/18/README)
+今日深度研读 19 篇医学影像前沿文献，聚焦影像组学在癌症精准预测中的临床应用。
+重点突破了高保真超分辨率 CT 预测肺腺癌 EGFR 突变，以及 MRI 组学结合病理因子评估直肠癌术后生存期。
+建议关注“影像组学+多模态数据”的融合模型，这是提升肿瘤无创诊断准确性的关键趋势。
+- 详情：[/202607/19/README](/202607/19/README)
 
 ### 精读区论文标签
-1. [CT texture analysis and delta radiomics in predicting R0 resection after preoperative chemotherapy in resectable pancreatic ductal adenocarcinoma](/202607/18/ct-texture-analysis-and-delta-radiomics-in-predicting-r0-resection-after-preoperative-chemotherapy-in-resectable-pancreatic-ductal-adenocarcinoma)  
+1. [High-fidelity super-resolution CT radiomics for non-invasive EGFR mutation prediction in lung adenocarcinoma: a multi-center pooled analysis](/202607/19/high-fidelity-super-resolution-ct-radiomics-for-non-invasive-egfr-mutation-prediction-in-lung-adenocarcinoma-a-multi-center-pooled-analysis)  
    标签：无标签
-2. [YEARS algorithm for diagnosis of suspected pulmonary embolism in patients with cancer: a randomized clinical trial](/202607/18/years-algorithm-for-diagnosis-of-suspected-pulmonary-embolism-in-patients-with-cancer-a-randomized-clinical-trial)  
+2. [Postoperative disease-free survival prediction based on MRI radiomics combined with clinicopathological factors in locally advanced rectal cancer](/202607/19/postoperative-disease-free-survival-prediction-based-on-mri-radiomics-combined-with-clinicopathological-factors-in-locally-advanced-rectal-cancer)  
    标签：无标签
-3. [Board-Level Performance of Leading Open-Weight Vision-Language Models on the Japanese Diagnostic Radiology Board Examination: Reasoning, Image-Input …](/202607/18/board-level-performance-of-leading-open-weight-vision-language-models-on-the-japanese-diagnostic-radiology-board-examination-reasoning-image-input-)  
+3. [X-CapFusion: Efficient label-aware model for medical image captioning](/202607/19/x-capfusion-efficient-label-aware-model-for-medical-image-captioning)  
    标签：无标签
-4. [RADAR: A Difference-Aware Retrieval with Organ-Level Alignment for Change Radiology Report Generation](/202607/18/radar-a-difference-aware-retrieval-with-organ-level-alignment-for-change-radiology-report-generation)  
+4. [RadBridge: Radiomics-Guided Brownian Bridge Diffusion from CT to MRI](/202607/19/radbridge-radiomics-guided-brownian-bridge-diffusion-from-ct-to-mri)  
    标签：无标签
-5. [Sharpness matters: Higher image resolution improves generalization and explainability in chest X-ray classification](/202607/18/sharpness-matters-higher-image-resolution-improves-generalization-and-explainability-in-chest-x-ray-classification)  
+5. [Swin-Qwen3: A Three-Stage Vision–Language Framework for Automated Radiology Report Generation with Multi-Agent Verification](/202607/19/swin-qwen3-a-three-stage-visionlanguage-framework-for-automated-radiology-report-generation-with-multi-agent-verification)  
    标签：无标签
-6. [The Risks and Benefits of Synthetic Medical Images](/202607/18/the-risks-and-benefits-of-synthetic-medical-images)  
+6. [MedBench: Deliberative Evaluation of Medical Language Models](/202607/19/medbench-deliberative-evaluation-of-medical-language-models)  
    标签：无标签
-7. [A Vision-Language End-to-End Framework for Automated Brain MRI Tumor Report Generation Using 3D GBR UNet Segmentation and Evidence-Aware Retrieval …](/202607/18/a-vision-language-end-to-end-framework-for-automated-brain-mri-tumor-report-generation-using-3d-gbr-unet-segmentation-and-evidence-aware-retrieval-)  
+7. [Minibatch selection for Language Models via Partition Matroid Constrained Gradient Matching](/202607/19/minibatch-selection-for-language-models-via-partition-matroid-constrained-gradient-matching)  
    标签：无标签
-8. [Dynamic Spectral Calibration Integrated with Diffusion Based Temporal Fusion for Accurate and Interpretable Hyperspectral Brain Tumor Segmentation](/202607/18/dynamic-spectral-calibration-integrated-with-diffusion-based-temporal-fusion-for-accurate-and-interpretable-hyperspectral-brain-tumor-segmentation)  
+8. [Dual-Latent Memory Routing for Vision-Language Reasoning](/202607/19/dual-latent-memory-routing-for-vision-language-reasoning)  
    标签：无标签
-9. [Citation-Aware Continual Pre-Training for Biomedical Language Models](/202607/18/citation-aware-continual-pre-training-for-biomedical-language-models)  
+9. [Towards Multimodal Large Language Models with Both Training and Inference Efficiency](/202607/19/towards-multimodal-large-language-models-with-both-training-and-inference-efficiency)  
    标签：无标签
-10. [A knowledge enhanced framework for interpretable medical visual question and answering via large foundation model](/202607/18/a-knowledge-enhanced-framework-for-interpretable-medical-visual-question-and-answering-via-large-foundation-model)  
+10. [CofactGVR: Counterfactual Intervention for Grounded Visual Reasoning](/202607/19/cofactgvr-counterfactual-intervention-for-grounded-visual-reasoning)  
    标签：无标签
-11. [MedAct: Removing the Human Bottleneck in Benchmarking Clinical LLM Safety](/202607/18/medact-removing-the-human-bottleneck-in-benchmarking-clinical-llm-safety)  
+11. [Beyond Sunk Costs: Boosting LLM Pre-training Efficiency via Orthogonal Growth of Mixture-of-Experts](/202607/19/beyond-sunk-costs-boosting-llm-pre-training-efficiency-via-orthogonal-growth-of-mixture-of-experts)  
    标签：无标签
-12. [DTop-p MoE: Sparsity-Controlled Dynamic Top-p MoE for Foundation Model Pre-training](/202607/18/dtop-p-moe-sparsity-controlled-dynamic-top-p-moe-for-foundation-model-pre-training)  
+12. [Development and validation of an interpretable ultrasound radiomics model for benign and malignant classification of breast lesions: a multicenter large-sample study](/202607/19/development-and-validation-of-an-interpretable-ultrasound-radiomics-model-for-benign-and-malignant-classification-of-breast-lesions-a-multicenter-large-sample-study)  
    标签：无标签
-13. [Yuvion VL: A Multimodal Foundation Model for Adversarial Content and AI Safety](/202607/18/2606.25034-yuvion-vl-a-multimodal-foundation-model-for-adversarial-content-and-ai-safety)  
+13. [Z-Adapter: Parameter-Efficient 2.5 DLongitudinal Fusion for SAM2-Based Lung Tumor Segmentation in CT](/202607/19/z-adapter-parameter-efficient-25-dlongitudinal-fusion-for-sam2-based-lung-tumor-segmentation-in-ct)  
    标签：无标签
-14. [AutoTrainess: Teaching Language Models to Improve Language Models Autonomously](/202607/18/2606.31551-autotrainess-teaching-language-models-to-improve-language-models-autonomously)  
+14. [MultiHashFormer: Hash-based Generative Language Models](/202607/19/2606.28057-multihashformer-hash-based-generative-language-models)  
    标签：无标签
-15. [Understanding Why Language Models Hallucinate: Testing Reasoning Against Priors](/202607/18/2607.00447-understanding-why-language-models-hallucinate-testing-reasoning-against-priors)  
+15. [MOPD: Multi-Teacher On-Policy Distillation for Capability Integration in LLM Post-Training](/202607/19/2606.30406-mopd-multi-teacher-on-policy-distillation-for-capability-integration-in-llm-post-training)  
    标签：无标签
-16. [Do Medical Vision Language Models Actually See? A Counterfactual Grounding Framework and Hard-Negative Contrastive Training for Visually-Reliant Medical …](/202607/18/2607.03647-do-medical-vision-language-models-actually-see-a-counterfactual-grounding-framework-and-hard-negative-contrastive-training-for-visually-reliant-medical-)  
+16. [Discrete Diffusion Language Models for Interactive Radiology Report Drafting](/202607/19/2607.01436-discrete-diffusion-language-models-for-interactive-radiology-report-drafting)  
    标签：无标签
-17. [dOPSD: On-Policy Self-Distillation for Diffusion Language Models](/202607/18/2607.04428-dopsd-on-policy-self-distillation-for-diffusion-language-models)  
+17. [Learning Anatomy-Grounded CT Vision-Language Representations with Organ-Hierarchical Report Knowledge](/202607/19/2607.10953-learning-anatomy-grounded-ct-vision-language-representations-with-organ-hierarchical-report-knowledge)  
    标签：无标签
-18. [Dive Into the Implicit Biases of Low-rank Vision-language Alignment](/202607/18/2607.08194-dive-into-the-implicit-biases-of-low-rank-vision-language-alignment)  
+18. [Knowledgeless Language Models: Suppressing Parametric Recall for Evidence-Grounded Language Modeling](/202607/19/2607.12831-knowledgeless-language-models-suppressing-parametric-recall-for-evidence-grounded-language-modeling)  
    标签：无标签
-19. [REVA-PO: Stabilizing Reinforcement Learning for Chest X-ray Report Generation](/202607/18/2607.10147-reva-po-stabilizing-reinforcement-learning-for-chest-x-ray-report-generation)  
-   标签：无标签
-20. [A Unified Framework for Comprehensive Cardiac CT Segmentation and Phenotyping: Human-in-the-Loop Data Annotation, Vision Foundation Model Development …](/202607/18/2607.11287-a-unified-framework-for-comprehensive-cardiac-ct-segmentation-and-phenotyping-human-in-the-loop-data-annotation-vision-foundation-model-development-)  
+19. [Fine-Grained Vision-Language Pretraining with Organ-Conditioned Pattern Tokens for CT Understanding](/202607/19/2607.13892-fine-grained-vision-language-pretraining-with-organ-conditioned-pattern-tokens-for-ct-understanding)  
    标签：无标签
 
 ### 速读区论文标签

@@ -1,0 +1,660 @@
+Title: Fine-Grained Vision-Language Pretraining with Organ-Conditioned Pattern Tokens for CT Understanding
+
+URL Source: https://arxiv.org/pdf/2607.13892
+
+Published Time: Thu, 16 Jul 2026 01:28:06 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# Fine-Grained Vision-Language Pretraining with Organ-Conditioned Pattern Tokens for CT Understanding 
+
+Guoliang You 1, Xiaomeng Chu 2,* 
+
+1University of Pennsylvania 
+
+2Yale University 
+
+Abstract —Computed tomography (CT) vision-language pre-training from paired volumes and radiology reports is a scalable yet challenging task. Existing methods commonly adopt global scan-report contrast, which is scalable but obscures heteroge-neous organ evidence. Meanwhile, direct organ-level alignment remains coarse, since the same anatomy can exhibit multiple dis-tinct radiological appearances. Therefore, pretraining requires a finer alignment unit: the organ-conditioned radiological pattern. In this work, we propose OCP-CT, an organ-conditioned pattern-token alignment framework for CT vision-language pretrain-ing. Specifically, OCP-CT preserves a stable global CT-report contrastive branch and introduces an organ pattern interface: sparse Mixture-of-Experts (MoE) routes image and text tokens according to latent radiological patterns, learnable slots query the routed tokens into continuous pattern tokens, and paired token contrast aligns image-text pattern tokens with structured soft targets built from report-derived clinical similarity. On the publicly available CT-RATE and RAD-ChestCT benchmarks, OCP-CT achieves average AUROCs of 84.5% and 69.9% for zero-shot abnormality diagnosis, respectively. Compared with the strongest prior reported results, these results yield absolute AUROC gains of 6.7 and 0.8 percentage points. 
+
+I. I NTRODUCTION 
+
+Computed tomography (CT) is a cornerstone of medical imaging and clinical diagnosis, but interpreting a volumetric study requires reviewing hundreds of slices and reasoning across multiple anatomies [1]. This motivates general-purpose CT representation learning for diagnosis, retrieval, and down-stream adaptation. Since dense 3D annotations are costly, recent CT vision-language pretraining (VLP) methods learn scalable representations from routinely collected CT-report pairs [1–4]. A dominant recipe is global-level scan-report contrast, where one CT embedding is aligned with one report embed-ding. This design is a strong foundation: it inherits the scalabil-ity of CLIP-style image-text learning [5] and adapts naturally to radiology reports as weak language supervision [6]. Existing 3D CT VLP systems further show that paired CT volumes and reports can support whole-volume diagnosis, retrieval, and general representation learning [1, 4]. However, global contrast is coarse: a report may describe findings across lung, pleura, heart, esophagus, and aorta, while the model only receives one scan-report matching signal. This coarse global supervision can obscure the organ evidence that supports the report. 
+
+*Corresponding author. A. Global -level Contrast  
+
+> GLOBAL REPORT
+> Bilateral ground -glass
+> opacities and
+> consolidations …
+> The heart is mildly
+> enlarged …
+> The esophagus is
+> unremarkable …
+
+B. Organ -level Contrast     
+
+> Heart token Lung token Aorta token
+
+C. OCP -CT: Pattern -level Contrast                                  
+
+> CT Volume
+> Organ
+> CT Token
+> …
+> Global CT Token
+> Esophagus token
+> Global +Pattern Contrastive Learning
+> Global Report Token
+> CT Volume Report Text
+> Global CT Embedding
+> ……
+> Global Report Embedding
+> ……
+> CT Volume
+> GLOBAL REPORT
+> Bilateral ground -glass
+> opacities and
+> consolidations …
+> The heart is mildly
+> enlarged …
+> The esophagus is
+> unremarkable …
+> Report Text
+> Local CT Embedding
+> …
+> …
+> …
+> …
+> Local Report Embedding
+> Heart report
+> Esophagus report
+> Aorta report
+> Lung report
+> Patterns: …
+> Report
+> Pattern Tokens
+> CT
+> Pattern Tokens
+> …
+> …
+> …
+> …
+> Organ Matching
+> Global Matching
+> Pattern
+> Matching
+> …
+> Organ
+> MoE
+> Router
+> Slot
+> Pooling
+> GLOBAL REPORT
+> Bilateral ground -glass
+> opacities and
+> consolidations …
+> The heart is mildly
+> enlarged …
+> The esophagus is
+> unremarkable …
+> Report Text
+> Organ
+> MoE
+> Router
+> Slot
+> Pooling
+
+Fig. 1. Motivation of organ-conditioned pattern-token alignment. Global-level CT-report contrast compresses organ evidence into one scan-report match, while organ-level alignment can still mix multiple radiological patterns inside the same anatomy. OCP-CT introduces a pattern token bottleneck that routes organ image/text evidence through sparse MoE, pools the routed evidence into compact pattern tokens with organ slots, and aligns paired pattern tokens before the global objective. 
+
+Radiologists typically inspect relevant anatomy, identify local findings, and integrate them into a global-level impression. A natural response is to introduce organ-level local align-ment in CT vision-language pretraining. Global-local repre-sentation methods align image regions with report seman-tics [7, 8], and CT-specific methods use fine-grained, multi-grained, or grounded supervision to connect reports with anatomical regions [9–12]. Yet organ-level alignment remains coarse because organ-level features can still mix heteroge-neous radiological appearances: the same lung may contain normal parenchyma, diffuse opacity, focal nodules, atelectatic changes, and pleural fluid. The missing unit is therefore the organ-conditioned radiological pattern, not the organ alone. arXiv:2607.13892v1 [cs.CV] 15 Jul 2026 Moreover, local contrast with only paired positives can over-penalize samples sharing related patterns, reflecting the sen-sitivity of contrastive objectives to positive and negative def-initions [9, 13, 14]. As illustrated in Figure 1, the key gap is to expose heterogeneous organ radiological patterns while preserving the global CT-report objective. This motivates a focused question: can CT-report pretraining learn organ radiological patterns while preserving the global volume-report alignment that makes contrastive learning ef-fective? A useful solution should keep the whole-volume contrastive path, decompose organ evidence into compact pattern tokens, and avoid over-penalizing cases that share related radiological patterns. To answer this question, we propose OCP-CT, an organ-conditioned pattern-token framework for CT vision-language pretraining. The central idea is to insert a compact organ-conditioned pattern token bottleneck between dense image/text tokens and the global contrastive objective. Private sparse MoE modules route organ image tokens and organ text evidence through pattern-specialized transformations, and organ slot queries then pool the routed tokens into a fixed number of continuous pattern tokens. Thus, sparse MoE performs pattern triage, while the organ slot queries provide the aggregation interface that yields cross-modal pattern tokens. The pattern-token interface is trained with paired image–text token con-trast, aligning image pattern token k with text pattern token k
+
+within the same organ. To avoid forcing all non-paired organ instances into uniformly hard negatives, structured soft targets assign weak positive mass to samples with related patterns. We evaluate OCP-CT on two public CT benchmarks for zero-shot abnormality diagnosis and retrieval. The results show improved global CT understanding, while organ-group analysis, module ablations, and patch-occlusion visualization further support the effectiveness of organ-conditioned pattern modeling. In summary, our main contributions are as follows:  
+
+> •
+
+We formulate organ-conditioned pattern-token alignment for CT-report contrastive learning, preserving scalable global volume-report supervision while exposing organ patterns.  
+
+> •
+
+We introduce OCP-CT, a pattern-token framework that uses sparse MoE and organ slots to route image/text evidence and compress it into paired continuous pattern tokens.  
+
+> •
+
+We mitigate hard-negative bias in local contrast with structured soft targets, so samples with related radiolog-ical patterns are not treated as uniformly negative.  
+
+> •
+
+We demonstrate the advantages of OCP-CT through pub-lic benchmark evaluation, organ-group analysis, focused ablations, and patch-occlusion visualization. II. R ELATED WORK 
+
+a) Global CT Vision-language Pretraining.: Contrastive vision-language learning has become a standard recipe for learning transferable visual representations from paired text supervision [5, 15, 16]. In radiology, reports provide scalable supervision beyond discrete disease labels, enabling medical image-text pretraining for recognition and retrieval [6, 17, 18]. Recent CT systems extend this paradigm to volumetric data, showing that paired CT volumes and reports can support zero-shot diagnosis, retrieval, and generalist representation learning [1–4]. These works make global scan-report contrast a strong foundation rather than a weak baseline. 
+
+b) Local and Organ-aware CT Vision-language Pretrain-ing.: Global-local radiology methods align local visual regions with report semantics to improve label-efficient recognition and localized evaluation [7, 8]. For CT, recent work introduces anatomy, region, or report-structure cues to improve fine-grained understanding and grounding [9–12]. These studies show that anatomy is a useful handle for CT-report learning. Yet an organ remains coarse: lung evidence may include nor-mal parenchyma, diffuse opacity, nodules, or pleural findings, while report phrases often mix concepts, locations, and at-tributes. The remaining question is what unit should represent evidence inside each organ. 
+
+c) Sparse Mixture-of-Experts.: Mixture-of-experts mod-els increase capacity by routing each input to a small subset of expert subnetworks [19]. Switch Transformer simplifies sparse expert selection and improves the practicality of conditional computation at large scale [20]. Beyond language models, V-MoE extends sparse routing to Vision Transformers, showing that image tokens can be adaptively processed by different experts [21]. Soft MoE further connects expert routing with token mixture and slot-like aggregation by passing weighted combinations of input tokens to experts [22]. These works motivate sparse experts as adaptive token processors; in our setting, we use them as organ-conditioned pattern transfor-mation paths for heterogeneous CT image tokens and report evidence. III. M ETHOD 
+
+A. Overall Framework 
+
+OCP-CT learns CT-report representations with organ-conditioned pattern-token alignment. Each example contains a CT volume xi, a paired report ri, multi-abnormality labels 
+
+yi ∈ { 0, 1}18 , and organ masks when available. The active organ set is       
+
+> O={lung ,heart ,esophagus ,aorta }.(1)
+
+The model keeps a global CT-report contrastive pathway, but augments it with an organ pattern pathway before the final study-level representation is evaluated. The pathway is built around three operations: organ-conditioned token selection, pattern-specialized sparse routing, and continuous pattern-token pooling. The global branch provides the study-level representation used by the main evaluation, while the organ branch shapes this representation through local cross-modal supervision. Figure 2 summarizes the data flow. The image encoder (ResNet-18[23]) produces both a global token zgi and a dense 3D feature map Fi. Organ masks select organ image tokens 
+
+Vi,o from the feature map. The text encoder (BioMedVLP OCP -CT (Pattern - & Global -token Contrast)     
+
+> CT volume 𝒙 𝒊
+> 3D Feature
+> Map 𝑭 𝒊
+
+AvgPool 
+
+> 𝒛 𝒊
+> 𝒈
+> 𝑳 𝒈𝒍𝒐𝒃𝒂𝒍
+
+Global            
+
+> Text
+> Encoder
+> Findings:
+> There are bilateral ground -glass
+> opacities and consolidations ...
+> The heart is mildly enlarged ...
+> The esophagus is unremarkable...
+> The aorta is mildly atherosclerotic
+> Report 𝒓 𝒊
+> Organ
+> CT Token
+> Lung …Heart …
+> Eso …Aorta …
+> Whole -report
+> Text Embedding
+> Organ
+> Text Embedding
+> Private
+> Sparse
+> MoE
+> Slot
+> Pool
+> Private
+> Sparse
+> MoE
+> Slot
+> Pool
+> CT
+> Pattern Tokens
+> Report
+> Pattern Tokens
+> 𝑳 𝒑𝑰𝑻𝑪
+
+Patterns Organ Modality 
+
+Image Pathway (Visual Tokens) 
+
+Text Pathway (Report Tokens) 
+
+Symbols 
+
+𝑀 : Number of Experts 
+
+𝐾 !: Number of Slots Per Organ 
+
+Heart Lung Aorta Esophagus                  
+
+> Image Organ Tokens
+> 𝑉 +,-∈𝑅 .!×0
+> Text Organ Evidence
+> 𝑇 +,-∈𝑅 1!×0
+> Private Sparse MoE
+> (Top -2 routing)
+> Image
+> MoE
+> Text
+> MoE
+> … …
+> Router
+> 𝒈 (,)
+> Router
+> 𝒈 (,)
+> 𝑃 𝐸 2
+> 3𝑃 𝐸 4
+> 3𝑃 𝐸 5
+> 3𝑃 𝐸 6
+> 3
+> 𝑃 𝐸 2
+> 7𝑃 𝐸 4
+> 7𝑃𝐸 5
+> 7𝑃 𝐸 6
+> 7
+> "
+> 𝒎
+> 𝜶 𝒎 𝑬 𝒎 (&)
+> "
+> 𝒎
+> 𝜶 𝒎 𝑬 𝒎 (&)
+> Routed Pattern -enhanced
+> Image Tokens
+> 0𝑉 +,-∈𝑅 .!×0
+> Routed Pattern -enhanced
+> Text Tokens
+> 0𝑇 +,-∈𝑅 1!×0
+> Route/Transform
+
+…
+
+…
+
+> Route/Transform
+
+Slot Pool (𝑸 𝒐 )
+
+Slot Pool (𝑸 𝒐 )
+
+> 0𝑉 +,-
+
+…
+
+…
+
+> 0𝑇 +,-
+
+𝑨 𝑰 
+
+𝑨 𝑻                                   
+
+> Slot Queries 𝑄 (∈𝑅 )"×+
+> Image Pattern Tokens
+> 𝑆 +,-
+> 3∈𝑅 8,×0
+> Text Pattern Tokens
+> 𝑆 +,-
+> 9∈𝑅 8,×0
+> 𝑆 +,-
+> 3
+> 𝑆 +,-
+> 7
+> Slot Diversity
+> Loss: 𝐿 :+;
+> Paired Pattern -token Contrast
+> 1) Within -organ Pattern Matching (organ oi,j )
+> Image Pattern Text Pattern
+> 1.0
+> 0.0
+> 𝑆 #,%&'(
+> )
+> 𝑆 #,%&'(
+> *
+> 𝑆 +,%&'(
+> )…
+> 𝑆 +,%&'(
+> *
+> …
+> Pattern Similarity
+> for Pair (i,j,o )𝐾 ,×𝐾 ,
+> Diagonal Average → 𝑃 .,0
+> (()
+> 𝑆 .,(
+> 1𝑆 .,(
+> 2
+> 2) Batch Pattern Contrast
+> Predicted Batch Organ
+> Contrast Similarity 𝑃 (
+> GT S tructure
+> Soft Target 𝑇 (()
+> 1.0
+> 0.0
+> Image organs j=1… B o
+> 1.0
+> 0.0
+> 𝐿 -*).
+> Slot Queries 𝑄 (∈𝑅 )"×+
+> text  organs  i = 1… B o
+> Image organs j=1… B o
+> text  organs  i = 1… B o
+> 𝒖 𝒊
+> 𝒈
+> 3D Encoder
+
+…Fig. 2. Overview of OCP-CT. A global branch aligns the CT global token zgi with the whole-report token ugi , while an organ branch selects image organ tokens Vi,o and text organ evidence Ti,o . Private sparse MoE routers send these tokens to M pattern experts, and organ slot queries Qo pool routed tokens into Ks paired CT/report pattern tokens. Pattern matching and structured soft batch targets define the pattern-level contrast, allowing local evidence to shape the same global representation evaluated downstream. 
+
+CXR-BERT [18]) produces the whole-report token ugi and report tokens, from which organ-specific textual evidence Ti,o 
+
+is collected using the report-derived organ fields. Image and text organ tokens are processed by private pattern routers and then compressed independently by parallel Slot Pool blocks that share the organ slot queries Qo. The resulting pattern tokens define within-organ pattern matching and batch pattern contrast shown in the figure; auxiliary prompt and organ-pathology supervision are added in the final training objective. 
+
+B. Stable Global Contrastive Backbone 
+
+The global image branch is anchored by average pooling over a 3D CT feature map. Let Fi ∈ RC×D×H×W be the layer-4 feature map from the visual encoder. The default whole-volume feature is 
+
+ai = AvgPool( Fi). (2) 
+
+To allow adaptive readout without replacing the pooled repre-sentation, we add a small gated query residual: 
+
+zgi = Wo (AvgPool( Fi) + σ(γ)Wq ¯qi) , (3) 
+
+where four learnable queries attend to the flattened feature grid, ¯qi is the mean decoded query, and γ is initialized to 
+
+−4. This makes the initial residual scale σ(−4) ≈ 0.018 .The readout therefore preserves the supervised average-pooled CT representation at the start of contrastive training, while allowing a bounded query residual to adapt the global evidence readout under image-text supervision. Given the paired text embedding ugi from the report encoder, the global contrastive loss follows the standard symmetric form, 
+
+Lglobal = 12
+
+
+
+CE 
+
+ Zg (U g )⊤
+
+τg
+
+, I 
+
+
+
++ CE 
+
+ U g (Zg )⊤
+
+τg
+
+, I 
+
+ 
+
+, (4) 
+
+where rows are normalized embeddings, I is the paired identity target, and τg is the temperature. All local modules described below are optimized to improve this global representation rather than define a separate test-time model. 
+
+C. Organ-Conditioned Pattern Routing 
+
+For each organ o, its mask is downsampled to the spatial size of Fi, and foreground locations select organ image tokens 
+
+Vi,o = {vi,o,n }Ni,o 
+
+n=1 . Empty masks are skipped. The report is also decomposed into organ-specific text evidence, producing text tokens Ti,o = {ti,o,m }Mi,o 
+
+m=1 from the biomedical text encoder. This gives both modalities the same anatomical conditioning variable, but it does not yet solve the pattern heterogeneity inside an organ. Because a single organ can contain heterogeneous patterns, OCP-CT routes both image and text organ tokens through private sparse pattern experts. Let P E Im and P E Tm denote the 
+
+m-th image and text pattern experts. For an image token v,the router computes 
+
+pI (v) = softmax( W Ir v), KI (v) = TopK( pI (v), k ), (5) 
+
+and the routed token is 
+
+˜v = X
+
+m∈K I (v)
+
+pIm(v)
+
+P
+
+ℓ∈K I (v) pIℓ (v) P E Im(v). (6) The text branch uses the same token-wise form with a separate router and expert bank. Applying the routing to all organ tokens gives 
+
+˜Vi,o = {˜vi,o,n }Ni,o  
+
+> n=1
+
+, ˜Ti,o = {˜ti,o,m }Mi,o 
+
+> m=1
+
+. (7) 
+
+where each routed token is computed by the top-k expert mixture above. In our implementation, M = 4 experts with top-2 routing provide this token-level processing capacity. We view the expert bank as learned pattern-specialized transfor-mation paths: organ masks provide anatomical conditioning, while the router selects latent token processors rather than predefined organ or disease classes. A load-balancing auxiliary loss discourages collapse to a single path. This routing stage addresses heterogeneity at the token-transformation level. Each organ token receives a small set of learned processing paths before any fixed-size local rep-resentation is formed. The next step is therefore aggregation, which converts the routed pattern-enhanced organ tokens into the pattern tokens used for cross-modal alignment. 
+
+D. Continuous Pattern Tokens 
+
+After sparse routing, learnable slot queries compress the routed pattern-enhanced organ tokens into a fixed set of continuous pattern tokens. In contrast to MoE, which selects transformation paths, Slot Pool performs aggregation: each slot query attends to the routed token set and summarizes recurring evidence into one latent component. Let Qo ∈ RKs×C be the slot queries for organ o. Slot Pool first forms an attention matrix from slot queries to routed tokens: 
+
+AIi,o = softmax (QoW Iq )( ˜Vi,o W Ik )⊤
+
+√d
+
+!
+
+. (8) 
+
+The text-side attention ATi,o has the same form over ˜Ti,o . For each organ, Slot Pool produces image pattern tokens and text pattern tokens, 
+
+SIi,o = AIi,o ˜Vi,o , STi,o = ATi,o ˜Ti,o , (9) 
+
+where SIi,o , S Ti,o ∈ RKs×d and Ks = 6 in our implementa-tion; Ks sets the capacity of the pattern-token bottleneck for summarizing routed organ evidence. The pattern tokens are latent components. We do not assign pattern token k a fixed clinical label such as location or severity. Instead, the tokens are shaped by anatomical masks, sparse MoE, slot diversity regularization, organ text supervi-sion, pathology heads, and paired image-text token contrast. Since multiple slots would otherwise be free to copy the same dominant organ feature, we apply a diversity penalty to normalized image slots: 
+
+Ldiv = 1
+
+Ks(Ks − 1) 
+
+X 
+
+> k̸=l
+
+D ˆSIi,o,k , ˆSIi,o,l 
+
+E
+
+. (10) 
+
+The penalty does not force human-named semantics, but it en-courages the slot interface to carry multiple local components rather than a repeated organ-level summary. 
+
+E. Paired Pattern-Token Contrast 
+
+The local cross-modal objective has two parts: within-organ pattern matching and batch pattern contrast. 
+
+a) Within-organ Pattern Matching.: For image sample 
+
+i and report sample j in organ o, the within-organ pattern matching score is 
+
+p(o) 
+
+> ij
+
+= 1
+
+KsKsX
+
+> k=1
+
+* SIi,o,k 
+
+∥SIi,o,k ∥2
+
+, STj,o,k 
+
+∥STj,o,k ∥2
+
++
+
+. (11) 
+
+This diagonal matching turns the pattern-token index into a shared image-text interface. Each image pattern token is trained to match the corresponding text pattern token for the same organ, so the local objective preserves multiple aligned evidence components instead of collapsing the organ into a single pooled descriptor. 
+
+b) Structured Batch Target.: The scores p(o) 
+
+> ij
+
+form the predicted batch pattern-similarity matrix P (o) ∈ RBo×Bo ,where P (o) 
+
+> ij
+
+= p(o) 
+
+> ij
+
+. For each organ mini-batch, we construct a structured target matrix T (o) that encodes pairwise clinical similarity between samples: 
+
+T (o) = λdI + λaAabn + λcAconcept + λlAloc + λr Aattr . (12) 
+
+Here I is the paired identity target. Aabn is derived from the 18 abnormality labels, Aconcept measures overlap between organ-mapped disease labels, and Aloc and Aattr encode coarse location and attribute agreement extracted from report fields. The report fields are obtained with RadGraph-XL-assisted parsing and LLM normalization [24, 25]. We use λd = 1 .0,
+
+λa = 0 .8, λc = 0 .8, λl = 0 .20 , and λr = 0 .15 .
+
+c) Batch Pattern Contrast.: After row normalization, 
+
+¯T (o) serves as the soft label distribution for contrastive clas-sification over the predicted matrix P (o). The image-to-text batch pattern contrast is 
+
+L(o) 
+
+> I→T
+
+= − 1
+
+Bo
+
+X
+
+> i
+
+X
+
+> j
+
+¯T (o) 
+
+> ij
+
+log exp( P (o) 
+
+> ij
+
+/τ l)
+
+P 
+
+> m
+
+exp( P (o) 
+
+> im
+
+/τ l) . (13) 
+
+The text-to-image term uses ¯T (o)⊤, and LpIT C averages the two directions. This objective uses the structured target as a soft label distribution, keeping the paired study dominant while allowing related off-diagonal organ samples to contribute weak supervision. 
+
+F. Pathology Prompt Anchoring 
+
+The prompt anchor is complementary to the pattern-level image–text contrast above. Pattern-level contrast aligns each organ image pattern token with the corresponding organ report pattern token and uses structured targets to relax batch nega-tives. This provides case-level cross-modal alignment, but its supervision still comes from instance-specific report text. We add a label-conditioned anchor by encoding positive and negative pathology prompts with the same text-side pattern-token branch. Image pattern tokens and report pattern tokens are compared with these prompt pattern tokens using pathol-ogy labels or organ-text parses as binary targets. A shallow organ pathology head also reads the mean image pattern token TABLE I                                                                          
+
+> ZERO -SHOT ABNORMALITY DIAGNOSIS ON PUBLIC CT BENCHMARKS .DIAGNOSTIC PERFORMANCE IS REPORTED USING AUROC, ACCURACY , F1,
+> AND PRECISION . T HE BEST AVAILABLE VALUE IN EACH COLUMN IS HIGHLIGHTED IN BOLD . COLIPRI-C †DENOTES THE CONTRASTIVE -ONLY
+> COLIPRI VARIANT EVALUATED UNDER THE COMPARABLE ZERO -SHOT DIAGNOSIS SETTING .Method CT-RATE ↑RAD-ChestCT ↑
+> AUROC ACC F1 Prec. AUROC ACC F1 Prec. CT-Net [26] 60.3 58.1 63.1 23.9 54.4 54.0 58.7 28.5 CT-CLIP [2] 73.1 66.8 70.7 32.3 62.9 59.5 64.2 33.6 BIUD [27] 71.3 68.1 71.6 33.8 62.9 60.6 65.2 33.7 Merlin [1] 72.8 67.2 70.9 33.7 64.4 61.9 66.3 34.8 COLIPRI-C †[4] 76.3 –––69.1 –––fVLM [9] 77.8 71.8 75.1 37.9 68.0 64.7 68.8 37.4
+> OCP-CT 84.5 78.1 80.3 44.5 69.9 65.2 69.7 47.0
+
+for organ-mapped findings. These auxiliary terms correspond to Lprompt and LorganCls in the final objective; they keep the pattern-token interface tied to named abnormality cues during training, but are not separate evaluation heads or expert-verified pattern labels. 
+
+G. Training Objective 
+
+The method is built on a supervised visual foundation and optimized for CT-report contrastive representation learning. The visual encoder is initialized by supervised multi-label CT abnormality training without the report-contrastive objective, after which the full model is optimized with the losses above. We optimize the following final objective: 
+
+L = Lglobal + λlocal LpIT C + λdiv Ldiv 
+
++ λmoe Lmoe + Lprompt + LorganCls . (14) 
+
+Lmoe is the router load-balancing loss. Lprompt uses binary cross-entropy to anchor image/report pattern tokens to positive and negative pathology prompts, while LorganCls is a binary multi-label classification loss for organ-mapped findings from pooled pattern tokens. IV. E XPERIMENTS 
+
+A. Datasets and Metrics 
+
+Datasets: We evaluate on two public chest CT benchmarks. CT-RATE [2] contains 50,188 chest CT scans from 21,304 patients with 18 abnormality labels. We adopt the CT-CLIP training/validation splits and use CT-RATE for zero-shot abnormality diagnosis and retrieval experiments. For exter-nal validation, we use RAD-ChestCT [26], which comprises 36,316 non-contrast chest CT scans from Duke University collected between 2012 and 2017 with 83 abnormality labels. Following the CT-CLIP evaluation framework, we evaluate on its public subset of 3,630 scans. Since RAD-ChestCT is collected from a different institution and has a different label set, it provides an external check for zero-shot diagnosis. 
+
+Metrics: We consider three evaluation tasks: zero-shot ab-normality diagnosis, image-image retrieval, and report-image retrieval. These tasks cover both diagnostic prediction and retrieval-based representation evaluation. For diagnosis, we report AUROC, ACC, F1, and precision. For image-image retrieval, we report MAP@5/10/50. For report-image retrieval, we report Recall@5/10/50/100. All metrics follow the standard evaluation protocol used by the compared baselines, and missing baseline metrics are marked as “–”. 
+
+B. Main Results 
+
+Zero-shot Abnormality Diagnosis: Table I compares zero-shot abnormality diagnosis on CT-RATE and RAD-ChestCT. On CT-RATE, OCP-CT achieves an AUROC of 84.5, with an accuracy, F1-score, and precision of 78.1, 80.3, and 44.5, respectively. On the external RAD-ChestCT benchmark, OCP-CT obtains an AUROC of 69.9, with an accuracy, F1-score, and precision of 65.2, 69.7, and 47.0, respectively. These re-sults indicate that the learned representation remains effective for prompt-based abnormality diagnosis across both the in-domain benchmark and external validation. Compared with fVLM, the most related anatomy-aware CT VLP baseline with complete reported metrics, OCP-CT improves CT-RATE by 6.7, 6.3, 5.2, and 6.6 percentage points in AUROC, accuracy, F1-score, and precision, respectively, and improves RAD-ChestCT by 1.9, 0.5, 0.9, and 9.6 percentage points, respec-tively. The consistent gains over an anatomy-level alignment method suggest that modeling multiple organ-conditioned pat-tern tokens provides benefits beyond assigning one pooled rep-resentation to each anatomy. OCP-CT also exceeds COLIPRI-C in the available AUROC columns. Since the diagnosis is performed from the final scan-level representation, these improvements show that local pattern supervision contributes to the global embedding used at inference. This supports the design goal of using organ pattern tokens as training-time evidence interfaces. 
+
+Image-image Retrieval: Table II evaluates whether the scan-level embedding preserves abnormality-based neighbor-hood structure. OCP-CT obtains MAP@5, MAP@10, and MAP@50 scores of 70.7, 61.0, and 53.5 on CT-RATE, respec-tively, outperforming the strongest listed prior result by 2.4, 3.8, and 4.6 points, respectively. This shows that the organ-conditioned pattern pathway improves the final global CT embedding, rather than only adding an auxiliary local training signal. The improvement remains consistent as the retrieval depth increases, with the largest gain observed at MAP@50. TABLE II 
+
+CT-RATE RETRIEVAL . IMAGE -IMAGE RETRIEVAL MEASURES ABNORMALITY -BASED NEIGHBORHOOD STRUCTURE , WHILE REPORT -IMAGE RETRIEVAL MEASURES CROSS -MODAL ALIGNMENT .OCP-CT IS EVALUATED UNDER THE SAME RETRIEVAL SETTING .Method Img2Img MAP @5/10/50 ↑
+
+Rpt2Img Recall @5/10/50/100 ↑
+
+CT-Net [26] 59.4 / 48.1 / 40.7 – / – / – / – VocabFine [2] 68.3 / 57.2 / 48.8 0.1 / 0.6 / 2.3 / 2.0 ClassFine [2] 67.9 / 56.8 / 48.5 – / – / – / – Merlin [1] 62.6 / 51.3 / 43.9 1.5 / 2.7 / 7.7 / 12.7 CT-CLIP [2] 68.3 / 57.2 / 48.9 2.9 / 5.0 / 18.0 / 28.7 
+
+OCP-CT 70.7 / 61.0 / 53.5 7.4 / 12.4 / 34.3 / 48.6 
+
+Since image-image retrieval ranks CT volumes by embedding similarity and evaluates whether clinically related scans are retrieved near the query, the stronger MAP@50 suggests that OCP-CT preserves disease-neighborhood structure over a broader retrieved set. 
+
+Report-image Retrieval: Report-image retrieval evaluates cross-modal alignment by using a report as the query and checking whether its paired CT volume appears among the top-ranked image results. OCP-CT reaches Recall@5, Re-call@10, Recall@50, and Recall@100 scores of 7.4, 12.4, 34.3, and 48.6, respectively, outperforming the strongest listed prior result by 4.5, 7.4, 16.3, and 19.9 points, respectively. COLIPRI-C retrieval is omitted because it was not produced under the same configuration. These gains indicate that the final scan-level embedding is better aligned with report se-mantics. Since the retrieval target is the paired volume rather than a disease category, improved report-image recall provides complementary evidence for cross-modal representation learn-ing. This is consistent with the paired pattern-token objective, which aligns organ image pattern tokens with organ report pattern tokens and, through the shared visual backbone, shapes the scan-level representation used for retrieval. 
+
+Organ-group Behavior: Fig. 3 summarizes CT-RATE diag-nosis gains from the matched global-only baseline to OCP-CT across organ groups. Bars show mean AUROC improvement within each group. All analyzed groups show positive mean gains. The other group is reported separately because Medical material and Lymphadenopathy are not assigned to the four active organs. The mean AUROC gains for lung, heart, aorta, esophagus, and other labels are 8.9, 5.4, 3.7, 8.0, and 9.6 points, respectively. The label-level points indicate that the im-provement is not concentrated in a single abnormality group. Overall, the result suggests that adding organ-conditioned pat-tern supervision improves the shared scan-level representation across several clinically meaningful label groups, rather than only benefiting one dominant organ category. 
+
+C. Qualitative Visualization 
+
+Patch-occlusion Evidence: Fig. 4 visualizes patch-occlusion sensitivity for representative cases across the active organ groups. For each case, local patches are occluded and the 
+
+TABLE III 
+
+CORE OCP-CT ABLATION . DIAGNOSIS AUROC IS REPORTED UNDER THE SAME ZERO -SHOT ABNORMALITY DIAGNOSIS SETTING AS TABLE I. THE FULL OCP-CT ROW IS FOLLOWED BY A GLOBAL -BRANCH -ONLY VARIANT THAT REMOVES THE ORGAN -CONDITIONED OCP-CT PATHWAY ,
+
+> THEN MODULE
+
+-REMOVAL VARIANTS FOR SPARSE ROUTING ,
+
+> PATTERN
+
+-TOKEN SLOTS , PAIRED TOKEN CONTRAST , AND STRUCTURED SOFT TARGETS .Variant Diagnosis AUROC ↑
+
+OCP-CT full 84.49 
+
+global branch only (w/o organ OCP-CT) 76.41 w/o sparse pattern routing 83.35 w/o pattern-token slots 83.71 w/o paired token contrast 82.30 w/o structured soft targets 81.24 
+
+change in the target disease score is recorded; warmer re-sponses indicate patches whose removal causes a larger score drop. Compared with CT-CLIP, OCP-CT shows more concen-trated responses within the model-visible crop and closer to the organ regions associated with the target abnormality. The yellow box marks the crop observed by the model, and the heatmaps are interpreted only within this visible region. This visualization further supports the role of organ-conditioned pattern supervision in shaping the global predic-tion. Since both methods are evaluated through their global scores, stronger organ-related occlusion responses suggest that the learned representation is more sensitive to organ-related radiological evidence, rather than reflecting only a separate local branch. This model-agnostic sensitivity check complements the quantitative diagnosis, retrieval, and ablation results. 0     
+
+> 5
+> 10
+> 15
+> 20
+> AUROC gain (points)
+> lung heart aorta esophagus other pathology
+> +8.9
+> lung (n=11)
+> +5.4
+> heart (n=3)
+> +3.7
+> aorta (n=1)
+> +8.0
+> esophagus (n=1)
+> +9.6
+> other (n=2)
+
+Fig. 3. Organ-level AUROC gains over the global-only baseline. Bars report mean AUROC improvement in percentage points from the matched global-only baseline to OCP-CT within each organ group, and open circles mark the individual abnormality-label gains in that group. n denotes the number of abnormality labels. Other labels are shown separately because they are not assigned to the four active organs. Original CT CT-CLIP OCP-CT Original CT CT-CLIP OCP-CT   
+
+> Lung Heart Aorta Esophagus
+> Response
+> 1
+> 0.5
+> 0Fig. 4. Patch-occlusion visualization. Selected cases from each available organ group compare the original CT slice, CT-CLIP, and OCP-CT. The colorbar reports normalized occlusion response; warmer colors correspond to larger positive disease-score drops after local patch occlusion. The yellow box marks the model-visible crop, and heatmaps are only defined inside this crop. OCP-CT tends to concentrate stronger responses on organ-related regions, suggesting that the prediction is more sensitive to relevant organ evidence.
+
+D. Ablation Study 
+
+Table III evaluates the main components of OCP-CT under the same CT-RATE diagnosis setting. The ablations are de-signed to separate the effect of the global branch, the organ-conditioned pattern-token bottleneck, and the contrastive target design. 
+
+Global Branch vs. Organ-conditioned Pathway: Removing the organ-conditioned pattern-token pathway leaves only the global branch and reduces AUROC from 84.49 to 76.41. This supports the motivation that global scan-report alignment is a strong foundation, and that adding organ pattern supervi-sion substantially improves the final representation. The gap between the global-only variant and full OCP-CT indicates that the organ-conditioned pathway provides complementary training signals beyond whole-volume contrast alone. 
+
+Sparse Routing and Pattern-token Slots: Removing sparse pattern routing decreases AUROC to 83.35, while removing pattern-token slots gives 83.71. These results indicate that both parts of the pattern-token bottleneck are useful: sparse routing provides input-dependent token transformation, and slot pooling compresses routed organ evidence into a fixed set of pattern tokens. The drop without slots is consistent with our motivation that an organ should not be represented only by one pooled descriptor. Together, these components provide the routing-and-aggregation mechanism needed to organize het-erogeneous organ evidence into pattern-level representations. 
+
+Paired Contrast and Structured Soft Targets: The larger drops come from removing the contrastive interface or its target structure. Without paired token contrast, AUROC de-creases to 82.30; without structured soft targets, it further decreases to 81.24. This suggests that pattern-token contrast works best when fine-grained image–report matching is paired with structured clinical similarity. Paired pattern tokens define the local image–text similarity space, while soft targets allow samples with related abnormalities, concepts, or locations to contribute weak positive supervision instead of being treated as uniformly hard negatives. They provide the pattern-token objective with both fine-grained cross-modal matching and clinically informed supervision. V. D ISCUSSION AND LIMITATIONS 
+
+a) What the Results Establish.: OCP-CT is designed to test whether organ-conditioned pattern tokens can improve the global CT-report representation, rather than merely adding an auxiliary local branch. The evaluation therefore uses standard scan-level endpoints: zero-shot abnormality diagnosis, image-image retrieval, and report-image retrieval. Together with the global-only ablation, the results show that local pattern supervision can improve the shared scan-level representation used at inference. The claim is not that the learned tokens are expert-defined radiological categories, but that exposing organ pattern structure during training benefits global CT VLP endpoints. 
+
+b) Limitations.: The local supervision is automatically derived from reports and labels, so errors in entity extraction, organ assignment, location parsing, or attribute normalization may affect the structured targets. The current organ branch covers lung, heart, esophagus, and aorta, leaving other findings to the global pathway. In addition, external validation is cur-rently limited to abnormality diagnosis on RAD-ChestCT; re-trieval transfer is evaluated only on CT-RATE. Patch-occlusion visualizations provide weakly supervised sensitivity evidence, but do not replace expert localization annotations. 
+
+c) Implication.: These results suggest a practical middle ground between purely global CT-report contrast and fully grounded supervision. OCP-CT keeps the scalable global scan-report objective, while using weak organ structure and pattern tokens to shape the representation through a shared backbone. This design allows organ-local evidence to guide global representation learning without requiring dense expert lesion annotations. VI. C ONCLUSION 
+
+We presented OCP-CT, an organ-conditioned pattern-token alignment framework for CT-report contrastive pretraining. OCP-CT preserves global scan-report alignment while intro-ducing an organ-local pattern interface, where a sparse MoE module routes image and text evidence, organ slots form continuous pattern tokens, and structured soft targets supervise paired pattern-token contrast. Across CT-RATE and RAD-ChestCT, OCP-CT improves zero-shot abnormality diagnosis, and on CT-RATE it also improves image-image and report-image retrieval using the same final scan-level representation. The ablation and organ-group analyses further show that the gains come from the organ-conditioned pathway and its pattern-level contrastive design, rather than from a separate task-specific local head. Overall, these results suggest that CT VLP benefits from representing organ evidence at the pattern-token level before optimizing the final global scan-report representation. This leads to stronger diagnosis and retrieval performance while preserving the scalable global contrastive training paradigm. Future work will explore broader anatom-ical coverage and richer report-derived attributes to further improve the generality of organ-conditioned CT representation learning across datasets. REFERENCES 
+
+[1] L. Blankemeier, A. Kumar, J. P. Cohen, J. Liu, L. Liu, D. Van Veen, S. J. S. Gardezi, H. Yu, M. Paschali, Z. Chen et al. , “Merlin: a computed tomography vision– language foundation model and dataset,” Nature , pp. 1– 11, 2026. [2] I. E. Hamamci, S. Er, C. Wang, F. Almas, A. G. Simsek, S. N. Esirgun, I. Dogan, O. F. Durugol, B. Hou, S. Shit 
+
+et al. , “Generalist foundation models from a multimodal dataset for 3d computed tomography,” Nature Biomedical Engineering , pp. 1–19, 2026. [3] H. Lai, Z. Jiang, Q. Yao, R. Wang, Z. He, X. Tao, W. Lv, W. Wei, and S. K. Zhou, “Bridged semantic alignment for zero-shot 3d medical image diagnosis,” IEEE Journal of Biomedical and Health Informatics , 2025. [4] T. Wald, I. E. Hamamci, Y. Gao, S. Bond-Taylor, H. Sharma, M. Ilse, C. Lo, O. Melnichenko, A. Schwaighofer, N. C. Codella et al. , “Comprehensive language-image pre-training for 3d medical image understanding,” arXiv preprint arXiv:2510.15042 , 2025. [5] A. Radford, J. W. Kim, C. Hallacy, A. Ramesh, G. Goh, S. Agarwal, G. Sastry, A. Askell, P. Mishkin, J. Clark 
+
+et al. , “Learning transferable visual models from natural language supervision,” in International conference on machine learning . PMLR, 2021, pp. 8748–8763. [6] Y. Zhang, H. Jiang, Y. Miura, C. D. Manning, and C. P. Langlotz, “Contrastive learning of medical visual representations from paired images and text,” in Machine learning for healthcare conference . PMLR, 2022, pp. 2–25. [7] S.-C. Huang, L. Shen, M. P. Lungren, and S. Yeung, “Gloria: A multimodal global-local representation learn-ing framework for label-efficient medical image recog-nition,” in Proceedings of the IEEE/CVF international conference on computer vision , 2021, pp. 3942–3951. [8] P. M¨ uller, G. Kaissis, C. Zou, and D. Rueckert, “Joint learning of localized representations from medical im-ages and reports,” in European conference on computer vision . Springer, 2022, pp. 685–701. [9] Z. Shui, J. Zhang, W. Cao, S. Wang, R. Guo, L. Lu, L. Yang, X. Ye, T. Liang, Q. Zhang et al. , “Large-scale and fine-grained vision-language pre-training for enhanced ct image understanding,” 2025. [10] X. Ni, L. Wu, J. Zhuang, Q. Wang, M. Wu, V. Vardhan-abhuti, L. Zhang, H. Gao, and H. Chen, “Mg-3d: Multi-grained knowledge-enhanced 3d medical vision-language pre-training,” 2024. [11] J. Lin, Y. Xia, J. Zhang, K. Yan, K. Cao, L. Lu, J. Luo, and L. Zhang, “Ct-glip: 3d grounded language-image pretraining with ct scans and radiology reports for full-body scenarios,” 2024. [12] X. Zhang, C. Wu, Z. Zhao, J. Lei, W. Tian, Y. Zhang, W. Xie, and Y. Wang, “Development of a large-scale grounded vision language dataset for chest ct analysis,” 
+
+Scientific Data , vol. 12, no. 1, p. 1636, 2025. [13] P. Khosla, P. Teterwak, C. Wang, A. Sarna, Y. Tian, P. Isola, A. Maschinot, C. Liu, and D. Krishnan, “Su-pervised contrastive learning,” vol. 33, 2020, pp. 18 661– 18 673. [14] J. D. Robinson, C.-Y. Chuang, S. Sra, and S. Jegelka, “Contrastive learning with hard negative samples,” in 
+
+International Conference on Learning Representations ,2021. [15] C. Jia, Y. Yang, Y. Xia, Y.-T. Chen, Z. Parekh, H. Pham, Q. Le, Y.-H. Sung, Z. Li, and T. Duerig, “Scaling up visual and vision-language representation learning with noisy text supervision,” in International conference on machine learning . PMLR, 2021, pp. 4904–4916. [16] J. Li, R. Selvaraju, A. Gotmare, S. Joty, C. Xiong, and S. C. H. Hoi, “Align before fuse: Vision and language representation learning with momentum distillation,” Ad-vances in neural information processing systems , vol. 34, pp. 9694–9705, 2021. [17] Z. Wang, Z. Wu, D. Agarwal, and J. Sun, “Medclip: Contrastive learning from unpaired medical images and text,” in Proceedings of the 2022 Conference on Empiri-cal Methods in Natural Language Processing , 2022, pp. 3876–3887. [18] B. Boecking, N. Usuyama, S. Bannur, D. C. Castro, A. Schwaighofer, S. Hyland, M. Wetscherek, T. Nau-mann, A. Nori, J. Alvarez-Valle et al. , “Making the most of text semantics to improve biomedical vision–language processing,” in European conference on computer vision .Springer, 2022, pp. 1–21. [19] N. Shazeer, A. Mirhoseini, K. Maziarz, A. Davis, Q. Le, G. Hinton, and J. Dean, “Outrageously large neural net-works: The sparsely-gated mixture-of-experts layer,” in 
+
+International Conference on Learning Representations ,2017. [20] W. Fedus, B. Zoph, and N. Shazeer, “Switch transform-ers: Scaling to trillion parameter models with simple and efficient sparsity,” Journal of Machine Learning Research , vol. 23, no. 120, pp. 1–39, 2022. [21] C. Riquelme, J. Puigcerver, B. Mustafa, M. Neu-mann, R. Jenatton, A. Susano Pinto, D. Keysers, and N. Houlsby, “Scaling vision with sparse mixture of experts,” Advances in Neural Information Processing Systems , vol. 34, pp. 8583–8595, 2021. [22] J. Puigcerver, C. Riquelme Ruiz, B. Mustafa, and N. Houlsby, “From sparse to soft mixtures of experts,” in 
+
+International Conference on Learning Representations ,vol. 2024, 2024, pp. 28 435–28 445. [23] K. He, X. Zhang, S. Ren, and J. Sun, “Deep residual learning for image recognition,” in Proceedings of the IEEE conference on computer vision and pattern recog-nition , 2016, pp. 770–778. [24] J.-B. Delbrouck, P. Chambon, Z. Chen, M. Varma, A. Johnston, L. Blankemeier, D. Van Veen, T. Bui, S. Truong, and C. Langlotz, “Radgraph-xl: A large-scale expert-annotated dataset for entity and relation extraction from radiology reports,” in Findings of the Association for Computational Linguistics: ACL 2024 , 2024, pp. 12 902–12 915. [25] A. Yang, A. Li, B. Yang, B. Zhang, B. Hui, B. Zheng, B. Yu, C. Gao, C. Huang, C. Lv et al. , “Qwen3 technical report,” arXiv preprint arXiv:2505.09388 , 2025. [26] R. L. Draelos, D. Dov, M. A. Mazurowski, J. Y. Lo, R. Henao, G. D. Rubin, and L. Carin, “Machine-learning-based multiple abnormality prediction with large-scale chest computed tomography volumes,” Medical image analysis , vol. 67, p. 101857, 2021. [27] W. Cao, J. Zhang, Y. Xia, T. C. Mok, Z. Li, X. Ye, L. Lu, J. Zheng, Y. Tang, and L. Zhang, “Bootstrapping chest ct image understanding by distilling knowledge from x-ray expert models,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,2024, pp. 11 238–11 247.
