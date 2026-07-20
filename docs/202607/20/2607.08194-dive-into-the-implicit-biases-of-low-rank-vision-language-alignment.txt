@@ -1,0 +1,1719 @@
+Title: Dive Into the Implicit Biases of Low-rank Vision-language Alignment
+
+URL Source: https://arxiv.org/pdf/2607.08194
+
+Published Time: Fri, 10 Jul 2026 00:34:34 GMT
+
+Number of Pages: 36
+
+Markdown Content:
+# Dive into the implicit biases of low-rank vision-language alignment 
+
+Mingjia Shi Shuo Wang 1‡ Xiaobo Wang 2† Sifan Zhou 1 Kai Wang 3
+
+Tianyu Fu 1 Chenxu Zhao 1† Anyang Su 1 Ping Jiang 1 Minghui Wu 1 
+
+> 1
+
+Mininglamp  
+
+> 2
+
+Shenzhen University of Advanced Technology  
+
+> 3
+
+National University of Singapore 
+
+{wangshuo.e,zhaochenxu}@mininglamp.com, 3101ihs@gmail.com, wangxiaobo@suat-sz.edu.cn 
+
+Abstract. Vision-language alignment, the stage that bridges pretrained vision encoders and large language models, is widely treated as a form of pretraining requiring full-parameter updates. We challenge this view and investigate what happens when low-rank adaptation is applied to the LLM during this stage instead. We find that low-rank alignment not only reduces computational costs but also outperforms full-parameter alignment on most benchmarks. To understand this phenomenon, we systematically characterize the implicit biases introduced by low-rank adaptation during alignment. Empirically, we find that low-rank align-ment shifts model behavior from hallucinatory to conservative and pre-serves per-token linear separability of visual features that full-parameter alignment disrupts, a phenomenon we term LS-curse . Geometrically, low-rank aligned models exhibit more homogeneous and structurally stable visual representations, maintaining modality-specific knowledge rather than prematurely fusing entity-level semantics. Theoretically, we estab-lish two theorems showing that low-rank alignment induces preferences for parameter subspaces with flat gradients and feature subspaces robust to perturbations, providing a principled explanation for the observed structure-preserving behavior. Extensive experiments cover ablation over 100 alignment configurations, three families of low-rank operators, and various rank, encoder, and other settings. 
+
+## 1 Introduction 
+
+The construction of vision-language models (VLMs) hinges on a critical stage: 
+
+vision-language alignment , where pretrained vision encoders are bridged with large language models (LLMs) through adapter modules and joint training [5, 8, 25]. As illustrated in Figure 1, this stage precedes instruction tuning and establishes the cross-modal feature correspondence upon which all downstream capabilities depend. Standard practice updates the full LLM parameters during alignment, treating it as a form of pretraining. However, this view constitutes a   
+
+> 3†
+
+Corresponding author. ‡ Project lead. arXiv:2607.08194v1 [cs.CV] 9 Jul 2026 2 M. Shi et al. 1. Vision -Language Alignment      
+
+> 2.2 Multi -Task Post -training
+> 2.1 Instruction Tuning
+> 0. Pretrained LLMs & ViTs
+> adapter
+> tokenizer
+> vision tower LLM concat
+> What’s the picture about?
+> text
+> Default setting
+> (Minimum Achievable VLM)
+> response
+> label
+> loss
+> Low -Rank Adaptation or Full?
+> Core: Visual Tokens
+
+Fig. 1: Vision-language alignment framework (default): a minimum achievable VLM with a cross-modal adapter (MLP). How does low-rank alignment shape visual tokens ?. 
+
+misconception: unlike LLM pretraining, which builds linguistic representations from scratch, vision-language alignment operates atop pretrained knowledge and reasoning priors: it is, in fact, supervised fine-tuning , precisely the regime for which low-rank adaptation methods were designed [10, 12, 14, 55]. Yet, applying low-rank methods during this stage remains largely unexplored. When low-rank adaptation is applied to the LLM during alignment ( i.e. ,
+
+low-rank alignment ), we observe that not only does the training cost drop sub-stantially, but downstream performance empirically improves across all involved model scales (from 1.4B to 14B). This improvement holds across diverse bench-marks spanning perception, knowledge, reasoning, and hallucination, and gen-eralizes across three families of low-rank operators (LoRA, LoHa, LoKr). This finding raises a natural question: how do the low-rank methods reshape the visual features to yield superior representations, and technically, what implicit biases does the low-rank alignment introduce? Empirical observations. We investigate this question first at the behavior and feature levels. At the behavior level, hypothesis testing on visual perception benchmarks reveals that low-rank alignment shifts model decision-making from hallucinatory to conservative, reducing overconfident predictions while preserv-ing cautious uncertainty (§2.2). At the feature level, token-wise linear probes uncover that full-parameter alignment disrupts the linear separability of certain visual tokens, a phenomenon we term LS-curse , whereas low-rank alignment preserves the per-token knowledge structure inherited from the pretrained vi-sion tower (§2.3). Together, these observations suggest that the performance gain stems from low-rank alignment’s stronger preservation of modality-specific knowledge structures, rather than the premature entity-level mixing induced by full-parameter updates. 
+
+Geometric characterization. We further characterize these biases through geometric analysis of the visual feature space. Fine-grained and coarse-grained linear probes reveal that fully aligned models exhibit greater feature diversity and broader angular coverage across tokens, reflecting aggressive entity-level fusion. In contrast, low-rank aligned models maintain homogeneous and structurally conservative representations. Manifold visualizations corroborate this finding: per-token feature distributions under low-rank alignment are markedly more consistent than those under full alignment (§2.4). 
+
+Theoretical analysis. We establish two theorems characterizing the mathe-matical mechanisms underlying these biases. Theorem 1 reveals that the low-rank gradient flow exhibits a noise-weighted smoothing effect, preferentially reinforc-ing updates along feature directions robust to stochastic variations, encoding Dive into the implicit biases of low-rank vision-language alignment 3
+
+an implicit bias toward flatter regions of the loss landscape. Theorem 2 demon-strates that the steady-state distribution of low-rank parameters concentrates on subspaces with flat gradients and noise-robust features. These two results jointly explain why low-rank alignment preserves general knowledge structures instead of prematurely fusing entity-specific characteristics (§3). We conduct extensive experiments across over 55 vision-language alignment settings (unique combinations of model, vision encoder, low-rank operator, rank, vision-tower depth, and learning-rate schedule) spanning model architectures from MobileLLaMA-1.4B to Qwen3-14B and three families of low-rank opera-tors, which together yield over 100 configurations when evaluated across bench-mark categories. We summarize our contributions as follows: 
+
+– We demonstrate that low-rank adaptation during vision-language alignment not only improves efficiency but also consistently enhances downstream per-formance across all evaluated model scales (1.4B–14B), challenging the pre-vailing assumption that alignment requires full-parameter updates. 
+
+– We provide a systematic empirical and geometric characterization of the implicit biases introduced by low-rank alignment, identifying the LS-curse in full alignment and revealing how low-rank methods preserve modality-specific knowledge structures, collectively supporting a progressive fusion 
+
+view in which general visual representations are retained during alignment and entity-specific fusion is deferred to instruction tuning. 
+
+– We establish two theorems identifying the theoretical mechanisms: noise-robust feature preferences during optimization (Theorem 1), and flat-gradient subspace concentration at steady state (Theorem 2), providing a principled explanation for the structure-preserving behavior observed empirically. 
+
+– We conduct comprehensive ablations covering rank, operators, model scales, architectures, encoder generalization (CLIP, DINOv2, SigLIPv2) and other details, providing practical guidance for efficient multimodal training. 
+
+## 2 Empirical Study: Low-Rank Alignment’s Preferences rank: r                     
+
+> 𝐵
+> 𝐴
+> 𝑊 0: Weights
+> 𝑊 X←𝑊 0𝑋 +𝐵𝐴𝑋
+> 𝑋
+> 𝐵 1
+> 𝐴 1
+> 𝑊 0: Weights rank: r
+> 𝑊 X←𝑊 0𝑋 +(𝐵 1𝐴 1∗𝐵 2𝐴 2)𝑋
+> 𝑋
+> 𝐵 2
+> 𝐴 2
+> ∗: Hadamard Product
+> 𝑋
+> 𝐶 𝑊 0: Weights rank: r
+> 𝑊 X←𝑊 0𝑋 +(𝐶 ⊗𝐵𝐴 )𝑋
+> 𝐵
+> 𝐴
+> ⊗: Kronecker Product
+> Low -Rank Operators
+> Matrix Multiplication
+> Kronecker Product
+> Hadamard Product
+> LoRA :
+> LoHa:
+> LoKr :
+> 12
+> 3
+> 1
+> 2
+> 3
+> LoRA LoHa
+> LoKr
+
+Fig. 2: Operators for low-rank alignment: LoRA/LoHa/LoKr (Matrix, Hadamard and Kronecker Products). 
+
+Training protocol. As illustrated in Figure 1, during the vision-language alignment stage, we employ percep-tual question answering (QA) tasks with general prompting templates. Trainable parameters comprise the LLM backbone and the vision-tower adapter; the vision encoder is frozen by default. For low-rank alignment, we apply adaptation exclusively to all linear modules in the LLM, since the adapters are already lightweight; im-posing low-rank constraints on them would force all vision features into a 4 M. Shi et al. 
+
+low-rank subspace. Both full-parameter and low-rank baselines are tuned un-der matched hyperparameter budgets to ensure fair comparison (best out of 9 times). For behavioral evaluation, instruction tuning is necessary to ensure proper instruction following. To assess zero-shot capabilities, we divide instruc-tion tuning into two phases: initial tuning with a base visual question answering (VQA) instruction dataset, followed by post-training with an extended instruc-tion dataset covering task-specific and knowledge-intensive data. All benchmarks except GQA and TextVQA are treated as unseen tasks. Extended ablations on encoder choice, frozen vs. unfrozen settings, low-rank placement, learning rate schedules, and overfitting controls are provided in §4. 
+
+Low-rank operators. We focus on linear transformations, specifically LoRA [14], LoHa [17], and LoKr [51], which encompass the three principal product-based constructions for low-rank modules: matrix multiplication, Hadamard product, and Kronecker product. The formulations and operator details are in Figure 2. 
+
+Linear probe. The procedure extracts features from a classification dataset and trains a linear classifier on them to measure accuracy. This approach enables us to assess both the robustness of the corresponding knowledge and the degree of feature entanglement. 
+
+Resources. We conduct experiments across a range of language models span-ning compact to commonly used scales, including MobileLLaMA-1.4/2.7B [8], Vicuna-7/13B [7], and Qwen3-8/14B 4 [49]. The vision tower is CLIP-Vision [38]. For vision-language alignment, we utilize datasets including LAION [42], CC [43], SBU [37], SAM [39], and MS-COCO [24]. Instruction tuning leverages default instruction datasets, including LLaVA [25], ShareGPT4V-PT [5], GQA [15], MS-COCO-train-2017, OCRVQA [34], TextVQA [44], and VG [20], along with ex-tended instruction datasets: SBU, ScienceQA [30], MS-COCO, GQA, IconQA [31], SAM, ShareGPT4V-TextVQA [5], Web-Celebrity [29], Web-Landmark [8], and WikiArt [16]. Evaluation is performed on a diverse set of benchmarks and tasks, including GQA, MMBench [28], MME [52], MMMU-Pro-Vision [54], MMVet-gpt [53], POPE [22], ScienceQA, and TextVQA. 
+
+Default settings. Since this work focuses on the alignment stage, we minimize the VLM pipeline to its essential components, deliberately removing unneces-sary architectural tricks to facilitate clean ablation and isolate alignment-stage effects. Unless otherwise specified, instruction fine-tuning uses GQA, TextVQA, and OCRVQA as task-specific datasets, and LoRA with rank 128 by default. For clarity in reporting, we categorize the main benchmarks into four groups: 
+
+perception , knowledge , reasoning , and hallucination , corresponding to MME-perception, GQA, MME-reasoning, and POPE, respectively. For simplicity, we refer to models by their size rather than their full names. Default visualizations and fine-grained analyses are performed using the 1.4B model to reduce the  
+
+> 4Detailed experiments regarding Qwen3 and other settings are in the Appendix.
+
+Dive into the implicit biases of low-rank vision-language alignment 5
+
+Table 1: Performance of low-rank vs. full-parameter alignment across model scales (1.4B–13B). Low-rank results report the best configuration across LoRA, LoHa, and LoKr after three rounds of rank tuning. Metrics cover perception (MME-P), knowledge (GQA), reasoning (MME-R), and hallucination (POPE). Training time on 8 ×A100. size perception ↑ ∆ ↑ knwldg. ↑ ∆ ↑ reason ↑ ∆ ↑ hallu. ↑ ∆ ↑ time (h) ↓ − ∆ ↑
+
+1.4B 208.1[453.5] 245.418.9[28.0] 9.122.9[766.6] 743.7 2.5[72.8] 70.3 4.53[2.52] 2.01 2.7B 15.7[669.0] 653.311.6[42.4] 30.840.4[201.4] 161.0 0.5[76.4] 75.9 8.61[4.29] 4.32 7B 521.0[965.3] 444.323.4[38.5] 15.186.8[332.5] 245.735.0[80.4] 45.4 19.75[7.68] 12.07 13B236.6[1079.7] 843.129.5[43.0] 13.552.5[219.6] 167.166.9[82.9] 16.035.32[13.23] 21.09 
+
+computational and storage overhead associated with complex processing ( e.g. ,feature extraction and dimensionality reduction). 
+
+2.1 Pre-Experiments: Performance of Low-Rank Alignment 
+
+We evaluate models aligned via low-rank methods under the default instruction-tuning setting described above. Table 1 demonstrates that low-rank vision-language alignment substantially enhances final model performance across all scales, even when implemented solely through low-rank branches prior to in-struction tuning. It raises the question: why and how does low-rank alignment boost performance? We then address this question through both experimental and theoretical analyzes of the mechanism of low-rank alignment. 
+
+2.2 Behavioral Preferences: From Hallucinatory to Conservative 
+
+We first examine whether low-rank alignment alters model decision-making be-havior. To this end, we evaluate aligned models on a yes-or-no visual QA dataset and measure Type I and Type II error rates after instruction tuning. In this context, a Type I error occurs when the model incorrectly answers “yes” to a negative-ground-truth question, indicating an overconfident or hallucinated re-sponse. A Type II error occurs when the model incorrectly answers “no” to a positive-ground-truth question, reflecting cautious behavior that defaults to re-jection under uncertainty. At the sentence level, such cautiousness manifests as increased perplexity in the generated answers. Type I Error (1 - Precision)  Type II Error (1 - Recall) (rank)                      
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> full
+> LoHa LoKr LoRA
+> (32) (64) (128) (32) (64) (128) (32) (64) (128) full
+> LoHa LoKr LoRA
+> (32) (64) (128) (32) (64) (128) (32) (64) (128)
+> 1.4B
+> 2.7B
+> 7B
+> 13B
+
+Fig. 3: Type -I and -II error rate: models and low-rank operators. The results are on POPE, a visual perception hallucination benchmark. 
+
+Figure 3 demonstrates that low-rank adaptation shifts model behavior from halluci-natory to conservative. At the 1.4B and 7B scales, LoHa sub-stantially reduces the Type I error rate compared to full fine-tuning, effectively revers-ing the model’s behavioral tendency from overconfident affirmation toward cautious 6 M. Shi et al. 
+
+rejection. Through grid search over rank values, we find that certain low-rank operators, such as LoHa, can simultaneously reduce both Type I and Type II error rates without inducing a mere trade-off between the two failure modes. We use conservative to denote a reduced Type I (hallucination) rate and decisive to denote that this reduction is not obtained at the cost of a higher Type II rate, 
+
+i.e. , both error modes decrease jointly rather than trading off. We note that this shift is context-dependent: at the smallest (1.4B) scale the gap narrows, since an under-capacity model already tends toward conservative default decisions, and conservatism is not universally beneficial: settings that require affirmative identification may favor less cautious behavior. 
+
+Obs. 1 Low-rank alignment is associated with conservative/decisive behaviors. 
+
+2.3 Feature Preferences: Linear Separability Preservation 
+
+We next investigate how the visual features ( i.e. , the LLM’s visual inputs) are shaped by alignment before multimodal fusion takes place. We employ Ima-geNet [41] as the test dataset to evaluate general vision capabilities. Broken linear separability   
+
+> in some tokens.
+> Token Index 140 105 35 070
+> 99
+> 92
+> 84
+> rank 32 rank 64 rank 128 full
+> Dataset: ImageNet
+> Linear Probe Acc. (%)
+
+Fig. 4: Broken per-token linear separability of visual tokens, marked in Figure 1, tested by the default settings on ImageNet. 
+
+We measure per-token linear sepa-rability (LS), which assesses whether each visual token independently re-tains a linearly separable knowledge structure. Concretely, for each token position t in the visual sequence, we train a separate linear classifier on the corresponding C-dimensional fea-ture vectors across all samples and report classification accuracy. A high per-token LS indicates that the knowledge encoded at that position remains well-structured and discriminative; a low value suggests that the token’s repre-sentation has been entangled with information from other tokens or modalities. The original vision tower is well-trained and exhibits near-perfect token-wise linear separability. Figure 4 reveals that in a low-level perception setting ( i.e. ,a 1.4B model with full or low-rank alignment using a 2-layer vision-language connector), the vision tokens of aligned models before instruction tuning no longer maintain full linear separability on ImageNet. For the low-rank aligned model (LoRA with rank 128), individual tokens remain largely linearly separable, whereas full-parameter alignment disrupts this property in a subset of tokens, a phenomenon we term LS-curse : certain tokens lose their discriminative structure entirely, with accuracy dropping from near-perfect to as low as 83.6%. As shown in the following table, while some fully aligned tokens retain the knowledge structure from generic image datasets, others exhibit a mixing of representations that destroys linear separability. 
+
+origin full low-rank avg. acc. ± std. (%) [min] 100 ±0.00 99.52 ±1.89 [83.61] 99.99 ±0.02 Dive into the implicit biases of low-rank vision-language alignment 7
+
+This mixing of partial representations is not necessarily detrimental; it can in-troduce beneficial diversity across token representations. For instance, adversar-ial samples with similar representations may align semantically, thus appearing non-adversarial in certain tasks or contexts. However, it reflects a fundamentally different alignment strategy: full-parameter alignment aggressively restructures the visual feature space, whereas low-rank alignment operates conservatively within a constrained subspace. 
+
+Obs. 2 Low-rank alignment preserves per-token linear separability. 
+
+Interpretation. The combination of Obs. 1 and 2 reveals a coherent picture of the implicit biases introduced by low-rank alignment. At the behavior level, low-rank aligned models exhibit greater conservatism and reduced susceptibility to hallucination. At the feature level, this conservatism is grounded in the preserva-tion of modality-specific knowledge structures: low-rank alignment maintains the per-token linear separability inherited from the pretrained vision tower, whereas full alignment disrupts this structure through aggressive entity-level mixing. The subspace-constrained nature of low-rank updates limits token-wise diversity, pre-serving commonalities within each modality and preventing premature fusion of entity-level characteristics, while adjusting the subspace that most strongly af-fects the majority of features to maximize alignment loss reduction.      
+
+> full low-rank (behavior) decisiveness hallucinatory conservative (feature) preference entity characteristics modal commonality
+
+2.4 Geometric Characterization 
+
+To further characterize the structural differences between full and low-rank align-ment, we conduct two token-level geometric analyses: (1) testing each token’s linear separability on diverse, unseen fine-grained classification datasets ( e.g. ,birds and dogs) to disentangle general from entity-specific knowledge; and (2) examining the angular coverage and manifold structure of token features on general coarse-grained datasets ( e.g. , ImageNet). 
+
+General vs. specific knowledge. If low-rank alignment preserves general knowl-edge structures without prematurely fusing entity-specific characteristics, the two alignment types should yield comparable per-token LS on fine-grained en-tity categories while differing substantially on coarse-grained, general-purpose datasets. Table 2 confirms this prediction. On both STF-dogs [19] and CUB [47] (fine-grained datasets targeting dogs and birds, respectively), the fully aligned model exhibits high peak accuracy ( e.g. , 95.7% on STF-dogs, 94.0% on CUB) but also pronounced inter-token variability, with the worst tokens degrading significantly. The low-rank aligned model, by contrast, maintains narrower and more uniform LS distributions: it trades peak fine-grained separability for con-sistent preservation of coarse, foundational representations across all tokens. 8 M. Shi et al.                              
+
+> Table 2: Linear probe results across datasets of varying knowledge granularity. The fully aligned (full) vision tower’s features are more diverse (wider range of linear probe acc. on fine-grained datasets). ImageNet is general classification dataset. STF-dogs and CUB are fine-grained classification dataset of dogs and birds. Ranks of LoRA are 32/64/128. Range is reported by the maximum and minimum. dataset fine-grained full rank=128 rank=64 rank=32 ImageNet ×83.6 ∼100.0 99.9 ∼100.0 99.8 ∼100.0 99.8 ∼100.0 STF-dogs ✓32.8 ∼95.7 39.2 ∼88.0 36.3 ∼85.9 36.7 ∼86.8 CUB ✓49.9 ∼94.0 61.2 ∼91.7 60.8 ∼91.5 61.6 ∼91.5 full rank: 128 ( LoRA )rank: 64 ( LoRA )
+> .25
+> .2
+> 0
+> -.2
+> .5 .75 1
+> .4
+> Alignment Process Ratio
+> Minimal Cosine
+> Fig. 5: Full aligned vision tokens have larger cover-age of each given input images in ImageNet. Each image’s feature angle coverage ( i.e. , minimal cosine
+> ↓:= min i,j cos( i, j ), i, j ∈ { visualtokens |images }).
+
+This asymmetry directly sup-ports the progressive fusion hypothesis: low-rank align-ment retains the general knowl-edge backbone while deferring entity-specific fusion to subse-quent tuning stages. 
+
+Representation geometry. We quantify how alignment re-shapes the angular structure of the visual feature space. For each entity sampled from ImageNet, we compute the minimum pairwise cosine an-gle among its corresponding visual tokens; a smaller angle indicates that tokens have spread farther apart on the hyperspherical surface. As shown in Figure 5, the horizontal axis tracks alignment progress and the vertical axis reports this angular coverage. The fully aligned model covers a progressively wider angular span, at times exceeding half of the hyperspherical surface, indicating aggressive spread and fusion of token representations. The low-rank aligned model, by contrast, maintains a compact angular footprint throughout, preserving the original structural layout of the visual features. 
+
+Feature manifold. Figure 6 visualizes the token-wise feature manifolds (where colors represent different tokens), corroborating the angular analysis above. Un-der full alignment, per-token manifolds are geometrically diverse and spatially dispersed across the feature space, reflecting aggressive restructuring of visual representations. Under low-rank alignment, token clusters are markedly more homogeneous in shape and collectively occupy a more compact region, confirm-ing that the low-rank constraint induces a structural bias toward conservative, stable representations. This geometric regularity is consistent with updates con-fined to a dominant low-rank subspace, preserving the spatial organization in-herited from the pre-trained encoder rather than aggressively overwriting it. Dive into the implicit biases of low-rank vision-language alignment 9Low -Rank Alignment Full -Parameter Alignment     
+
+> General Patterns Fine -Grained Patterns
+> Diverse Homogeneous
+> Feature Manifolds tokens
+
+Fig. 6: The feature manifolds of each visual token, as depicted in Figure 1, are diverse under full align-ment and homogeneous under low-rank alignment (LoRA, rank 128). The surface is fitted using a poly-nomial, retaining first- and second-order informa-tion. Each colored manifold represents the token fea-ture distribution on MS-COCO. 
+
+Empirical summary. Low-rank alignment introduces systematic implicit biases that manifest at multiple lev-els. At the behavior level, it produces conservative and decisive perception. At the feature level, it preserves per-token knowledge struc-ture and prevents the LS-curse. Geometrically, it main-tains homogeneous and struc-turally stable visual represen-tations while preventing the premature spread and overgeneralization of entity-level features observed in full alignment. These converging observations motivate the theoretical analysis in Section 3, where we identify the mathematical mechanisms underlying these biases. 
+
+## 3 Theoretical Study: Preferences on Parameter and Representation Spaces, Flatness and Robustness 
+
+The empirical study in Section 2 reveals that low-rank alignment exhibits system-atic implicit biases: conservative behavior, preservation of per-token knowledge structure, and geometrically stable visual representations. Theoretical analysis is provided to identify the sufficient conditions under which such patterns arise and derive their mathematical characterizations. Due to the presence of higher-order tensors beyond second order in our derivations, we adopt the Einstein summation convention by default, wherein duplicated indices imply summation. Analysis model: unconstrained features. We adopt the Unconstrained Feature Model [35] (UFM) as our analytical framework. UFM assumes that an over-parameterized neural network can fit any feature, thereby treating features H as free variables rather than fixed outputs of a specific architecture. This enables us to study global properties of the learned feature structure, such as which direc-tions are preferentially reinforced. In practice, this assumption is well-supported by the over-parameterized nature of modern LLMs used in the alignment stage. 
+
+Low-rank modeling. Consider a low-rank adaptation parameterized by θ with forward mapping O(θ, H ) and total loss 
+
+F (θ) = E(x,y )∼D [L(O(θ, H (x)) , y )] ,Oi = W0ij Hj + bi + li(H; θ),
+
+where Oi ∈ Rp and Hj ∈ Rq denote the output and input features indexed by 
+
+i and j; W i  
+
+> 0j
+
+∈ Rp×q and bi ∈ Rp are the frozen base weight and bias; li(H; θ)10 M. Shi et al. 
+
+is the low-rank adaptation term; D is the training dataset; and L is the loss function. For LoRA, li(H; θ) = BikAkj Hj with low-rank factors A kj ∈ Rr×q ,
+
+B ik ∈ Rp×r , and θ = {B, A }. Analogous parameterizations for LoHa and LoKr, involving Hadamard factor pairs B1, B 2 ∈ Rp×r , A1, A 2 ∈ Rr×q and Kronecker factor C st ∈ Rs×t, are detailed in the Appendix. 
+
+3.1 Process Preference: Robustness to Feature Noise Theorem 1 (Feature preferences: noise smoothing.). Under the UFM assumption, the feature space with additive noise exhibits a weighted smoothing effect. Expanding features with zero-mean noise  ξ, we have 
+
+Eξ
+
+ ∂F ∂W i 
+
+> 0j
+
+
+
+≃ ∂F ∂W i 
+
+> 0j
+
+( ¯H) + 12
+
+∂3F∂W i  
+
+> 0j
+
+∂H k ∂H l Σkl ,
+
+where  Σkl = E[ξkξl] is the feature noise covariance, F is the alignment loss function, W0 is the original weight, ¯H the mean of H := ¯H + ξ.
+
+Corollary 1 (LoRA’s 5 noise robustness preference .). Substituting this into the LoRA gradient flow yields 
+
+˙Apj ≃ − ηB ip
+
+ ∂F ∂W i 
+
+> 0j
+
+( ¯H) + 12
+
+∂3F∂W i  
+
+> 0j
+
+∂H k ∂H l Σkl 
+
+
+
+,
+
+˙Bip ≃ − η
+
+ ∂F ∂W i 
+
+> 0j
+
+( ¯H) + 12
+
+∂3F∂W i  
+
+> 0j
+
+∂H k∂H l Σkl 
+
+
+
+Apj ,
+
+demonstrating an implicit smoothing effect along directions with feature noise. This shows that gradient flow preferentially aligns updates along subspaces that are robust to stochastic variations in the features, encoding an implicit bias to-wards flatter directions in the loss landscape. Intuition and explanation. The core insight lies in the coupled gradient flow: 
+
+˙A ∼ B · (grad + noise ) and ˙B ∼ (grad + noise ) · A, where ˙A and ˙B denote the gradient flows of A and B, respectively, and ∗ and ⊗ denote the Hadamard and Kronecker products where applicable. Since updates to A are scaled by B
+
+and vice versa, whichever directions are already dominant receive proportionally larger updates, a self-reinforcing dynamic. The noise-induced third-order term further amplifies this effect along directions with large feature-noise covariance, creating a Matthew effect: strong directions grow stronger while weak directions are suppressed. Consequently, LoRA naturally concentrates updates on noise-robust principal directions in the feature space.   
+
+> 5Corollaries about LoHa and LoKr can be obtained. See Appendix. Dive into the implicit biases of low-rank vision-language alignment 11
+
+Comparison: full vs. low-rank alignment. In full alignment, the weight matrix 
+
+W is updated directly and all directions receive gradient updates on an equal footing. In low-rank alignment, A and B act as mutual subspace projectors, con-fining the effect of third-order smoothing terms to the principal subspace. This confinement favors conservative feature integration along dominant directions while suppressing changes in weaker subspaces, helping to explain the homo-geneous manifold structure and preserved linear separability observed in Sec-tion 2.3. Here δji denotes the Kronecker delta arising in the projection identities. Analogous conclusions hold for LoHa and LoKr as detailed in the Appendix. 
+
+3.2 Steady-State Preferences: Flatness and Robustness 
+
+Theorem 1 characterizes which directions are reinforced during optimization. We now ask a complementary question: where do the low-rank parameters converge at the end of training? 
+
+Theorem 2 (Low-rank steady-state distribution). Let the gradient flow of θ be ˙θα = −η ∂F ∂θ α . Define the effective low-rank subspace mapping M H = l(H)
+
+(for example, M = BA in LoRA, M = B1A1 ∗ B2A2 in LoHa, M = C ⊗ BA in LoKr) and the corresponding effective loss: 
+
+Feff (M ) = F (M ) + η log det eD(M )4 + ∂2F
+
+2∂O i∂O m Σjk (W i  
+
+> 0j
+
++ M ij )( W m  
+
+> 0k
+
++ M mk),
+
+where F (M ) is the original loss expressed in the low-rank subspace M ; eD(M ) is the covariance of gradient noise projected onto M , encoding flatness preference; 
+
+Σjk is the covariance of feature noise. Then, under small-step stochastic gradient descent or noisy gradient flow, the steady-state M distributes approximately as: 
+
+pstat (M ) ∝ exp 
+
+
+
+− 2
+
+η Feff (M )
+
+
+
+.
+
+Remark 1. The effective loss Feff augments F with two penalty terms. The log-determinant term penalizes subspaces where gradient noise is small or isotropic, biasing convergence toward flat regions of the loss landscape. The feature-noise term penalizes subspaces sensitive to input perturbations, biasing convergence toward noise-robust directions. Together, they ensure that steady-state param-eters concentrate on subspaces that are simultaneously flat and robust. 
+
+Intuition and takeaways. The two penalty terms reveal a dual implicit bias: low-rank parameters are drawn toward configurations that are flat with respect to the loss and robust with respect to input perturbations. The net effect is that the learned subspace naturally avoids directions sensitive to small variations: the system settles into configurations where outputs remain stable under feature noise, inherently reducing susceptibility to adversarial perturbations and aligning with the conservative behavior observed empirically in Section 2. 12 M. Shi et al.                                                         
+
+> Table 3: Comparison of between low-rank operators on Vicuna-13B. Full-parameter alignment serves as the baseline. The selection of low rank operators is highly correlated with rank. A suitable range of rank can be empirically found with better perception. full LoRA LoKr LoHa metric –32 64 128 32 64 128 32 64 128 MME-P 236.6 375.9 288.0 –79.4 78.5 449.3 380.6 621.4 1079.7
+> POPE 42.2 50.0 19.7 –9.0 12.7 46.8 21.6 51.5 82.8 Table 4: Ablation on low-rank operators across model scales. Results are reported on 7B / 13B MobileVLM-V2 models. Best results in bold .operators on 7/13B perception ↑knowledge ↑reasoning ↑hallucination ↑
+> full parameter 521.0/236.6 23.4/29.5 86.8/52.5 35.0/66.9 LoRA: mat. mul. 551.8/375.9 27.0/36.3 251.4/147.5 40.9/66.7 LoHa: Hadamard 965.3 /1079.7 38.5 /43.0 332.5 /219.6 80.4 /82.9
+> LoKr: Kronecker 844.4/449.3 37.4/40.7 312.5/62.5 74.8/70.2
+
+## 4 Ablation Study: Low-rank Vision-Language Alignment 
+
+Overview. The ablation studies investigate the effects of rank, model scale, align-ment depth, low-rank operators, vision encoder choice, frozen vs. unfrozen en-coder settings, low-rank placement, learning rate schedules, and overfitting con-trols. Unless otherwise specified, experiments follow the default settings with targeted modifications. Extended results are provided in the Appendix. 
+
+Ranks. In perception-intensive benchmarks, increasing the rank of the low-rank module yields significant performance gains, particularly for larger models. This is evident from the improvements on MME-perception and POPE using the 13B model In Table 3 , in contrast, knowledge-intensive or task-specific bench-marks ( e.g. , GQA, ScienceQA, TextVQA) show no comparable gains from rank increases, suggesting that the performance bottleneck in these tasks lies else-where. We explore this further in the extended-data ablation in the Appendix. 
+
+Operators. Ablation of operators is conducted using Vicuna-7B and -13B under default settings with the best-tuned rank for each operator. The results reveal operator-specific strengths across benchmarks, indicating that the choice of low-rank operator is a promising avenue for future optimization. 
+
+Model scales and architectures. As shown in Tables 5 and 6, low-rank alignment consistently matches or outperforms full fine-tuning across scales from 1.4B to 14B, and this advantage generalizes to architecturally distinct models including Qwen3-8B/14B under a one-shot protocol. Two exceptions, POPE and MMMU-Pro, appear consistently across both model families, where higher-rank updates partially overwrite pre-trained knowledge structures. The rank dependence of Dive into the implicit biases of low-rank vision-language alignment 13                                                                                                  
+
+> Table 5: Performance across model scales and alignment methods. Full-parameter alignment serves as the baseline. MobileVLM-V2 results use rank 64 for all low-rank methods. model metric Full LoRA LoKr LoHa 1.4B MME-P 208.1 568.7 766.6 450.8 POPE 2.5 51.5 72.8 63.1 2.7B MME-P 15.8 52.0 432.6 318.3 POPE 0.5 15.0 71.3 66.1 7B MME-P 521.0 551.8 825.1 608.3 POPE 35.0 37.2 70.7 67.3 13B MME-P 236.6 288.0 78.5 621.4
+> POPE 66.9 44.8 37.6 67.4
+> Table 6: Performance of alignment methods on Qwen3. Low-rank alignment works on most of the benchmarks, with notable exceptions on POPE and MMMU-Pro where rank-constrained updates prove insufficient. metric full 8B LoRA ( r= 128 , 8B) ∆full 14B LoRA ( r= 32 , 14B) ∆
+> GQA 28.4 37.2 +8 .86.6 20.2 +13 .6
+> MMBench 18.1 48.7 +30 .612.0 45.5 +33 .5
+> MME-P 536.0 752.3 +216 .3526.3 988.9 +462 .6
+> MME-R 212.1 242.1 +30 .0234.3 308.6 +74 .3
+> MMMU-Pro 12.1 5.7 −6.411.8 11.8 0
+> POPE 92.7 25.1 −67 .6n/a 62.3 n/a ScienceQA 63.7 71.3 +7 .659.3 71.9 +12 .6
+> TextVQA 5.9 9.7 +3 .84.2 10.2 +6 .0
+
+these anomalies suggests that the low-rank constraint acts as a regularizer lim-iting deviation from the pre-trained weight manifold, a property that becomes increasingly important as rank grows. 
+
+Other ablation on default settings. These ablations jointly validate the default configuration of our alignment pipeline across four dimensions. (a) Visual en-coder. Both DINOv2 [36] and SigLIPv2 [46] backbones benefit from low-rank alignment over full fine-tuning, with consistent gains on GQA and MMBench. The improvement is more pronounced under DINOv2, suggesting that the low-rank constraint interacts more favorably with dense spatial features than with the global token representations of SigLIPv2. (b) Encoder freezing. Freezing the visual encoder during alignment consistently outperforms unfreezing across nearly all metrics, regardless of backbone or alignment method. Unfreezing in-troduces instability, particularly on TextVQA and MME-p, indicating that gra-dient updates to the encoder during alignment disrupt pre-trained visual repre-sentations rather than refining them. (c) Adaptation scope. Applying low-rank adaptation jointly to both attention and MLP modules yields the best overall 14 M. Shi et al.                                                                                               
+
+> Table 7: Ablation studies on alignment design choices. All configurations use full fine-tuning in the instruction tuning stage with other default settings unchanged. Row colors denote ablation groups: visual encoder , frozen vs. unfrozen encoder , low-rank adaptation scope , and overfitting control . bench. GQA MME-p POPE TextVQA MMB-dev SQA dinov2-full 61.56 1503.69 86.86 51.56 72.51 74.27 dinov2-LoRA 61.88 1481.45 86.52 55.19 74.66 76.15
+> siglipv2-full 62.19 1406.61 88.24 29.58 72.68 73.42 siglipv2-LoRA 62.73 1474.70 87.52 30.82 73.37 72.08 frz. clip-LoRA 62.47 1511.61 87.52 44.73 72.41 71.42 un-frz. clip-full 59.98 1444.91 85.79 40.18 71.74 72.53 un-frz. clip-LoRA 60.18 1373.54 86.49 42.97 71.22 72.53
+> un-frz. dinov2-full 61.78 1403.20 87.60 28.61 71.82 72.38 un-frz. dinov2-LoRA 63.07 1481.98 88.18 37.27 76.03 72.04 all (attn. + MLP) 62.47 1511.61 87.52 44.73 72.41 71.42 MLP only 59.99 1384.71 87.95 41.29 72.77 75.41
+> attn. only 62.26 1391.84 87.66 39.38 69.62 74.32 full + weight decay 61.30 1432.68 86.21 43.55 70.34 70.61 default (LoRA) 62.47 1511.61 87.52 44.73 72.41 71.42
+
+performance, with the full configuration outperforming MLP-only and attention-only variants on MME-p and TextVQA. This suggests that the two module types capture complementary aspects of visual-language alignment and should not be decoupled. (d) Overfitting. Our default low-rank alignment matches or exceeds full fine-tuning with tuned weight decay across all six benchmarks, confirming that the performance advantage is not attributable to overfitting in the full fine-tuning baseline. The low-rank constraint is an effective overfitting regularizer. 
+
+## 5 Related Works 
+
+Low-rank Adaptation and Vision-Language Models. Low-rank adaptation [14] introduces trainable low-rank matrices into frozen linear layers for parameter-efficient fine-tuning, with extensions including QLoRA [9], LoHa [17], LoKr [51], and further variants [13, 23, 27, 33, 48, 56]. On the VLM side, Flamingo [1] pio-neered visual-language integration, inspiring a broad family of models [6,8,21,26, 50, 57] that differ in scale, architecture, and alignment strategy. In this context, VLoRA [32] suggests that cross-modal information transfer may be intrinsically low-rank, providing empirical motivation for applying low-rank adaptation in the alignment stage. However, whether such constraints introduce systematic implicit biases in visual token representations during alignment remains unchar-acterized. Our work targets this gap: rather than proposing a new method, we analyze the alignment dynamics induced by LLM-side low-rank adaptation, a question orthogonal to connector design. Since many open-source VLMs release Dive into the implicit biases of low-rank vision-language alignment 15 
+
+only trained weights without the full reproduction materials required to repli-cate their pretraining stage, we adopt a more general alignment pipeline that abstracts away model-specific details while remaining representative of main-stream practice, as evidenced by its continued use in recent popular models such as Kimi2.5-K2 [45]. Our simplified pipeline is therefore deliberately distinct from architecture-specific designs such as Qwen3-VL-style [3] multi-layer visual injec-tion (deepstack), which depends on proprietary training configurations beyond public reproduction, and we cannot reproduce the alignment stages of Qwen3-VL. Moreover, most current open-source models employ a ViT inherited from a previously aligned version rather than trained from unaligned ones, making it difficult to isolate for academic research. 
+
+Implicit Bias of Low-Rank Adaptation and Matrix Factorization. A classical line of work studies the implicit regularization of factorized parameterizations: gradient descent on matrix factorization is biased toward low-rank / minimal nuclear-norm solutions [11], an effect that deep factorization intensifies [2] and that need not be captured by any norm [40]; more recent analyses study LoRA from a parameter-efficiency or optimization-landscape standpoint [4, 18]. Our setting departs from this line in four respects: a non-linear LLM backbone, fine-tuning from a pretrained checkpoint, stochastic (noisy) dynamics, and a cross-entropy alignment objective. Consequently, it yields a flat-gradient, noise-robust subspace bias (Sec. 3) rather than the min-norm/low-rank bias of the classical setting; we expand on these four differences in Appendix 1.4. 
+
+## 6 Conclusion 
+
+This work investigates the implicit biases introduced by low-rank adaptation dur-ing vision-language alignment, a stage widely treated as requiring full-parameter updates. We show that low-rank alignment not only reduces training costs but consistently outperforms full fine-tuning across model scales from 1.4B to 14B parameters. Through behavioral, feature-level, and geometric analyzes, we iden-tify three systematic biases: a shift from hallucinatory to conservative percep-tion, preservation of per-token linear separability (in contrast to full alignment), and structurally homogeneous visual representations. These observations reveal that low-rank alignment retains general modality-specific knowledge during the alignment stage while deferring entity-specific fusion to subsequent instruction tuning. Two theorems ground this behavior in optimization theory, showing that low-rank gradient flow preferentially reinforces noise-robust feature directions and that steady-state parameters concentrate on flat, perturbation-robust sub-spaces. Extensive experiments across over 100 alignment configurations (span-ning model scales, operator families and vision encoders) validate these findings and offer practical guidance for vision-language alignment. 
+
+## Acknowledgements 
+
+We thank the ECCV committee and reviewers for their careful reading and constructive feedback. We are also grateful to colleagues for helpful discussions 16 M. Shi et al. 
+
+and to the institutions that provided computational resources used in this study. The first author carried out and led this work as an independent researcher. 
+
+## References 
+
+1. Alayrac, J.B., Donahue, J., Luc, P., Miech, A., Barr, I., Hasson, Y., Lenc, K., Mensch, A., Millican, K., Reynolds, M., et al.: Flamingo: A visual language model for few-shot learning. NeurIPS 35 , 23716–23736 (2022) 2. Arora, S., Cohen, N., Hu, W., Luo, Y.: Implicit regularization in deep matrix factorization. In: Advances in Neural Information Processing Systems (NeurIPS) (2019) 3. Bai, S., Cai, Y., Chen, R., Chen, K., Chen, X., Cheng, Z., Deng, L., Ding, W., Gao, C., Ge, C., et al.: Qwen3-vl technical report. arXiv preprint arXiv:2511.21631 (2025) 4. Biderman, D., Portes, J., Gonzalez Ortiz, J.J., Paul, M., Greengard, P., Jennings, C., King, D., Havens, S., Chiley, V., Frankle, J., Blakeney, C., Cunningham, J.P.: LoRA learns less and forgets less. Transactions on Machine Learning Research (TMLR) (2024) 5. Chen, L., Li, J., Dong, X., Zhang, P., He, C., Wang, J., Zhao, F., Lin, D.: Sharegpt4v: Improving large multi-modal models with better captions. In: Eu-ropean Conference on Computer Vision. pp. 370–387. Springer (2024) 6. Chen, Z., Wu, J., Wang, W., Su, W., Chen, G., Xing, S., Zhong, M., Zhang, Q., Zhu, X., Lu, L., et al.: Internvl: Scaling up vision foundation models and aligning for generic visual-linguistic tasks. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition. pp. 24185–24198 (2024) 7. Chiang, W.L., Li, Z., Lin, Z., Sheng, Y., Wu, Z., Zhang, H., Zheng, L., Zhuang, S., Zhuang, Y., Gonzalez, J.E., et al.: Vicuna: An open-source chatbot impressing gpt-4 with 90%* chatgpt quality. See https://vicuna. lmsys. org (accessed 14 April 2023) 2(3), 6 (2023) 8. Chu, X., Qiao, L., Zhang, X., Xu, S., Wei, F., Yang, Y., Sun, X., Hu, Y., Lin, X., Zhang, B., et al.: Mobilevlm v2: Faster and stronger baseline for vision language model. arXiv preprint arXiv:2402.03766 (2024) 9. Dettmers, T., Pagnoni, A., Holtzman, A., Zettlemoyer, L.: Qlora: Efficient fine-tuning of quantized llms. Advances in Neural Information Processing Systems 36 
+
+(2024) 10. Dong, M., Cai, H., Li, J., Zhou, S., Ren, B., Peng, K., Fu, Y.: Visnec: Measuring and leveraging visual necessity for multimodal instruction tuning. arXiv preprint arXiv:2603.01195 (2026) 11. Gunasekar, S., Woodworth, B., Bhojanapalli, S., Neyshabur, B., Srebro, N.: Im-plicit regularization in matrix factorization. In: Advances in Neural Information Processing Systems (NeurIPS) (2017) 12. Han, Z., Gao, C., Liu, J., Zhang, S.Q., et al.: Parameter-efficient fine-tuning for large models: A comprehensive survey. arXiv preprint arXiv:2403.14608 (2024) 13. Hayou, S., Ghosh, N., Yu, B.: Lora+: Efficient low rank adaptation of large models. arXiv preprint arXiv:2402.12354 (2024) 14. Hu, E.J., Wallis, P., Allen-Zhu, Z., Li, Y., Wang, S., Wang, L., Chen, W., et al.: Lora: Low-rank adaptation of large language models. In: International Conference on Learning Representations Dive into the implicit biases of low-rank vision-language alignment 17 15. Hudson, D.A., Manning, C.D.: Gqa: A new dataset for real-world visual reasoning and compositional question answering. In: Proceedings of the IEEE/CVF confer-ence on computer vision and pattern recognition. pp. 6700–6709 (2019) 16. HuggAN: WikiArt Dataset. https://huggingface.co/datasets/huggan/wikiart 
+
+(2022), accessed: 2024-12-19 17. Hyeon-Woo, N., Ye-Bin, M., Oh, T.H.: Fedpara: Low-rank hadamard product for communication-efficient federated learning. In: The Twelfth International Confer-ence on Learning Representations (2022) 18. Jang, U., Lee, J.D., Ryu, E.K.: LoRA training in the NTK regime has no spurious local minima. In: International Conference on Machine Learning (ICML) (2024) 19. Khosla, A., Jayadevaprakash, N., Yao, B., Li, F.F.: Novel dataset for fine-grained image categorization: Stanford dogs. In: Proc. CVPR workshop on fine-grained visual categorization (FGVC). vol. 2 (2011) 20. Krishna, R., Zhu, Y., Groth, O., Johnson, J., Hata, K., Kravitz, J., Chen, S., Kalantidis, Y., Li, L.J., Shamma, D.A., et al.: Visual genome: Connecting language and vision using crowdsourced dense image annotations. International journal of computer vision 123 (1), 32–73 (2017) 21. Li, J., Li, D., Savarese, S., Hoi, S.: BLIP-2: Bootstrapping language-image pre-training with frozen image encoders and large language models. ICML pp. 19730– 19742 (2023) 22. Li, Y., Du, Y., Zhou, K., Wang, J., Zhao, W.X., Wen, J.R.: Evaluating object hal-lucination in large vision-language models. arXiv preprint arXiv:2305.10355 (2023) 23. Li, Y., Yu, Y., Liang, C., He, P., Karampatziakis, N., Chen, W., Zhao, T.: Loftq: Lora-fine-tuning-aware quantization for large language models. arXiv preprint arXiv:2310.08659 (2023) 24. Lin, T.Y., Maire, M., Belongie, S., Hays, J., Perona, P., Ramanan, D., Dollár, P., Zitnick, C.L.: Microsoft coco: Common objects in context. In: European conference on computer vision. pp. 740–755. Springer (2014) 25. Liu, H., Li, C., Li, Y., Lee, Y.J.: Improved baselines with visual instruction tuning (2023) 26. Liu, H., Li, C., Wu, Q., Lee, Y.J.: Visual instruction tuning. NeurIPS 36 (2024) 27. Liu, S.Y., Wang, C.Y., Yin, H., Molchanov, P., Wang, Y.C.F., Cheng, K.T., Chen, M.H.: Dora: Weight-decomposed low-rank adaptation. arXiv preprint arXiv:2402.09353 (2024) 28. Liu, Y., Duan, H., Zhang, Y., Li, B., Zhang, S., Zhao, W., Yuan, Y., Wang, J., He, C., Liu, Z., et al.: Mmbench: Is your multi-modal model an all-around player? In: European conference on computer vision. pp. 216–233. Springer (2024) 29. Liu, Z., Luo, P., Wang, X., Tang, X.: Deep learning face attributes in the wild. In: Proceedings of International Conference on Computer Vision (ICCV) (December 2015) 30. Lu, P., Mishra, S., Xia, T., Qiu, L., Chang, K.W., Zhu, S.C., Tafjord, O., Clark, P., Kalyan, A.: Learn to explain: Multimodal reasoning via thought chains for science question answering. Advances in Neural Information Processing Systems 
+
+35 , 2507–2521 (2022) 31. Lu, P., Qiu, L., Chen, J., Xia, T., Zhao, Y., Zhang, W., Yu, Z., Liang, X., Zhu, S.C.: Iconqa: A new benchmark for abstract diagram understanding and visual language reasoning. arXiv preprint arXiv:2110.13214 (2021) 32. Ma, F., Xue, H., Zhou, Y., Wang, G., Rao, F., Yan, S., Zhang, Y., Wu, S., Shou, M.Z., Sun, X.: Visual perception by large language model’s weights. Advances in Neural Information Processing Systems (2024) 18 M. Shi et al. 33. Meng, F., Wang, Z., Zhang, M.: PiSSA: Principal singular values and singular vec-tors adaptation of large language models. In: The Thirty-eighth Annual Conference on Neural Information Processing Systems (2024) 34. Mishra, A., Shekhar, S., Singh, A.K., Chakraborty, A.: Ocr-vqa: Visual question answering by reading text in images. In: 2019 international conference on document analysis and recognition (ICDAR). pp. 947–952. IEEE (2019) 35. Mixon, D.G., Parshall, H., Pi, J.: Neural collapse with unconstrained features. Sampling Theory, Signal Processing, and Data Analysis 20 (2), 11 (2022) 36. Oquab, M., Darcet, T., Moutakanni, T., Vo, H., Szafraniec, M., Khalidov, V., Fernandez, P., Haziza, D., Massa, F., El-Nouby, A., et al.: Dinov2: Learning robust visual features without supervision. arXiv preprint arXiv:2304.07193 (2023) 37. Ordonez, V., Kulkarni, G., Berg, T.: Im2text: Describing images using 1 mil-lion captioned photographs. Advances in neural information processing systems 
+
+24 (2011) 38. Radford, A., Kim, J.W., Hallacy, C., Ramesh, A., Goh, G., Agarwal, S., Sastry, G., Askell, A., Mishkin, P., Clark, J., et al.: Learning transferable visual models from natural language supervision. In: ICML. pp. 8748–8763. PMLR (2021) 39. Ravi, N., Gabeur, V., Hu, Y.T., Hu, R., Ryali, C., Ma, T., Khedr, H., Rädle, R., Rolland, C., Gustafson, L., et al.: Sam 2: Segment anything in images and videos. arXiv preprint arXiv:2408.00714 (2024) 40. Razin, N., Cohen, N.: Implicit regularization in deep learning may not be explain-able by norms. In: Advances in Neural Information Processing Systems (NeurIPS) (2020) 41. Russakovsky, O., Deng, J., Su, H., Krause, J., Satheesh, S., Ma, S., Huang, Z., Karpathy, A., Khosla, A., Bernstein, M., Berg, A.C., Fei-Fei, L.: Imagenet large scale visual recognition challenge (2015), https://arxiv.org/abs/1409.0575 
+
+42. Schuhmann, C., Beaumont, R., Vencu, R., Gordon, C., Wightman, R., Cherti, M., Coombes, T., Katta, A., Mullis, C., Wortsman, M., et al.: Laion-5b: An open large-scale dataset for training next generation image-text models. Advances in neural information processing systems 35 , 25278–25294 (2022) 43. Sharma, P., Ding, N., Goodman, S., Soricut, R.: Conceptual captions: A cleaned, hypernymed, image alt-text dataset for automatic image captioning. In: Proceed-ings of ACL (2018) 44. Singh, A., Natarajan, V., Shah, M., Jiang, Y., Chen, X., Batra, D., Parikh, D., Rohrbach, M.: Towards VQA models that can read. In: CVPR. pp. 8317–8326 (2019) 45. Team, K.: Kimi k2.5: Visual agentic intelligence. https://www.kimi.com/blog/ kimi-k2-5 (2025) 46. Tschannen, M., Gritsenko, A., Wang, X., Naeem, M.F., Alabdulmohsin, I., Parthasarathy, N., Evans, T., Beyer, L., Xia, Y., Mustafa, B., et al.: Siglip 2: Multilingual vision-language encoders with improved semantic understanding, lo-calization, and dense features. arXiv preprint arXiv:2502.14786 (2025) 47. Wah, C., Branson, S., Welinder, P., Perona, P., Belongie, S.: The caltech-ucsd birds-200-2011 dataset (2011) 48. Xu, Y., Xie, L., Gu, X., Chen, X., Chang, H., Zhang, H., Chen, Z., Zhang, X., Tian, Q.: Qa-lora: Quantization-aware low-rank adaptation of large language models. arXiv preprint arXiv:2309.14717 (2023) 49. Yang, A., Li, A., Yang, B., Zhang, B., Hui, B., Zheng, B., Yu, B., Gao, C., Huang, C., Lv, C., Zheng, C., Liu, D., Zhou, F., Huang, F., Hu, F., Ge, H., Wei, H., Lin, H., Tang, J., Yang, J., Tu, J., Zhang, J., Yang, J., Yang, J., Zhou, J., Zhou, J., Lin, Dive into the implicit biases of low-rank vision-language alignment 19 J., Dang, K., Bao, K., Yang, K., Yu, L., Deng, L., Li, M., Xue, M., Li, M., Zhang, P., Wang, P., Zhu, Q., Men, R., Gao, R., Liu, S., Luo, S., Li, T., Tang, T., Yin, W., Ren, X., Wang, X., Zhang, X., Ren, X., Fan, Y., Su, Y., Zhang, Y., Zhang, Y., Wan, Y., Liu, Y., Wang, Z., Cui, Z., Zhang, Z., Zhou, Z., Qiu, Z.: Qwen3 technical report (2025), https://arxiv.org/abs/2505.09388 
+
+50. Yao, Y., Yu, T., Zhang, A., Wang, C., Cui, J., Zhu, H., Cai, T., Li, H., Zhao, W., He, Z., et al.: Minicpm-v: A gpt-4v level mllm on your phone. arXiv preprint arXiv:2408.01800 (2024) 51. Yeh, S.Y., Hsieh, Y.G., Gao, Z., Yang, B.B., Oh, G., Gong, Y.: Navigating text-to-image customization: From lycoris fine-tuning to model evaluation. In: The Twelfth International Conference on Learning Representations (2023) 52. Yin, S., Fu, C., Zhao, S., Li, K., Sun, X., Xu, T., Chen, E.: A survey on multimodal large language models. National Science Review 11 (12), nwae403 (2024) 53. Yu, W., Yang, Z., Ren, L., Li, L., Wang, J., Lin, K., Lin, C.C., Liu, Z., Wang, L., Wang, X.: Mm-vet v2: A challenging benchmark to evaluate large multimodal models for integrated capabilities. arXiv preprint arXiv:2408.00765 (2024) 54. Yue, X., Zheng, T., Ni, Y., Wang, Y., Zhang, K., Tong, S., Sun, Y., Yu, B., Zhang, G., Sun, H., et al.: Mmmu-pro: A more robust multi-discipline multimodal under-standing benchmark. In: Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers). pp. 15134–15186 (2025) 55. Zhang, S., Dong, L., Li, X., Zhang, S., Sun, X., Wang, S., Li, J., Hu, R., Zhang, T., Wu, F., et al.: Instruction tuning for large language models: A survey. arXiv preprint arXiv:2308.10792 (2023) 56. Zhou, S., Wang, S., Yuan, Z., Shi, M., Shang, Y., Yang, D.: Gsq-tuning: Group-shared exponents integer in fully quantized training for llms on-device fine-tuning. In: Findings of the Association for Computational Linguistics: ACL 2025. pp. 22971–22988 (2025) 57. Zhu, D., Chen, J., Shen, X., Li, X., Elhoseiny, M.: MiniGPT-4: Enhancing vision-language understanding with advanced large language models. arXiv preprint arXiv:2304.10592 (2023) 20 M. Shi et al. 
+
+## Appendix 1 Implicit Biases: Low-Rank Alignment 
+
+1.1 Preliminary: First-Order and Symbols 
+
+Due to the high-order tensor and Kronecker structures employed in our deriva-tions, we adopt the Einstein summation convention by default. The analysis of the optimized feature H is motivated by the Unconstrained Feature Model (UFM) under the universal approximation assumption and the practical large scale of both data and models. 
+
+Model Definition 
+
+Oi = W0ij Hj + bi + li(H; θ),
+
+where  Hj is the input vector (dimension  q),  Oi is the output vector (dimension 
+
+p), and  θ denotes, collectively, the parameters of  l(H; θ).
+
+Symbols 
+
+Symbol Meaning / Dimension 
+
+Oi, H j Output/input vectors, p, qOis , H jt Kronecker Output/input, p × s, q × tW i  
+
+> 0j
+
+, b i Base weight p × q, bias pA kj , B ik Low-rank factors, r × q, p × rB1, B 2, A 1, A 2 Hadamard-case factors, p × r, r × qC st Kronecker factor, s × tli(H; θ) Adaptation term with parameters θF (O) Scalar objective 
+
+g(P ) 
+
+> ij
+
+, g (Q) 
+
+> ij
+
+Metric tensors; gij  
+
+> (P)
+
+, g ij  
+
+> (Q)
+
+inverses 
+
+δji Kronecker delta 
+
+∗, ⊗ Hadamard, Kronecker products 
+
+i, j, k Output, input, latent indices 
+
+m, n, s, t Auxiliary summation indices 
+
+M Temporary variables for simplification 
+
+Index and Dimension Conventions 
+
+i ∈ { 1, . . . , p }, j ∈ { 1, . . . , q }, k ∈ { 1, . . . , r },
+
+and  m, n, s, t  are auxiliary summation indices. All indices obey the Einstein summation convention: repeated upper and lower indices are summed. Dive into the implicit biases of low-rank vision-language alignment 21 
+
+Metric Tensors Let  g(P ) 
+
+> ij
+
+and  g(Q) 
+
+> ij
+
+denote the metric tensors on output and input spaces respectively, with inverses  gij   
+
+> (P)
+
+and  gij  
+
+> (Q)
+
+satisfying 
+
+g(P ) 
+
+> ik
+
+g kj   
+
+> (P)
+
+= δij , g(Q) 
+
+> ik
+
+g kj  
+
+> (Q)
+
+= δij .
+
+For covariant differentiation we write: 
+
+∂F ∂H j
+
+= g(Q)
+
+> jm
+
+∂F ∂H m , ∂F ∂O i
+
+= g(P )
+
+> im
+
+∂F ∂O m .
+
+General Chain Rule 
+
+∂F ∂H j = ∂F ∂O i
+
+∂O i
+
+∂H j , ∂F ∂θ = ∂F ∂O i
+
+∂O i
+
+∂θ .
+
+Since 
+
+O i = W0 ij H j + b i + l i(H; θ),
+
+it follows that 
+
+∂O i
+
+∂H j = W0 ij + ∂l i
+
+∂H j .
+
+Case 0 full: l = 0 (Pure Linear Map) 
+
+Model. 
+
+Oi = W0ij Hj + bi
+
+Gradients. Let Gi = ∂F ∂O i . Then 
+
+∂F ∂H k = GiW0ik,∂F ∂W 0ij
+
+= GiHj , ∂F ∂b i = Gi.
+
+First-order conditions. 
+
+GiW0ik = 0 ,GiHj = 0 ,Gi = 0 
+
+Case 1: LoRA l = BAH 
+
+Model. 
+
+li = BimAmj Hj = M ij Hj , M ij = BimAmj
+
+Oi = W0ij Hj + bi + M ij Hj22 M. Shi et al. 
+
+Gradients. 
+
+∂F ∂H k = Gi(W0ik + BimAmk),∂F ∂B im
+
+= GiAmj Hj , ∂F ∂A mj
+
+= GiBimHj
+
+First-order condition.  Gi(W0ik + BimAmk) = 0 ,GiAmj Hj = 0 ,GiBimHj = 0 
+
+Case 2 LoHa: l = [( B1A1) ∗ (B2A2)] H (Hadamard) 
+
+Model. 
+
+M i 
+
+> 1j
+
+= Bi
+
+> 1m
+
+Am  
+
+> 1j
+
+, M i 
+
+> 2j
+
+= Bi
+
+> 2m
+
+Am  
+
+> 2j
+
+,M ij = M i 
+
+> 1j
+
+M i 
+
+> 2j
+
+, li = M ij Hj
+
+Gradients. 
+
+∂F ∂H k = Gi(W0ik + M ik),∂F ∂B s 
+
+> 1t
+
+= GsAt 
+
+> 1j
+
+M s  
+
+> 2j
+
+Hj , ∂F ∂B s 
+
+> 2t
+
+= GsAt 
+
+> 2j
+
+M s  
+
+> 1j
+
+Hj ,∂F ∂A m 
+
+> 1n
+
+= GiBi
+
+> 1m
+
+M i
+
+> 2n
+
+Hn, ∂F ∂A m 
+
+> 2n
+
+= GiBi
+
+> 2m
+
+M i
+
+> 1n
+
+Hn
+
+First-order conditions. 
+
+Gi(W0ik + M i
+
+> 1k
+
+M i
+
+> 2k
+
+) = 0 ,GiBi
+
+> 1m
+
+Am  
+
+> 1j
+
+Hj = 0 ,GiBi
+
+> 2m
+
+Am  
+
+> 2j
+
+Hj = 0 
+
+Case 3 LoKr: l = [ C ⊗ (BA )] H (Kronecker) 
+
+Model. 
+
+M ij = BimAmj , lip = M ij Cpq Hjq 
+
+Gradients. 
+
+∂F ∂H kr = Gip (δikδpr W ip  
+
+> 0
+
++ M ikCpr ),∂F ∂B st
+
+= Gsp Cpq Atj Hjq , ∂F ∂A mn
+
+= Gip Cpq BimHnq ,∂F ∂C pq
+
+= Gip M ij Hjq Dive into the implicit biases of low-rank vision-language alignment 23 
+
+First-order conditions. 
+
+Gip (W ip  
+
+> 0
+
++ M ij Cpq )Hjq = 0 ,Gip Amj BimHjq = 0 ,Gip M ij Hjq = 0 
+
+Notes 
+
+– Einstein summation convention applies to all repeated indices. 
+
+– δij is the Kronecker delta. 
+
+– gij and hjk are metric tensors for covariant/contravariant transformations. 
+
+– M , M1, M2 denote intermediate low-rank mappings. 
+
+1.2 LoRA Rank-Weighted Smoothing under Noisy Features 
+
+Consider a neural network with weights W i 
+
+> 0,j
+
+and a low-rank update parameter-ized by Apj and Bip. Let the feature vector be Hj , corrupted by additive noise 
+
+ξj :
+
+Hj = ¯Hj + ξj , E[ξj ] = 0 , E[ξj ξk] = Σjk ,
+
+where 
+
+– ¯Hj is the noise-free feature, 
+
+– ξj is the additive noise, 
+
+– Σjk is the noise covariance matrix. Let the total loss function be F = F (W, H ). The LoRA gradient flow for A
+
+is 
+
+˙Apj = −ηB ip
+
+∂F ∂W i 
+
+> 0j
+
+,
+
+where η > 0 is the learning rate. 
+
+Taylor expansion of the gradient Expanding the gradient of F w.r.t W around the noise-free feature ¯H using a multivariate Taylor expansion: 
+
+∂F ∂W i 
+
+> 0j
+
+(H) = ∂F ∂W i 
+
+> 0j
+
+( ¯H) + ∂2F∂W i  
+
+> 0j
+
+∂H k ξk
+
++ 12
+
+∂3F∂W i  
+
+> 0j
+
+∂H k∂H l ξkξl + O(∥ξ∥3),
+
+where indices follow Einstein summation convention. 
+
+Expectation over noise Taking expectation over the noise ξ:
+
+Eξ
+
+ ∂F ∂W i 
+
+> 0j
+
+
+
+≃ ∂F ∂W i 
+
+> 0j
+
+( ¯H) + 12
+
+∂3F∂W i  
+
+> 0j
+
+∂H k∂H l E[ξkξl]= ∂F ∂W i 
+
+> 0j
+
+( ¯H) + 12
+
+∂3F∂W i  
+
+> 0j
+
+∂H k∂H l Σkl .24 M. Shi et al. 
+
+Substitute into LoRA gradient flow Substituting the expected gradient into the LoRA gradient flow: 
+
+˙Apj ≃ − ηB ip
+
+ ∂F ∂W i 
+
+> 0j
+
+( ¯H) + 12
+
+∂3F∂W i  
+
+> 0j
+
+∂H k∂H l Σkl 
+
+
+
+.
+
+1.3 Implicit Biases of Low-Rank Alignment: Gradient Flow 
+
+Table 8: Implicit biases summary and comparison: LoRA, LoKr, LoHa Property LoRA LoKr LoHa Grad. Flow Subspace Rank-r (B, A ) Rank-r (C ⊗ BA ) Rank-r1 × r2 ((B1A1) ∗ (B2A2))Flatness Bias Along BA Along C ⊗ BA Along (B1A1) ∗ (B2A2)
+
+Noise Smoothing Along H Through C ⊗ BA Along Hadamard subspace Scale Invariance Linear in H Linear in H Linear in H
+
+Case 1 LoRA: l = BAH Consider the LoRA forward mapping: 
+
+Oi = ( W i  
+
+> 0j
+
++ BipApj )Hj ,
+
+with a total loss function 
+
+F = E(x,y )∼D [L(O(x), y )] .
+
+Assume the feature has additive noise: 
+
+Hj = ¯Hj + ξj , E[ξj ] = 0 , E[ξj ξk] = Σjk .
+
+Gradient flow dynamics. The gradient flow dynamics for LoRA parameters are: 
+
+˙Apj = −η ∂F ∂A pj
+
+= −ηB ip
+
+∂F ∂W i 
+
+> 0j
+
+,
+
+˙Bip = −η ∂F ∂B ip
+
+= −η ∂F ∂W i 
+
+> 0j
+
+Apj ,
+
+with  ∂F ∂W i 
+
+> 0j
+
+= ∂F ∂O i Hj .
+
+Define the gradient projection: 
+
+Gij := E
+
+ ∂F ∂O i Hj
+
+
+
+.Dive into the implicit biases of low-rank vision-language alignment 25 
+
+Thus, the expected gradient flow becomes: 
+
+˙Apj = −ηB ipGij ,
+
+˙Bip = −ηG ij Apj .
+
+This shows that the gradient flow is restricted to the rank-r subspace spanned by B and A, w.r.t the range of p.
+
+Noise-weighted smoothing. Expanding the gradient under feature noise ξ:
+
+Eξ
+
+ ∂F ∂W i 
+
+> 0j
+
+
+
+≃ ∂F ∂W i 
+
+> 0j
+
+( ¯H) + 12
+
+∂3F∂W i  
+
+> 0j
+
+∂H k∂H l Σkl .
+
+Substituting into the gradient flow: 
+
+˙Apj ≈ − ηB ip
+
+ ∂F ∂W i 
+
+> 0j
+
++ 12
+
+∂3F∂W i  
+
+> 0j
+
+∂H k∂H l Σkl 
+
+
+
+,
+
+showing an implicit smoothing effect along noisy feature directions. 
+
+Scale invariance. Under feature scaling Hj → αH j , the gradient projection scales linearly: 
+
+Gij → αG ij , ˙Apj → α ˙Apj , ˙Bip → α ˙Bip.
+
+This indicates that the implicit flatness preference is invariant to feature scale. 
+
+Fokker–Planck approximation and steady-state distribution. Small-step SGD or noisy gradient flow can be approximated as an SDE: 
+
+dθ α = − ∂F ∂θ α dt + √η C αμdw μt ,
+
+with noise covariance 
+
+Dαβ = Cγ αCγ β .
+
+The corresponding Fokker–Planck equation is: 
+
+∂tp(θ, t ) = ∂α
+
+
+
+∂αF p + 12 ∂β (Dβα p)
+
+
+
++ 12 ∂α∂β (Dαβ p).
+
+Assuming no-flux boundary conditions, the steady-state distribution is ap-proximately: 
+
+pstat (θ) ∝ exp 
+
+
+
+− 2
+
+η F (θ)
+
+
+
+det( D(θ)) −1/2.26 M. Shi et al. 
+
+LoRA: low-rank subspace marginalization. Define the effective LoRA subspace: 
+
+M = BA. 
+
+Then the steady-state marginal over M is: 
+
+pstat (M ) ∝ exp 
+
+
+
+− 2
+
+η F (M )
+
+Z
+
+> BA =M
+
+det D(B, A )−1/2dμ (B, A )
+
+| {z }  
+
+> =: V(M)
+
+.
+
+Effective Loss Incorporating Flatness and Noise Define the effective loss in the low-rank subspace: 
+
+Feff (M ) = F (M ) + η
+
+4 log det eD(M )+ 12 Σjk ∂2F∂O i∂O m (W i  
+
+> 0j
+
++ M ij )( W m  
+
+> 0k
+
++ M mk),
+
+where the first term is the original loss, the second term encodes gradient-noise-induced flatness, and the third term encodes feature-noise-weighted smoothing. 
+
+Case 2 LoHa: l = [( B1A1) ∗ (B2A2)] H Consider the LoHa forward mapping: 
+
+Oi = ( Bi
+
+> 1p
+
+Ap 
+
+> 1j
+
+) ∗ (Bi 
+
+> 2q
+
+Aq 
+
+> 2j
+
+)Hj ,
+
+with a total loss function 
+
+F = E(x,y )∼D [L(O(x), y )] .
+
+Assume additive feature noise: 
+
+Hj = ¯Hj + ξj , E[ξj ] = 0 , E[ξj ξk] = Σjk .
+
+Gradient flow dynamics. 
+
+˙Ap 
+
+> 1j
+
+= ( Bi 
+
+> 2q
+
+Aq 
+
+> 2j
+
+) ∂F ∂O i Hj Bi
+
+> 1p
+
+,
+
+˙Bi 
+
+> 1p
+
+= (( Bi 
+
+> 2q
+
+Aq 
+
+> 2j
+
+) ∂F ∂O i Hj )Ap 
+
+> 1j
+
+,
+
+˙Aq 
+
+> 2j
+
+= ( Bi
+
+> 1p
+
+Ap 
+
+> 1j
+
+) ∂F ∂O i Hj Bi 
+
+> 2q
+
+,
+
+˙Bi 
+
+> 2q
+
+= (( Bi
+
+> 1p
+
+Ap 
+
+> 1j
+
+) ∂F ∂O i Hj )Aq 
+
+> 2j
+
+.
+
+Define gradient projection: 
+
+Gij := E
+
+ ∂F ∂O i Hj
+
+
+
+.Dive into the implicit biases of low-rank vision-language alignment 27 
+
+Noise-weighted smoothing. 
+
+Eξ
+
+ ∂F ∂O i (B1A1 ∗ B2A2)Hj
+
+
+
+≃ ∂F ∂O i (B1A1 ∗ B2A2) ¯Hj
+
++ 12
+
+∂3F∂O i∂H m∂H n (B1A1 ∗ B2A2)Σmn .
+
+Scale invariance. Under Hj → αH j :
+
+Gij → αG ij , ˙A1,2, ˙B1,2 → α ˙A1,2, α ˙B1,2.
+
+Fokker–Planck and steady-state. 
+
+dθ α = − ∂F ∂θ α dt + √η C αμdw μt , Dαβ = Cγ αCγ β ,
+
+pstat (θ) ∝ exp 
+
+
+
+− 2
+
+η F (θ)
+
+
+
+det( D(θ)) −1/2.
+
+Effective Loss in LoHa subspace. 
+
+M = ( B1A1) ∗ (B2A2),
+
+Feff (M ) = F (M ) + η
+
+4 log det eD(M )+ 12 Σjk ∂2F∂O i∂O m (W i  
+
+> 0j
+
++ M ij )( W m  
+
+> 0k
+
++ M mk).
+
+Case 3 LoKr: l = [ C ⊗ (BA )] H Consider the LoKr forward mapping: 
+
+Oi = Cik(BkpApj )Hj ,
+
+with a total loss function 
+
+F = E(x,y )∼D [L(O(x), y )] .
+
+Assume the feature has additive noise: 
+
+Hj = ¯Hj + ξj , E[ξj ] = 0 , E[ξj ξk] = Σjk .
+
+Gradient flow dynamics. The gradient flow for LoKr parameters: 
+
+˙Apj = −ηB kpCik
+
+∂F ∂O i Hj ,
+
+˙Bkp = −ηC ik
+
+∂F ∂O i Hj Apj ,
+
+˙Cik = −η ∂F ∂O i (BkpApj Hj ).28 M. Shi et al. 
+
+Define the gradient projection: 
+
+Gij := E
+
+ ∂F ∂O i Hj
+
+
+
+.
+
+Expected gradient flow: 
+
+˙Apj = −ηB kpCikGij ,
+
+˙Bkp = −ηC ikGij Apj ,
+
+˙Cik = −ηG ij BkpApj .
+
+Noise-weighted smoothing. 
+
+Eξ
+
+ ∂F ∂O i (BkpApj )Hj
+
+
+
+≃ ∂F ∂O i (BkpApj ) ¯Hj
+
++ 12
+
+∂3F∂O i∂H m∂H n (BkpApj )Σmn .
+
+Scale invariance. Under Hj → αH j :
+
+Gij → αG ij , ˙Apj → α ˙Apj ,
+
+˙Bkp → α ˙Bkp, ˙Cik → α ˙Cik.
+
+Fokker–Planck approximation and steady-state distribution. 
+
+dθ α = − ∂F ∂θ α dt + √η C αμdw μt , Dαβ = Cγ αCγ β ,
+
+∂tp(θ, t ) = ∂α
+
+
+
+∂αF p + 12 ∂β (Dβα p)
+
+
+
++ 12 ∂α∂β (Dαβ p),
+
+pstat (θ) ∝ exp 
+
+
+
+− 2
+
+η F (θ)
+
+
+
+det( D(θ)) −1/2.
+
+Effective Loss in LoKr subspace. 
+
+M = C ⊗ (BA ),
+
+Feff (M ) = F (M ) + η
+
+4 log det eD(M )+ 12 Σjk ∂2F∂O i∂O m (W i  
+
+> 0j
+
++ M ij )( W m  
+
+> 0k
+
++ M mk).Dive into the implicit biases of low-rank vision-language alignment 29 
+
+1.4 Relation to Classical Implicit-Bias Results 
+
+A classical line of work studies the implicit regularization of factorized param-eterizations: gradient descent on matrix factorization is biased toward low-rank / minimal nuclear-norm solutions [11], an effect that deep factorization inten-sifies [2] and that need not be captured by any norm [40]. More recent anal-yses study LoRA from a parameter-efficiency or optimization-landscape stand-point [4, 18]. Our analysis differs along four axes that together yield a qualita-tively different conclusion: (i) non-linear backbone : prior results target linear or deep-linear networks, whereas we analyze a factorized update acting on a large non-linear LLM; (ii) fine-tuning rather than training from scratch : we study adaptation from a pretrained checkpoint W0, so the relevant bias concerns de-viation from a pretrained weight manifold rather than convergence from small initialization; (iii) stochastic dynamics : our account explicitly incorporates gra-dient noise instead of assuming deterministic, full-batch flow; and (iv) alignment objective : we consider a cross-entropy alignment loss rather than squared loss. Under these conditions, our theorems characterize a flat-gradient, noise-robust subspace bias (Sec. 3), distinct from the min-norm/low-rank bias of the classi-cal setting, and it is this bias that underlies the structure-preserving behavior observed empirically. 
+
+## 2 More experimental results. 
+
+2.1 Statement and Limitations 
+
+We state the boundaries of our claims explicitly. (i) Controlled alignment pipeline. To isolate alignment-stage effects and keep attribution clean, we delib-erately study a minimal pipeline rather than any single proprietary, architecture-specific recipe; our claims are correspondingly scoped to the alignment stage. Within this scope the observed bias is not a single-setup artifact: it holds con-sistently across model scales (1.4B–14B), three low-rank operator families, mul-tiple vision encoders, and the architecturally distinct Qwen3 family. Compute constraints further restrict our finest-grained probing to smaller models and to already-post-trained large models. (ii) Explanatory theory. Our theorems are intended as a mechanistic explanation rather than a quantitative bound: they adopt idealized assumptions (an unconstrained-feature view and a small-step, noisy-gradient regime), in the spirit of standard NTK- and neural-collapse-style analyses. Their role is to predict the direction of the observed biases (conservative behavior, homogeneous manifolds, and preserved linear separability), which the experiments corroborate, not to certify exact training trajectories. (iii) Associ-ational evidence. We phrase the link between the feature-level and geometric signatures and downstream gains associationally rather than causally. This is de-liberate: the support is a rank-controlled chain in which a single intervention (the low-rank constraint) produces parallel, monotone shifts in per-token linear sep-arability, angular and manifold geometry, Type-I/II behavior, and downstream accuracy, consistently across three operator families and five model scales; we 30 M. Shi et al. 
+
+present this as strong, controlled association and do not overstate it as proof of causation. (iv) Boundary cases. The few benchmarks on which low-rank does not lead ( e.g ., POPE and MMMU-Pro at certain ranks) are consistent with, and predicted by, our regularization account (Sec. 4): they delimit the regime in which the implicit bias is beneficial rather than contradict it. 
+
+2.2 Why Not Constrain the Connector? 
+
+We apply low-rank adaptation to the LLM rather than to the vision–language connector (MLP adapter) by design. The connector holds only a tiny fraction of trainable parameters (<0.3%), so a low-rank constraint there brings negligible compute or memory savings. More importantly, the connector is the sole bottle-neck through which all visual tokens pass; forcing it to be low-rank would project every visual feature into one shared low-rank subspace and discard token-specific structure, the opposite of the selective, structure-preserving regularization that LLM-side low-rank provides. We therefore keep the connector at full rank by default and study low-rank adaptation on the LLM.                                                              
+
+> Table 9: Effect of extended instruction datasets on full vs. low-rank aligned mod-els (MobileVLM-2.7B). ∆zero and ∆Ex. denote gains under zero-shot and extended finetuning settings. Boost ratio =∆Ex ./∆ zero −1. Low-rank results use the best con-figuration among LoRA/LoHa/LoKr at rank 32/64/128. metric full low-rank ∆zero ∆Ex.:full ∆Ex.:low-rank boost (%) GQA 11.6 42.4 30.8 ↑13.7 3.2 -34.3 MMBench 0.1 3.6 3.4 ↑2.7 30.3 805.2 MME-P 15.7 668.0 652.2 ↑148.7 406.4 39.6 MME-R 40.4 201.4 161.1 ↑-19.6 -7.5 7.5 MMMU-Pro 0.0 0.2 0.2 ↑3.8 5.7 824.7 POPE 0.5 79.4 78.8 ↑1.5 -9.7 -14.2 ScienceQA 1.1 23.4 22.3 ↑5.9 29.2 104.1 TextVQA 0.6 20.5 19.8 ↑6.2 1.4 -23.9
+
+2.3 Extended finetuning dataset. 
+
+In this work, we primarily focus on zero-shot capabilities. We further investigate how efficiently a model with minimal domain knowledge or limited reasoning ability can absorb new information under both low-rank and full alignment set-tings, as shown in Table 9. The largest model that is appropriate for this setting is MobileVLM-2.7B. GQA and TextVQA represent previously seen knowledge, whereas MMBench and ScienceQA correspond to novel sub-domain knowledge. Dive into the implicit biases of low-rank vision-language alignment 31 
+
+We additionally track changes in perception and reasoning on MME and assess whether the model retains its zero-shot image reasoning ability on MMMU-Pro. POPE is a benchmark for visual perception hallucination. 
+
+Analyses. We observe limited gains from previously seen knowledge, such as GQA and TextVQA, although improvements are still present. In contrast, low-rank alignment yields pronounced gains on unseen, knowledge-intensive, or com-prehensive benchmarks such as ScienceQA and MMBench. This further supports our hypothesis: low-rank alignment preserves more general knowledge and leaves sufficient capacity for subsequent entity-level construction. We also find that new capabilities emerge on unseen tasks such as MMMU-Pro Vision, where accuracy rises from near-zero to meaningful levels, with low-rank alignment exhibiting stronger emergent behavior. On the negative side, both reasoning performance and visual hallucination robustness degrade. The trade-off, however, is an im-provement in perceptual ability driven by the increased infusion of visual knowl-edge.                                                        
+
+> Table 10: Comparison of full vs. low-rank alignment under full-parameter (F.F.T.) and default (LoRA, rank 128) instruction tuning. Model is MobileVLM-1.4B. metric full low-rank ∆default full F.F.T. low-rank F.F.T. ∆FFT GQA 18.9 27.7 8.8 ↑47.8 51.9 4.1 ↑
+> MMBench 0.0 0.6 0.6 ↑2.1 9.2 7.1 ↑
+> MME-P 208.1 766.6 558.5 ↑736.9 743.6 6.7 ↑
+> MME-R 22.9 196.4 173.6 ↑80.4 140.0 59.6 ↑
+> MMMU-Pro 1.0 4.4 3.5 ↑0.2 0.5 0.3 ↑
+> POPE 2.5 72.8 70.3 ↑27.6 58.2 30.6 ↑
+> ScienceQA 0.1 16.4 16.2 ↑11.0 25.1 14.1 ↑
+> TextVQA 4.2 8.1 3.8 ↑24.5 18.1 -6.4
+
+2.4 Full parameter instruction tuning. 
+
+This section examines the performance headroom of low-rank aligned models under different fine-tuning regimes, including full-parameter tuning. We observe that the smaller model, MobileVLM-1.4B, exhibits far fewer metric collapses when trained with low-rank alignment in Table 10. Even among models that do not collapse, low-rank alignment consistently yields greater robustness. 
+
+2.5 Linear separability of vision tower’s feature space. 
+
+It is observed that the linear separability of CLIP’s tokens is greater than that of those from pretrained VLMs’ adapters on both coarse-grained and fine-grained classification datasets, as shown in Fig 7. 32 M. Shi et al. 
+
+Table 11: Details about dataset for both vision-language alignment and post-training. vision-language alignment dataset for MobileVLM-v2 ShareGPT4V-PT(captioner) 1.2M (subset of following datasets:) 
+
+· LAION 
+
+· CC 
+
+· SBU 
+
+· MS-COCO post-training dataset (same for both) LLaVA-Instruction 665K 
+
+· LLaVA 
+
+· ShareGPT 
+
+· MS-COCO 
+
+· GQA 
+
+· OCR-VQA 
+
+· VQAv2 
+
+· OKVQA 
+
+· A-OKVQA 
+
+· TextCaps 
+
+· RefCOCO 
+
+· VG Dive into the implicit biases of low-rank vision-language alignment 33 
+
+Table 12: Training receipt. vision-language alignment name MobileVLM-v2 (1.7B/3B) vision-language alignment datasets ShareGPT4V-PT trained parameters Vision Adapter + LLM batchsize 256 optimizer AdamW learning rate 1×10 −3
+
+scheduler cosine vision tower clip-vit-large-patch14-336 LLM MobileLLaMA-1.4B/2.7B-Chat adapter ldpnetv2 max sequence length 2048 selected feature layer second post-training post-training dataset Instruction Tuning from LLaVA-v1.5 batchsize 128 optimizer AdamW learning rate 4×10 5
+
+scheduler cosine default PEFT LoRA related PEFT setting ranks (r) of LoRA 32/64/128 
+
+α of LoRA 256 (empirically fixed) 
+
+## 3 Additional Ablation Experiments with Full Fine-tuning 
+
+Depth. In Figure 8, we conduct a grid search over alignment and instruction-tuning depths. Intuitively, deeper layers encode higher-level semantic representa-tions, and aligning these may provide a clearer cross-modal bridge. However, the optimal alignment depth varies across model sizes, a phenomenon we term the 
+
+alignment/fine-tuning depth preference . Specifically, the depth yielding the best alignment is not necessarily optimal for fine-tuning. As illustrated in Figure 8, Vicuna-7B favors deeper layers for alignment and mid-level layers for fine-tuning on perception and hallucination benchmarks, whereas MobileLLaMA-1.4B and -2.7B both favor shallower-to-middle layers for alignment, with divergent fine-tuning depth preferences. 
+
+Learning scheduler. Ablation about learning schedulers is shown in Tabel 13. Consistent results are shown across different popular schedulers. 34 M. Shi et al. bench. GQA MME-p POPE TextVQA MMB-dev SQA linear-full 61.15 1469.49 88.09 43.06 73.63 74.77 linear-pevila 62.07 1545.05 87.36 46.72 73.02 74.15 wsd-full 60.92 1482.24 87.42 42.34 73.54 74.37 wsd-pevila 61.97 1482.24 87.09 47.34 75.69 75.41 
+
+Table 13: Learning rates. Warmup-stable-decay: wsd. 
+
+Table 14: Symbols employed in our theoretical analysis. Symbol Meaning, Dimension and Shape 
+
+i, j, k, m, n, s, t Einstein sum. convention’s indices 
+
+Notice : indices have no meaning but "duplicate →sum". 
+
+Oi, H j Output and input (feature), range: p, qOis , H jt Kronecker Output/input, p × s, q × tW i  
+
+> 0j
+
+, b i Base weight p × q, bias pA k j , B ik Low-rank factors, r × q, p × rB1, B 2, A 1, A 2 Hadamard-case factors, p × r, r × qC st Kronecker factor, s × tli(H; θ) Linear adaptation term, parameter θF (O; D) Scalar objective on dataset D
+
+δji , ˙A Kronecker delta, gradient flow of A
+
+∗, ⊗ Hadamard, Kronecker products 
+
+M Temporary variables for simplification 
+
+## 4 Symbols 
+
+Our employed symbols are summarized in Table 14 Dive into the implicit biases of low-rank vision-language alignment 35 0 100 200 300 400 500 600 
+
+> Token Index
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Accuracy
+
+Linear Probe 0 100 200 300 400 500 600 
+
+> Token Index
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Accuracy
+
+Linear Probe 0 100 200 300 400 500 600 
+
+> Token Index
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Accuracy
+
+Linear Probe 
+
+ImageNet (CLIP) STF-dogs (CLIP) CUB (CLIP) 0 20 40 60 80 100 120 140 
+
+Token Index 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+> Accuracy
+
+Linear Probe 0 20 40 60 80 100 120 140 
+
+Token Index 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+> Accuracy
+
+Linear Probe 0 20 40 60 80 100 120 140 
+
+Token Index 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+> Accuracy
+
+Linear Probe 
+
+ImageNet (full) STF-dogs (full) CUB (full) 0 20 40 60 80 100 120 140 
+
+Token Index 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+> Accuracy
+
+Linear Probe 0 20 40 60 80 100 120 140 
+
+Token Index 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+> Accuracy
+
+Linear Probe 0 20 40 60 80 100 120 140 
+
+Token Index 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+> Accuracy
+
+Linear Probe 
+
+ImageNet (LoRA) STF-dogs (LoRA) CUB (LoRA) 
+
+Fig. 7: CLIP, the vision tower of related VLMs, originally has great general and fine-grained knowledge structures in each token. Notation CLIP means features in original CLIP of 336 ×336 resolutions and 14 patch. Notations full/LoRA mean features in each vision token from full-parameter/LoRA pretrained VLMs. Fine-grained classification datasets: STF-dogs and CUB. 36 M. Shi et al. 2     
+
+> 10
+> 18
+> 22
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> 120
+> 140
+> 160
+> 2610 14 18 22
+
+1.4 B 
+
+2.7 B 
+
+7 B 
+
+Alignment Layer on Vision Tower                     
+
+> Fine -tuning Layer  on Vision Tower
+> 2610 14 18 22
+> 0
+> 2
+> 10
+> 18
+> 22
+> 2610 14 18 22
+> 2
+> 10
+> 18
+> 22
+> 0
+> 100
+> 200
+> 300
+> 400
+> 2610 14 18 22
+> 2610 14 18 22
+> 2
+> 10
+> 18
+> 22
+> 500
+> 400
+> 300
+> 200
+> 100
+> 30
+> 20
+> 10
+> 0
+> 10
+> 20
+
+MME -perception                
+
+> 2
+> 10
+> 18
+> 80
+> 60
+> 40
+> 20
+> 0
+> 20
+> 40
+> 22
+> 60
+> 2610 14 18 22
+> 2
+> 10
+> 18
+> 22
+> 0
+> 10
+> 20
+> 30
+> 40
+> 2610 14 18 22
+> 2
+> 10
+> 18
+> 22
+> 25
+> 0
+> 25
+> 50
+> 75
+> 100
+> 125
+> 150
+> 2610 14 18 22
+
+MME -reasoning 
+
+> 2
+> 10
+> 18
+> 22
+> 0
+> 50
+> 100
+> 150
+> 200
+> 250
+
+POPE      
+
+> 2610 14 18 22
+> 2
+> 10
+> 18
+> 22
+> 0
+> 10
+> 20
+> 30
+> 40
+> 50
+
+Fig. 8: Depth preferences: the optimal alignment depth depends on the model scale, while patterns in a given model across similar benchmarks remain consistent. Horizontal axis : the vision-tower layer used during the feature alignment stage, sampled from the original 23-layer CLIP encoder at layers {2, 6, 10, 14, 18, 22}. Vertical axis : the vision-tower layer used during the instruction fine-tuning stage, selected from layers {2, 10, 18, 22} of the same 23-layer CLIP model. Default: 22 layer. MobileLLaMA-1.4B and -2.7B, Vicuna-7B are used as LLMs backbone.
