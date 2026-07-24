@@ -1,0 +1,1419 @@
+Title: Evaluating the Google CT Foundation model for central pulmonary embolism detection on computed tomography pulmonary angiograms
+
+URL Source: https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext
+
+Markdown Content:
+## Highlights
+
+•
+
+The Google CT Foundation model is evaluated for central PE detection on CTPA.
+
+•
+
+A Random Forest on the embeddings reaches test AUC 0.79 on the RSNA cohort.
+
+•
+
+Pairwise DeLong tests find no significant AUC differences among classifier heads.
+
+•
+
+The decision threshold does not transport to a Stanford external cohort (N = 241).
+
+•
+
+Vascular hard-masking does not improve classification in the low-data regime.
+
+## Abstract
+
+Early detection of pulmonary embolism (PE) is critical for clinical outcomes, yet existing deep-learning models often fail to generalize across institutions. The recently released Google CT Foundation model, pre-trained on a large, diverse CT corpus, produces compact volumetric embeddings that may transfer to downstream tasks without fine-tuning. We evaluate a classification pipeline that pairs these frozen embeddings with three lightweight heads — Multi-Layer Perceptron (MLP), Random Forest (RF), and a stacking ensemble — for central PE detection, training on the public RSNA CTPA dataset and externally validating on the Stanford INSPECT cohort. The pipeline first reproduces the published data-size scaling behavior of the foundation model on other medical pathologies. The highest point-estimate test AUC of 0.79 was obtained by the RF trained on a balanced training set of 408 CT studies and evaluated on the held-out RSNA test set of 144 studies; paired DeLong tests showed that this advantage over the MLP and stacking heads was not statistically significant. Direct comparison to specialized state-of-the-art PE pipelines is task-mismatched — those target any-PE rather than central PE — so the result anchors a non-fine-tuned baseline rather than a deficit. In a low-data regime, hard vascular segmentation did not improve performance. On the external INSPECT cohort, AUC dropped by 0.17 and specificity at the transferred operating point collapsed, so simple global threshold recalibration does not restore deployability—frozen generalist embeddings alone do not guarantee cross-institutional reliability.
+
+## Keywords
+
+1.   [Pulmonary embolism detection](https://www.ejradiology.com/action/doSearch?AllField=%22Pulmonary+embolism+detection%22&journalCode=eurr)
+2.   [Foundation model](https://www.ejradiology.com/action/doSearch?AllField=%22Foundation+model%22&journalCode=eurr)
+3.   [Artificial intelligence in medical imaging](https://www.ejradiology.com/action/doSearch?AllField=%22Artificial+intelligence+in+medical+imaging%22&journalCode=eurr)
+
+## 1 Introduction
+
+An occlusive Pulmonary Embolism (PE) is a blockage of an artery in the lungs, usually caused by a blood clot that dislodges from a deep vein in the leg and travels through the bloodstream [[1]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+1.
+
+Lavorini, F. ∙ Di Bello, V. ∙ De Rimini, M.L. ...
+
+**Diagnosis and treatment of pulmonary embolism: a multidisciplinary approach**
+
+_Multidiscip. Respir. Med._ 2013; **8**(1):75
+
+. Mansella et al. [[2]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+2.
+
+Mansella, G. ∙ Keil, C. ∙ Nickel, C.H. ...
+
+**Delayed diagnosis in pulmonary embolism: frequency, patient characteristics, and outcome**
+
+_Respiration._ 2020; **99**(7):589-597
+
+ reported that among hospitalized PE patients, in-hospital mortality was substantially higher in those with diagnostic delay than in those diagnosed promptly, underscoring the clinical importance of timely identification. However, PE-related maternal mortality in the U.S. did not decrease from 2003 to 2020, persisting at 1.02 deaths per 100,000 live births and accounting for 5.7% of all maternal deaths, underscoring the critical need for improving early detection [[3]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+3.
+
+Farmakis, I.T. ∙ Barco, S. ∙ Hobohm, L. ...
+
+**Maternal mortality related to pulmonary embolism in the United States, 2003–2020**
+
+_Am. J. Obs. Gynecol. MFM._ 2023; **5**(1), 100754
+
+. Some studies [[4–6]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+4.
+
+Vallée, A. ∙ Quint, R. ∙ Brun, A.L. ...
+
+**A deep learning-based algorithm improves radiology residents’ diagnoses of acute pulmonary embolism on CT pulmonary angiograms**
+
+_Eur. J. Radiol._ 2024; **171**, 111324
+
+5.
+
+Shapiro, J. ∙ Reichard, A. ∙ Chowdhry, S. ...
+
+**The use of artificial intelligence technology in the detection and treatment of pulmonary embolism at a tertiary referral center**
+
+_J. Vasc. Surg._ 2023; **78**(3), e23
+
+6.
+
+Schlossman, J. ∙ Salehi, S. ∙ Weinberg, B. ...
+
+**Validation of a Deep Learning Tool for Automatic Pulmonary Embolism Detection**
+
+**A103. TOWARDS IMPROVING ICU PRACTICE**
+
+American Thoracic Society, 2023; A2607
+
+ showed that using Deep Learning (DL)-based algorithms to automate PE detection improved diagnostic accuracy, reduced the time-to-consult, and initiation of time-sensitive treatments.
+
+Recently, Google introduced a novel Computed Tomography (CT) Foundation model [[7]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+7.
+
+**Taking medical imaging embeddings 3D**
+
+2024
+
+, which serves as a 3D embedding tool. Unlike the Med-Gemini model [[8]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+8.
+
+Yang, L. ∙ Xu, S. ∙ Sellergren, A. ...
+
+**Advancing multimodal medical capabilities of Gemini**
+
+2024
+
+, which focuses on multimodal reasoning, this foundation model was specifically pre-trained to produce compact 3D representations. It was trained on a dataset of over 657,719 CT studies covering the head, chest, abdomen, and extremities from diverse facilities. The model leverages the VideoCoCa architecture to efficiently aggregate volumetric data into information-rich embeddings [[9]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+9.
+
+Yan, S. ∙ Zhu, T. ∙ Wang, Z. ...
+
+**Videococa: Video-text modeling with zero-shot transfer from contrastive captioners**
+
+2022
+
+. By learning from such a diverse dataset, the model is expected to adapt to numerous downstream tasks. To test the CT foundation model’s utility and generalizability, the Google CT foundation team evaluated its ability to detect clinically relevant pathologies of: intracranial hemorrhage, calcifications in the chest and heart, lung cancer prediction in the chest, suspicious abdominal lesions, nephrolithiasis, and abdominal aortic aneurysm in abdominopelvic CTs [[7]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+7.
+
+**Taking medical imaging embeddings 3D**
+
+2024
+
+. In this paper, we build on this work by testing the ability of the CT foundation model to detect a central PE. A central PE as an emboli involving the main pulmonary artery and/or the proximal right or left pulmonary arteries [[10]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+10.
+
+Colak, E. ∙ Kitamura, F.C. ∙ Hobbs, S.B. ...
+
+**The RSNA pulmonary embolism CT dataset**
+
+_Radiol.: Artif. Intell._ 2021; **3**(2), e200254
+
+.
+
+The foundation model processes input volumes with dimensions of
+
+, compressing this high-dimensional spatial information into a compact 1408-element embedding vector [[7]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+7.
+
+**Taking medical imaging embeddings 3D**
+
+2024
+
+. Generally, the main abnormality in a positive PE scan is the embolus itself. The embolus represents a tiny proportion of the scanned volume. The volume of a large pulmonary embolism (for example, 3 cm in diameter and 10 cm in length) represents 1/6000th of the volume of a chest CT. A critical question arises: Does the significant information compression associated with the conversion of the CT scan into an embedded vector retain the fine-grained features necessary to detect pulmonary emboli? To answer this question, and to test the utility of the Google CT foundation, the performance of the model is examined in detecting central PE, a critical and potentially life-threatening condition that requires a timely diagnosis.
+
+### 1.1 Related work
+
+DL approaches for PE detection have evolved from isolated slice analysis to comprehensive study-level diagnosis. Early efforts focused primarily on image-level labels; however, true clinical automation and utility requires a CT study-level approach that determines whether or not a PE is present in the patient. While several models have achieved high performance on specific datasets, significant gaps remain regarding cross-vendor generalization and the role of foundation models.
+
+Initial research often prioritized high-resolution detection on individual slices. Wu et al. [[11]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+11.
+
+Wu, H. ∙ Xu, Q. ∙ He, X. ...
+
+**SPE-YOLO: a deep learning model focusing on small pulmonary embolism detection**
+
+_Comput. Biol. Med._ 2025; **184**, 109402
+
+ utilized a YOLO-based architecture [[12]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+12.
+
+J. Redmon, S. Divvala, R. Girshick, A. Farhadi, You only look once: Unified, real-time object detection, in: Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition, 2016, pp. 779–788.
+
+ to detect small PE, achieving a precision of 84.20% on image-level test data. Similarly, Grenier et al. [[13]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+13.
+
+Grenier, P.A. ∙ Ayobi, A. ∙ Quenet, S. ...
+
+**Deep learning-based algorithm for automatic detection of pulmonary embolism in chest CT angiograms**
+
+_Diagnostics._ 2023; **13**(7):1324
+
+ employed a hybrid 2D/3D U-Net [[14]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+14.
+
+Ronneberger, O. ∙ Fischer, P. ∙ Brox, T.
+
+**U-net: Convolutional networks for biomedical image segmentation**
+
+**International Conference on Medical Image Computing and Computer-Assisted Intervention**
+
+Springer, 2015; 234-241
+
+ for segmentation and detection, reaching an Area Under the Curve (AUC) of 0.92. While these studies demonstrate the feasibility of DL for PE identification, image-level success does not always translate to a clinical diagnosis at the patient (study) level.
+
+To address this, more recent architectures have focused on aggregating information across the entire CT stack. Huhtanen et al. [[15]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+15.
+
+Huhtanen, H. ∙ Nyman, M. ∙ Mohsen, T. ...
+
+**Automated detection of pulmonary embolism from CT-angiograms using deep learning**
+
+_BMC Med. Imaging._ 2022; **22**(1):43
+
+ implemented a ResNet-based Long Short-Term Memory (LSTM) network to produce study-level predictions, achieving an AUC of 0.94. Likewise, Weikert et al. [[16]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+16.
+
+Weikert, T. ∙ Winkel, D.J. ∙ Bremerich, J. ...
+
+**Automated detection of pulmonary embolism in CT pulmonary angiograms using an AI-powered algorithm**
+
+_Eur. Radiol._ 2020; **30**(12):6545-6553
+
+ combined a ResNet architecture [[17]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+17.
+
+K. He, X. Zhang, S. Ren, J. Sun, Deep residual learning for image recognition, in: Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition, 2016, pp. 770–778.
+
+ with 3D segmentation, reporting high sensitivity (92.7%) and specificity (95.5%) at the study level.
+
+A recurring limitation in the state-of-the-art is the lack of validation on diverse, multi-institutional datasets. For example, despite being trained on large cohorts, the models of Weikert et al. [[16]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+16.
+
+Weikert, T. ∙ Winkel, D.J. ∙ Bremerich, J. ...
+
+**Automated detection of pulmonary embolism in CT pulmonary angiograms using an AI-powered algorithm**
+
+_Eur. Radiol._ 2020; **30**(12):6545-6553
+
+ and Huhtanen et al. [[15]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+15.
+
+Huhtanen, H. ∙ Nyman, M. ∙ Mohsen, T. ...
+
+**Automated detection of pulmonary embolism from CT-angiograms using deep learning**
+
+_BMC Med. Imaging._ 2022; **22**(1):43
+
+ were evaluated on test sets gathered from a single institution. Even models utilizing the large-scale Radiological Society of North America (RSNA) dataset [[10]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+10.
+
+Colak, E. ∙ Kitamura, F.C. ∙ Hobbs, S.B. ...
+
+**The RSNA pulmonary embolism CT dataset**
+
+_Radiol.: Artif. Intell._ 2021; **3**(2), e200254
+
+, such as the multitask model by Ma et al. [[18]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+18.
+
+Ma, X. ∙ Ferguson, E.C. ∙ Jiang, X. ...
+
+**A multitask deep learning approach for pulmonary embolism detection and identification**
+
+_Sci. Rep._ 2022; **12**(1):13087
+
+ (AUC 0.95), and the UNet-based algorithm by Lanza et al. [[19]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+19.
+
+Lanza, E. ∙ Ammirabile, A. ∙ Francone, M.
+
+**nnU-Net-based deep-learning for pulmonary embolism: detection, clot volume quantification, and severity correlation in the RSPECT dataset**
+
+_Eur. J. Radiol._ 2024; **177**, 111592
+
+ (AUC 0.865), were often tested on data from the same source as their training sets. Pu et al. [[20]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+20.
+
+Pu, J. ∙ Gezer, N.S. ∙ Ren, S. ...
+
+**Automated detection and segmentation of pulmonary embolisms on computed tomography pulmonary angiography (CTPA) using deep learning but without manual outlining**
+
+_Med. Image Anal._ 2023; **89**, 102882
+
+ attempted to address this by testing their RSNA-trained model on a small local dataset, but the scale of such external validation remains limited. In the commercial world, the BriefCase-Triage computer-aided triage and notification software (AIDOC, Tel Aviv, Israel) received FDA approval in July 2024 for flagging suspected pulmonary emboli. As part of that FDA submission, the manufacturer reported a retrospective, blinded, multicentre study of 509 cases drawn from five U.S.-based clinical sites, using three senior board-certified radiologists as the reference standard: sensitivity was 94.4% (95% CI: 90.4–97.1%) and specificity 94.3% (95% CI: 91.0–96.7%) [[21]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+21.
+
+U.S. Food and Drug Administration
+
+**510(K) summary: Aidoc pulmonary embolism (K241727)**
+
+2024
+
+. More recently, Goldberg-Stein et al. [[22]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+22.
+
+Goldberg-Stein, S. ∙ Gandomi, A. ∙ Barish, M.A. ...
+
+**Clinical implementation of AI for pulmonary embolism detection in over 30,000 CT pulmonary angiography examinations**
+
+_Radiol.: Artif. Intell._ 2026;
+
+Published online May 13, 2026
+
+ completed a post-implementation concordance study of the same FDA-approved BriefCase-Triage flagging tool across 32,501 CTPA studies from Northwell Health, an integrated U.S. healthcare system: overall AI-vs-radiologist concordance was 97.8% (95% CI: 97.62–97.94%), higher for AI-negative than for AI-positive examinations (98.2% versus 93.8%;
+
+), and expert adjudication of discordant cases favored the radiologist in 88.73% of cases. These two evaluations together provide the commercially deployed performance reference points.
+
+Furthermore, these successful algorithms typically rely on a transfer learning approach, where a vision-based model is fine-tuned for the specific task of PE detection. This process often requires extensive, precisely labeled data, which remains a bottleneck for rapid clinical deployment. The emergence of large-scale foundation models, such as the Google CT foundation model, represents a shift from specialized to generalist models. Unlike traditional models that require fine-tuning on task-specific labels, foundation models are pre-trained on vast, diverse datasets using weak labels (e.g., radiologist reports). While segmentation has been shown to improve the results of specialized [[13]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+13.
+
+Grenier, P.A. ∙ Ayobi, A. ∙ Quenet, S. ...
+
+**Deep learning-based algorithm for automatic detection of pulmonary embolism in chest CT angiograms**
+
+_Diagnostics._ 2023; **13**(7):1324
+
+, fine-tuned algorithms, its impact on generalist models — where fine-tuning may not be available or feasible — remains unstudied. If a foundation model can achieve parity with specialized models while using smaller datasets and generalizing across different vendors or formats, it would significantly simplify the deployment of classification pipelines for PE and other complex medical tasks.
+
+### 1.2 Contributions
+
+The primary objective of this study is to assess the capability of the Google CT Foundation model in a classification pipeline to accurately detect central PE in Computed Tomography Pulmonary Angiography (CTPA) images. Specifically, we:
+
+•
+
+Develop and evaluate a classification pipeline that combines frozen Google CT Foundation embeddings with a small classifier head (MLP, Random Forest, or stacking ensemble) for the automated detection of central PE on CTPA.
+
+•
+
+Validate the implementation of the Google CT Foundation model by benchmarking the pipeline’s performance against the published Google CT Foundation benchmark for other medical pathologies, specifically focusing on data-size scaling.
+
+•
+
+Assess whether hard vascular segmentation improves classifier performance within the foundation-model pipeline, in a low-data regime.
+
+•
+
+Characterize cross-institutional generalization on an independent cohort, Stanford Integrating Numerous Sources for Prognostic Evaluation of Clinical Timelines (INSPECT), and show that the RSNA-tuned operating point does not transport to INSPECT in a deployment-relevant sense, i.e. specificity collapse, reinforcing that frozen generalist embeddings do not by themselves guarantee cross-institutional reliability.
+
+•
+
+Provide a statistical comparison of the three classifier heads via paired DeLong tests and paired-bootstrap tests of the AUC difference with Holm–Bonferroni correction within each dataset configuration.
+
+## 2 Methods
+
+To examine the performance of the Google CT Foundation model, a classification pipeline is implemented as illustrated in [Fig. 1](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#fig1). For each CT series, the pre-trained foundation model generates a 1408-dimensional embedding vector. These embeddings serve as inputs to a trained classifier, which determines the presence or absence of central PE within the original scan.
+
+The structure of the methodology is organized as follows. Section [2.1](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#sec-2-1) details the primary dataset and the stratification strategy used to create subsets for training and evaluation. The various classifier types, their specific architectures, and the corresponding hyperparameter tuning methods are described in Section [2.2](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#sec-2-2). The performance metrics utilized during training and evaluation are introduced in Section [2.3](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#sec-2-3). To assess whether focusing on a region of interest reduces problem complexity, a vascular segmentation technique is employed, as detailed in Section [2.5](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#sec-2-5). Finally, Section [2.6](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#sec-2-6) describes the methodology and external dataset used to evaluate the pipeline’s generalizability across different CT sources and image formats.
+
+[![Image 1: Fig. 1](https://www.ejradiology.com/cms/10.1016/j.ejrad.2026.113092/asset/8e418fc3-8c05-4d7e-9c5c-f04f432605cc/main.assets/gr1.jpg)](https://www.ejradiology.com/cms/10.1016/j.ejrad.2026.113092/asset/2ab77dbd-114a-4835-a975-b11243853c36/main.assets/gr1_lrg.jpg "View full size image in a new tab")
+
+Fig. 1 The classification pipeline.
+
+### 2.1 Dataset
+
+The primary dataset is derived from the publicly available RSNA CTPA dataset [[10]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+10.
+
+Colak, E. ∙ Kitamura, F.C. ∙ Hobbs, S.B. ...
+
+**The RSNA pulmonary embolism CT dataset**
+
+_Radiol.: Artif. Intell._ 2021; **3**(2), e200254
+
+, comprising over 9000 CT scans after curation for image quality, label consistency, and metadata standardization. Due to the curation performed on the primary dataset, no further curation for exclusion was required in this study. A CT scan is designed with the central PE label if there is an embolus involving the main pulmonary artery and/or the proximal right or left pulmonary arteries (including saddle emboli). In contrast, right-sided and left-sided PE labels correspond to more distal lobar or segmental branches [[10]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+10.
+
+Colak, E. ∙ Kitamura, F.C. ∙ Hobbs, S.B. ...
+
+**The RSNA pulmonary embolism CT dataset**
+
+_Radiol.: Artif. Intell._ 2021; **3**(2), e200254
+
+. The labeling process follows a strict hierarchy: for a study to receive a location-specific label like central PE, it must first be flagged with the single image-level annotation “PE Present on Image”. Once the presence of PE is confirmed, annotators must assign at least one location label, distinguishing central PE from “right-sided” or “left-sided” PE, which correspond to clots located further distally in the arterial tree at the lobar level or beyond.
+
+From the original RSNA pool, a specific cohort of 982 scans was selected to focus on central PE. This study filtered the data to prioritize central PE cases. The final cohort consists of 241 positive cases of central PE and 741 negative cases, defined as studies without any indication of PE (negating central, left-sided, and right-sided findings). To ensure a consistent comparison of the classifier performance using the CT foundation model on central PE detection and other medical tasks, for the largest imbalanced training dataset, an approximate 1:3 positive-to-negative ratio was maintained. To facilitate model development and hyperparameter tuning, this primary dataset was split into a training pool and a test set using a stratified 85/15 partition, preserving the number of positive and negative cases in both sets. The training pool consists of 838 CT scans (204 positive, 634 negative), and the RSNA test set consists of 144 CT scans (36 positive, 108 negative).
+
+From the training pool, four distinct training subsets were created to evaluate the impact of dataset size and class balance on model performance. The number of CT scans labeled positive and negative cases on central PE are mentioned in [Table 1](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#tbl1). The full RSNA attrition: curated cohort
+
+central-PE selection
+
+stratified split), is shown in the Standards for Reporting of Diagnostic Accuracy (STARD) diagram in [Fig. 3](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#fig3).
+
+| Name | Dataset description | Positive studies | Negative studies |
+| --- | --- | --- | --- |
+| D1 | Small Balanced | 32 | 32 |
+| D2 | Medium Balanced | 64 | 64 |
+| D3 | Large Balanced | 204 | 204 |
+| D4 | Imbalanced | 204 | 634 |
+
+Table 1
+Four training datasets with varying sizes were used for evaluating the classifiers.
+
+*   [Open table in a new tab](https://www.ejradiology.com/action/showFullTableHTML?isHtml=true&tableId=tbl1&pii=S0720-048X%2826%2900440-7)
+
+### 2.2 Classifiers model and hyperparameter tuning
+
+For the classification pipeline illustrated in [Fig. 1](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#fig1), three distinct classifiers are trained independently for each dataset listed in [Table 1](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#tbl1): a Multi-Layer Perceptron (MLP), a Random Forest (RF) classifier, and an ensemble model that utilizes MLP predictions as features for RF training. This results in a total of 12 trained classifiers. To mitigate overfitting, a 5-fold cross-validation strategy was implemented throughout the training process for all models. Additionally, class weighting [[23]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+23.
+
+King, G. ∙ Zeng, L.
+
+**Logistic regression in rare events data**
+
+_Political Anal._ 2001; **9**(2):137-163
+
+ was applied during training to address the inherent class imbalance within the larger dataset.
+
+#### 2.2.1 MLP architecture and training
+
+The classifier is an MLP designed to process the 1408-dimensional embeddings extracted from the foundation model. To improve model robustness, the input embeddings are first passed through a Gaussian Noise layer (with standard deviation
+
+) before being reshaped and aggregated via a global average 1D pooling layer. This is followed by a sequence of hidden layers, where the configuration was treated as a tunable hyperparameter (either “32 × 32” or “64 × 64” neurons). Each dense layer utilizes ReLU activation and is regularized through a sequence of L1 regularization with a fixed weight decay 10−7, batch normalization, layer normalization, and dropout. The final layer consists of a single neuron with a sigmoid activation function to output the binary probability of central PE.
+
+Hyperparameter optimization was performed using a cross-validation strategy within the Keras Tuner framework. A random search over 250 trials is employed. To prevent overfitting during tuning, each trial was evaluated using a stratified 5-fold cross-validation on the training pool. The objective was to maximize the mean Receiver Operating Characteristic (ROC) AUC across the folds. The tunable search space included the learning rate
+
+, dropout rate
+
+, and Gaussian noise standard deviation
+
+. The L1 weight decay was held fixed at 10−7. The AdamW optimizer’s cosine decay restarts schedule is also optimized, specifically tuning the alpha parameter (0.1, 0.5, 0.8) and first decay steps (50, 100).
+
+Once the optimal hyperparameters were identified from the cross-validation search, the final model was retrained on the training pool using a stratified 90/10 split: the 90% partition was used for parameter updates and the 10% partition was reserved as an internal early-stopping monitor (patience = 50 epochs). This 90/10 split is distinct from the 5-fold cross-validation folds used during hyperparameter search; the held-out RSNA test set was never touched during hyperparameter search or final training and was used only for the reported evaluation. Class weighting was applied using the inverse frequency of positive and negative samples to address data imbalance.
+
+#### 2.2.2 Random forest training
+
+For comparison, a RF classifier from scikit-learn was implemented. The hyperparameters were optimized using an exhaustive 5-fold cross-validation grid search (GridSearchCV) on the training dataset. The hyperparameter grid evaluated the number of trees (n_estimators: 50, 75, 100, 125, 150), maximum tree depth (max_depth: 3, 5, 7, 9, 11), minimum samples required to split an internal node (min_samples_split: 10, 15, 20), minimum samples per leaf (min_samples_leaf: 5, 7, 10, 15), and the number of features to consider when looking for the best split (max_features:
+
+).
+
+To address the class imbalance, the grid search also evaluated multiple class_weight strategies, including balanced_subsample (which computes weights based on the bootstrap sample for each tree), a fixed manual penalty (1:3 ratio for positive class), and weights derived from the global training set frequency. The configuration yielding the highest mean ROC AUC across the 5 folds was selected for final evaluation.
+
+#### 2.2.3 Ensemble model architecture and training
+
+An ensemble model was constructed using a feature-extraction (or “stacking”) approach. First, a base MLP model was trained and tuned on the 1408-dimensional embeddings, following the exact hyperparameter tuning procedure described in Section [2.2.1](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#sec-2-2-1). Once the best base MLP was identified, a new feature-extractor model was instantiated from it. This new model used the MLP’s input layer but produced its output from the second-to-last hidden layer (the layer immediately preceding the final sigmoid activation). This intermediate model was then used to transform the original 1408-dimensional embeddings into a learned, lower-dimensional feature representation.
+
+A RF classifier was then trained on these extracted features. This head RF model was tuned using the same 5-fold GridSearchCV process, hyperparameter grid, and class weighting strategies described in Section [2.2.2](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#sec-2-2-2). This stacked architecture leverages the MLP’s ability to learn non-linear representations from the embeddings while utilizing the RF’s robustness for the final classification decision.
+
+### 2.3 Evaluation and performance index
+
+To rigorously evaluate the performance of the classification pipeline, Sensitivity, Specificity, ROC AUC, and Confidence Interval (CI) are utilized as the primary evaluation metrics. Sensitivity (Recall) measures the proportion of actual positive cases (studies with central PE) that were correctly identified by the model. It is a crucial indicator of the model’s ability to avoid false negatives [[24]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+24.
+
+Fawcett, T.
+
+**An introduction to ROC analysis**
+
+_Pattern Recognit. Lett._ 2006; **27**(8):861-874
+
+. Specificity measures the proportion of actual negative cases (studies without central PE) that were correctly identified. It reflects the model’s ability to avoid false alarms [[25]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+25.
+
+Altman, D.G.
+
+**Practical statistics for medical research**
+
+Chapman and Hall/CRC, 1990
+
+.
+
+(1)
+
+where True Positive (TP), False Positive (FP), True Negative (TN), and False Negative (FN) are the four categories of the prediction outcomes based on the ground truth.
+
+The ROC curve is created by plotting the Sensitivity against the false positive rate (1 - Specificity) at various threshold settings. The AUC provides an aggregate measure of performance across all possible classification thresholds, with a value of 1.0 representing a perfect classifier and 0.5 representing a classifier with no discriminative ability [[24]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+24.
+
+Fawcett, T.
+
+**An introduction to ROC analysis**
+
+_Pattern Recognit. Lett._ 2006; **27**(8):861-874
+
+. During the training of all classifiers, the ROC AUC of the validation set is considered as the evaluation metric. To assess the statistical stability and reliability of the results, 95% CI were estimated using non-parametric bootstrap resampling (1000 iterations) for each performance metric [[25]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+25.
+
+Altman, D.G.
+
+**Practical statistics for medical research**
+
+Chapman and Hall/CRC, 1990
+
+.
+
+To report study-level Sensitivity and Specificity, a single operating point (threshold) was first determined. The operating-point selection rule was pre-specified prior to evaluating any external set: a smallest threshold is selected whose out-of-fold sensitivity met a minimum target of 0.85 while maximizing specificity. The 0.85 target was retained for the primary results to preserve a usable specificity floor on the small RSNA test set; a sensitivity analysis at higher targets (0.85, 0.90, 0.95) is performed to examine the impact of the operating recalibration. This fixed threshold is applied to the RSNA test set predictions to calculate the final performance metrics (TP, FP, TN, and FN) and assess model generalization. 95% bootstrap confidence intervals (10,000 resamples) are also reported for every sensitivity and specificity value.
+
+### 2.4 Statistical comparison of classifiers
+
+To determine whether the differences in test AUC between the MLP, Random Forest, and stacking ensemble heads were statistically meaningful within each dataset configuration, two paired tests are performed:
+
+•
+
+**Paired DeLong test** (DeLong [[26]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+26.
+
+DeLong, E.R. ∙ DeLong, D.M. ∙ Clarke-Pearson, D.L.
+
+**Comparing the areas under two or more correlated receiver operating characteristic curves: a nonparametric approach**
+
+_Biometrics._ 1988; **44**(3):837-845
+
+). The fast
+
+implementation of this test using the approach by Sun et al. [[27]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+27.
+
+Sun, X. ∙ Xu, W.
+
+**Fast implementation of DeLong’s algorithm for comparing the areas under correlated receiver operating characteristic curves**
+
+_IEEE Signal Process. Lett._ 2014; **21**(11):1389-1393
+
+ is applied. This test computes the variance of the AUC difference from the structural components of the Mann–Whitney
+
+statistic, paired by test-sample identity.
+
+•
+
+**Paired bootstrap of the AUC difference** (10,000 iterations). For each bootstrap resample of the test set, the AUC of both classifiers is recomputed and their difference recorded; the two-sided
+
+-value is twice the smaller tail mass under the bootstrap distribution, and the 95% bootstrap CI of the difference is reported alongside.
+
+P-values were corrected for multiple comparisons within each dataset using the Holm–Bonferroni procedure (3 tests per dataset) [[28]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+28.
+
+Holm, S.
+
+**A simple sequentially rejective multiple test procedure**
+
+_Scand. J. Stat._ 1979; **6**(2):65-70
+
+.
+
+### 2.5 Segmentation impact
+
+Here, the objective is to determine whether the application of vascular segmentation simplifies the classification task, as evidenced by measurable improvements in the pipeline’s performance metrics, specifically test AUC and CI. To isolate the pulmonary vasculature, a dedicated preprocessing pipeline is implemented on the two smallest training datasets and the RSNA test dataset. The core of this pipeline involved segmenting the vessels from the surrounding anatomy using VesselFM [[29]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+29.
+
+B. Wittmann, Y. Wattenberg, T. Amiranashvili, S. Shit, B. Menze, vesselFM: A Foundation Model for Universal 3D Blood Vessel Segmentation, in: Proceedings of the Computer Vision and Pattern Recognition Conference, 2025, pp. 20874–20884.
+
+, a state-of-the-art 3D foundation model designed specifically for medical image segmentation. As a specialized tool, VesselFM excels at generating precise, zero-shot 3D segmentations of complex vascular structures directly from CT scans.
+
+VesselFM is applied to each raw chest CT scan to generate a 3D binary mask that identifies the voxels corresponding to the pulmonary vasculature. From this mask and the original CT volume, a new masked CT series is created that contains only the areas identified as blood vessels by the VesselFM algorithm. To ensure compatibility with the downstream classification pipeline, the resulting series was reconstructed while preserving the critical metadata from the original scan, including image dimensions, slice thickness, and pixel spacing. The Hounsfield Units (HU) values of the voxels within the segmented vessels were also maintained. These preprocessed, vessel-centric CT series were then used as the direct input for the Google CT Foundation model to generate embeddings for the classification pipeline. One sample of the segmentation of VesselFM on a CT slice is depicted in [Fig. 2](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#fig2). The figure reflects how the VesselFM algorithm segments the pulmonary arteries and ribs. No secondary processing is applied to remove the ribs from the segmented images that were passed back into the Google CT Foundation model.
+
+To visually assess whether segmentation simplifies the classification task, the t-distributed Stochastic Neighbor Embedding (t-SNE) is applied as a dimensionality reduction technique that projects high-dimensional embeddings into a lower-dimensional space while preserving local structures [[30]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+30.
+
+Van der Maaten, L. ∙ Hinton, G.
+
+**Visualizing data using t-SNE**
+
+_J. Mach. Learn. Res._ 2008; **9**:2579-2605
+
+. By comparing the t-SNE plots of the original and segmented datasets, one can observe whether the segmentation leads to a more distinct separation between positive and negative classes, which indicates a simplified classification problem. Following this visual analysis, three classifiers are trained independently for each of the two smaller sub-datasets listed in [Table 1](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#tbl1). Finally, the AUC and CI of these classifiers are evaluated on the segmented RSNA test dataset to determine whether the segmentation process objectively enhances the performance of the classification pipeline in the specified low-data regime.
+
+[![Image 2: (a)](https://www.ejradiology.com/cms/10.1016/j.ejrad.2026.113092/asset/7cc64837-d7cd-41f5-85d8-c7b8a674f593/main.assets/gr2a.jpg)](https://www.ejradiology.com/cms/10.1016/j.ejrad.2026.113092/asset/343b9d17-b4cc-49c6-b793-67f684662b1f/main.assets/gr2a_lrg.jpg "View full size image in a new tab")
+
+(a)Original CT scans.
+
+[![Image 3: (b)](https://www.ejradiology.com/cms/10.1016/j.ejrad.2026.113092/asset/3e69cd18-bbd5-4f43-86db-f5e1f361f4e7/main.assets/gr2b.jpg)](https://www.ejradiology.com/cms/10.1016/j.ejrad.2026.113092/asset/aef9e0d5-3bc5-4c39-bd5b-9402c5f69277/main.assets/gr2b_lrg.jpg "View full size image in a new tab")
+
+(b)Segmented CT scans.
+
+Fig. 2 A CT slice example where VesselFM is used to segment the vessels.
+
+### 2.6 Datasets source and format impact
+
+Foundation models are typically trained on large-scale datasets, with the expectation that their generated embeddings remain invariant to the format and source of the data. To evaluate the generalizability of the models — which were trained on the RSNA dataset — we curated an independent test set from the INSPECT dataset [[31]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+31.
+
+Huang, S.-C. ∙ Huo, Z. ∙ Steinberg, E. ...
+
+**Inspect: a multimodal dataset for pulmonary embolism diagnosis and prognosis**
+
+2023
+
+. Explicitly, any studies from the INSPECT cohort that overlapped with the RSNA dataset is excluded. Notably, while the RSNA data is in DICOM format, the INSPECT dataset utilizes Neuroimaging Informatics Technology Initiative (NIfTI). First, a preprocessing pipeline was applied to clean the INSPECT data and mitigate potential covariate shifts arising from these format differences in Section [2.6.1](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#sec-2-6-1). Then, the experiments to compare the distributional differences between the embeddings of a sample of the RSNA test set and the INSPECT dataset are described. Finally, the performance of the best classifier on RSNA and INSPECT test datasets is compared.
+
+#### 2.6.1 INSPECT dataset
+
+The INSPECT dataset [[31]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+31.
+
+Huang, S.-C. ∙ Huo, Z. ∙ Steinberg, E. ...
+
+**Inspect: a multimodal dataset for pulmonary embolism diagnosis and prognosis**
+
+2023
+
+ is a large-scale, multimodal cohort from a single site (Stanford Medicine), containing 19,402 patients and 23,248 CTPA studies acquired between 2000 and 2021, with 3D CT images, radiology report impressions, and structured EHR data; release was approved by the Stanford Institutional Review Board. The INSPECT test set (N = 241) was sampled to match the RSNA test set’s
+
+positive-to-negative class imbalance, facilitating cross-domain comparison under a matched class prevalence. This test set was constructed in four stages and is summarized in the STARD diagram in [Fig. 3](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#fig3). (i) An initial keyword search of INSPECT radiology report impressions for “central PE” or “PE in the main artery” yielded 80 candidate positive and 250 candidate negative studies (
+
+). (ii) 12 candidate studies that overlapped with the RSNA-STR PE CT (RSPECT) subset of INSPECT [[31]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+31.
+
+Huang, S.-C. ∙ Huo, Z. ∙ Steinberg, E. ...
+
+**Inspect: a multimodal dataset for pulmonary embolism diagnosis and prognosis**
+
+2023
+
+ were excluded. The overlaps identified using the provenance column released with the INSPECT study-mapping file. (iii) The impression of remaining positive cases were reviewed by a collaborating radiologist (not at the image level); one case was excluded for not meeting the central-PE definition on closer reading of the report. Stages (ii) and (iii) together removed 13 studies, leaving a post-curation cohort of
+
+studies entering the quality-control stage. (iv) The Quality Control (QC) pipeline described below removed 10 studies flagged for disordered slice sequencing and 66 studies flagged as non-chest (abdominal) scans, yielding the final test set of 241 studies (59 positive, 182 negative).
+
+Huang et al. report (Table 2 of [[31]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+31.
+
+Huang, S.-C. ∙ Huo, Z. ∙ Steinberg, E. ...
+
+**Inspect: a multimodal dataset for pulmonary embolism diagnosis and prognosis**
+
+2023
+
+, “All” column) the cohort-level demographics across all 19,402 INSPECT patients: 55.1% female, age distribution skewed toward 39–69 years (51.5%) and 69–89 years (30.0%), and racial composition 55.2% White, 15.1% Asian, 5.8% Black, 2.1% Native, 21.8% Unknown (15.5% Hispanic ethnicity). A 241-study subset is drawn from across the INSPECT canonical train/val/test splits using four-stage cohort construction shown in [Fig. 3](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#fig3), so the cohort-level marginal is the appropriate reference distribution. For the 198 studies with Digital Imaging and Communications in Medicine (DICOM)-derived scanner metadata, the manufacturer mix is Siemens 132/Toshiba 34/GE Medical Systems 32, with a median slice thickness of 2.0 mm (IQR 1.5–5.5 mm). Among the 59 positives, INSPECT’s source NLP labels ([[31]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+31.
+
+Huang, S.-C. ∙ Huo, Z. ∙ Steinberg, E. ...
+
+**Inspect: a multimodal dataset for pulmonary embolism diagnosis and prognosis**
+
+2023
+
+, Section 4.2.1) flag 58/59 as acute and 58/59 as proximal (pe_subsegmentalonly
+
+); one case is flagged subsegmental-only by the source NLP despite matching the central-PE keyword filter, an edge case we retained for transparency. All 59 are also flagged positive by INSPECT’s source NLP labeler, which complements the image-level radiologist validation described below.
+
+To mitigate the covariate shift observed due to format differences between the RSNA (DICOM) and INSPECT (NIfTI) data, the non-overlapping INSPECT test set was subjected to two harmonization steps before embedding generation. First, the per-file metadata (Rescale Slope and Rescale Intercept) were used to ensure that the data arrays were accurately converted to true physical HU. Then, the NIfTI header’s voxel dimensions (
+
+and
+
+) were also updated using the metadata published alongside the INSPECT dataset. This way, subtle texture cues essential for clot detection and to accurately reflect the physical dimensions are preserved.
+
+To ensure the integrity of the studies, a QC pipeline is implemented to identify and remove corrupted or anatomically irrelevant scans. To detect disordered slice sequencing, the pixel-wise correlation coefficient between adjacent axial slices (
+
+and
+
+) is calculated. A scan was flagged as corrupted, and excluded, if the minimum pairwise correlation across consecutive-slice pairs fell below 0.9 or if the mean absolute first difference of the correlation sequence (a “jaggedness” measure) exceeded 0.05. To filter out abdominal scans mislabeled as chest CTs, the proportion of internal air voxels (HU
+
+, inside the body silhouette) relative to total body-silhouette voxels was computed. CT scans with an internal-air ratio exceeding 10% — reflecting the air-filled lungs that dominate the chest interior — were classified as chest CTs; those below 10% were classified as abdominal.
+
+_Image-level validation of INSPECT labels._ As an additional ground-truth check on the keyword + impression-text label pipeline described above, a senior radiology resident independently reviewed a stratified random sample of 50 of the INSPECT test studies (15 of positives + 35 of negatives, oversampling the positives) directly on the CT images, rather than on the report impression text. The radiologist’s image-level labels agreed with the keyword-derived labels on all 50 cases (Cohen’s
+
+; sensitivity, specificity, PPV, and NPV equal to 1.00).
+
+[![Image 4: Fig. 3](https://www.ejradiology.com/cms/10.1016/j.ejrad.2026.113092/asset/4ef768ea-7724-4931-b9fe-68fc8e960057/main.assets/gr3.jpg)](https://www.ejradiology.com/cms/10.1016/j.ejrad.2026.113092/asset/c7b0f81d-0438-4f70-a9af-addbf3da77a6/main.assets/gr3_lrg.jpg "View full size image in a new tab")
+
+Fig. 3 STARD-style flow of CT studies through the RSNA cohort (used for training, internal hyperparameter search, and the held-out internal test set) and the Stanford INSPECT external test cohort. Counts in parentheses are _positive central PE/negative_. Dashed boxes summarize exclusion criteria at each step. The INSPECT test set (N = 241) was sampled to match the RSNA test set’s positive-to-negative class imbalance, facilitating cross-domain comparison under a matched class prevalence.
+
+#### 2.6.2 Experiments
+
+In this section, two distinct experiments are conducted. First, the distribution shift between the embeddings generated for the RSNA and INSPECT test datasets is directly compared. Subsequently, the performance of the highest-performing classifiers across these two datasets is evaluated.
+
+_Distributional shift analysis:_ We hypothesized that domain-specific features, such as scanner artifacts, reconstruction kernels, or noise textures, might persist in the latent representations generated by the Google CT Foundation model. To test this hypothesis, two balanced, randomly sampled subsets of
+
+CT scans from the RSNA test set and the harmonized INSPECT dataset (36 positive and 108 negative) is constructed. For each scan, volumetric embeddings were generated using the frozen Google CT foundation model. This resulted in two sets of high-dimensional embeddings,
+
+and
+
+, representing the training and external domains, respectively. First, the structure of the latent space is visualized by applying the t-SNE to project the high-dimensional embeddings into a two-dimensional manifold. Then, to statistically confirm the separation observed in the t-SNE projection, two rigorous distribution-free two-sample tests are employed:
+
+•
+
+**Maximum Mean Discrepancy (MMD):** The unbiased Maximum Mean Discrepancy (MMD) statistic with a radial basis function (RBF) kernel [[32]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+32.
+
+Gretton, A. ∙ Borgwardt, K.M. ∙ Rasch, M.J. ...
+
+**A kernel two-sample test**
+
+_J. Mach. Learn. Res._ 2012; **13**(25):723-773
+
+ was employed to quantify the distance between two probability distributions. Since the underlying distributions are not directly observable, the RBF kernel maps the data into a high-dimensional reproducing kernel Hilbert space to identify differences between mean embeddings. The squared MMD is calculated as:
+
+(2)
+
+where the off-diagonal sums over the kernel matrices
+
+and
+
+implement the unbiased
+
+-statistic estimator (diagonal terms are excluded to remove the trivial
+
+self-similarity bias of the
+
+-statistic). To determine statistical significance between
+
+and
+
+, a permutation test (1000 permutations) was performed. This is critical because the MMD value is context-dependent; for instance, an MMD of 0.02 is highly significant if
+
+, indicating a clear covariate shift. Conversely, the same value with
+
+would suggest that the difference is likely due to random sampling noise rather than a true distributional shift.
+
+•
+
+**Classifier-Based Two-Sample Test (C2ST)**[[33]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+33.
+
+D. Lopez-Paz, M. Oquab, Revisiting classifier two-sample tests, in: International Conference on Learning Representations, 2017.
+
+: A binary Random Forest classifier was trained to distinguish between embeddings from
+
+and
+
+. Under the null hypothesis that the distributions are identical (
+
+), the classifier should perform no better than random chance (accuracy
+
+).
+
+_Linear-probe analysis:_ As an objective test of embedding separability that complements the qualitative t-SNE visualization, additionally, a plain logistic regression with no hidden layer, a method known as linear probe [[34]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+34.
+
+Alain, G. ∙ Bengio, Y.
+
+**Understanding intermediate layers using linear classifier probes**
+
+2016
+
+, is trained on the StandardScaler-normalized 1408-dimensional embeddings, using class-balanced weighting. Linear probes were trained on each of the four dataset configurations in [Table 1](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#tbl1) and evaluated on both the RSNA and INSPECT test sets. A linear probe’s AUC reflects the linearly separable structure of the embedding space and is therefore not affected by t-SNE’s preservation of local-only structure. For each configuration, the linear probe’s predictions were compared to the corresponding RF’s predictions on the same test samples via a paired DeLong test [[26,27]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+26.
+
+DeLong, E.R. ∙ DeLong, D.M. ∙ Clarke-Pearson, D.L.
+
+**Comparing the areas under two or more correlated receiver operating characteristic curves: a nonparametric approach**
+
+_Biometrics._ 1988; **44**(3):837-845
+
+27.
+
+Sun, X. ∙ Xu, W.
+
+**Fast implementation of DeLong’s algorithm for comparing the areas under correlated receiver operating characteristic curves**
+
+_IEEE Signal Process. Lett._ 2014; **21**(11):1389-1393
+
+, so that any RSNA-vs-INSPECT degradation can be reported as a quantitative significance result rather than a point-estimate gap.
+
+_The best classifier performance:_ We hypothesize that the performance of the best classifier on the RSNA test dataset should not be significantly worse on the INSPECT test dataset. For this purpose, the performance of the classifier is quantified using ROC AUC and CI. This fixed threshold that is calculated in Section [2.3](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#sec-2-3), is applied to the INSPECT test set predictions to calculate the final performance metrics (TP, FP, TN, and FN) and assess model generalization.
+
+## 3 Results
+
+For each dataset pair specified in [Table 1](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#tbl1) and the classifier architectures detailed in Section [2.2](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#sec-2-2), the classification pipeline was trained independently. The resulting performance metrics for the twelve trained classifiers are summarized in [Table 2](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#tbl2). Across all four dataset configurations, the RF classifier yielded the highest point-estimate AUC on the RSNA test set; however, paired DeLong tests ([Table 3](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#tbl3)) showed that none of the pairwise differences between the three classifiers reached statistical significance at
+
+within any configuration (smallest uncorrected
+
+; smallest Holm-corrected
+
+). Therefore, the Random Forest ranking provides a descriptive characterization of feature importance rather than a formal statistical inference. These outcomes align with the benchmark performance of the CT foundation model reported across seven diverse medical image classification tasks, where MLP heads were utilized for evaluation [[7]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+7.
+
+**Taking medical imaging embeddings 3D**
+
+2024
+
+. Consistent with those benchmarks, test AUC is observed to improve as the training dataset size increases. This alignment with established benchmarks validates the integration of the CT foundation model within the proposed classification pipeline.
+
+[Table 3](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#tbl3) reports paired-DeLong and paired-bootstrap pairwise comparisons between the three classifiers within each dataset configuration, together with Holm–Bonferroni-corrected p-values (3 tests per dataset). None of the 12 pairwise tests reaches significance at
+
+in either test, before or after correction; the bootstrap 95% CI of every
+
+contains zero. The smallest uncorrected DeLong
+
+-value is 0.18 (RF versus stacking ensemble on D2 and D3). The point-estimate ranking favors RF in every configuration, but the test set (
+
+) is underpowered to declare the differences statistically meaningful.
+
+| Training | MLP | RF | Stacking |
+| --- | --- | --- | --- |
+| Dataset | Test AUC | 95% CI | Test AUC | 95% CI | Test AUC | 95% CI |
+| Small Balanced | 0.53 | [0.42–0.64] | 0.59 | [0.48–0.69] | 0.55 | [0.44–0.66] |
+| Medium Balanced | 0.73 | [0.62–0.82] | 0.76 | [0.65–0.86] | 0.69 | [0.58–0.79] |
+| Large Balanced | 0.76 | [0.67–0.85] | 0.79 | [0.69–0.88] | 0.75 | [0.66–0.83] |
+| Large Imbalanced | 0.74 | [0.63–0.83] | 0.78 | [0.68–0.87] | 0.75 | [0.66–0.84] |
+
+Table 2
+The performance of three classifiers trained on four datasets on the RSNA test dataset.
+
+*   [Open table in a new tab](https://www.ejradiology.com/action/showFullTableHTML?isHtml=true&tableId=tbl2&pii=S0720-048X%2826%2900440-7)
+
+| Dataset | Pair | AUC | Bootstrap | DeLong | Bootstrap |
+| --- | --- | --- | --- | --- | --- |
+|  |  |  | 95% CI of AUC | p/Holm | p/Holm |
+| D1 | RF vs MLP |  | [, ] | 0.41/1.00 | 0.40/1.00 |
+| D1 | RF vs Stacking |  | [, ] | 0.56/1.00 | 0.56/1.00 |
+| D1 | MLP vs Stacking | −0.019 | [, ] | 0.77/1.00 | 0.75/1.00 |
+| D2 | RF vs MLP |  | [, ] | 0.40/0.80 | 0.39/0.78 |
+| D2 | RF vs Stacking |  | [, ] | 0.18/0.53 | 0.18/0.54 |
+| D2 | MLP vs Stacking |  | [, ] | 0.50/0.80 | 0.50/0.78 |
+| D3 | RF vs MLP |  | [, ] | 0.38/0.77 | 0.40/0.80 |
+| D3 | RF vs Stacking |  | [, ] | 0.18/0.54 | 0.18/0.53 |
+| D3 | MLP vs Stacking |  | [, ] | 0.58/0.77 | 0.58/0.80 |
+| D4 | RF vs MLP |  | [, ] | 0.21/0.62 | 0.22/0.66 |
+| D4 | RF vs Stacking |  | [, ] | 0.54/1.00 | 0.54/1.00 |
+| D4 | MLP vs Stacking | −0.019 | [, ] | 0.58/1.00 | 0.59/1.00 |
+
+Table 3
+Pairwise comparison of classifier AUCs within each dataset configuration using paired DeLong [[27]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+27.
+
+Sun, X. ∙ Xu, W.
+
+**Fast implementation of DeLong’s algorithm for comparing the areas under correlated receiver operating characteristic curves**
+
+_IEEE Signal Process. Lett._ 2014; **21**(11):1389-1393
+
+ and paired bootstrap (10,000 iterations) tests, with Holm–Bonferroni-corrected p-values within each dataset.
+
+*   [Open table in a new tab](https://www.ejradiology.com/action/showFullTableHTML?isHtml=true&tableId=tbl3&pii=S0720-048X%2826%2900440-7)
+
+The operating points for the three top-performing classifiers — the RF models trained on the medium balanced, large balanced, and large imbalanced datasets — are calculated according to the methodology detailed in Section [2.3](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#sec-2-3). These operating points are then applied to evaluate the sensitivity and specificity of the models on the RSNA datasets, with results summarized in [Table 4](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#tbl4). Sensitivity remains close to the 0.85 target for the large balanced and large imbalanced RFs (0.86 in both cases); the medium balanced RF reaches 0.89 sensitivity but at the cost of a specificity of only 0.19 [0.12–0.27], which is not deployable. The large balanced RF achieves a substantially higher specificity (0.53 [0.43–0.62]); none of the operating points, however, approaches the specificity range achieved by human readers (Section [4](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#sec-4)).
+
+Next, the results on the impact of segmentation and the generalization analysis on the INSPECT test dataset are provided.
+
+| RF Model | Sensitivity (95% CI) | Specificity (95% CI) | TP | TN | FP | FN |
+| --- | --- | --- | --- | --- | --- | --- |
+| Training Dataset |  |  |  |  |  |  |
+| Medium Balanced | 0.89 [0.78–0.97] | 0.19 [0.12–0.27] | 32 | 21 | 87 | 4 |
+| Large Balanced | 0.86 [0.74–0.97] | 0.53 [0.43–0.62] | 31 | 57 | 51 | 5 |
+| Large Imbalanced | 0.86 [0.74–0.97] | 0.48 [0.39–0.58] | 31 | 52 | 56 | 5 |
+
+Table 4
+
+Performance of RF classifiers on the RSNA test dataset (
+
+) using their corresponding operating point. Models were trained on RSNA splits, and evaluation metrics were computed using the operating point.
+
+*   [Open table in a new tab](https://www.ejradiology.com/action/showFullTableHTML?isHtml=true&tableId=tbl4&pii=S0720-048X%2826%2900440-7)
+
+### 3.1 Segmentation impact
+
+First, the class separability of the embeddings from both original and segmented CT scans in the medium balanced dataset was visualized using t-SNE plots. Subsequently, the classification performance across the two training sub-datasets and various classifiers was presented for the segmented CT scans.
+
+The t-SNE plot in [Fig. 4](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#fig4) illustrates that the dots corresponding to embeddings of positive and negative series are highly intermingled for both original and segmented CT scans. Although it is claimed that the embeddings generated by the Google CT foundation model include information about organs, tissues, and the presence of abnormalities, as expected, the t-SNE plot in [Fig. 4(a)](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#fig4a) indicates that this foundation model is not solely specialized in detecting PE. Similarly, [Fig. 4(b)](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#fig4b) indicates vascular segmentation does not necessarily improve class separation. This conclusion is inferred by comparing t-SNE projections with and without segmentation, which show comparable overlap between positive and negative cases.
+
+The classification pipeline is trained using two segmented datasets and three distinct classifiers, with performance evaluated on the segmented RSNA test set as detailed in [Table 5](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#tbl5). For the segmented CT scans, the RF classifier consistently yields the best results, demonstrating a positive correlation between dataset size and test AUC. However, comparing these outcomes to the performance on the original CT scans in [Table 2](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#tbl2) suggests that segmentation does not improve the classification pipeline’s performance. In fact, segmentation may reduce the ability of the Google CT Foundation model to generate embeddings containing high-utility information.
+
+[![Image 5: (a)](https://www.ejradiology.com/cms/10.1016/j.ejrad.2026.113092/asset/52efa19c-8878-4b9a-a4e3-a92b8a5a0265/main.assets/gr4a.jpg)](https://www.ejradiology.com/cms/10.1016/j.ejrad.2026.113092/asset/11acc02a-0d2a-443a-9ca5-f4e929759faf/main.assets/gr4a_lrg.jpg "View full size image in a new tab")
+
+(a)Original CT scans.
+
+[![Image 6: (b)](https://www.ejradiology.com/cms/10.1016/j.ejrad.2026.113092/asset/926e2463-662e-4f46-b464-fb6cf7c96e02/main.assets/gr4b.jpg)](https://www.ejradiology.com/cms/10.1016/j.ejrad.2026.113092/asset/c725197c-4c65-409e-9786-89b06862c221/main.assets/gr4b_lrg.jpg "View full size image in a new tab")
+
+(b)Segmented CT scans.
+
+Fig. 4 t-SNE plot for all the extracted embeddings from the Google CT Foundation model for the segmented and original CTs in the medium balanced dataset. (Parameters: perplexity , max iterations , random_state; implementation: distributional_analysis.py.)
+
+| Training | MLP | RF | Ensemble |
+| --- | --- | --- | --- |
+| Dataset | Test AUC | 95% CI | Test AUC | 95% CI | Test AUC | 95% CI |
+| Small Balanced | 0.61 | [0.50, 0.72] | 0.56 | [0.46, 0.65] | 0.57 | [0.45, 0.68] |
+| Medium Balanced | 0.51 | [0.40, 0.62] | 0.61 | [0.51, 0.71] | 0.54 | [0.44, 0.64] |
+
+Table 5
+The performance of three classifiers trained on two segmented sub-datasets on the segmented RSNA test dataset.
+
+*   [Open table in a new tab](https://www.ejradiology.com/action/showFullTableHTML?isHtml=true&tableId=tbl5&pii=S0720-048X%2826%2900440-7)
+
+### 3.2 Dataset source and format impact
+
+Qualitatively, the t-SNE projection ([Fig. 5](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#fig5)) reveals a visible separation between the embedding clusters of the two datasets. While there is some overlap in the latent space, the distinct centers of mass suggest a systematic difference in feature representation.
+
+Quantitative analysis using two-sample tests confirmed the statistical significance of this covariate shift. The MMD test rejected the null hypothesis that the distributions are identical (MMD statistic = 0.026,
+
+). Furthermore, the C2ST achieved an accuracy of 83.9% (
+
+), significantly outperforming the random chance baseline of 50%. These results demonstrate that despite standard physics and geometric harmonization, the foundation model’s embeddings retain sufficient domain-specific signals (e.g., scanner-specific noise textures or reconstruction artifacts) to separate the RSNA and INSPECT cohorts.
+
+[![Image 7: Fig. 5](https://www.ejradiology.com/cms/10.1016/j.ejrad.2026.113092/asset/45114a0d-ebc2-44c6-849c-14c965bef5d0/main.assets/gr5.jpg)](https://www.ejradiology.com/cms/10.1016/j.ejrad.2026.113092/asset/780466e7-3376-49ed-b4cf-06fc5af4d160/main.assets/gr5_lrg.jpg "View full size image in a new tab")
+
+Fig. 5 The t-SNE visualization of embeddings generated from the RSNA and INSPECT datasets. (Parameters: perplexity , max iterations , random_state; balanced subset of per cohort.)
+
+As a third quantitative test, the linear-probe analysis (Section [2.6.2](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#sec-2-6-2)) directly assesses the linear separability of the embeddings on both domains. On the large-balanced training set, the linear probe achieves test AUC 0.795 [0.697–0.882] on RSNA — statistically indistinguishable from the RF (AUC 0.79, paired DeLong
+
+). This confirms that the embeddings carry meaningful linearly separable structure for central PE on the source domain, despite the intermingled t-SNE projection in [Fig. 4](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#fig4); the t-SNE visual overlap is therefore uninformative about the linear-probe geometry. On INSPECT, however, the linear probe degrades to 0.556 [0.469–0.642] while the RF holds at 0.62 (paired DeLong
+
+). The much larger degradation of the simpler linear head versus the non-linear RF under domain shift is itself consistent with the MMD/C2ST-detected feature shift: under cross-domain conditions the discriminative signal that survives in the embedding is no longer linearly accessible.
+
+This distributional shift negatively impacts downstream generalization performance. [Table 6](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#tbl6) presents the performance of RF classifiers trained on RSNA splits and evaluated on the INSPECT test set. A substantial performance degradation is observed, with AUC values dropping to approximately 0.62–0.63 across all training strategies.
+
+Crucially, when applying the decision threshold (operating point) optimized on the RSNA test set, models exhibited poor specificity (ranging from 0.08 to 0.36), resulting in a high number of FP. This suggests that the distribution of output probabilities is shifted in the target domain, further corroborating the presence of a domain gap that simple threshold calibration cannot fully resolve. In clinical practice, AI-based pulmonary embolism detection systems are primarily used to prioritize emergency department and inpatient CT scans for urgent review. In this context, low specificity would be a problem because the model would generate excessive false-positive alerts which would contribute to “alarm-fatigue” among radiologists and would delay the reading of other critical CT scans.
+
+| RF Model | Test AUC | Sensitivity | Specificity | TP | TN | FP | FN |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Training Dataset | (95% CI) | (95% CI) | (95% CI) |  |  |  |  |
+| Medium Balanced | 0.63[0.55–0.72] | 1.00 [1.00–1.00] | 0.08 [0.04–0.12] | 59 | 15 | 167 | 0 |
+| Large Balanced | 0.62 [0.53–0.70] | 0.80 [0.69–0.90] | 0.36 [0.29–0.43] | 47 | 65 | 117 | 12 |
+| Large Imbalanced | 0.62[0.55–0.71] | 0.81 [0.71–0.91] | 0.29 [0.22–0.35] | 48 | 52 | 130 | 11 |
+
+Table 6
+
+Performance of RF classifiers on the INSPECT test dataset (
+
+). Models were trained on RSNA splits, and evaluation metrics were computed using the operating point. The low AUC and specificity highlight the generalization gap caused by domain shift.
+
+*   [Open table in a new tab](https://www.ejradiology.com/action/showFullTableHTML?isHtml=true&tableId=tbl6&pii=S0720-048X%2826%2900440-7)
+
+#### 3.2.1 Threshold transport and recalibration analysis
+
+A natural question is whether simple recalibration of the operating point can recover deployable performance on INSPECT. To assess this, the RSNA-OOF threshold for the best RF model (Large Balanced) at three target sensitivities — 0.85, 0.90, and 0.95 — is computed, and each resulting threshold is applied to both the RSNA test set and the INSPECT test set. [Table 7](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#tbl7) summarizes the outcome.
+
+Two observations follow from [Table 7](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#tbl7). First, RSNA test sensitivity remains essentially flat at 0.86 across the three targets, because the OOF-derived threshold does not transfer with full fidelity to the small (
+
+) RSNA test set. Second — and more importantly — on INSPECT, specificity collapses from 0.36 to 0.14 as the sensitivity target is raised, while sensitivity gains only modestly. Simple global recalibration of the threshold does not restore a deployable operating point on the external cohort. At a clinically relevant target of 0.95 sensitivity, the INSPECT specificity of 0.14 would generate approximately 3 false-positive alerts for every true positive in a 1:3 prevalence-matched setting, which is well below the alarm-fatigue threshold that radiologists tolerate in practice.
+
+| Target sens. | Threshold | RSNA sens/spec | INSPECT sens/spec |
+| --- | --- | --- | --- |
+| 0.85 | 0.419 | 0.86 [0.74–0.97]/0.53 [0.43–0.62] | 0.80 [0.69–0.90]/0.36 [0.29–0.43] |
+| 0.90 | 0.368 | 0.86 [0.74–0.97]/0.41 [0.31–0.50] | 0.83 [0.73–0.92]/0.24 [0.18–0.31] |
+| 0.95 | 0.322 | 0.86 [0.74–0.97]/0.33 [0.24–0.43] | 0.83 [0.73–0.92]/0.14 [0.10–0.19] |
+
+Table 7
+
+Operating-point sensitivity analysis for the Large Balanced RF model. Each threshold is the smallest value whose RSNA-OOF sensitivity met the target column; the same threshold is then evaluated unchanged on RSNA test (
+
+) and INSPECT test (
+
+). 95% bootstrap CIs in brackets.
+
+*   [Open table in a new tab](https://www.ejradiology.com/action/showFullTableHTML?isHtml=true&tableId=tbl7&pii=S0720-048X%2826%2900440-7)
+
+## 4 Discussion
+
+The trained classification pipeline achieved a peak point-estimate test AUC of 0.79 using the Random Forest head on the large balanced training set. Paired DeLong tests (Section [2.4](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#sec-2-4)) showed that none of the pairwise differences between the three classifier heads reached significance at
+
+, so the RF advantage should be read descriptively. Direct comparison to specialized state-of-the-art PE-detection pipelines is task-mismatched: Huhtanen et al. [[15]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+15.
+
+Huhtanen, H. ∙ Nyman, M. ∙ Mohsen, T. ...
+
+**Automated detection of pulmonary embolism from CT-angiograms using deep learning**
+
+_BMC Med. Imaging._ 2022; **22**(1):43
+
+ (AUC 0.94,
+
+CTPAs) and Weikert et al. [[16]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+16.
+
+Weikert, T. ∙ Winkel, D.J. ∙ Bremerich, J. ...
+
+**Automated detection of pulmonary embolism in CT pulmonary angiograms using an AI-powered algorithm**
+
+_Eur. Radiol._ 2020; **30**(12):6545-6553
+
+ (sensitivity 0.927, specificity 0.955) both target the broader any-PE task, of which central PE is the easier subset (large, proximal, high-contrast). The classification pipeline’s 0.79 central-PE AUC, therefore, likely understates the deployment gap relative to any-PE specialized models; a fair within-task comparison would require re-training a specialized central-PE-only baseline on the same RSNA split.
+
+The headline external-validation finding is not the AUC drop but the collapse of specificity at the operating point. At the RSNA-tuned threshold, the best RF achieves INSPECT specificity in the range 0.08–0.36 depending on the training set ([Table 6](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#tbl6)); raising the target sensitivity by re-deriving the threshold on RSNA out-of-fold predictions makes the situation worse, with INSPECT specificity falling to 0.14 at the clinically preferred 0.95 sensitivity target ([Table 7](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#tbl7)). Simple global recalibration of the threshold does not restore deployable performance on the external cohort. In a clinical triage setting, a specificity below 0.2 would generate enough false positives to produce “alarm-fatigue” and would likely delay the reading of other emergency-department CTs, halting adoption. The deployment limitation we identify is therefore not the AUC alone but the non-transportability of the operating point.
+
+For clinical context, Kligerman et al. [[35]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+35.
+
+Kligerman, S.J. ∙ Mitchell, J.W. ∙ Sechrist, J.W. ...
+
+**Radiologist performance in the detection of pulmonary embolism: features that favor correct interpretation and risk factors for errors**
+
+_J. Thorac. Imaging._ 2018; **33**(6):350-357
+
+ reported radiologist sensitivity for detecting central, lobar, segmental, and subsegmental PEs in the range 0.67–0.87 and specificity 0.89–0.99 for PE detection on CTPA, with a sensitivity of 1.0 for multiple central PEs. For central PE detection specifically, Goldberg-Stein et al. [[22]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+22.
+
+Goldberg-Stein, S. ∙ Gandomi, A. ∙ Barish, M.A. ...
+
+**Clinical implementation of AI for pulmonary embolism detection in over 30,000 CT pulmonary angiography examinations**
+
+_Radiol.: Artif. Intell._ 2026;
+
+Published online May 13, 2026
+
+ reported a radiologist-to-AI concordance of 95.79% in a clinical-implementation study of over 30,000 CTPA examinations. Remy-Jardin et al. [[36]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+36.
+
+Remy-Jardin, M. ∙ Remy, J. ∙ Wattinne, L. ...
+
+**Central pulmonary thromboembolism: diagnosis with spiral volumetric CT with the single-breath-hold technique—comparison with pulmonary angiography**
+
+_Radiology._ 1992; **185**(2):381-387
+
+ reported 100% sensitivity and 96% specificity for CTPA detection of central PE compared with conventional pulmonary angiography. The best RF reaches sensitivity 0.86 (within the radiologist range) but specificity 0.53 on RSNA and 0.36 on INSPECT which is below the radiologist specificity range; the deployment-relevant gap is therefore not in detection sensitivity but in false-alarm rate. Finally, when assessing the accuracy of the INSPECT dataset labeling for the present study, the senior radiology resident who reviewed a stratified random sample of the INSPECT test studies (15 labeled positive and 35 labeled negative for central PE) reported 100% concordance with our keyword-derived labels (Cohen’s
+
+). A full-cohort (241 studies) image-level review would further strengthen confidence in the external label set.
+
+Architecturally, both Huhtanen et al. [[15]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+15.
+
+Huhtanen, H. ∙ Nyman, M. ∙ Mohsen, T. ...
+
+**Automated detection of pulmonary embolism from CT-angiograms using deep learning**
+
+_BMC Med. Imaging._ 2022; **22**(1):43
+
+ and Weikert et al. [[16]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+16.
+
+Weikert, T. ∙ Winkel, D.J. ∙ Bremerich, J. ...
+
+**Automated detection of pulmonary embolism in CT pulmonary angiograms using an AI-powered algorithm**
+
+_Eur. Radiol._ 2020; **30**(12):6545-6553
+
+ fine-tune ResNet-based models for PE detection, with the latter augmenting classification with integrated segmentation. The Google CT Foundation model in the classification pipeline is not open-source, so task-specific fine-tuning was not feasible (see the reproducibility limitation discussed in Section [4.1](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#sec-4-1)). Within the low-data regime (D1 and D2;
+
+), hard vascular segmentation via VesselFM did not improve classifier performance and may have removed contextual signal that the foundation model relies on; we explicitly caveat that this conclusion is conditional on the specific VesselFM hard-masking approach and on the limited training-set sizes evaluated, and we identify dilated-vessel masks, lung-parenchyma-preserving masks, region-guided attention, and rib-removal as concrete follow-ups.
+
+When comparing the results to the performance of specialized state-of-the-art algorithms such as Huhtanen et al. [[15]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+15.
+
+Huhtanen, H. ∙ Nyman, M. ∙ Mohsen, T. ...
+
+**Automated detection of pulmonary embolism from CT-angiograms using deep learning**
+
+_BMC Med. Imaging._ 2022; **22**(1):43
+
+, it is important to consider the broader advantages of a generalist foundation model approach. A single embedding generated by such a model can serve as a common representation for assessing the presence or absence of many different pathologies, enabling a streamlined multi-task analysis from a single forward pass. A potential additional advantage — which is not directly evidenced by experiments and results of this study — is that operating within a shared embedding space may facilitate reasoning about relationships between pathologies. For example, the presence of one abnormality may implicitly reduce the likelihood of another, a relationship that can be more naturally modeled when multiple conditions are inferred from the same latent representation. In contrast, using dozens or hundreds of independently trained, task-specific algorithms makes it difficult to compare outputs or model interactions between conditions in a consistent manner. Validating this hypothesis would require multi-task downstream experiments outside the scope of the current study.
+
+One might argue that increasing the dataset size would bridge this performance gap between this work and state-of-the-art algorithms. Benchmarks for the CT foundation model across seven diverse medical imaging tasks — using MLP heads for evaluation — demonstrate that while performance generally scales with data, this trend is task-dependent [[7]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+7.
+
+**Taking medical imaging embeddings 3D**
+
+2024
+
+. For example, tasks like calcification detection showed only marginal AUC gains despite increased training data. A naïve extrapolation from the Google CT Foundation benchmark curves _for other pathologies_ suggests a possible plateau approximately near AUC 0.90 at full RSNA scale; because those curves are for different pathologies and classifier heads, this extrapolation is illustrative only and should not be read as a quantitative prediction for central PE. Ideally, a foundation model should capture sufficiently rich features to make PE detection a relatively simple task, allowing a small dataset to produce a pipeline that rivals specialized models. However, the observed test AUC suggests that this goal of “high performance with low data” remains elusive for this specific pathology.
+
+Cross-institutional generalization is the second key finding. We hypothesized that a foundation model pre-trained on a massive and diverse corpus would generalize reliably to a different cohort. The data do not support this hypothesis for central PE: the best AUC on the INSPECT test set was 0.17 lower than on RSNA, and — as discussed above — the operating point does not transport even after global threshold recalibration. The objective tests of feature shift (MMD
+
+, C2ST accuracy 0.839) and the linear-probe degradation, from 0.795 to 0.556, are consistent with a persistent domain-specific signal in the embeddings (scanner, reconstruction kernel, noise textures) that the frozen foundation model does not abstract away. A classification pipeline built on a non-fine-tuned generalist foundation model, therefore, does not, on this evidence, offer better cross-institutional reliability than a specialized, task-specific algorithm would.
+
+### 4.1 Limitations and future work
+
+#### Reproducibility of the foundation model.
+
+The Google CT Foundation Model is not open-source. For this study, it is accessed via the Google Health Research API during 2024–2025; access is granted by Google Health Research to selected research groups and is not openly distributable. The embedding-extraction code, including preprocessing (resampling, HU clamping), input size (
+
+), and batching, is publicly released on Google Health GitHub repository as Jupyter notebooks (CT_Foundation_Demo.ipynb for DICOM, CT_Foundation_NIfTI_Demo.ipynb for NIfTI). To the best of our knowledge, no peer-reviewed publication or arXiv preprint dedicated to this specific embedding model has been released. The access constraint is a structural reproducibility limitation of any study built on this model. Recently introduced open medical foundation models — MedGemma [[37]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+37.
+
+Sellergren, A. ∙ Kazemzadeh, S. ∙ Jaroensri, T. ...
+
+**MedGemma Technical Report**
+
+2025
+
+, CT-CLIP [[38]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+38.
+
+Hamamci, I.E. ∙ Er, S. ∙ Almas, F. ...
+
+**Generalist foundation models from a multimodal dataset for 3D computed tomography**
+
+2026
+
+, and Merlin [[39]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+39.
+
+Blankemeier, L. ∙ Cohan, J.P. ∙ Kumar, A. ...
+
+**Merlin: A vision language foundation model for 3D computed tomography**
+
+2024
+
+ — offer publicly released weights and are natural follow-up comparators that would address this limitation directly.
+
+#### Segmentation ablations are restricted to the low-data regime.
+
+The segmentation experiments in Section [2.5](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#sec-2-5) were run only on the two smallest training subsets (D1,
+
+; D2,
+
+), where the baseline AUCs are near chance, and the test is statistically under-powered. The conclusion “hard vessel masking did not improve performance” should therefore be read as conditional on the low-data regime and on the specific VesselFM hard-masking approach. Additional ablations that would test the underlying “context matters” hypothesis include: dilated-vessel masks; lung-parenchyma-preserving masks; and region-guided attention or cropping around the main pulmonary artery instead of hard masking.
+
+#### Rib co-segmentation in the segmented inputs.
+
+As visible in [Fig. 2](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#fig2), the VesselFM output for the scans co-segments the ribs together with the pulmonary vasculature. As no secondary rib-removal post-processing step is applied, the segmented-input experiments contain residual osseous structure. Rib contamination could plausibly drive part of the null segmentation result; a rib-removal ablation is identified as a follow-up. Accordingly, the segmentation null result should be read as conditional on this residual osseous signal, and not as evidence that vascular localisation is uninformative for this pipeline, until a rib-removal sensitivity check has been performed.
+
+#### Patient population and selection flow.
+
+For the INSPECT external test cohort, cohort-level demographics are tabulated in Huang et al. [[31]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+31.
+
+Huang, S.-C. ∙ Huo, Z. ∙ Steinberg, E. ...
+
+**Inspect: a multimodal dataset for pulmonary embolism diagnosis and prognosis**
+
+2023
+
+, Table 2 (“All” column; reported in Section [2.6.1](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#sec-2-6-1)). However, the public RSNA CTPA challenge manifest does not expose per-study age or sex, so a paired RSNA-versus-INSPECT demographics table cannot be constructed from the data used in this study. Both cohorts are US-based (RSNA — multi-institutional US contributors; INSPECT — Stanford Medicine), which limits external-domain-shift conclusions to within-US-style imaging protocols. Severity stratification within central PE (e.g., RV/LV ratio, saddle vs. lobar anatomy, hemodynamic significance) is not provided by the INSPECT release. Clinical context (inpatient vs. emergency-department setting) is recorded in the INSPECT EHR but was not used in this study, and is not exposed in the public RSNA manifest.
+
+#### Statistical power and within-task specialized baseline.
+
+The RSNA hold-out test set (
+
+, 36 positive) is relatively small. Pairwise DeLong tests confirmed that this sample size is statistically underpowered to declare AUC differences of the observed magnitudes between the three classifier heads as significant (Section [2.4](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#sec-2-4)). Consequently, evaluating the pipeline on a larger, multi-institutional held-out test set represents a natural next step. Furthermore, a strict like-for-like comparison would benefit from re-training a specialized PE-detection baseline architecture (e.g., ResNet+LSTM) restricted to central PE on the identical RSNA split.
+
+#### Other PE subtypes and prospective evaluation.
+
+This study primarily focused on central PE; the performance of the classification pipeline on other PE subtypes remains to be investigated. Moreover, this study is retrospective, and further analysis in a prospective clinical setting is required to compare the utility of foundation models versus specialized algorithms in real-world practice. Specifically, it is crucial to evaluate whether integrating a foundation model into clinical workflows can measurably improve radiologist performance and patient outcomes compared to multiple task-specific algorithms.
+
+## CRediT authorship contribution statement
+
+**Sara Hosseinirad:** Writing – review & editing, Writing – original draft, Visualization, Software, Methodology, Investigation, Formal analysis, Data curation, Conceptualization. **Mobina Mobaraki:** Writing – review & editing, Software, Data curation, Conceptualization. **Dhanav Handa:** Writing – review & editing, Conceptualization. **Ryan Arman:** Writing – review & editing, Supervision, Methodology. **Philip Edgcumbe:** Writing – review & editing, Validation, Supervision, Methodology, Data curation.
+
+## Code availability
+
+All analysis code used to produce the results in this paper is openly available at [https://github.com/sara-hrad/AI-for-Medical-Imaging](https://github.com/sara-hrad/AI-for-Medical-Imaging), including: the training and evaluation pipeline, the statistical-analysis scripts, and the INSPECT data-cleaning pipeline.
+
+## Ethical approval and data use
+
+Ethical approval was not required for this study as it relies exclusively on publicly available, de-identified datasets. Both the RSNA CTPA dataset and the Stanford INSPECT dataset were accessed in accordance with the respective data-use agreements and open-access license terms. The authors performed no primary data collection involving human participants.
+
+## Declaration of generative AI and AI-assisted technologies
+
+During the preparation of this work, the authors used Gemini to assist with grammatical corrections and readability. After using this service, the authors reviewed and edited the content as needed and take full responsibility for the content of the published article.
+
+## Declaration of competing interest
+
+The authors declare the following financial interests/personal relationships which may be considered as potential competing interests: Philip Edgcumbe reports financial support was provided by The University of British Columbia Faculty of Medicine. If there are other authors, they declare that they have no known competing financial interests or personal relationships that could have appeared to influence the work reported in this paper.
+
+## Acknowledgments
+
+We appreciate Google Research for granting access to the Google CT Foundation Model, which served as the backbone for the classification pipeline.
+
+## Data Availability
+
+The RSNA CTPA dataset is publicly available from the Radiological Society of North America [[10]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+10.
+
+Colak, E. ∙ Kitamura, F.C. ∙ Hobbs, S.B. ...
+
+**The RSNA pulmonary embolism CT dataset**
+
+_Radiol.: Artif. Intell._ 2021; **3**(2), e200254
+
+ via the RSNA-STR Pulmonary Embolism Detection challenge. The Stanford INSPECT dataset [[31]](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#)
+
+31.
+
+Huang, S.-C. ∙ Huo, Z. ∙ Steinberg, E. ...
+
+**Inspect: a multimodal dataset for pulmonary embolism diagnosis and prognosis**
+
+2023
+
+ is available to qualified researchers under a Data Use Agreement at [https://stanfordaimi.azurewebsites.net/](https://stanfordaimi.azurewebsites.net/). Access to the Google CT Foundation embedding model itself is gated by Google Health Research and is not openly distributable, as discussed in Section [4.1](https://www.ejradiology.com/article/S0720-048X(26)00440-7/fulltext#sec-4-1).
+
+## References
+
+Lavorini, F. ∙ Di Bello, V. ∙ De Rimini, M.L. ...
+
+**Diagnosis and treatment of pulmonary embolism: a multidisciplinary approach**
+
+_Multidiscip. Respir. Med._ 2013; **8**(1):75
+
+Mansella, G. ∙ Keil, C. ∙ Nickel, C.H. ...
+
+**Delayed diagnosis in pulmonary embolism: frequency, patient characteristics, and outcome**
+
+_Respiration._ 2020; **99**(7):589-597
+
+Farmakis, I.T. ∙ Barco, S. ∙ Hobohm, L. ...
+
+**Maternal mortality related to pulmonary embolism in the United States, 2003–2020**
+
+_Am. J. Obs. Gynecol. MFM._ 2023; **5**(1), 100754
+
+Vallée, A. ∙ Quint, R. ∙ Brun, A.L. ...
+
+**A deep learning-based algorithm improves radiology residents’ diagnoses of acute pulmonary embolism on CT pulmonary angiograms**
+
+_Eur. J. Radiol._ 2024; **171**, 111324
+
+Shapiro, J. ∙ Reichard, A. ∙ Chowdhry, S. ...
+
+**The use of artificial intelligence technology in the detection and treatment of pulmonary embolism at a tertiary referral center**
+
+_J. Vasc. Surg._ 2023; **78**(3), e23
+
+Schlossman, J. ∙ Salehi, S. ∙ Weinberg, B. ...
+
+**Validation of a Deep Learning Tool for Automatic Pulmonary Embolism Detection**
+
+**A103. TOWARDS IMPROVING ICU PRACTICE**
+
+American Thoracic Society, 2023; A2607
+
+**Taking medical imaging embeddings 3D**
+
+2024
+
+Yang, L. ∙ Xu, S. ∙ Sellergren, A. ...
+
+**Advancing multimodal medical capabilities of Gemini**
+
+2024
+
+Yan, S. ∙ Zhu, T. ∙ Wang, Z. ...
+
+**Videococa: Video-text modeling with zero-shot transfer from contrastive captioners**
+
+2022
+
+Colak, E. ∙ Kitamura, F.C. ∙ Hobbs, S.B. ...
+
+**The RSNA pulmonary embolism CT dataset**
+
+_Radiol.: Artif. Intell._ 2021; **3**(2), e200254
+
+Wu, H. ∙ Xu, Q. ∙ He, X. ...
+
+**SPE-YOLO: a deep learning model focusing on small pulmonary embolism detection**
+
+_Comput. Biol. Med._ 2025; **184**, 109402
+
+J. Redmon, S. Divvala, R. Girshick, A. Farhadi, You only look once: Unified, real-time object detection, in: Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition, 2016, pp. 779–788.
+
+Grenier, P.A. ∙ Ayobi, A. ∙ Quenet, S. ...
+
+**Deep learning-based algorithm for automatic detection of pulmonary embolism in chest CT angiograms**
+
+_Diagnostics._ 2023; **13**(7):1324
+
+Ronneberger, O. ∙ Fischer, P. ∙ Brox, T.
+
+**U-net: Convolutional networks for biomedical image segmentation**
+
+**International Conference on Medical Image Computing and Computer-Assisted Intervention**
+
+Springer, 2015; 234-241
+
+Huhtanen, H. ∙ Nyman, M. ∙ Mohsen, T. ...
+
+**Automated detection of pulmonary embolism from CT-angiograms using deep learning**
+
+_BMC Med. Imaging._ 2022; **22**(1):43
+
+Weikert, T. ∙ Winkel, D.J. ∙ Bremerich, J. ...
+
+**Automated detection of pulmonary embolism in CT pulmonary angiograms using an AI-powered algorithm**
+
+_Eur. Radiol._ 2020; **30**(12):6545-6553
+
+K. He, X. Zhang, S. Ren, J. Sun, Deep residual learning for image recognition, in: Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition, 2016, pp. 770–778.
+
+Ma, X. ∙ Ferguson, E.C. ∙ Jiang, X. ...
+
+**A multitask deep learning approach for pulmonary embolism detection and identification**
+
+_Sci. Rep._ 2022; **12**(1):13087
+
+Lanza, E. ∙ Ammirabile, A. ∙ Francone, M.
+
+**nnU-Net-based deep-learning for pulmonary embolism: detection, clot volume quantification, and severity correlation in the RSPECT dataset**
+
+_Eur. J. Radiol._ 2024; **177**, 111592
+
+Pu, J. ∙ Gezer, N.S. ∙ Ren, S. ...
+
+**Automated detection and segmentation of pulmonary embolisms on computed tomography pulmonary angiography (CTPA) using deep learning but without manual outlining**
+
+_Med. Image Anal._ 2023; **89**, 102882
+
+U.S. Food and Drug Administration
+
+**510(K) summary: Aidoc pulmonary embolism (K241727)**
+
+2024
+
+Goldberg-Stein, S. ∙ Gandomi, A. ∙ Barish, M.A. ...
+
+**Clinical implementation of AI for pulmonary embolism detection in over 30,000 CT pulmonary angiography examinations**
+
+_Radiol.: Artif. Intell._ 2026;
+
+Published online May 13, 2026
+
+King, G. ∙ Zeng, L.
+
+**Logistic regression in rare events data**
+
+_Political Anal._ 2001; **9**(2):137-163
+
+Fawcett, T.
+
+**An introduction to ROC analysis**
+
+_Pattern Recognit. Lett._ 2006; **27**(8):861-874
+
+Altman, D.G.
+
+**Practical statistics for medical research**
+
+Chapman and Hall/CRC, 1990
+
+DeLong, E.R. ∙ DeLong, D.M. ∙ Clarke-Pearson, D.L.
+
+**Comparing the areas under two or more correlated receiver operating characteristic curves: a nonparametric approach**
+
+_Biometrics._ 1988; **44**(3):837-845
+
+Sun, X. ∙ Xu, W.
+
+**Fast implementation of DeLong’s algorithm for comparing the areas under correlated receiver operating characteristic curves**
+
+_IEEE Signal Process. Lett._ 2014; **21**(11):1389-1393
+
+Holm, S.
+
+**A simple sequentially rejective multiple test procedure**
+
+_Scand. J. Stat._ 1979; **6**(2):65-70
+
+B. Wittmann, Y. Wattenberg, T. Amiranashvili, S. Shit, B. Menze, vesselFM: A Foundation Model for Universal 3D Blood Vessel Segmentation, in: Proceedings of the Computer Vision and Pattern Recognition Conference, 2025, pp. 20874–20884.
+
+Van der Maaten, L. ∙ Hinton, G.
+
+**Visualizing data using t-SNE**
+
+_J. Mach. Learn. Res._ 2008; **9**:2579-2605
+
+Huang, S.-C. ∙ Huo, Z. ∙ Steinberg, E. ...
+
+**Inspect: a multimodal dataset for pulmonary embolism diagnosis and prognosis**
+
+2023
+
+Gretton, A. ∙ Borgwardt, K.M. ∙ Rasch, M.J. ...
+
+**A kernel two-sample test**
+
+_J. Mach. Learn. Res._ 2012; **13**(25):723-773
+
+D. Lopez-Paz, M. Oquab, Revisiting classifier two-sample tests, in: International Conference on Learning Representations, 2017.
+
+Alain, G. ∙ Bengio, Y.
+
+**Understanding intermediate layers using linear classifier probes**
+
+2016
+
+Kligerman, S.J. ∙ Mitchell, J.W. ∙ Sechrist, J.W. ...
+
+**Radiologist performance in the detection of pulmonary embolism: features that favor correct interpretation and risk factors for errors**
+
+_J. Thorac. Imaging._ 2018; **33**(6):350-357
+
+Remy-Jardin, M. ∙ Remy, J. ∙ Wattinne, L. ...
+
+**Central pulmonary thromboembolism: diagnosis with spiral volumetric CT with the single-breath-hold technique—comparison with pulmonary angiography**
+
+_Radiology._ 1992; **185**(2):381-387
+
+Sellergren, A. ∙ Kazemzadeh, S. ∙ Jaroensri, T. ...
+
+**MedGemma Technical Report**
+
+2025
+
+Hamamci, I.E. ∙ Er, S. ∙ Almas, F. ...
+
+**Generalist foundation models from a multimodal dataset for 3D computed tomography**
+
+2026
+
+Blankemeier, L. ∙ Cohan, J.P. ∙ Kumar, A. ...
+
+**Merlin: A vision language foundation model for 3D computed tomography**
+
+2024
