@@ -1858,6 +1858,26 @@ window.$docsify = {
         }
       };
 
+      const setPaperReadStatus = (paperId, status) => {
+        const id = String(paperId || '').replace(/\/$/, '').trim();
+        if (!id) return {};
+        const state = loadReadState();
+        if (status) {
+          state[id] = status;
+        } else {
+          delete state[id];
+        }
+        saveReadState(state);
+        return state;
+      };
+
+      const getPaperReadStatus = (paperId) => {
+        const id = String(paperId || '').replace(/\/$/, '').trim();
+        if (!id) return '';
+        const state = loadReadState();
+        return String(state[id] || '').trim();
+      };
+
       // ---------- Share to GitHub Gist ----------
       const loadGithubTokenForGist = () => {
         try {
@@ -2224,6 +2244,9 @@ window.$docsify = {
 
           // 左侧按钮容器（分享 + 收藏）
           let leftActions = li.querySelector('.sidebar-paper-left-actions');
+          let readToggleIcon = leftActions
+            ? leftActions.querySelector('.sidebar-paper-read-toggle')
+            : null;
 	          if (!actionWrapper) {
 	            actionWrapper = document.createElement('span');
 	            actionWrapper.className = 'sidebar-paper-rating-icons';
@@ -2274,6 +2297,12 @@ window.$docsify = {
               shareIcon.title = '分享（生成 GitHub Gist 链接）';
               shareIcon.setAttribute('aria-label', '分享');
               shareIcon.textContent = '⤴';
+
+              readToggleIcon = document.createElement('button');
+              readToggleIcon.className = 'sidebar-paper-read-toggle';
+              readToggleIcon.title = '标记为已读';
+              readToggleIcon.setAttribute('aria-label', '切换已读状态');
+              readToggleIcon.textContent = '○';
 
               const setStateAndRefresh = (value) => {
                 const latestState = loadReadState();
@@ -2326,6 +2355,22 @@ window.$docsify = {
                 }
               });
 
+              readToggleIcon.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const latestState = loadReadState();
+                if (latestState[paperIdFromHref]) {
+                  delete latestState[paperIdFromHref];
+                } else {
+                  latestState[paperIdFromHref] = 'read';
+                }
+                saveReadState(latestState);
+                markSidebarReadState(null);
+                requestAnimationFrame(() => {
+                  syncSidebarActiveIndicator({ animate: false });
+                });
+              });
+
 	            badIcon.addEventListener('click', (e) => {
 	              e.preventDefault();
 	              e.stopPropagation();
@@ -2334,6 +2379,7 @@ window.$docsify = {
 
               // 左侧容器添加收藏和分享按钮
               leftActions.appendChild(favoriteIcon);
+              leftActions.appendChild(readToggleIcon);
               leftActions.appendChild(shareIcon);
               a.parentNode.insertBefore(leftActions, a);
 
@@ -2352,6 +2398,13 @@ window.$docsify = {
               if (blueIcon) blueIcon.classList.toggle('active', s === 'blue');
               if (orangeIcon) orangeIcon.classList.toggle('active', s === 'orange');
 	            if (badIcon) badIcon.classList.toggle('active', s === 'bad');
+              if (readToggleIcon) {
+                const isRead = !!s;
+                readToggleIcon.classList.toggle('is-read', isRead);
+                readToggleIcon.textContent = isRead ? '✓' : '○';
+                readToggleIcon.title = isRead ? '标记为未读' : '标记为已读';
+                readToggleIcon.setAttribute('aria-label', readToggleIcon.title);
+              }
 	          } catch {
 	            // ignore
 	          }
@@ -2359,6 +2412,39 @@ window.$docsify = {
 	          applyLiState(li, paperIdFromHref);
 	        });
 	      };
+
+      const ensurePageReadStateButton = (paperId) => {
+        const id = String(paperId || '').replace(/\/$/, '').trim();
+        if (!id) return;
+        const titleRow = document.querySelector('.paper-title-row');
+        if (!titleRow) return;
+
+        let button = titleRow.querySelector('.dpr-paper-read-state-btn');
+        if (!button) {
+          button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'dpr-paper-read-state-btn';
+          button.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const current = getPaperReadStatus(id);
+            setPaperReadStatus(id, current ? '' : 'read');
+            markSidebarReadState(null);
+            ensurePageReadStateButton(id);
+            requestAnimationFrame(() => {
+              syncSidebarActiveIndicator({ animate: false });
+            });
+          });
+          titleRow.appendChild(button);
+        }
+
+        const status = getPaperReadStatus(id);
+        const isRead = !!status;
+        button.classList.toggle('is-read', isRead);
+        button.textContent = isRead ? '已读' : '未读';
+        button.title = isRead ? '点击标记为未读' : '点击标记为已读';
+        button.setAttribute('aria-label', button.title);
+      };
 
       const scoreToStarRating = (scoreValue) => {
         const score = Number(scoreValue);
@@ -3924,6 +4010,7 @@ window.$docsify = {
         // ----------------------------------------------------
         if (!isLandingLikePage && paperId) {
           markSidebarReadState(paperId);
+          ensurePageReadStateButton(paperId);
         } else {
           // 首页也需要应用已有的“已读高亮”，但不新增记录
           markSidebarReadState(null);
