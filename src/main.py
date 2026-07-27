@@ -121,6 +121,82 @@ def resolve_sidebar_date_label(fetch_days: int | None) -> str | None:
     return None
 
 
+def normalize_date_token(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return datetime.now(timezone.utc).strftime("%Y%m%d")
+    for fmt in ("%Y%m%d", "%Y-%m-%d", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(text, fmt).strftime("%Y%m%d")
+        except Exception:
+            continue
+    raise ValueError(f"Invalid date '{value}', expected YYYYMMDD / YYYY-MM-DD / YYYY/MM/DD")
+
+
+def parse_date_input(value: Any) -> tuple[str, list[str]]:
+    text = str(value or "").strip()
+    if not text:
+        today = datetime.now(timezone.utc).strftime("%Y%m%d")
+        return today, [today]
+
+    if re.match(r"^\d{8}-\d{8}$", text):
+        start = datetime.strptime(text[:8], "%Y%m%d").date()
+        end = datetime.strptime(text[9:], "%Y%m%d").date()
+        if start > end:
+            raise ValueError(f"Invalid date range '{value}': start > end")
+        days: list[str] = []
+        current = start
+        while current <= end:
+            days.append(current.strftime("%Y%m%d"))
+            current += timedelta(days=1)
+        return f"{start:%Y%m%d}-{end:%Y%m%d}", days
+
+    day = normalize_date_token(text)
+    return day, [day]
+
+
+def build_date_label_from_token(date_token: str) -> str | None:
+    text = str(date_token or "").strip()
+    if not re.match(r"^\d{8}-\d{8}$", text):
+        return None
+    start = datetime.strptime(text[:8], "%Y%m%d").strftime("%Y-%m-%d")
+    end = datetime.strptime(text[9:], "%Y%m%d").strftime("%Y-%m-%d")
+    return f"{start} ~ {end}"
+
+
+def resolve_fetch_source(cli_value: str | None) -> str:
+    text = str(cli_value or "").strip().lower()
+    if text and text != "auto":
+        return text
+    setting = load_arxiv_paper_setting()
+    configured = str(setting.get("fetch_source") or "").strip().lower()
+    if configured in {"email", "gmail"}:
+        return "email"
+    return "arxiv"
+
+
+def resolve_email_date(cli_value: str | None) -> str:
+    text = str(cli_value or "").strip()
+    if text:
+        return text
+    setting = load_arxiv_paper_setting()
+    email_setting = setting.get("email_quick_run") or {}
+    if not isinstance(email_setting, dict):
+        email_setting = {}
+
+    date_start = str(email_setting.get("date_start") or "").strip()
+    date_end = str(email_setting.get("date_end") or "").strip()
+    if date_start and date_end:
+        start_token = normalize_date_token(date_start)
+        end_token = normalize_date_token(date_end)
+        return f"{start_token}-{end_token}"
+
+    date_single = str(email_setting.get("date_single") or "").strip()
+    if date_single:
+        return date_single
+    return datetime.now(timezone.utc).strftime("%Y%m%d")
+
+
 def normalize_arxiv_id(value: Any) -> str:
     text = str(value or "").strip().lower()
     if not text:
@@ -542,6 +618,22 @@ def main() -> None:
         help="Force fetch-run mode: auto(按阈值), standard(非skims), skims(强制skims).",
     )
     parser.add_argument(
+        "--fetch-source",
+        default="auto",
+        choices=("auto", "arxiv", "email", "gmail"),
+        help="抓取来源：auto 读取 config.yaml，arxiv 走常规检索链路，email/gmail 走 Gmail 论文列表。",
+    )
+    parser.add_argument(
+        "--email-date",
+        default=None,
+        help="email/gmail 模式的日期：YYYYMMDD / YYYY-MM-DD / YYYY/MM/DD / YYYYMMDD-YYYYMMDD。",
+    )
+    parser.add_argument(
+        "--email-subject",
+        default="new related research",
+        help="email/gmail 模式的 Gmail subject 过滤条件。",
+    )
+    parser.add_argument(
         "--profile-tag",
         default="",
         help="仅运行指定 tag 对应的词条；大小写不敏感，支持空格。",
@@ -569,10 +661,21 @@ def main() -> None:
 
     python = sys.executable
 
-    sidebar_date_label = resolve_sidebar_date_label(args.fetch_days)
-    run_date_token = resolve_run_date_token(args.fetch_days)
+    fetch_source = resolve_fetch_source(args.fetch_source)
+    if fetch_source == "gmail":
+        fetch_source = "email"
+
+    email_date_value = resolve_email_date(args.email_date) if fetch_source == "email" else ""
+    if fetch_source == "email":
+        run_date_token, _email_days = parse_date_input(email_date_value)
+        sidebar_date_label = build_date_label_from_token(run_date_token)
+    else:
+        sidebar_date_label = resolve_sidebar_date_label(args.fetch_days)
+        run_date_token = resolve_run_date_token(args.fetch_days)
+
     os.environ["DPR_RUN_DATE"] = run_date_token
     print(f"[INFO] DPR_RUN_DATE={run_date_token}", flush=True)
+    print(f"[INFO] fetch_source={fetch_source}", flush=True)
     profile_tag = str(args.profile_tag or os.getenv("DPR_FILTER_PROFILE_TAG") or "").strip()
     if profile_tag:
         os.environ["DPR_FILTER_PROFILE_TAG"] = profile_tag
@@ -625,6 +728,41 @@ def main() -> None:
             "Step 0 - enrich config",
             [python, os.path.join(SRC_DIR, "0.enrich_config_queries.py")],
         )
+
+    if fetch_source == "email":
+        run_step(
+            "Step 1 - fetch email paper list",
+            [
+                python,
+                os.path.join(SRC_DIR, "1.fetch_email_paper_list.py"),
+                "--date",
+                email_date_value,
+                "--mode",
+                recommend_mode,
+                "--subject",
+                str(args.email_subject or "new related research"),
+            ],
+        )
+        if trace_ids:
+            print_trace_recommend("RECOMMEND", recommend_path, trace_ids)
+        run_step(
+            "Step 6 - Generate Docs",
+            [
+                python,
+                os.path.join(SRC_DIR, "6.generate_docs.py"),
+                "--date",
+                run_date_token,
+                "--mode",
+                recommend_mode,
+                *(
+                    ["--sidebar-date-label", sidebar_date_label]
+                    if sidebar_date_label
+                    else []
+                ),
+            ],
+            env=resolve_summary_step_env(),
+        )
+        return
 
     # 判断是否跳过 Step 1（全量数据拉取）
     if args.skip_fetch is None:
