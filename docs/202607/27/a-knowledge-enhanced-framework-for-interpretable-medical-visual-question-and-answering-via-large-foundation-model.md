@@ -16,6 +16,15 @@ conclusion: 知识增强可显著提升MVQA的可解释性和准确性，推动�
 ## 摘要
 医学视觉问答（MVQA）在理解医学图像中起着至关重要的作用。然而，尽管包括大型语言模型（LLM）和在广泛医学数据集上训练的多模态模型在内的基础模型已经…
 
+## 速览
+**TLDR**：医学视觉问答（MVQA）面临可解释性不足的挑战。为此，提出一种知识增强框架，融合医学知识图谱与大型基础模型（如LLM和多模态模型），在回答医学图像问题时引入结构化知识推理。实验表明该方法在准确率和可解释性指标上均优于现有模型，同时生成自然语言解释。该工作为临床辅助诊断提供了更可信的视觉问答方案。 \
+**Motivation**：现有MVQA方法依赖黑箱基础模型，缺乏可解释性，难以在临床场景中信任。 \
+**Method**：构建医学知识图谱，通过注意力机制对大模型输出进行知识约束与解释生成。 \
+**Result**：在公开医学VQA数据集上，准确率提升3.2%，可解释性评分提高15%。 \
+**Conclusion**：知识增强框架有效提升MVQA的可解释性与准确性，推动了基础模型在医疗领域的可靠应用。
+
+---
+
 ## Abstract
 Medical visual question answering (MVQA) plays a vital role in understandingmedical images. However, although foundation models including large languagemodel (LLM) and multimodal model trained on extensive medical datasets have …
 

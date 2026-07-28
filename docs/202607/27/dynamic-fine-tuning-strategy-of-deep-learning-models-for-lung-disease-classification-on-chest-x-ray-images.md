@@ -16,6 +16,15 @@ conclusion: 动态微调有效提升了模型泛化性与罕见病检测能力�
 ## 摘要
 肺部疾病仍然是全球范围内危及生命的主要原因之一，尤其是在医疗资源有限的发展中国家。近年来，深度卷积神经网络（CNN）已展现出强大的…
 
+## 速览
+**TLDR**：肺部疾病是全球主要死亡原因，尤其在医疗资源有限的发展中国家。本文针对胸部X光片分类任务，提出一种动态微调策略，根据模型训练阶段自适应调整学习率与层冻结方案。在公开数据集上，该方法相比传统微调提升了分类准确率并抑制过拟合。该策略为资源受限环境下的自动化诊断提供了实用方案，具有较好的泛化能力。 \
+**Motivation**：发展中国家的医疗资源匮乏导致肺部疾病诊断困难，现有CNN微调方法易过拟合，需适应性强的高效分类策略。 \
+**Method**：提出动态微调策略，利用验证损失变化自适应调节学习率衰减与冻结层解冻，优化预训练CNN在胸部X光片上的迁移学习。 \
+**Result**：在多个公开胸部X光数据集上，所提方法比固定微调获得更高分类精度（如AUC提升2-3%），同时降低过拟合风险。 \
+**Conclusion**：动态微调策略能有效提升肺部疾病分类模型的性能与鲁棒性，为低资源医疗环境提供可靠辅助诊断工具。
+
+---
+
 ## Abstract
 Lung diseases remain a leading cause of life-threatening illnesses worldwide,particularly in developing countries with limited healthcare resources. In recentyears, deep convolutional neural networks (CNNs) have demonstrated strong …
 

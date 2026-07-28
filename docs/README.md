@@ -12,14 +12,14 @@
       <span class="dpr-home-dashboard-kicker">2026-07-27</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 23 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 24 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
-    <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>23</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>2 次</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>24</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>0</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-07-27 22:23:49 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-07-28 22:35:58 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -30,7 +30,9 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日精读23篇论文，重点聚焦医疗视觉问答的增强解释性框架与病理全切片分析的协同网络。值得关注的方向包括大模型驱动的知识增强可解释医疗VQA，以及病理基础模型与CNN融合的千兆像素切片分析。建议深入研读这两篇，理解大模型在医疗影像中的应用潜力。</p>
+<p>今日精读两篇医学影像与病理分析前沿论文，聚焦大模型与领域知识融合。</p>
+<p>最值得关注的方向：知识增强的可解释医学视觉问答框架，以及病理基础模型联合CNN分析全切片图像。</p>
+<p>建议普通读者重点关注基础模型在垂直医疗场景的协同应用，及可解释性提升的实际价值。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -39,7 +41,7 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">23 篇</strong>
+    <strong class="dpr-home-dashboard-count">24 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
 <ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="A knowledge enhanced framework for interpretable medical visual question and answering via large foundation model">A knowledge enhanced framework for interpretable medical visual question and answering via large foundation model</span></li><li><span class="dpr-home-dashboard-paper-title" title="Co-assistant networks by pathology foundation model and convolutional neural network for gigapixel whole slide image analysis">Co-assistant networks by pathology foundation model and convolutional neural network for gigapixel whole slide image analysis</span></li><li><span class="dpr-home-dashboard-paper-title" title="Dynamic Fine-Tuning Strategy of Deep Learning Models for Lung Disease Classification on Chest X-ray Images">Dynamic Fine-Tuning Strategy of Deep Learning Models for Lung Disease Classification on Chest X-ray Images</span></li></ul>

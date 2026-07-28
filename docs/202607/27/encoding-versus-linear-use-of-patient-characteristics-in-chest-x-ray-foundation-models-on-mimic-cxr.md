@@ -16,6 +16,15 @@ conclusion: 建议在CXR基础模型中采用线性探测利用患者特征，�
 ## 摘要
 背景：胸部X射线（CXR）基础模型通过线性探针仅从图像中预测患者的人口统计学类别（性别、年龄、种族），但编码属性是否驱动发现预测尚未在大规模上进行测试。方法：…
 
+## 速览
+**TLDR**：胸部X光基础模型可通过线性探测从图像预测患者性别、年龄等人口统计特征，但此类编码属性是否驱动疾病预测尚未大规模检验。本研究在MIMIC-CXR数据集上比较了直接编码与线性使用患者特征两种方式，发现编码属性会引入预测偏差，而线性使用可部分缓解。结果表明模型不应默认使用编码特征，以避免不公平性。 \
+**Motivation**：验证CXR基础模型中编码的人口统计属性是否直接驱动疾病预测，而非仅通过线性相关性。 \
+**Method**：在MIMIC-CXR上比较两种方式：直接使用编码的患者特征与线性探测预测，分析对疾病预测的影响。 \
+**Result**：编码特征导致预测偏差增大，线性使用可减少但未完全消除偏差。 \
+**Conclusion**：使用CXR基础模型时应避免直接编码患者特征，以提升公平性与鲁棒性。
+
+---
+
 ## Abstract
 Background: Chest X-ray (CXR) foundation models can predict patient demographiccategories (sex, age, race) from images alone by linear probing, but whetherencoded attributes drive finding prediction has not been tested at scale. Methods: On …
 

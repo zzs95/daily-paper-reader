@@ -16,6 +16,15 @@ conclusion: 所提AI方法有效应对数据缺失，为临床决策提供可靠
 ## 摘要
 最佳的癌症预后结合了多模态数据，包括活检结果、CT扫描、患者特征以及至今的临床轨迹。然而，许多患者并非所有模态的数据都可用，因此要求医生拥有…
 
+## 速览
+**TLDR**：针对癌症预后预测中多模态数据缺失问题，提出一种AI方法，能在数据不完整的情况下进行生存预测。通过整合可用模态数据并利用缺失数据处理技术，提升预测准确性。结果表明该方法有效应对数据缺失挑战，具有良好的临床应用潜力。 \
+**Motivation**：临床中许多患者缺少部分模态数据，影响多模态预后模型的实用性，亟需能处理缺失数据的预测方法。 \
+**Method**：提出一种AI框架，结合数据插补与多模态融合策略，利用部分可用数据预测肺癌患者生存。 \
+**Result**：在缺失数据场景下，该方法预测性能优于传统仅用完整数据或简单填充方法。 \
+**Conclusion**：该方法为数据不完整时的临床预后评估提供了可行方案，可推广至其他癌症类型。
+
+---
+
 ## Abstract
 Optimal cancer prognostication combines multimodal data including biopsy results,CT scan, patient characteristics, and clinical trajectory thus far. However, manypatients do not have all modalities of data available, so requiring physicians to have …
 

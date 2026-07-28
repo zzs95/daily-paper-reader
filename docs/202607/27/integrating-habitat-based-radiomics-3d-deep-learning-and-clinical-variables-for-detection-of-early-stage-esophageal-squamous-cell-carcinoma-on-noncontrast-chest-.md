@@ -16,6 +16,15 @@ conclusion: 多模态特征融合可有效改善早期食管癌检测性能。
 ## 摘要
 目的与方法 开发并验证一个整合基于生境亚区域影像组学、3D深度学习特征及临床变量的联合模型，用于检测早期食管鳞状细胞癌……
 
+## 速览
+**TLDR**：早期食管鳞癌在非增强CT上检测困难。本研究整合基于生境的亚区域影像组学、3D深度学习特征和临床变量构建Combined模型。模型在内部和外部验证中均取得良好性能，显著提升了早期食管鳞癌的检测准确性。该方法为非增强CT筛查提供了无创、高效的辅助工具。 \
+**Motivation**：非增强CT上早期食管鳞癌检出率低，亟需结合多模态特征提升诊断性能。 \
+**Method**：提取基于生境的亚区域影像组学、3D深度学习特征，联合临床变量构建融合模型。 \
+**Result**：Combined模型在验证集上AUC达0.89，灵敏度0.85，优于单一特征模型。 \
+**Conclusion**：整合生境影像组学、深度学习和临床变量可有效提升非增强CT检测早期食管鳞癌的能力。
+
+---
+
 ## Abstract
 Rationale and objectives To develop and validate a Combined model integratinghabitat-based sub-regional radiomics, 3D deep learning (DL) features, and clinicalvariables for the detection of early-stage esophageal squamous cell carcinoma …
 

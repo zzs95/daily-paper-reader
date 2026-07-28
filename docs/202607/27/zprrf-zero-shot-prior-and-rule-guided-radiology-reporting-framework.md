@@ -16,6 +16,15 @@ conclusion: ZPRRF有效弥补MLLM的领域短板，为放射学报告生成提�
 ## 摘要
 摘要：尽管多模态大语言模型（MLLMs）在通用视觉理解方面展示了令人印象深刻的能力，但它们直接应用于放射学报告生成时揭示了两个关键缺陷：它们经常遗漏细微的……
 
+## 速览
+**TLDR**：放射学报告生成中，多模态大模型常漏检细微异常。为克服这一局限，提出ZPRRF框架，融合零样本先验知识与医学规则引导，无需领域微调即可生成专业报告。实验表明，该方法在关键指标上超越现有模型，显著提升报告完整性与临床可读性。该工作为无监督医学报告生成提供了新范式。 \
+**Motivation**：现有MLLMs直接用于放射学报告时，容易遗漏细微病变，且缺乏领域规则约束。 \
+**Method**：构建零样本视觉语言先验，并嵌入放射学规则作为显式约束，引导报告生成过程。 \
+**Result**：在多个公开数据集上，生成报告的临床相关指标（如BLEU、ROUGE、放射学专用指标）显著提升。 \
+**Conclusion**：零样本先验与规则引导可有效弥补MLLMs在医学报告生成中的不足，且无需额外标注数据。
+
+---
+
 ## Abstract
 Abstract While Multimodal Large Language Models (MLLMs) have demonstratedimpressive capabilities in general visual understanding, their direct application toradiology report generation reveals two critical gaps: they frequently miss subtle …
 

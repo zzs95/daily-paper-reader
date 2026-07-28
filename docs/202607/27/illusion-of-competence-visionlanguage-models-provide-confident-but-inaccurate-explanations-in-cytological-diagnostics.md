@@ -16,6 +16,15 @@ conclusion: 当前LVLMs不适合直接用于细胞学诊断，需谨慎验证其
 ## 摘要
 大型视觉-语言模型（LVLMs）在跨领域图像理解方面表现出令人印象深刻的能力。然而，它们对于细胞形态学诊断的适用性仍不清楚。在此，我们系统地评估了……
 
+## 速览
+**TLDR**：大型视觉-语言模型在细胞学诊断中表现出自信但错误的解释能力。本研究系统评估了其性能，发现模型虽然能生成流畅的医学描述，但准确性不足，存在过度自信问题。这揭示了当前模型在医疗场景中的局限性，需警惕其误导性。 \
+**Motivation**：大型视觉-语言模型在细胞诊断中的适用性尚不明确，需评估其解释的准确性。 \
+**Method**：系统评估LVLMs在细胞形态学诊断任务上的表现，对比其输出与专家标注。 \
+**Result**：模型生成自信但频繁错误的诊断解释，准确性远低于临床要求。 \
+**Conclusion**：LVLMs在细胞诊断中易产生误导性输出，需谨慎使用并改进可靠性。
+
+---
+
 ## Abstract
 Large vision-language models (LVLMs) have shown impressive image-understanding capabilities across domains. However, their suitability forcytomorphological diagnostics remains unclear. Here, we systematically evaluated …
 

@@ -16,6 +16,15 @@ conclusion: 手术纱布计数和术后影像检查是预防及诊断纱布瘤�
 ## 摘要
 背景：纱布瘤是指术后遗留在体腔内的手术海绵或纱布，是一种罕见但具有临床意义的并发症。它可能急性发作或在长期潜伏期后出现，表现为…
 
+## 速览
+**TLDR**：纱布瘤是手术中残留纱布形成的罕见并发症，可长期潜伏并伪装成腹腔肿瘤。本文报告一例剖宫产术后患者，因慢性腹痛和腹部包块就诊，影像学提示肿瘤，但手术探查证实为纱布瘤。通过病例报告与文献回顾，强调对于术后腹腔不明包块应警惕纱布瘤，避免误诊和不必要治疗。及时手术取出纱布可完全治愈。 \
+**Motivation**：提高对纱布瘤这一罕见但严重并发症的认识，减少误诊为腹腔肿瘤的风险。 \
+**Method**：报道一例剖宫产术后患者的临床表现、影像学特征及手术探查结果，并系统回顾相关文献。 \
+**Result**：患者表现为慢性腹痛和腹部包块，CT示腹腔内占位，手术发现为纱布瘤，取出后症状完全缓解。 \
+**Conclusion**：纱布瘤可模拟腹腔肿瘤，术后腹内包块需考虑此诊断，及时手术可治愈。
+
+---
+
 ## Abstract
 Background: Gossypiboma, the retention of a surgical sponge or gauze within a bodycavity following an operative procedure, is a rare but clinically significantcomplication. It may manifest acutely or after a prolonged latent period, presenting …
 

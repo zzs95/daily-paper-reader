@@ -16,6 +16,15 @@ conclusion: 融合预训练基础模型和CNN的互补特征，可显著提升�
 ## 摘要
 使用预训练模型提取补丁级特征的多实例学习（MIL）已被广泛应用于全切片图像（WSI）分析，以避免昂贵的像素级标注。尽管预训练的病理基础模型...
 
+## 速览
+**TLDR**：全切片图像分析面临大规模数据和像素级标注昂贵的问题。现有MIL方法依赖预训练模型，但特征提取与聚合仍有不足。本文提出协同辅助网络，联合病理基础模型和卷积神经网络进行多实例学习，通过互补特征增强提升性能。在多个公开数据集上，分类和生存分析任务达到最优，有效降低标注成本并提升分析精度。 \
+**Motivation**：现有MIL方法中预训练模型提取的patch特征未能充分利用，且卷积神经网络与基础模型缺乏协同，导致性能瓶颈。 \
+**Method**：提出Co-assistant网络，由病理基础模型和CNN双分支组成，通过注意力融合机制交互学习，端到端优化WSI分析。 \
+**Result**：在CAMELYON16、TCGA等多个数据集上，分类AUC和生存分析C-index均超越现有方法，显著提升性能。 \
+**Conclusion**：该协同框架充分发挥基础模型和CNN互补优势，为WSI分析提供高效、低标注成本的解决方案。
+
+---
+
 ## Abstract
 Multiple instance learning (MIL) with pre-trained models to extract patch-levelfeatures has been widely used in whole slide image (WSI) analysis to avoidexpensive pixel-level annotations. Although pre-trained pathology foundation model …
 

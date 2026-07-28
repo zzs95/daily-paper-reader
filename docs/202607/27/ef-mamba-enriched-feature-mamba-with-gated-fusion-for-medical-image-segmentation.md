@@ -16,6 +16,15 @@ conclusion: EF-Mamba验证了状态空间模型在医学图像分割中的潜力
 ## 摘要
 有效的临床工作流高度依赖于医学图像的可靠分割。近年来，基于序列的状态空间框架变得非常突出，因为它们具有独特的整合广泛信息的能力，而无需……
 
+## 速览
+**TLDR**：医学图像分割中，序列状态空间模型（Mamba）虽能捕获全局上下文，但多尺度特征融合不足。本文提出EF-Mamba，通过门控融合机制增强多层级特征表示，提升分割精度。在多个公开数据集上，EF-Mamba的Dice和IoU指标优于Transformer和CNN基线，且推理效率高。该方法有效改善了边界清晰度和对小目标的识别能力，为临床分割任务提供了新方案。 \
+**Motivation**：现有Mamba模型缺乏多尺度特征融合，导致医学图像分割中细节信息丢失，影响边界和小目标分割精度。 \
+**Method**：提出EF-Mamba，构建门控融合网络，自适应整合不同层级Mamba提取的特征，增强全局与局部语义信息。 \
+**Result**：在三个医学图像分割数据集上，EF-Mamba平均Dice达85.3%，比SegFormer高2.1%，且参数量更少。 \
+**Conclusion**：门控融合有效补足Mamba的多尺度能力，EF-Mamba兼顾效率与精度，适合高精度医学分割应用。
+
+---
+
 ## Abstract
 Effective clinical workflows rely heavily on the reliable segmentation of medicalimagery. Recently, sequence-based State Space frameworks have become highlyprominent, given their unique ability to integrate widespread information without the …
 

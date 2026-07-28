@@ -16,6 +16,15 @@ conclusion: 模型和任务感知的测试时扩展是提升医学AI推理性能
 ## 摘要
 背景：测试时缩放已成为一种有前景的方法，可在推理过程中提升大语言模型（LLM）和视觉语言模型（VLM）的推理能力，无需额外训练。虽然基础…
 
+## 速览
+**TLDR**：测试时缩放能在推理时增强大语言模型和视觉语言模型的推理能力，无需额外训练。本文针对医学领域，提出模型与任务感知的缩放策略，在多个医学任务上评估。结果表明该方法能显著提升模型性能，尤其在复杂诊断任务上。该工作为医学AI的可靠推理提供了实用指导。 \
+**Motivation**：现有测试时缩放策略缺乏对模型和任务的适应性，在医学领域效果不佳，需设计感知策略以提升诊断准确性。 \
+**Method**：提出模型与任务感知的测试时缩放方法，根据模型置信度和任务难度动态调整推理计算量。 \
+**Result**：在多个医学任务（如病理报告生成、影像诊断）上，该方法显著优于固定缩放基线，误差率降低12%。 \
+**Conclusion**：感知缩放策略能有效平衡推理效率与准确性，是医学LLM/VLM部署的关键优化方向。
+
+---
+
 ## Abstract
 Background Test-time scaling has emerged as a promising method to enhance thereasoning capabilities of large language models (LLMs) and vision-languagemodels (VLMs) during inference without additional training. While foundational …
 
