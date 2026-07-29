@@ -16,6 +16,15 @@ conclusion: 本方法有效提升多视图视频报告生成质量，为医学�
 ## 摘要
 背景：生成超声心动图报告需要综合多个视频视图中的解剖和功能发现，形成单一的研究级别报告。尽管近年来医学视觉-语言模型有所改进……
 
+## 速览
+**TLDR**：心脏超声报告生成需要整合多视图的解剖和功能发现。本文提出解剖和功能感知分层适配器（AFA-HA）视觉语言模型，通过双流编码器和分层适配机制分别捕获解剖与功能信息。在私有数据集上，生成报告的准确性和完整性优于基线方法。该工作为多视图医学报告生成提供了新的感知融合范式。 \
+**Motivation**：现有模型未充分利用多视图超声中的解剖和功能信息，导致报告生成不精确。 \
+**Method**：提出解剖和功能感知分层适配器（AFA-HA），包含解剖流和功能流，通过分层适配融合多视图特征。 \
+**Result**：在私有超声数据集上，生成的报告在准确性和完整性上优于现有基线。 \
+**Conclusion**：解剖和功能感知的分层适配有效提升了超声报告生成质量。
+
+---
+
 ## Abstract
 Background Producing echocardiography reports requires synthesizing bothanatomical and functional findings from multiple video views into a single study-levelreport. Although medical vision–language models have improved in recent years …
 

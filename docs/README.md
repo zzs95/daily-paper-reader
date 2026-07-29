@@ -15,11 +15,11 @@
     <strong class="dpr-home-dashboard-count">共 24 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
-    <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>2 次</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>3 次</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>24</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>0</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-07-28 22:35:58 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-07-29 21:40:57 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -30,9 +30,9 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日精读两篇医学影像与病理分析前沿论文，聚焦大模型与领域知识融合。</p>
-<p>最值得关注的方向：知识增强的可解释医学视觉问答框架，以及病理基础模型联合CNN分析全切片图像。</p>
-<p>建议普通读者重点关注基础模型在垂直医疗场景的协同应用，及可解释性提升的实际价值。</p>
+<p>今日精读两篇医学AI论文，分别聚焦可解释性医学视觉问答和大规模病理图像分析。</p>
+<p>知识增强框架利用大型基础模型提升医学VQA可解释性；病理基础模型与CNN协同分析全切片图像。</p>
+<p>建议关注大型基础模型在医学影像解释及病理诊断中的实际应用进展。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
