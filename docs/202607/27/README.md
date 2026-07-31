@@ -1,15 +1,15 @@
 # 日报 · 2026-07-27
 
-- 最近生成时间：2026-07-30 22:21:17 UTC
-- 今日累计更新：4 次
+- 最近生成时间：2026-07-31 22:28:42 UTC
+- 今日累计更新：5 次
 - 今日累计推荐总数：24
 - 精读区：24
 - 速读区：0
 
 ## 今日简报（AI）
-每日精读24篇论文，重点聚焦知识增强型医学视觉问答框架和全切片病理分析的协同辅助网络。
-最值得关注的是：大模型驱动的医学图像可解释问答方法，以及病理基础模型与CNN融合的千兆像素图片分析方案。
-下一步建议深入探索多模态大模型在医疗影像中的可解释性提升策略及其临床应用转化。
+今日精读两篇医学AI前沿论文，聚焦可解释视觉问答与超大病理图像分析。  
+最值得看：知识增强大模型用于可解释医学VQA，以及病理基础模型与CNN协同分析十亿像素全切片。  
+下一步建议关注多模态医学大模型的可解释性应用，以及高效处理大规模病理图像的技术方案。
 
 ## 精读区
 1. [A knowledge enhanced framework for interpretable medical visual question and answering via large foundation model](/202607/27/a-knowledge-enhanced-framework-for-interpretable-medical-visual-question-and-answering-via-large-foundation-model) 
