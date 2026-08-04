@@ -15,11 +15,11 @@
     <strong class="dpr-home-dashboard-count">共 24 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
-    <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>8 次</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>9 次</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>24</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>0</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-08-03 22:21:50 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-08-04 22:36:03 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -30,7 +30,9 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日精读24篇医学AI论文，聚焦多模态智能诊疗前沿。最值得关注的是：知识增强框架提升医学视觉问答可解释性，病理基础模型与CNN协同分析全切片图像。建议优先研读这两篇论文，可结合临床场景验证模型效果。</p>
+<p>今日精读24篇，重点聚焦医学视觉问答与病理全切片分析。</p>
+<p>最值一看：知识增强框架提升医学VQA可解释性；病理基础模型+CNN协作分析WSI。</p>
+<p>建议普通读者：关注大模型在医学影像中的可解释与多模态协同趋势。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
