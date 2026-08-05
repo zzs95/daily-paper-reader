@@ -179,21 +179,6 @@ def resolve_email_date(cli_value: str | None) -> str:
     text = str(cli_value or "").strip()
     if text:
         return text
-    setting = load_arxiv_paper_setting()
-    email_setting = setting.get("email_quick_run") or {}
-    if not isinstance(email_setting, dict):
-        email_setting = {}
-
-    date_start = str(email_setting.get("date_start") or "").strip()
-    date_end = str(email_setting.get("date_end") or "").strip()
-    if date_start and date_end:
-        start_token = normalize_date_token(date_start)
-        end_token = normalize_date_token(date_end)
-        return f"{start_token}-{end_token}"
-
-    date_single = str(email_setting.get("date_single") or "").strip()
-    if date_single:
-        return date_single
     return datetime.now(timezone.utc).strftime("%Y%m%d")
 
 
