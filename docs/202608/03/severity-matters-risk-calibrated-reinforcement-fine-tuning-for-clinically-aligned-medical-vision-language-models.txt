@@ -1,0 +1,1395 @@
+Title: Severity Matters: Risk-Calibrated Reinforcement Fine-Tuning for Clinically Aligned Medical Vision&#x2013;Language Models
+
+URL Source: https://ieeexplore.ieee.org/iel8/6287639/6514899/11622461.pdf
+
+Published Time: Tue, 04 Aug 2026 19:04:18 GMT
+
+Number of Pages: 26
+
+Markdown Content:
+> Received 26 June 2026, accepted 17 July 2026, date of publication 23 July 2026, date of current version 3 August 2026.
+> Digital Object Identifier 10.1109/ACCESS.2026.3716267
+
+# Severity Matters: Risk-Calibrated Reinforcement Fine-Tuning for Clinically Aligned Medical Vision–Language Models 
+
+YU SU  AND PENG WANG 
+
+> Jilin Province Science and Technology Innovation Center for Network Database Application Software, Changchun University of Science and Technology, Changchun 130022, China
+
+Corresponding author: Peng Wang (wangpeng@cust.edu.cn) This work was supported in part by Jilin Province Science and Technology Innovation Platform Construction Project under Grant YDZJ202302CXJD027. 
+
+ABSTRACT In clinical vision-language model (VLM) post-training, the relevant failure mode is not only how often a model is wrong, but whether errors concentrate in cases where missed findings carry greater clinical cost. Risk-Calibrated Reinforcement Fine-Tuning (RCRFT) addresses this mismatch by making severity an explicit signal in reinforcement learning rather than an after-the-fact evaluation stratum. The framework combines a severity-weighted multimodal reward, slot-aware post-rollout edits that respect clinical report structure, and a unified clinical utility spanning report quality, grounding fidelity, calibration, and safety penalties. A formal analysis decomposes the risk-weighted objective into mean utility, a global severity-scaling term, and a severity–reward covariance term; under severity centering only the mean and the covariance remain, indicating that the method favors positive association between utility and case severity rather than simple reward amplification. On MIMIC-CXR, this shift in optimization improves the safety-critical region first: relative to a matched RL baseline, severe-case false negatives fall from 9.8% to 5.6%, and high-risk utility rises from 0.65 to 0.74. The same training signal also lifts general report quality, raising ROUGE-L from 29.9 to 30.8 and RadGraph F1 from 25.8 to 27.3 while lowering RadCliQ from 0.86 to 0.72. Ablations show that each component contributes, with severity weighting accounting for the largest share of the improvement. 
+
+INDEX TERMS Medical vision-language models, reinforcement fine-tuning, risk calibration, severity-weighted rewards, radiology report generation, visual grounding, calibration. 
+
+I. INTRODUCTION 
+
+Radiology report generation and visual grounding are central tasks in clinical AI, with direct implications for decision support, triage, and documentation workload reduction [1]. Vision-language models (VLMs) have emerged as the domi-nant paradigm for these tasks, while reinforcement fine-tuning has become an increasingly important post-training strategy for adapting foundation VLMs to clinical deployment [2], [3], [4], [5]. By optimizing directly against task-level reward sig-nals [6] such as clinical consistency and grounding accuracy, RL-based post-training can overcome the limitations of purely imitative supervised fine-tuning and better align model outputs 
+
+The associate editor coordinating the review of this manuscript and approving it for publication was Ines Domingues  .
+
+with clinically meaningful objectives [7], [8], [9]. At the same time, radiology VLMs have improved substantially in capability [10], [11], [12], making post-training design increasingly consequential. Even small mis-specifications in the RL objective can propagate into systematic clinical failure modes that remain hidden under aggregate evaluation. Yet current RL objectives for medical VLMs exhibit a fundamental structural limitation: they operate as average-quality surrogates that treat all cases as equally important. A missed tension pneumothorax and a mildly overstated chronic finding contribute equally to the scalar reward, even though their clinical consequences differ substantially [13]. This leads to risk dilution , where the optimization signal from rare but high-stakes errors is dominated by the majority of routine cases. As a result, a model may achieve  
+
+> 115480
+> 2026 The Authors. This work is licensed under a Creative Commons Attribution 4.0 License. For more information, see https://creativecommons.org/licenses/by/4.0/ VOLUME 14, 2026 Y. Su, P. Wang: Severity Matters: RCRFT for Clinically Aligned Medical VLMs
+
+strong aggregate performance while degrading high-risk false-negative behavior. Severity-aware reweighting is well established in supervised learning for medical imaging [14], [15], but remains underexplored in RL objectives for medical VLMs. Moreover, existing post-training frameworks treat reward design in a monolithic or fragmented manner: report quality, grounding fidelity, calibration, and safety-sensitive penalties are either collapsed into a single scalar or optimized in separate stages [16], [17], without a principled formulation that ties their relative importance to clinical risk. The motivation for risk calibration is not merely to reweight training samples, but to align the structure of the optimization objective with the asymmetric cost profile of clinical decision-making [18]. When error costs are heterogeneous, optimizing expected reward yields policies that perform well on average. Such policies may still concentrate errors on a small subset of high-risk cases. A more appropriate objective is to favor policies whose performance is positively aligned with case severity, namely those that remain reliable when clinical stakes are high. This provides a tractable surrogate for capturing heterogeneous risk beyond uniform expectation-based optimization. This perspective motivates incorporating severity directly into the RL objective as a weighting mechanism, rather than treating it as a post-hoc stratification variable. We propose Risk-Calibrated Reinforcement Fine-Tuning 
+
+(RCRFT), a post-training framework that addresses these limitations. RCRFT consists of three coupled components: (1) a severity-weighted reward that upweights high-risk cases via a risk-sensitivity parameter γ ; (2) slot-aware post-rollout edits that revise generated reports along clinically meaningful slots (findings, impression, uncertainty clauses), improving reward signal quality while controlling policy drift; and (3) a multimodal clinical utility that integrates report quality, grounding fidelity, calibration, and safety-sensitive penalties into a unified reward. We show that the resulting objective admits a decomposition into mean utility, a severity-scaling term, and a risk–reward covariance term. Proposition 1 further establishes that, under severity centering, the objective reduces to mean utility plus the covariance between severity and reward. This formulation makes explicit that the method favors policies whose performance aligns with case severity rather than merely optimizing average reward. Our contributions are : 
+
+> •
+
+We formulate a risk-calibrated multimodal RL objective for medical VLMs that explicitly couples report quality, grounding fidelity, calibration, and safety-sensitive penalties through severity-aware weighting.  
+
+> •
+
+We derive a decomposition showing that the objective consists of mean utility, a severity-scaling term, and a risk–reward covariance term; under severity centering, it reduces to mean utility plus covariance, providing a principled interpretation of severity-aware optimization.  
+
+> •
+
+We extend post-rollout editing to structured clinical slots (findings, impression, uncertainty), improving reward signal quality while controlling policy drift, and establish an edit-monotonicity guarantee.  
+
+> •
+
+We provide a comprehensive evaluation protocol with severity-stratified reporting, grounding assessment, cali-bration analysis, and ablations that validate each design component. 
+
+> II. RELATED WORK
+
+Learning-based prediction has advanced rapidly across domains, from image-to-image translation and neural surro-gate modeling to physics-informed networks for scientific and engineering simulation [19], [20], [21], [22]; medical vision-language models extend this trajectory to clinical reporting, where the cost of an error is highly asymmetric. 
+
+> A. RADIOLOGY REPORT GENERATION
+
+Automated radiology report generation has evolved rapidly from transformer-based encoder–decoders [23], [24] toward richer formulations that inject external knowledge [25], [26], [27], exploit structural or observation-guided rea-soning [28], [29], [30], ground generation in organ- or region-aware representations [31], [32], [33], drive generation with diagnosis-aware prompts [34], leverage longitudinal context [35], or combine large language models with clinical tool use [36], [37]. Complementary efforts have emphasized task-aware inclusive frameworks [38], eye-gaze-guided cross-modal alignment [39], reinforced attention with repetition penalties [40], fine-grained image–text alignment [41], and sentence-level image–language contrastive learning [42]. Although these methods collectively improve aggregate text-similarity and clinical-consistency metrics, none incor-porates objective-level severity weighting during training; severity is treated either as a post-hoc evaluation stratification or handled indirectly through attention- or contrast-based surrogates. As a consequence, these methods exhibit the risk-dilution signature we identify in Section III: aggregate utility improves with model capacity and training maturity while Critical-stratum utility plateaus. 
+
+> B. REINFORCEMENT FINE-TUNING FOR MEDICAL VLMs
+
+Medical VLM post-training has progressed from supervised fine-tuning to preference optimization and reinforcement learning. Approaches such as CheXalign [7] and CheXPO [8] show that report generation benefits from task-level supervi-sion, while recent work explores direct RL for medical VLMs, including MedVLM-R1 [4], Med-R1 [5], and grounded chest X-ray foundation models trained with reinforcement learn-ing [3], as well as reasoning-oriented RL frameworks [43]. Foundation-model-based conversational VLMs [1], [10], [11] and instruction-tuned models such as LLaVA-Med [44] demonstrate strong generalization. Edit-based RL improves exploration and sampling efficiency through post-rollout corrections [9], while multimodal preference optimization emphasizes preserving visual conditioning and aligning outputs with clinical value [16], [17]. Despite these advances, most formulations remain centered on expected reward maximization [6], implicitly treating all errors as equally  
+
+> VOLUME 14, 2026 115481 Y. Su, P. Wang: Severity Matters: RCRFT for Clinically Aligned Medical VLMs
+
+costly. This assumption is limiting in medical settings where error severity is highly asymmetric, leading to risk dilution 
+
+in optimization. Moreover, calibration is often evaluated post-hoc rather than incorporated into the training objective, creating a gap between confidence and correctness. Finally, report quality and visual grounding are frequently optimized as loosely coupled objectives, which can yield outputs that are fluent but not clinically coherent. A growing line of work applies RL directly to radi-ology report generation and medical reasoning, including MedVLM-R1 [4], Med-R1 [5], grounded chest X-ray founda-tion models trained with reinforcement learning [3], edit-based RL for report correction [9], and earlier policy-gradient systems that optimize clinically accurate generation [45] or semantic factual-correctness rewards [46]. Across these systems severity, when present at all, enters as a reward component or a data stratifier rather than as an explicit weight on the policy gradient. The closest concurrent effort is RadHiera [47], an unpublished preprint that introduces a severity-aware impression reward inside a hierarchical RL pipeline, yet even there severity scales a reward term rather than tilting the objective through a severity–reward covariance. RCRFT instead treats clinical severity as an explicit weight in the RL objective itself, with a formal severity–reward covariance decomposition (Proposition 1) characterizing when and why high-severity gains arise. 
+
+> C. RISK-SENSITIVE REINFORCEMENT LEARNING AND CALIBRATION
+
+Risk-sensitive RL has a long history in robotics [18], autonomous driving, and safety-critical control, where the objective extends beyond expected returns to account for their distribution. Methods such as conditional value-at-risk (CVaR) optimization and distributional RL [48], [49] explicitly model tail risks, while constrained RL enforces safety constraints alongside reward maximization. In parallel, the LLM post-training literature explores selective prediction and abstention [50] to improve reliability, and calibration-aware training [51] shows that incorporating uncertainty into the objective can improve confidence-quality alignment. These ideas are particularly relevant in medical settings, where decision costs are inherently risk-asymmetric . However, they remain only partially explored in multimodal medical RL. Existing radiology RL systems typically evaluate calibration after training and treat severity awareness as a dataset-level stratification rather than an objective-level design principle. As a result, optimiza-tion may remain insensitive to clinically meaningful risk structure. 
+
+> D. POSITIONING
+
+Across these streams, severity enters as a dataset label or an evaluation stratum, and clinical or uncertainty-aware structure is targeted at the loss-function or inference level [33], [36], [39], [42]. RCRFT differs in where clinical risk enters the optimization. Its contribution is the specific integration of objective-level severity weighting with multimodal clinical utility and slot-local edits for radiology VLM post-training, so that the training objective itself favors policies whose gains concentrate on clinically important cases. This makes the severity–reward covariance an explicit and analyzable optimization target rather than a heuristic multi-term loss. The framework further couples this objective with slot-aware clinical edits and a composite reward that jointly targets report fidelity, grounding, calibration, and safety. We do not claim a fundamentally new optimization principle. The severity-weighted objective is an instance of cost-sensitive and risk-sensitive expected-utility weighting [52], [53], and its decomposition is elementary; the contribution is its instantiation at the policy-gradient level for multimodal clinical utility together with slot-local edits, which separates it from distributional or CVaR risk-sensitive RL [48], [49] and from cost-sensitive learning or medical severity weighting applied at the loss or data level. RCRFT is also distinct from the line of medical VLMs based on preference optimization and task-level supervision, such as CheXalign [7], CheXPO [8], MDPO [16], and MMedPO [17]. Those methods encode clinical risk through preference pairs, hard-example mining, or per-token weighting on a likelihood or preference loss, so risk influences which samples are preferred rather than how the expected return is scaled. RCRFT instead keeps the sampling policy and preference structure intact and acts through a severity-tilted reward, so that clinical risk enters as an analyzable covariance term in the return rather than as an implicit property of the preference data. The resulting framework unifies risk-sensitive utility, multimodal conditioning, and calibration-aware decision-making within a single optimization formulation, supported by formal analysis (Section III-E ) and extensive empirical validation. 
+
+> III. METHODOLOGY
+> A. PROBLEM FORMULATION AND NOTATION
+
+Let x denote a medical case, consisting of an image, optional report context, and optional grounding prompt. A policy 
+
+πθ (y | x) generates either a report, a grounding answer, or a joint multimodal response. Each case is associated with a scalar severity score s(x) ∈ [0 , 1] measuring clinical risk, with larger values indicating higher penalty for clinically important mistakes. We focus on post-training: the object of study is the reinforcement objective used to adapt a competent base model, whose behavior is being reshaped rather than learned from scratch. 
+
+> B. REWARD DESIGN AND SEVERITY SCORE
+
+We define the multimodal clinical utility as 
+
+R(x, y) = λtext rtext (x, y) + λcli rcli (x, y)
+
++ λgrd rgrd (x, y) + λcal rcal (x, y)
+
+− λFN safe eFN (x, y) − λFP safe eFP (x, y), (1)   
+
+> 115482 VOLUME 14, 2026 Y. Su, P. Wang: Severity Matters: RCRFT for Clinically Aligned Medical VLMs
+> TABLE 1. Summary of notation used throughout the paper.
+
+where rtext measures textual quality, rcli measures clinical consistency, rgrd measures grounding fidelity, and rcal 
+
+measures calibration or abstention quality, with eFN and 
+
+eFP denoting false-negative and false-positive penalties. In practice, rtext can be instantiated with BLEU, ROUGE-L, or BERTScore [54], [55], [56], while rcli can be instantiated with RadGraph, CheXbert, GREEN, or RadCliQ-family signals [13], [57], [58], [59], [60]. 
+
+1) CONSTRAINED-UTILITY INTERPRETATION 
+
+The reward in Eq. 1 can be interpreted from a constrained clinical optimization perspective. Specifically, one seeks to maximize report utility while enforcing constraints on grounding fidelity, calibration, and error rates. A stylized formulation is max 
+
+> πθ
+
+E[rtext (x, y) + rcli (x, y)] s.t. E[rgrd (x, y)] ≥ τgrd ,
+
+E[rcal (x, y)] ≥ τcal ,
+
+E[eFN (x, y)] ≤ τFN , E[eFP (x, y)] ≤ τFP . (2) Here, the thresholds define target operating points and are not assumed to be known precisely. Under this view, the weighted reward in Eq. 1 corresponds to a Lagrangian surrogate of Eq. 2, where each coefficient governs the trade-off associated with a clinically meaningful constraint, rather than serving as a purely empirical tuning parameter [61], [62]. 
+
+2) SEVERITY SCORE DESIGN 
+
+The severity score s(x) is the key component distinguishing our framework from standard average-reward medical RL. It quantifies the clinical consequence of an error on case x,   
+
+> TABLE 2. Severity weight s(f) assigned to each CheXpert finding and the resulting severity stratum.
+
+rather than its difficulty. While the two may correlate, they are not equivalent: benign but ambiguous cases can be difficult without being severe, whereas certain conditions may be easy to detect yet clinically critical if missed. Accordingly, s(x) serves a normative role, encoding clinical priorities rather than data complexity. In practice, s(x) can be instantiated in several ways, including: (i) rule-based mappings over structured findings (e.g., CheXpert-style labels) with higher weights assigned to critical abnormalities; (ii) clinician-defined risk stratification derived from report extraction pipelines; or (iii) a lightweight triage model predicting whether an error would alter downstream clinical decisions. The framework treats s(x) as a modular interface, allowing adaptation to available supervision and institutional constraints. Two constraints are essential. First, s(x) must depend only on x and not on the sampled output y,to avoid self-referential rewards (Assumption 1). Second, 
+
+s(x) should not collapse to a proxy for sample rarity; it should prioritize clinical consequence rather than statistical infrequency [52]. Because the severity signal drives the entire objective, we specify its construction in detail below. We assign each CheXpert finding a severity weight by the clinical cost of overlooking it rather than by its frequency, and group findings into four strata for stratified evaluation (Table 2).  
+
+> VOLUME 14, 2026 115483 Y. Su, P. Wang: Severity Matters: RCRFT for Clinically Aligned Medical VLMs
+
+Each finding f carries a severity weight s(f ) ∈ [0 , 1] from Table 2, and the case-level score is s(x) = max f ∈F(x) s(f ), where F(x) is the set of CheXpert findings extracted from case x. For severity-stratified evaluation, cases are binned by s(x) into four strata (Low < 0.35, Medium [0 .35 , 0.6), High [0 .6, 0.85), Critical ≥ 0.85). Because F(x) is derived from the reference annotation of case x and never from the sampled output y, the severity score depends only on x
+
+and not on y (the exogeneity condition formalized later as Assumption 1). For completeness, the four remaining CheXpert observa-tions (Enlarged Cardiomediastinum, Fracture, Lung Lesion, and Pleural Other) are assigned the default Medium weight 
+
+s(f ) = 0.45. Throughout, s(f ) is a heuristic clinician-priority weight for ordinal acuity stratification rather than a calibrated outcome probability. 
+
+Computation and Information Boundary of s (x): The CheXpert labeler operates on radiology text rather than on pixels, so F(x) is the finding set extracted from the 
+
+reference report of case x, and s(x) = max f ∈F(x) s(f )is a fixed, case-level supervision signal. During training, 
+
+s(x) multiplies the reward used for advantage computation; it is never concatenated to the policy input and never conditions generation. At validation and test, the same reference-derived s(x) serves only to assign each case to a severity stratum for stratified reporting, and at inference it is neither computed nor required, because severity awareness is already internalized in the trained policy. The score therefore cannot enter a prediction as an input, since it never participates in a forward pass of the policy and depends on the reference rather than on the generated report y, which preserves exogeneity (Assumption 1); the distinct question of label lineage shared between the training reward and the default evaluation strata is the subject of the robustness experiment in Section IV. When severity must be available at deployment without reference reports, the rule-based scorer can be replaced by the image-based learned triage scorer of Section IV (Table 13), which estimates s(x) from the image alone. 
+
+> 3) LABEL-SOURCE SEPARATION
+
+Because several supervision sources feed the framework, a natural concern is whether the reported gains are confounded by shared label lineage rather than reflecting a genuine policy improvement. We therefore make the provenance of each signal explicit. The severity score s(x) and the clinical-consistency reward rcli are derived from CheXpert and CheXbert/RadGraph/GREEN/RadCliQ extractors and thus enter training, whereas the grounding reward rgrd relies on a separate bounding-box annotation source. At evaluation time the severity strata are derived from CheXpert by default, and our robustness experiment re-derives them under alternative CheXbert, NegBio, and radiologist labels that are not the CheXpert stratifier used in training. Table 3 summarizes this mapping.  
+
+> TABLE 3. Label provenance for each framework component, with the label source and whether the component is used at training and at evaluation.
+> C. RISK-CALIBRATED OBJECTIVE
+
+The proposed risk-calibrated objective is 
+
+Jrisk (πθ ) = E x∼D 
+
+> y∼πθ(·| x)
+
+[(1 + γ s(x)) R(x, y)], (3) where γ ≥ 0 controls how strongly the policy prioritizes high-risk cases [53], [63]. 
+
+Proposition 1 (Risk-Calibrated Decomposition): The objective in Eq. 3 decomposes as 
+
+Jrisk (πθ ) = E[R] + γ E[s]E[R] + γ Cov( s, R). (4) 
+
+Proof: Expanding the product inside the expectation :
+
+Jrisk (πθ ) = E[(1 + γ s(x)) R(x, y)]
+
+= E[R(x, y)] + γ E[s(x)R(x, y)] .
+
+The covariance identity Cov (s, R) = E[sR ] − E[s]E[R]gives E[sR ] = E[s]E[R] + Cov (s, R). Substituting yields Eq. 4. □
+
+Interpretation. The three terms in Eq. 4 capture distinct aspects of the objective. The first term E[R] is the average-quality criterion shared with standard RL. The second term γ E[s]E[R] is a global severity-scaling that uniformly amplifies the average reward by the mean severity level. The third term γ Cov (s, R) explicitly rewards policies whose quality is positively aligned with case severity: a model that performs well on easy normal studies but fails on severe cases will achieve strong average reward yet be penalized by a weak or negative covariance term. 
+
+> 1) WHY SEVERITY BELONGS AT THE OBJECTIVE LEVEL
+
+The decomposition in Eq. 4 clarifies why severity is placed inside the policy-gradient objective rather than at the loss or inference level. Because the per-sample reward is (1 +
+
+γ s(x)) R(x, y), the resulting advantage is severity-tilted, so a high-severity case with above-average utility produces a gradient correction scaled by 1 + γ s(x) rather than by 1; the update therefore moves the policy more for the cases the covariance term γ Cov (s, R) rewards, which an inference threshold cannot reproduce. An inference-time threshold reranks or abstains over outputs sampled from an already frozen policy; it can shift the evaluation operating point but leaves the trained policy, and hence E[R] and Cov (s, R) in Eq. 4, unchanged, so it cannot retrain the model to concentrate quality on high-severity cases. Loss-level reweighting on the supervised objective is closer in spirit but mixes severity  
+
+> 115484 VOLUME 14, 2026 Y. Su, P. Wang: Severity Matters: RCRFT for Clinically Aligned Medical VLMs
+
+into a likelihood term, where it competes with fluency and token-level imitation rather than with clinical utility, so the severity signal is diluted by the very objective it is meant to override. Placing severity in the reward keeps it coupled to 
+
+R(x, y) alone, so that severity scaling acts only on clinical utility and the mechanism remains the covariance term identified in Proposition 1. 
+
+Remark 1: The decomposition identifies γ Cov (s, R) as the quantity that distinguishes risk-calibrated from average-quality RL. It does not establish global convergence, but it specifies the empirical signature we should expect if the mechanism is active: gains concentrate on high-severity cases and correspond to larger empirical covariance between severity and utility. 
+
+> D. SLOT-AWARE POST-ROLLOUT EDITS
+
+Post-rollout editing augments the RL loop by applying targeted corrections to sampled responses prior to reward evaluation and policy updates. Unlike sentence-level editing in generic RL [9], we restrict edits to clinically defined slots, preserving diagnostic structure while improving reward fidelity. 
+
+> 1) CLINICAL SLOTS
+
+Radiology reports follow a structured format. We define the slot set Sslot = { findings , impression , uncertainty clauses },where each slot corresponds to a semantically coher-ent unit. Findings describe localized abnormalities; the impression summarizes the clinical conclusion; uncertainty clauses encode hedging (e.g., ‘‘cannot exclude’’, ‘‘recom-mend follow-up’’). Restricting edits to these slots aligns post-hoc corrections with clinically meaningful report components. 
+
+> 2) EDIT OPERATOR AND ROLLOUT
+
+Let y ∼ πθ (· | x) denote a sampled response. The edit operator produces ˜y = Edit (y; x) by modifying only slot-identified segments, leaving all other tokens unchanged. The editor is fixed and rule-based: for each slot it applies a deterministic correction derived from CheXpert-extracted labels and reference confidences, insert-ing missing findings, repairing contradictory negations, replacing impression sentences on high-severity cases when key labels are missing or fabricated, and prepend-ing hedging phrases to overconfident assertions on low-confidence references. The editor never jointly trains with the policy. 
+
+Trigger Condition: An edit for slot k is applied only when the estimated edit gain exceeds a threshold τ :̂
+
+Gk (x, y) =̂ Rk (x, ˜yk ) −̂ Rk (x, y) − η dk (˜yk , y) ≥ τ, (5) where ̂ Rk denotes the slot-specific reward component (e.g., 
+
+rcli for findings, rcal for uncertainty), dk is the token-level edit distance within slot k, and τ = 0.02 throughout our experiments. This ensures that only edits with sufficient net benefit are retained, preventing drift from low-confidence corrections. 
+
+Edit Gain Estimation: Since computing the true edit gain G(x, y) = R(x, ˜y) − R(x, y) − η d(˜y, y) requires a full reward evaluation of the edited output, we use a lightweight proxy ̂ Rk : each slot-level reward component is evaluated independently via the corresponding sub-scorer (CheXbert for rcli , NegBio for negation accuracy, RadGraph for entity coverage), without a full forward pass of the reward model. The aggregate proxy gain is ̂ G(x, y) =∑
+
+> k∈Sslot
+
+̂ Gk (x, y). If each slot sub-scorer satisfies |̂Rk − Rk | ≤ 
+
+εk uniformly, the full proxy reward ˜R(x, y) = ∑ 
+
+> k
+
+λk̂ Rk (x, y)deviates from the true reward by at most ε = ∑ 
+
+> k
+
+λk εk ,and Proposition 4 then bounds the objective distortion by ((1 + γ ) + 2ρ)ε. Slot-level accuracy therefore translates directly into a controlled bound on the full edit-augmented objective. Edits affect only the reward signal used for advantage computation; the sampling distribution πθ (· | x) is unchanged. The full per-sample pipeline is detailed in Algorithm 1. The editor’s inputs are exactly the reference-derived CheXpert finding labels, the reference confidences for those findings (the CheXpert certainty state of positive, uncertain, or negative for each finding in the reference report), and the case severity s(x); it accesses neither the policy parameters nor any validation or test label. Concretely, the policy gradient is taken with respect to the log-probability of the original 
+
+sampled response, ∇θ log πθ (yi | x), and the edited response 
+
+˜yi enters only through the scalar advantage, because R(x, ˜yi)appears solely inside the edit-gain term G of the per-sample reward. The edited output is thus a reward-shaping surrogate. It is never a generation target and is never backpropagated through, so no gradient flows through the editor and editing introduces no off-policy correction on samples drawn from 
+
+πθ (· | x). The contribution of the editor’s reference-derived inputs is quantified by the reference-free ablation in Section IV (Table 16). The slot-aware editor is active only during training, where it shapes the reward used for advantage computation from CheXpert-extracted labels, reference confidences, and case severity; it never modifies the sampling distribution πθ (· | x). At validation, test, and inference the editor is disabled, so no reference-derived label or confidence reaches any evaluation or deployment output, and its effect on the reported metrics is only indirect, through the learned policy. 
+
+> 3) EDIT-AUGMENTED OBJECTIVE
+
+We augment the risk-calibrated objective with an edit-improvement term :
+
+Jedit (πθ ) = Jrisk (πθ ) + ρ E[R(x, ˜y) − R(x, y) − η d(˜y, y)],
+
+(6) where ρ ≥ 0 controls the edit contribution, d(˜y, y)measures slot-level deviation, and η > 0 penalizes excessive drift. The term R(x, ˜y) − R(x, y) captures raw edit gain.  
+
+> VOLUME 14, 2026 115485 Y. Su, P. Wang: Severity Matters: RCRFT for Clinically Aligned Medical VLMs
+> 4) FULL DECOMPOSITION
+
+Combining Eq. 6 with Proposition 1, the objective decomposes as 
+
+Jedit (πθ ) = E[R]
+
+︸︷︷︸ 
+
+> mean utility
+
++ γ E[s]E[R] + γ Cov( s, R)
+
+︸ ︷︷ ︸
+
+> severity alignment
+
++ ρ E[G]
+
+︸ ︷︷ ︸ 
+
+> edit gain
+
+, (7) where G(x, y) = R(x, ˜y) − R(x, y) − η d(˜y, y). Severity weighting and slot-aware editing are complementary: the former aligns performance with clinical risk, while the latter improves outputs within structured report components. 
+
+> E. THEORETICAL PROPERTIES
+> 1) ASSUMPTIONS
+
+Three assumptions underpin the results below. They are intentionally modest: their purpose is to preserve the interpretation of the objective, not to guarantee global optimality. 
+
+Assumption 1 (Exogenous Severity): The severity score 
+
+s(x) depends only on the case x and not on the sampled response y.This excludes formulations where severity is inferred from the model response itself, which would entangle optimization with self-referential labeling and weaken the covariance interpretation. 
+
+Assumption 2 (Bounded Reward): After clipping and optional affine normalization, the scalar clinical utility satisfies 0 ≤ R(x, y) ≤ M for some finite constant M > 0 and for all admissible pairs ( x, y). This keeps any one reward channel from dominating the group-relative advantage and is required for the concentration bound in Theorem 2. 
+
+Assumption 3 (Local Edit): The edit operator is local in the sense that each edited response ˜y is produced from the sampled response y by modifying only a bounded subset of clinically defined slots. If edits rewrote the entire output, the edit-improvement interpretation would become closer to imitation than to guided policy improvement. Slot-aware edits keep the perturbation localized, preserving more of the sampled policy behavior while still allowing clinically meaningful corrections to enter the update. The following results make explicit what the proposed objective guarantees at the level of ranking, centered normalization, distributional interpretation, and finite-sample estimation. None constitutes a convergence theorem for policy optimization; rather, they characterize what the objective prefers once Assumptions 1–3 are in force. 
+
+> 2) CENTERED REPRESENTATION
+
+Lemma 1 (Centered Objective): Define the centered sever-ity score sc(x) = s(x)−E[s(x)] and the centered risk-calibrated objective 
+
+Jc(πθ ) = E[(1 + γ sc(x)) R(x, y)]. (8) Then 
+
+Jc(πθ ) = E[R] + γ Cov( s, R). (9) 
+
+Proof: By definition of sc,
+
+Jc(πθ ) = E[( 1 + γ (s − E[s]) )R]. (10) Expanding :
+
+Jc(πθ ) = E[R] + γ E[sR ] − γ E[s]E[R]. (11) The covariance identity Cov (s, R) = E[sR ] − E[s]E[R] yields Eq. 9. □
+
+Under severity centering, the global scaling term γ E[s]E[R]vanishes, leaving only mean utility and the covariance align-ment term. This provides the most transparent interpretation: the method rewards policies whose performance quality co-varies positively with case severity. 
+
+> 3) ORDERING BY COVARIANCE
+
+Theorem 1 (Covariance Ordering): Let π1 and π2 be two policies with Eπ1 [R] = Eπ2 [R]. Then 
+
+Jrisk (π1) − Jrisk (π2) = γ
+
+(
+
+Cov π1 (s, R) − Cov π2 (s, R)
+
+)
+
+.
+
+(12) In particular, for every γ > 0, Jrisk (π1) > Jrisk (π2) if and only if Cov π1 (s, R) > Cov π2 (s, R). 
+
+Proof: Apply Proposition 1 separately to π1 and π2:
+
+Jrisk (π1) = Eπ1 [R] + γ E[s]Eπ1 [R] + γ Cov π1 (s, R),
+
+Jrisk (π2) = Eπ2 [R] + γ E[s]Eπ2 [R] + γ Cov π2 (s, R).
+
+Subtracting and applying Eπ1 [R] = Eπ2 [R] cancels the first two terms of each expression, leaving 
+
+Jrisk (π1) − Jrisk (π2) = γ (Cov π1 (s, R) − Cov π2 (s, R)). (13) Since γ > 0, the sign of the left-hand side equals the sign of Cov π1 (s, R) − Cov π2 (s, R). □
+
+Theorem 1 shows that when two policies achieve equal average reward, the risk-calibrated objective provides a strict tie-breaking rule based on severity–utility covariance. This is the cleanest formal characterization of what distinguishes RCRFT from average-quality RL. 
+
+> 4) FINITE-SAMPLE CONCENTRATION
+
+Theorem 2 (Concentration of the Empirical Estimator): 
+
+Under Assumptions 1 and 2, define 
+
+Zb = (1 + γ s(xb))R(xb, yb), ˆJrisk = 1
+
+B
+
+> B
+
+∑
+
+> b=1
+
+Zb. (14) If the sampled pairs ( xb, yb) are i.i.d. from the rollout distribution of πθ , then :
+
+1) ˆJrisk is an unbiased estimator of Jrisk (πθ ); 2) for every ε > 0, Pr 
+
+(∣ ∣∣ ˆJrisk − Jrisk (πθ )
+
+∣∣∣ ≥ ε
+
+)
+
+≤ 2 exp 
+
+( −2Bε2
+
+(1 + γ )2M 2
+
+)
+
+.
+
+(15)  
+
+> 115486 VOLUME 14, 2026 Y. Su, P. Wang: Severity Matters: RCRFT for Clinically Aligned Medical VLMs
+
+Proof: Unbiasedness. Because the Zb are identically distributed, 
+
+E[ ˆJrisk ] = 1
+
+B
+
+> B
+
+∑
+
+> b=1
+
+E[Zb] = E[Z1].
+
+By the definition of Z1 and the rollout distribution, 
+
+E[Z1] = Ex∼D, y∼πθ (·| x)
+
+[(1 + γ s(x)) R(x, y)] = Jrisk (πθ ).
+
+(16) 
+
+Concentration. From 0 ≤ s(xb) ≤ 1 and 0 ≤ R(xb, yb) ≤
+
+M ,0 ≤ Zb = (1 + γ s(xb))R(xb, yb) ≤ (1 + γ )M . (17) Each Zb lies in an interval of length (1 + γ )M. Since the Zb
+
+are independent, Hoeffding’s inequality [64] applied to the sample mean gives Pr 
+
+(∣ ∣∣ ˆJrisk − E[Z1]
+
+∣∣∣ ≥ ε
+
+)
+
+≤ 2 exp 
+
+( −2B2ε2
+
+B · ((1 + γ )M )2
+
+)
+
+= 2 exp 
+
+( −2Bε2
+
+(1 + γ )2M 2
+
+)
+
+. (18) Replacing E[Z1] by Jrisk (πθ ) yields Eq. 15. □
+
+The concentration bound shows that the empirical esti-mator converges at rate O(1 /√B) with a constant that degrades gracefully in γ and M. For numerical stability, one may optionally normalize severity scores within a batch or use a centered version s′(x) = s(x) − ¯ s. The choice should be reported explicitly because it affects whether the method is interpreted as pure reweighting or reweighting-plus-rescaling. 
+
+5) SEVERITY-TILTED DISTRIBUTION VIEW 
+
+Proposition 2 (Tilted Distribution): Define Zγ = E[1 +
+
+γ s(x)] = 1 + γ E[s(x)] > 0 and the severity-tilted case distribution Dγ via 
+
+dDγ
+
+dD (x) = 1 + γ s(x)
+
+Zγ
+
+. (19) Then 
+
+Jrisk (πθ ) = Zγ E x∼Dγ 
+
+> y∼πθ(·| x)
+
+[R(x, y)]. (20) 
+
+Proof: The density ratio in Eq. 19 is nonnegative, and 
+
+∫ 1 + γ s(x)
+
+Zγ
+
+dD(x) = E[1 + γ s(x)] 
+
+Zγ
+
+= 1, (21) so Dγ is a valid probability distribution. Using the Radon–Nikodym relation, 
+
+Zγ Ex∼Dγ , y∼πθ (·| x)[R(x, y)] 
+
+=
+
+∫
+
+(1 + γ s(x)) 
+
+· Ey∼πθ (·| x)[R(x, y)] dD(x)
+
+= Ex∼D, y∼πθ
+
+[(1 + γ s(x)) R(x, y)]
+
+= Jrisk (πθ ). □
+
+Remark 2: Proposition 2 shows that RCRFT can be read in two exact ways: as severity-aware reward weighting under the original distribution, or as ordinary expected utility under a severity-tilted case distribution. The second view explains why the method naturally amplifies clinically important strata without changing the optimizer. 
+
+6) BINARY HIGH-RISK SPECIAL CASE 
+
+Many practical severity pipelines ultimately reduce to a binary triage indicator. 
+
+Theorem 3 (Binary Risk Case): Assume s(x) = 1H (x) for an event H with pH = Pr (H ) ∈ (0 , 1). Define μH (πθ ) =
+
+Eπθ [R | H ] and μL (πθ ) = Eπθ [R | H c]. Then 
+
+Jrisk (πθ ) = (1 − pH )μL (πθ ) + (1 + γ )pH μH (πθ ). (22) Consequently, if μL (π1) = μL (π2), then 
+
+Jrisk (π1) − Jrisk (π2) = (1 + γ )pH
+
+(μH (π1) − μH (π2)).
+
+(23) 
+
+Proof: Because s(x) = 1H (x), 
+
+Jrisk (πθ ) = E[(1 + γ 1H (x)) R(x, y)]
+
+= E[R] + γ E[1H (x)R(x, y)] .
+
+Applying the law of total expectation, 
+
+E[R] = pH μH (πθ ) + (1 − pH )μL (πθ ),
+
+E[1H (x)R(x, y)] = pH μH (πθ ).
+
+Summing these gives Eq. 22. Subtracting Eq. 22 applied to 
+
+π2 from that applied to π1, and using μL (π1) = μL (π2), the low-risk terms cancel and Eq. 23 follows. □
+
+Remark 3: Theorem 3 gives a direct justification for reporting high-risk subset tables. In the binary triage limit, after low-risk behavior is controlled, the high-risk conditional utility tables are the exact quantities that determine the objective ranking. 
+
+7) AVERAGE-RISK TRADE-OFF THRESHOLD 
+
+Theorem 4 (Preference Threshold): Let π1 and π2 be two policies and define 
+
+1μ = Eπ1 [R] − Eπ2 [R],1c = Cov π1 (s, R) − Cov π2 (s, R). (24) Then the centered objective difference satisfies 
+
+Jc(π1) − Jc(π2) = 1μ + γ 1 c. (25) If 1μ1c < 0, there exists a unique threshold 
+
+γ ⋆ = − 1μ
+
+1c
+
+> 0 (26) such that Jc(π1) = Jc(π2) when γ = γ ⋆. Moreover: if 1c > 0, then Jc(π1) > Jc(π2) for every γ > γ ⋆; if 1c < 0, then 
+
+Jc(π1) > Jc(π2) for every γ < γ ⋆. 
+
+> VOLUME 14, 2026 115487 Y. Su, P. Wang: Severity Matters: RCRFT for Clinically Aligned Medical VLMs
+
+Proof: See Section V-I. □
+
+Remark 4: Theorem 4 converts an intuitive trade-off into a precise statement: a policy with slightly lower average utility can still be preferred once γ is large enough, provided its severity–utility covariance is sufficiently better. This is the cleanest formal justification for why a risk-sensitive method may legitimately prefer a different operating point from a benchmark-average method. 
+
+> 8) EDIT PROPERTIES
+
+The following results characterize when slot-aware edits are guaranteed to improve the objective. 
+
+Proposition 3 (Edit Monotonicity): If the edit gain satis-fies R(x, ˜y) − R(x, y) ≥ η d(˜y, y) for all ( x, y), then Jedit (πθ ) ≥
+
+Jrisk (πθ ). More precisely, if there exists S with Pr (S) > 0 such that G(x, y) ≥ δ > 0 on S and the edit operator is applied only on S, then 
+
+Jedit (πθ ) − Jrisk (πθ ) ≥ ρ Pr( S) δ. (27) 
+
+Proof: Define G(x, y) = R(x, ˜y) − R(x, y) − ηd(˜y, y). The edit contribution in Eq. 6 is ρ E[G]. Splitting the expectation over S and its complement Sc:
+
+E[G] = E[G1S ] + E[G1Sc ]. (28) By the premise, G(x, y) ≥ δ on S, so 
+
+E[G1S ] ≥ δ Pr( S). (29) Since the edit operator leaves samples in Sc unchanged, G =
+
+0 on Sc, giving E[G1Sc ] = 0. Multiplying by ρ yields the stated lower bound. □
+
+Corollary 1 (Monotone Edit Gain Under Non-Negative Gain Filtering): If edits are applied only when G(x, y) =
+
+R(x, ˜y) − R(x, y) − η d(˜y, y) ≥ 0, then Jedit (πθ ) ≥ Jrisk (πθ ). If the inequality is strict on a set of positive probability and 
+
+ρ > 0, then Jedit (πθ ) > Jrisk (πθ ). 
+
+Proof: Under the stated condition, G(x, y) ≥ 0 almost surely, so E[G] ≥ 0. From Eq. 6, Jedit (πθ ) = Jrisk (πθ ) +
+
+ρE[G] ≥ Jrisk (πθ ). If G > 0 on a set of positive probability, then E[G] > 0, and the strict inequality follows for ρ > 0. □
+
+> 9) THRESHOLDED EDIT SELECTION
+
+Theorem 5 (Thresholded Edit Improvement): Let G(x, y) =
+
+R(x, ˜y)−R(x, y)−ηd(˜y, y) be the true edit gain, and let ̂ G(x, y)be an estimated edit gain satisfying 
+
+|̂G(x, y) − G(x, y)| ≤ ε for all ( x, y). (30) Fix a threshold τ > ε and apply edits only on 
+
+Sτ = { (x, y) :̂ G(x, y) ≥ τ }. (31) Then 
+
+Jedit (πθ ) ≥ Jrisk (πθ ) + ρ Pr( Sτ )( τ − ε). (32) In particular, the edit contribution is nonnegative and strictly positive whenever Pr( Sτ ) > 0. 
+
+Proof: See Section V-K. □
+
+> 10) ROBUSTNESS TO PROXY REWARD ERROR
+
+Proposition 4 (Proxy Reward Stability): Suppose a proxy reward ˜R satisfies 
+
+|˜R(x, y) − R(x, y)| ≤ ε for all ( x, y). (33) Define the proxy objective ˜Jrisk (πθ ) = E[(1 + γ s(x)) ˜R(x, y)].Then 
+
+∣∣˜ Jrisk (πθ ) − Jrisk (πθ )∣∣ ≤ (1 + γ )ε. (34) If in addition the edit objective is evaluated with the same proxy reward and the drift term d(˜y, y) is unchanged, then 
+
+∣∣˜ Jedit (πθ ) − Jedit (πθ )∣∣ ≤ ((1 + γ ) + 2ρ)ε. (35) 
+
+Proof: See Section V-J. □
+
+Remark 5: Proposition 4 gives a stability guarantee of a different kind from a validity certificate: if the proxy approximates the intended utility uniformly well, then the optimization target cannot drift by more than a controlled amount, with a constant that is linear in γ and ρ.
+
+> F. TRAINING ALGORITHM
+
+RCRFT is compatible with existing group-based RL meth-ods [65], [66]: the optimizer, rollout process, and reference policy remain unchanged; only the reward supplied to the update is replaced by the risk-calibrated utility Eq. 1 augmented by the edit-improvement term. This makes ablation comparisons against vanilla RL clean, since the only variable is the objective. The full procedure is given in Algorithm 1; the dominant runtime cost remains rollout generation and reward evaluation, with severity lookup and structured editing adding overhead that is linear in group size and does not alter the asymptotic training loop. 
+
+> IV. EXPERIMENTS AND RESULTS
+> A. EXPERIMENTAL SETUP
+> 1) DATASETS
+
+We conduct experiments on three evaluation settings. For in-distribution training and evaluation we use MIMIC-CXR [67], containing over 377,110 chest radiographs from 227,835 studies. For cross-dataset transfer we use IU X-Ray [68], a smaller collection of 7,470 chest radiographs. We also evaluate on an out-of-distribution institutional site (OOD-Hospital) to assess generalization beyond the training distribution. Visual grounding follows the bounding-box protocol of [10] and [12], covering both anatomical landmarks and CheXpert-derived abnormality regions. 
+
+> 2) TASKS
+
+We evaluate RCRFT on two clinically relevant tasks. (1) Chest X-ray Report Generation : given a frontal CXR, the model generates a free-text clinical report consisting of a Findings section (per-observation descriptors with laterality and severity qualifiers) and an Impression section (synthesized diagnostic summary). This task exercises the textual quality ( rtext ) and  
+
+> 115488 VOLUME 14, 2026 Y. Su, P. Wang: Severity Matters: RCRFT for Clinically Aligned Medical VLMs
+
+Algorithm 1 Risk-Calibrated Reinforcement Fine-Tuning (RCRFT) 
+
+Require: initial policy πθ , dataset D, severity scorer s(·), hyperparameters γ , ρ, η, τ, {λ•} 
+
+> 1:
+
+for each mini-batch of cases x ∼ D do  
+
+> 2:
+
+Sample a group of outputs {yi}Gi=1 from πθ (· | x) 
+
+> 3:
+
+Retrieve severity score s(x) 
+
+> 4:
+
+for each sample yi do  
+
+> 5:
+
+if slot-aware edits enabled then  
+
+> 6:
+
+For each slot k ∈ Sslot , estimate ̂ Gk (x, yi) via Eq. 5  
+
+> 7:
+
+Apply slot-k edit only if ̂ Gk (x, yi) ≥ τ ; let ˜yi be the resulting response ( ˜yi = yi if no slot fires)  
+
+> 8:
+
+Compute R(x, yi) and R(x, ˜yi) via Eq. 1, and the realized edit gain G(x, yi) = R(x, ˜yi) − R(x, yi) −
+
+η d(˜yi, yi) 
+
+> 9:
+
+else  
+
+> 10:
+
+Compute R(x, yi) via Eq. 1 and set G(x, yi) = 0 
+
+> 11:
+
+end if  
+
+> 12:
+
+Form per-sample reward ri = (1 + γ s(x)) R(x, yi) +
+
+ρ G(x, yi) 
+
+> 13:
+
+end for  
+
+> 14:
+
+Compute group-relative advantages Ai from {ri}, then update πθ by ascending ∑ 
+
+> i
+
+Ai ∇θ log πθ (yi | x)(gradient on the original yi; the edit enters only through 
+
+Ai) 
+
+> 15:
+
+end for 
+
+clinical consistency ( rcli ) reward components, as well as cali-bration quality ( rcal ) through uncertainty-qualified language. (2) Visual Grounding : given a CXR and a natural-language phrase naming an anatomical region or radiological finding, the model predicts a bounding box localizing the referenced region. This task exercises grounding fidelity ( rgrd ) and is assessed with mAP @0 .5 decomposed into anatomy and abnormality categories. Both tasks are evaluated jointly under severity-stratified reporting, enabling comparison across the four clinical risk strata derived from CheXpert label severity. 
+
+3) IMPLEMENTATION DETAILS 
+
+RCRFT is built on RadVLM-8B [10] with LoRA [69] adapters on attention and output projections in both the language model and vision encoder; severity labels are derived from CheXpert [15] and partitioned into four strata (Low, Medium, High, Critical). The risk weight γ ⋆ = 0.75 and edit strength ρ⋆ = 0.6 are selected via the sensitivity and landscape analyses (Figures 6 and 7); all remaining training settings are summarized in Table 4. All experiments use three random seeds and report mean ± standard deviation. 
+
+4) EVALUATION METRICS 
+
+For report quality evaluation, we use the following metrics. Let C denote the candidate report and S the reference.  
+
+> TABLE 4. Training configuration for RCRFT.
+
+ROUGE-L [55] (R-L) is the LCS-based F-measure :
+
+ROUGE-L = 2 Plcs Rlcs 
+
+Plcs + Rlcs 
+
+,
+
+Plcs = LCS( C, S)
+
+|C| , Rlcs = LCS( C, S)
+
+|S| . (36) BERTScore [56] (B-S) matches tokens via contextual embeddings; letting xcj and xsi denote normalized embeddings of candidate and reference tokens :
+
+PB = 1
+
+|C|
+
+∑
+
+> j
+
+max  
+
+> i
+
+x⊤ 
+
+> cj
+
+xsi ,
+
+RB = 1
+
+|S|
+
+∑
+
+> i
+
+max  
+
+> j
+
+x⊤ 
+
+> si
+
+xcj ,
+
+BERTScore F = 2PBRB
+
+PB + RB
+
+. (37) CheXbert F1 [59] (CXb) and RadGraph F1 [57] (RGF1) are label-set and entity-level F-measures, respectively. Let ˆL and 
+
+L∗ be the predicted and reference label or entity sets :
+
+F1 = 2 | ˆ L ∩ L∗|| ˆ L| + | L∗| . (38) GREEN [60] is an LLM-graded composite score penalizing clinically significant errors; RadCliQ [13] (RCQ) is a composite score defined as a linear combination of the above report-quality sub-scores. For visual grounding, we report mean average precision at IoU threshold 0 .5: mAP @0 .5 = 1
+
+|C|
+
+∑
+
+> c∈C
+
+AP c,
+
+AP c =
+
+∫ 10
+
+pc(r) dr , (39) where the matching criterion is IoU (ˆb, b∗) ≥ 0.5. We decom-pose mAP into anatomy-mAP and abnormality-mAP and additionally report phrase-level Phrase MS and Phrase Pad 
+
+scores. In addition, for risk-sensitive evaluation, we compute the stratified utility for each severity stratum k:
+
+¯Uk = 1
+
+|Dk |
+
+∑
+
+> i∈Dk
+
+R(xi, yi),
+
+k ∈ { Low, Med., High, Crit. }. (40)  
+
+> VOLUME 14, 2026 115489 Y. Su, P. Wang: Severity Matters: RCRFT for Clinically Aligned Medical VLMs
+
+The high-risk false-negative rate counts missed findings on cases in the combined High and Critical strata Dhigh :FN high =
+
+∑ 
+
+> i∈Dhigh
+
+1[eFN (xi, yi) > 0]
+
+|Dhigh | . (41) Calibration is measured by Expected Calibration Error [51], partitioning predictions into M equally-spaced confidence bins {Bm}:ECE =
+
+> M
+
+∑
+
+> m=1
+
+|Bm|
+
+n
+
+∣∣acc( Bm) − conf( Bm)∣∣. (42) The calibration unit is the per-finding presence decision. For each of the 14 CheXpert observations the model emits a presence probability, taken as the length-normalized sequence probability of the asserted finding span under the policy, and ECE uses M = 15 equal-width confidence bins over these per-finding probabilities, with an absent finding scored by the complement of its presence probability, pooled across the test reports rather than per sentence or per whole report. Abstention quality is the area under the accuracy–coverage curve obtained by withholding the least-confident per-finding decisions, so a higher value means that confidence ranks correct assertions above incorrect ones. Grounding phrases are calibrated separately, through the localization confidence of each predicted box, and are not pooled with the report-level findings. 
+
+> 5) BASELINES
+
+We compare against six model families. MedGemma-it [11] (27B) is a large general-purpose medical foundation model fine-tuned for clinical instruction-following; we evaluate it in a zero-shot report-generation setting. MAIRA-2 [12] (7B) is a radiology-specialist model that jointly performs grounding and report generation through a dedicated fusion architecture. 
+
+CheXagent-2 [70] (3B) is a compact CXR-specialist VLM trained with instruction tuning across multiple radiology sub-tasks. LLaVA-Rad [71] (7B) is a general-purpose VLM adapted to radiology via domain-specific SFT on curated report–image pairs. Qwen3-VL +RL [72] (8B) provides a size-matched non-radiology-specialist comparison: a strong general VLM post-trained with standard (severity-agnostic) RL. RadVLM / RadVLM +RL / RadVLM-Thinking +RL [10] (8B) are the SFT, standard-RL, and chain-of-thought-RL variants of our base model; RadVLM +RL 
+
+serves as the primary matched vanilla RL baseline, sharing architecture and training data with RCRFT and differing only in the absence of severity weighting, slot-aware edits, and the composite reward. 
+
+> 6) RadVLM BASELINE CONFIGURATIONS
+
+The RadVLM variants share a backbone and training data and differ only in how they are post-trained, as summarized in Table 5. RadVLM +RL is our primary matched baseline and differs from RCRFT only in severity weighting, slot-aware post-rollout edits, and the composite reward.  
+
+> TABLE 5. RadVLM baseline configurations. All variants share the RadVLM-8B base; SFT denotes supervised fine-tuning on report–image pairs.
+
+Evaluation Protocol and Baseline Provenance: All RCRFT and RadVLM variants are trained and evaluated on the official MIMIC-CXR v2.0.0 splits, with reports passed through the standard section parser that retains the Findings and Impression sections, de-identification-token normalization and lowercasing, and images resized to 512 × 512. Report decoding uses nucleus sampling with temperature 0 .7 and top-
+
+p0.9, and grounding uses greedy decoding, fixed across all of our own runs. Hyperparameters were selected on the validation split over γ ∈ [0 .25 , 1.25], ρ ∈ [0 .2, 1.0], learning rate in 
+
+{1, 2, 5} × 10 −5, and group size in {4, 8, 16 }; the remaining training budget is in Table 4, and each run uses a single eight-GPU A100 node. In the comparison tables, methods with a public checkpoint (RadVLM and its variants, MAIRA-2, CheXagent-2, LLaVA-Rad, MedGemma-it, Qwen3-VL) are re-run by us from their official public releases under this identical split, preprocessing, and decoding, whereas the task-specific report generators in the upper block of Table 6 are reported from their original papers on the same MIMIC-CXR test split. Because aggregate report scores are sensitive to tokenization and section extraction, we read cross-method differences at the level of trends rather than exact decimals, and the risk-stratified utilities and calibration in Table 10 are computed by us from released checkpoints under our unified taxonomy, which requires each model’s own outputs and confidences and therefore restricts that comparison to methods we could run end to end. 
+
+OOD-Hospital Cohort: The out-of-distribution site com-prises 1 ,184 de-identified frontal chest radiographs from a single institution distinct from MIMIC-CXR, acquired on different scanner hardware and exposure protocols, each with a paired clinical report. Stratification labels were assigned by the same CheXpert pipeline and spot-checked by a radiologist on the High and Critical subset. The cohort is used for evaluation only, never for training or model selection, under an institutional data-use approval with a waiver of consent for retrospective de-identified imaging, and all protected health information was removed before analysis. 
+
+> B. MAIN RESULTS
+
+Table 6 summarizes report-generation performance on MIMIC-CXR against three baseline families: task-specific radiology report generators, medical-domain foundation models, and open VLM backbones fine-tuned with standard or  
+
+> 115490 VOLUME 14, 2026 Y. Su, P. Wang: Severity Matters: RCRFT for Clinically Aligned Medical VLMs
+
+reasoning-augmented RL. RCRFT consistently outperforms the matched vanilla RL baseline across all seven metrics: ROUGE-L improves from 29.9 to 30.8 , BERTScore from 59.2 to 60.5 , RadGraph F1 from 25.8 to 27.3 , GREEN from 32.7 to 34.1 , and RadCliQ from 0.86 to 0.72 . The advantage persists against the strongest recent task-specific methods: relative to MG-RRG [42], which leads the peer-reviewed baselines on ROUGE-L (29.1) and BERTScore (57.6), RCRFT improves ROUGE-L by +1.7 and BERTScore by +2.9. The picture is non-uniform across metrics, how-ever, since different methods specialize: ChatCAD + [36] attains the second-highest CXb-micro (56.0), OaD [33] the second-highest GREEN (31.8) and CheXbert macro-F1 (33.3), and RGRG [31] the second-highest RadGraph F1 (25.6) thanks to its region-grounded design; RCRFT outperforms all of them on every column. RCRFT also outperforms RadVLM-Thinking +RL, a chain-of-thought-augmented RL variant, on all metrics despite using neither explicit reasoning traces nor a larger model, suggesting that risk calibration provides gains complementary to test-time reasoning strategies. Notably, RCRFT at 8B outperforms MedGemma-it at 27B on all report-quality metrics (ROUGE-L +14 .9, RadGraph F1 +15 .3), indicating that risk-aligned post-training can be more effective than parameter scaling alone for clinical reporting tasks. Table 7 reports visual grounding results. RCRFT improves anatomy mAP from 84.5 to 85.2 and abnormality mAP from 45.9 to 47.8 over vanilla RL, with corresponding gains in phrase-level metrics (Phrase MS : 87 .9 → 89 .3; Phrase Pad :63 .0 → 65 .1). Compared to the strongest peer-reviewed grounding baselines, RCRFT improves anatomy mAP over RGRG [31] (the strongest task-specific competitor at 83.8, consistent with its explicit region-grounded design) by +1.4, over OaD [33] by +2.1, and over MG-RRG [42] by +5.2; for abnormality localization the corresponding margins are 
+
++2.6, +3.0, and +5.8, respectively. The improvement is more pronounced for abnormality localization ( +1.9 mAP) than for anatomy ( +0.7 mAP), consistent with the hypothesis that severity-aware training emphasizes pathological findings associated with higher clinical risk. RadVLM-Thinking +RL trails vanilla RL on abnormality mAP (43 .9 vs. 45 .9), suggesting that chain-of-thought reasoning alone, without explicit severity alignment, may compete with grounding optimization during training. Figure 1 provides a multi-perspective view of the model landscape. Panel A places RCRFT on the Pareto front of clinical utility versus safety score, outperforming all comparison models including MedGemma-it at 27B parameters, indicating that the gains are not attributable to model scale. Panel B presents a cumulative ablation waterfall showing how the risk-weighted utility Jrisk degrades as components are removed sequentially from Full RCRFT (0 .77) down to SFT (0 .21), consistent with the contribution ordering observed in the leave-one-out analysis. The cross-metric Pearson correlation matrix (panel D) reveals strong within-cluster correlations among text-generation metrics (r = 0.72–0 .93) and grounding metrics ( r = 0.87), with only moderate between-cluster correlation ( r = 0.44–0 .67), supporting the use of a composite reward that jointly optimizes complementary objectives. 
+
+> C. FRAMEWORK ANALYSIS
+> 1) RISK-SENSITIVE ANALYSIS
+> a: SEVERITY-STRATIFIED GAINS
+
+Tables 8 and 9 establish the principal risk-sensitive findings. While the overall utility gain is moderate (0 .76 → 0.78), the distribution of gains across severity strata is the defining result: RCRFT improves Low-stratum utility by only +0.01 (from 0 .78 to 0 .79), High-stratum utility by +0.09 (from 0.65 to 0 .74), and Critical-stratum utility by +0.21 (from 0.53 to 0 .74), so that the gain at the most clinically consequential end of the spectrum is more than twenty times the gain on routine cases. Examining the SFT-to-vanilla-RL transition reveals that standard RL improves over SFT at all strata by a near-uniform +0.05– +0.06, precisely the pattern expected when the covariance term Cov (s, R) is zero (γ = 0). RCRFT specifically amplifies gains where the severity-reward covariance is largest, consistent with the theoretical decomposition in Section III showing that Jrisk 
+
+rewards policies that align performance gains with clinical importance. Calibration also improves structurally: ECE drops from 0 .072 to 0.041 (a 43% relative reduction) and abstention quality rises from 0 .68 to 0.79 , indicating that RCRFT simultaneously achieves better high-severity sensitivity and better-calibrated uncertainty estimates. 
+
+> b: SUBGROUP BEHAVIOR AND CROSS-SITE TRANSFER
+
+Figure 2 examines the severity-stratified behavior in detail. Panel A shows that while all three models degrade with severity, RCRFT’s degradation is substantially slower: vanilla RL drops by 0 .12 from the High to Critical stratum (0 .65 →
+
+0.53), whereas RCRFT maintains nearly constant performance at both strata (0 .74 → 0.74). Panel C confirms that per-stratum FN-rate reductions relative to vanilla RL are strictly monotonic with severity ( −0.012 Low, −0.026 Medium, 
+
+−0.041 High, −0.056 Critical), with the Critical reduction 4.7× larger than the Low reduction; this gradient directly reflects the severity weighting mechanism, in which higher-severity cases generate larger gradient corrections through the γ sk (R − ¯ R) term. Panel B shows that the high-risk utility advantage persists under distribution shift across all three evaluation sites ( +0.09 on MIMIC-CXR, +0.08 on IU X-Ray, +0.08 on OOD-Hospital), demonstrating that the severity-calibrated policy generalizes beyond training-distribution characteristics. 
+
+> c: RISK-STRATIFIED COMPARISON WITH RECENT SOTA
+
+Table 10 extends the comparison to a direction that aggregate text-similarity metrics cannot capture: risk-stratified clinical utility and safety-critical error metrics evaluated on the same MIMIC-CXR test split under our unified severity  
+
+> VOLUME 14, 2026 115491
+
+Y. Su, P. Wang: Severity Matters: RCRFT for Clinically Aligned Medical VLMs 
+
+TABLE 6. Report-generation benchmark results on MIMIC-CXR. Best result per column in bold, second-best underlined. The lower block of foundation models, open VLM backbones, and the RadVLM and RCRFT variants is re-run by us under a unified split and preprocessing, while the upper block of task-specific generators is reported from the original papers on the same MIMIC-CXR test split. 
+
+TABLE 7. Grounding benchmark results on MIMIC-CXR. Anatomy and Abnorm. are mAP @0 .5 for anatomical and abnormality classes; Phrase MS 
+
+and Phrase Pad are phrase-grounding scores. Because grounding requires per-image predictions, all methods in this table are re-run by us from released checkpoints under a unified detection protocol on the same test split. 
+
+taxonomy. Even the strongest recent methods exhibit the characteristic risk-dilution signature identified in Section III: aggregate utility scales with model capacity and training 
+
+TABLE 8. Severity-stratified clinical utility on MIMIC-CXR (mean, 3 seeds). 
+
+TABLE 9. Calibration and safety evaluation on MIMIC-CXR. 
+
+maturity, but Critical-stratum utility for the peer-reviewed baselines tops out at 0 .52 (HReMRG-MR [40] and OaD [33]), and high-severity false-negative rates remain at 0 .081 or higher even for the calibration-aware competitors. RCRFT breaks this plateau, improving Critical utility by +0.22 over the strongest peer-reviewed baseline (0 .52 → 0.74) and 
+
+115492 VOLUME 14, 2026 Y. Su, P. Wang: Severity Matters: RCRFT for Clinically Aligned Medical VLMs        
+
+> FIGURE 1. Trade-off analysis, cumulative ablation, and metric structure. (A) Multi-model Pareto front of clinical utility vs. safety score. (B) Cumulative ablation waterfall. (C) Reward weight sensitivity as the λtext :λcli :λgrd balance varies; shaded region indicates the tested weight-balance range. (D) Cross-metric Pearson correlation matrix under RCRFT.
+
+reducing FN high from 0 .081 (OaD) to 0.056 , a 31% relative reduction in safety-critical errors over the best calibration-leaning competitor. The gap between RCRFT and prior SOTA widens monotonically with severity: +0.04 at All, 
+
++0.12 at High, and +0.22 at Critical, a gradient that mirrors the theoretical prediction from the severity–reward covariance decomposition (Proposition 1) that risk-calibrated objectives preferentially improve performance where clinical consequences are largest. Calibration also separates RCRFT from prior work: ECE under RCRFT (0 .041) is below the best task-specific competitor EGGCA-Net [39] (0 .056), whose eye-gaze-guided alignment is explicitly designed for radiologist-aligned attention but, as a supervised objective, lacks the reward-side severity coupling that makes calibration an optimization target rather than a post-hoc objective. We also note that within the peer-reviewed baselines no single method excels across all six columns: HReMRG-MR and OaD lead Critical-stratum utility but HReMRG-MR has the worst ECE (0 .128) and OaD has the lowest FN high ; EGGCA-Net leads on ECE and abstention quality but is mid-tier on aggregate; MG-RRG leads on aggregate utility but lags on calibration and high-severity recall. RCRFT is the only model that simultaneously occupies the top of every column. 
+
+d: CALIBRATION STRUCTURE 
+
+Figure 3 examines the calibration structure in detail. The reliability diagram (panel A) shows that RCRFT’s predicted      
+
+> TABLE 10. Risk-stratified clinical utility and safety-critical error comparison on MIMIC-CXR. Because the per-case utility and the calibration columns require each model’s own outputs and confidences, every method in this table is re-run by us from a released checkpoint under a unified severity taxonomy (L/M/H/C =Low/Medium/High/Critical).
+
+confidence more closely tracks empirical accuracy across the confidence bins; vanilla RL systematically over-predicts confidence in the mid-range bins (0 .3–0 .6), a hallmark of reward-hacking behavior under uncalibrated RL [73], [74], which RCRFT substantially reduces via the explicit calibration reward term rcal . The confidence mass distribution (panel B) reveals that RCRFT allocates more probability mass to the extreme confidence bins, suggesting it has learned to make more decisive predictions on clear cases and more conservative     
+
+> VOLUME 14, 2026 115493 Y. Su, P. Wang: Severity Matters: RCRFT for Clinically Aligned Medical VLMs
+> FIGURE 2. Severity-stratified and cross-site analysis. (A) Clinical utility across four severity strata for SFT, vanilla RL, and RCRFT. (B) High-risk utility across three evaluation sites (MIMIC-CXR, IU X-Ray, OOD-Hospital). (C) Per-stratum FN-rate reduction relative to vanilla RL.
+> TABLE 11. Leave-one-out ablations on MIMIC-CXR. Metric: risk-weighted utility ( Jrisk on the test set).
+
+predictions on ambiguous ones. The coverage–accuracy curve (panel C) shows RCRFT maintains higher accuracy at every abstention threshold, with the advantage most pronounced in the high-coverage regime, which is the operating range most relevant to clinical report screening workflows where abstaining is costly. 
+
+2) SEVERITY-SOURCE, SCORER, AND INJECTION-LEVEL ANALYSIS 
+
+a: ROBUSTNESS OF RISK-STRATIFIED GAINS TO THE EVALUATION LABEL SOURCE 
+
+A potential confound is that the severity-stratum gains reflect the CheXpert labeler shared by training and evaluation rather than a genuine policy improvement. To separate the two, we hold the trained models fixed and re-derive the evaluation strata under three additional label sources that were not used as the training stratifier, namely CheXbert, NegBio, and a radiologist-annotated High/Critical subset, alongside the original CheXpert reference (Table 12). RCRFT retains a positive Critical-stratum advantage over the baseline under every label source, and the advantage remains substantial under the fully independent radiologist annotations. The CheXpert(ref) row reproduces the main risk-stratified numbers, and the RCRFT Critical advantage shrinks from 0.21 under CheXpert to about 0 .15 under NegBio yet stays clearly positive, which indicates that the advantage is not an artifact of using a single shared labeler to define both the training severity and the evaluation strata.           
+
+> TABLE 12. Risk-stratified utility and severe-case false-negative rate under four evaluation label sources (mean ±std, 3 seeds). The radiologist subset comprises 312 dual-annotated High/Critical reports, so its ‘‘All’’ column is an H/C-mixture aggregate rather than the full-test ‘‘All’’.
+> TABLE 13. Rule-based versus learned severity scorer within RCRFT on MIMIC-CXR, all else fixed (mean ±std, 3 seeds). The learned triage scorer is trained on the rule-based labels and then frozen; the Spearman column reports its rank correlation with the rule-based severities, with mean ±std over three independently trained heads.
+
+b: RULE-BASED VERSUS LEARNED SEVERITY SCORER 
+
+To test whether the improvements depend on a single hand-crafted scorer, we replace the rule-based CheXpert scorer with a learned triage scorer inside RCRFT, a lightweight head that predicts s(x) from the input image, holding the backbone, data, and reward structure fixed (Table 13). The learned scorer tracks the rule-based teacher closely across all six metrics, with a Spearman rank correlation of about 0 .79 against the rule-based severities, but it does not beat its teacher on any column. Because performance is preserved when the rule-based scorer is replaced by a learned scorer distilled from it, the framework is robust to the parameterization of the severity scorer under a fixed severity ontology. 
+
+c: WHERE TO INJECT SEVERITY WEIGHTING 
+
+Severity weighting can in principle be applied at the inference, loss, or objective level, and in prior comparisons these choices are typically confounded with backbone and scale. On a      
+
+> 115494 VOLUME 14, 2026 Y. Su, P. Wang: Severity Matters: RCRFT for Clinically Aligned Medical VLMs
+> FIGURE 3. Calibration and reliability analysis on MIMIC-CXR. (A) Reliability diagram comparing RCRFT and vanilla RL against the perfect-calibration diagonal. (B) Confidence mass distribution across prediction probability bins. (C) Coverage–accuracy curve at varying abstention thresholds.
+> TABLE 14. Severity-weighting injection level on a matched RadVLM-8B backbone on MIMIC-CXR (mean ±std, 3 seeds). The backbone, data, and compute budget are identical across rows.
+
+common RadVLM-8B backbone with matched data and compute, we compare a vanilla-RL model that applies no severity weighting, the same model with severity introduced post hoc by an inference threshold or during training by loss reweighting, and the full objective-level formulation used by RCRFT (Table 14). The effect is non-monotone across injection points, so no single post-hoc adjustment recovers the full benefit. Inference-thresholding cuts FN high 
+
+and lifts High and Critical utility but loses a little on All and worsens calibration, while loss-reweighting raises High utility and recovers ECE yet leaves Critical short and trails on All; only end-to-end policy-gradient injection (RCRFT) improves all five quantities jointly. Because backbone, data, and compute are held constant, the differences reflect where and how severity enters the optimization rather than model scale. 
+
+d: SENSITIVITY TO THE SEVERITY WEIGHTS 
+
+A natural concern is whether the risk-stratified gains depend on the exact s(f ) values in Table 2. We therefore retrain RCRFT under four alternative weighting schemes that keep the stratum ordering but change the numeric weights, namely a uniform random jitter of ±0.1 per finding, a coarse two-level scheme that collapses the weights to high-risk versus the rest, a compressed scheme that pulls every weight toward 0 .5, and a steeper scheme that sharpens the contrast (Table 15). The Critical-stratum utility stays within [0 .71 , 0.75] and the severe-case false-negative rate within [0 .056 , 0.062] across all schemes, so even the weakest perturbation retains most         
+
+> TABLE 15. Sensitivity of RCRFT to the severity-weight scheme on MIMIC-CXR (mean ±std, 3 seeds); the calibrated default is the scheme of Table 2.
+> TABLE 16. Reference-free editor ablation within RCRFT on MIMIC-CXR (mean ±std, 3 seeds). The reference-free editor uses no reference label or confidence.
+
+of the +0.21 Critical gain over the matched vanilla baseline. The gains track the stratum structure rather than the precise weights, which indicates that the construction in Table 2 need only be ordinally correct. 
+
+e: REFERENCE-FREE EDITING 
+
+Because the slot-aware editor consults reference-derived labels and confidences during training, we ablate that access to confirm that the gains are not an artifact of reference information (Table 16). We compare RCRFT with edits disabled, with a reference-free editor that fires only on the model’s own slot-level self-consistency and uses no reference label or confidence, and with the full editor. The reference-free editor recovers most of the benefit, reaching Critical utility 0.720 against 0 .740 for the full editor and 0 .701 with edits disabled, and FN high of 0 .063 against 0 .056 and 0 .071. The reference-derived inputs therefore contribute a modest increment, and the bulk of the severe-case improvement comes from the severity-weighted objective rather than from privileged information inside the editor.      
+
+> VOLUME 14, 2026 115495 Y. Su, P. Wang: Severity Matters: RCRFT for Clinically Aligned Medical VLMs
+> TABLE 17. Paired bootstrap 95% confidence intervals and p-values for the RCRFT −vanilla-RL difference per stratum on MIMIC-CXR (10 ,000 resamples).
+> f: STATISTICAL SIGNIFICANCE OF THE RISK-STRATIFIED GAINS
+
+To test whether the stratified improvements are statistically reliable rather than seed noise, we compute paired bootstrap 95% confidence intervals and p-values for the RCRFT minus vanilla-RL difference on the shared test cases, resampling cases with replacement 10 ,000 times within each stratum (Table 17). The High and Critical gains and the reduction in FN high are significant with intervals well clear of zero, despite the smaller Critical-stratum sample, whereas the aggregate All gain is small yet still significant. This matches the intended profile of the method, in which the largest and most reliable improvements fall on the highest-risk cases. 
+
+> 3) ABLATION STUDY
+> a: COMPONENT CONTRIBUTIONS
+
+Table 11 quantifies each component’s contribution via leave-one-out analysis. Removing severity weighting ( γ =
+
+0) collapses Jedit in Eq. 6 to E[R] + ρE[G] (the edit-augmented mean utility without severity–reward coupling), eliminating the Cov (s, R) alignment term and yielding the largest performance drop of 0 .08 (0 .77 → 0.69). This observation is consistent with the theoretical decomposition, suggesting that the covariance term plays a central role in distinguishing risk-calibrated from standard RL. Slot-aware edits provide the second-largest gain ( −0.06 when removed), reflecting their role in correcting high-severity clinical finding errors during post-rollout processing. The grounding ( −0.04) and calibration ( −0.03) terms yield smaller but consistent improvements, indicating that all components contribute complementary aspects of clinical performance. The contribution ordering (severity > slot edits 
+
+> grounding > calibration) is consistent across both leave-one-out analysis and the cumulative waterfall in Figure 1B, providing convergent evidence for the dominant role of severity weighting. 
+
+> b: MODEL POSITIONING AND REWARD ROBUSTNESS
+
+The multi-model Pareto front (Figure 1A) places RCRFT on the frontier of the clinical utility versus safety trade-off space, outperforming all comparison models including MedGemma-it at 27B parameters, indicating that the gains are not attributable to model scale. Reward sensitivity analysis (panel C) shows stable performance within the central region of the selected weights ( λtext = 0.4, λcli = 0.3, 
+
+λgrd = 0.2), with utility varying by less than 0 .03, suggesting that the framework does not require precise weight tuning. The cross-metric Pearson correlation matrix (panel D) reveals strong within-cluster correlations among text-generation metrics and grounding metrics, but only moderate cross-cluster correlations, supporting the use of a composite reward that jointly optimizes complementary objectives. 
+
+> c: EDIT GRANULARITY
+
+Slot-aware edits (risk-weighted utility: 0 .77) outperform sentence-level edits (0 .72) by 0 .05, exceeding the individual contributions of both calibration and grounding in the ablation analysis. This result is consistent with the edit-monotonicity guarantee in Proposition 3, as restricting edits to localized clinical spans reduces drift cost d(˜y, y) and increases the likelihood of positive net edit gain G(x, y). In contrast, sentence-level edits incur higher drift by modifying adjacent correct content, which offsets reward improvements and reduces overall benefit. 
+
+> 4) TRAINING DYNAMICS AND SENSITIVITY
+> a: TRAINING TRAJECTORIES
+
+Figure 4 tracks the four primary metrics over 500 training steps. RCRFT and vanilla RL follow similar trajectories during the first ≈50 steps, before sufficient high-severity signal is encountered to induce divergence. Thereafter, RCRFT improves more rapidly in both overall utility (panel A) and high-risk utility (panel B), with the gap widening around step 
+
+≈220 following slot-aware edit activation. A brief transient dip is observed at this point, consistent with the perturbation introduced by post-rollout edits prior to policy adaptation. At convergence, the overall utility gap (0 .78 vs. 0 .76) is modest compared to the high-risk subset gap (0 .74 vs. 0 .65), which is 4.5× larger, indicating that improvements concentrate on high-severity cases. The severe-case FN rate (panel C) continues to decline for RCRFT after vanilla RL plateaus, reaching 
+
+≈0.056 versus ≈0.098, suggesting that the gains cannot be explained by overall quality improvements alone. 
+
+> b: COMPONENT DYNAMICS
+
+Figure 5 decomposes reward dynamics across six diagnostic dimensions. The safety score (panel B) increases more rapidly than other components throughout training, consistent with amplified gradients from high-severity cases under severity weighting. Following slot-aware edit activation at step ≈220, clinical consistency (panel A) exhibits accelerated growth relative to report quality, reflecting the targeted correction of clinically relevant errors. Gradient norm analysis (panel D) shows smooth monotone decay across all components, with no instability observed at edit activation or later stages, indicating stable optimization under the composite objective. The rolling inter-component Pearson correlation (panel E) evolves from variable early behavior to stable positive values after step 
+
+≈400, suggesting a transition from early competition to coordinated optimization across reward components.       
+
+> 115496 VOLUME 14, 2026 Y. Su, P. Wang: Severity Matters: RCRFT for Clinically Aligned Medical VLMs
+> FIGURE 4. Training dynamics over 500 update steps for SFT (gray dashed), vanilla RL (gold), and RCRFT (teal). Shaded bands: ±1 std across three seeds. (A) Overall multimodal utility. (B) High-risk subset utility. (C) Severe-case false-negative rate. (D) Grounding accuracy (mAP).
+> FIGURE 5. Component-wise reward analysis during training. Dotted vertical line: slot-aware edit activation (step ≈220). (A) Report quality (dark blue) and clinical consistency (green). (B) Grounding fidelity (teal) and safety score (orange). (C) Calibration utility. (D) Gradient norms for all four reward components. (E) Rolling inter-component Pearson correlations. (F) Per-component reward variance.
+
+c: HYPERPARAMETER SENSITIVITY 
+
+Figure 6 analyzes sensitivity to the two primary hyperparam-eters. The γ sweep (panel A) shows a peak at γ = 0.75 for high-risk utility, with performance degrading for larger values: over-weighting high-severity cases reduces moderate-severity performance, leading to lower overall utility despite marginal gains in high-risk sensitivity. This non-monotonic behavior is consistent with the objective decomposition, where excessive emphasis on the Cov (s, R) term may distort the balance with mean utility. The ρ sweep (panel B) exhibits a broader peak at 
+
+ρ = 0.6 with gradual degradation beyond this point, indicating that edit strength is less sensitive than risk weighting. Figure 7 further supports this behavior: fixed-γ cross-sections (panel B) peak near ρ⋆ ≈ 0.6, while fixed-ρ cross-sections (panel C) peak near γ ⋆ ≈ 0.75, suggesting approximate separability and a stable operating region. 
+
+D. CLINICAL FAILURE ANALYSIS 
+
+To complement quantitative benchmarks, we conduct a strati-fied qualitative analysis on 50 cases from the MIMIC-CXR test set, including 20 severe true positives, 15 severe misses (where vanilla RL omits a critical finding present                              
+
+> VOLUME 14, 2026 115497 Y. Su, P. Wang: Severity Matters: RCRFT for Clinically Aligned Medical VLMs
+> FIGURE 6. Hyperparameter sensitivity of RCRFT. (A) Effect of risk weight γon overall utility (teal) and high-risk utility (dark). (B) Effect of edit strength ρ
+> on the same two metrics. (C) Two-dimensional high-risk utility landscape over ( γ , ρ ); star marks the selected operating point ( γ⋆, ρ ⋆).
+> FIGURE 7. Two-dimensional hyperparameter landscape for high-risk utility. (A) Contour heatmap over ( γ , ρ ) space; star marks the selected operating point ( γ⋆, ρ ⋆)≈(0 .75 ,0.60). (B) Fixed-γcross-sections ( γ∈ { 0.25 ,0.5,0.75 ,1.0,1.25 }) as a function of ρ; dashed line at ρ⋆=0.6. (C) Fixed-ρ
+> cross-sections as a function of γ; dashed line at γ⋆=0.75.
+
+in the reference), and 15 ambiguous cases. Two annotators independently reviewed each output blind to model identity, classifying it as correct , hedged (finding acknowledged with uncertainty qualification), or omitted (annotation protocol detailed below). 
+
+1) ANNOTATION PROTOCOL AND SCHEMA 
+
+Both annotators had prior familiarity with reading and interpreting radiology reports, and each independently coded every output using the fixed failure taxonomy below before any discussion. The taxonomy underlies the case-level outcome labels (correct, hedged, omitted) reported below, where correct 
+
+denotes the absence of any failure category. We adopted an independent-annotation-then-adjudication procedure. The two annotators first coded all 50 cases in isolation, then jointly adjudicated every disagreement to reach a consensus label, and any residual tie was resolved by a senior adjudicator with clinical reporting experience. Inter-annotator agreement before adjudication was κ = 0.81, indicating substantial concordance on the failure categories. Each output is coded against a fixed failure taxonomy, and an output exhibiting none of the categories below is coded as correct.  
+
+> •
+
+Missed critical finding denotes a critical finding present in the reference but absent from the output.  
+
+> •
+
+False critical finding denotes a critical finding asserted in the output but unsupported by the reference.  
+
+> •
+
+Severity misranking denotes reported findings ordered with incorrect relative clinical urgency.  
+
+> •
+
+Grounding error denotes a finding attributed to the wrong anatomy, side, or region.  
+
+> •
+
+Hedging or uncertainty error denotes a clear finding that is over-qualified or an ambiguous one stated as definitive. This qualitative analysis is intended to be exploratory and illustrative of the behavioral differences between the two policies rather than a definitive statistical claim, given the limited sample of N = 50 cases. 
+
+a: CASE-LEVEL OUTCOME RATES 
+
+Figure 8A summarizes outcome rates across categories. On severe true positives, RCRFT achieves 95% correct (19/20)  
+
+> 115498 VOLUME 14, 2026 Y. Su, P. Wang: Severity Matters: RCRFT for Clinically Aligned Medical VLMs
+
+compared to 85% (17/20) for vanilla RL, where remaining errors are primarily over-qualification of incidental findings. On severe-miss cases (Figure 8B), RCRFT correctly identifies the critical finding in 11 of 15 cases and hedges in the remaining 4, while vanilla RL omits the finding in 9 of 15 cases (60% omission rate). On ambiguous cases, RCRFT appropriately qualifies uncertainty in 12 of 15 cases (80%) versus 53% (8/15) for vanilla RL, which more frequently produces unsupported definitive impressions. 
+
+> b: REPRESENTATIVE CASE ANALYSIS
+
+Figures 8C–D present two representative radiographs. In Case C (severe-miss category), vanilla RL reports clear lungs with no acute abnormality, omitting a left-sided pneumothorax, whereas RCRFT identifies absent lung markings and flags a likely pneumothorax requiring follow-up. In Case D (ambiguous category), vanilla RL commits to a ‘‘right lower lobe pneumonia’’ diagnosis without qualification, while RCRFT acknowledges consolidation but retains alternative etiologies and recommends clinical corre-lation. These examples illustrate two consistent behavioral differences: improved recovery of high-severity findings and more calibrated handling of diagnostic uncertainty. These behaviors are consistent with the design of RCRFT, where severity weighting emphasizes high-risk omissions and the calibration term discourages overconfident predictions under uncertainty. 
+
+> V. THEORETICAL ANALYSIS
+
+This section provides extended discussion and complete proofs for the theoretical results established in Section III-E .These results are presented in the main text to ensure self-containedness. 
+
+> A. ROLE OF THE CENTERED OBJECTIVE
+
+Lemma 1 decomposes the risk-calibrated objective into a mean-utility component and a severity–reward covariance component by recentering severity scores at their population mean. Under this centering, Jc(πθ ) = E[R] + γ Cov (s, R), which makes transparent that the objective simultaneously optimizes aggregate expected utility and the alignment of utility gains with clinical importance. These two components are orthogonal: a policy can achieve high mean utility while exhibiting low covariance (uniform improvement across strata) or high covariance (disproportionate improvement on high-severity cases). The decomposition motivates the severity-stratified evaluation protocol: an improvement in mean utility that is uniformly distributed across strata would produce 1 Cov (s, R) ≈ 0, whereas the empirically observed twentyfold gap in stratum-specific gains implies a substantial positive covariance contribution from RCRFT. 
+
+> B. POLICY RANKING INTERPRETATION
+
+Theorem 1 characterizes the policy preference induced by the centered objective as a comparative-statics result under a mean-utility constraint. When two policies are matched in mean expected reward, their objective values differ solely through the severity–reward covariance: the objective strictly prefers the policy whose utility gains are better concentrated on high-severity inputs. This ranking is a property of the objective, not an optimization guarantee; it holds for any two policies regardless of how they were obtained. Operationally, the theorem implies that among all policies achieving a given aggregate performance level, the risk-calibrated objective selects the one with the highest severity alignment, providing a principled selection criterion that extends beyond aggregate benchmarks. 
+
+> C. FINITE-SAMPLE ESTIMATION BOUND
+
+Theorem 2 establishes a Hoeffding-type concentration bound [64] for the empirical risk objective under independent sampling. The (1 + γ )2 factor reflects an inherent trade-off in importance-weighted estimation: increasing the risk weight 
+
+γ strengthens the objective’s preference for severity-aligned performance but simultaneously widens the range of the weighted sample Zb = (1 + γ sb)Rb, thereby weakening the finite-sample concentration guarantee. This inflation is a characteristic of any estimator that upweights a subset of examples, not a limitation specific to this objective. The bound supports the experimental practice of reporting severity-stratified metrics as means across multiple random seeds with confidence intervals, particularly for high-severity strata where the effective sample size is smaller. 
+
+> D. SEVERITY-TILTED DISTRIBUTION INTERPRETATION
+
+Proposition 2 establishes an exact change-of-measure equiva-lence [53] between the risk-calibrated objective and ordinary expected reward under a severity-tilted distribution Dγ .Specifically, Jrisk (πθ ) = Zγ Ex∼Dγ [R(x, y)], where Zγ =
+
+E[1 + γ s(x)] is a normalizing constant. This equivalence has two implications. First, the proposed objective is not a heuristic reweighting of the reward signal but corresponds precisely to optimizing expected utility under a distribution that assigns higher probability mass to high-severity cases. Second, the result identifies a principled implementation alternative: approximate oversampling of high-severity inputs with batch normalization compensation is mathematically related to the reward-weighting formulation, with discrepancies arising only from discretization and finite-batch normalization. 
+
+> E. BINARY TRIAGE REGIME
+
+Theorem 3 specializes the objective to binary severity ( s(x) ∈{0, 1}), the common case in clinical deployment pipelines that route inputs into low-risk and high-risk tracks. In this regime, the objective decomposes as Jrisk (πθ ) = (1 −
+
+pH )μL (πθ ) + (1 + γ )pH μH (πθ ), where pH = Pr (H ) and 
+
+μH , μL are the conditional expected rewards on the high-and low-risk strata, respectively. The amplification factor (1 + γ )pH on the high-risk term quantifies precisely how the risk weight γ redistributes optimization attention between strata: a unit increase in γ amplifies the high-risk contribution by pH relative to the base weighting. This decomposition   
+
+> VOLUME 14, 2026 115499 Y. Su, P. Wang: Severity Matters: RCRFT for Clinically Aligned Medical VLMs
+> FIGURE 8. Qualitative failure analysis on 50 stratified test cases. (A) Case-level outcome rates across three case categories for vanilla RL and RCRFT. (B) Error-type breakdown (correct, hedged, omitted) for the 15 severe-miss cases. (C) Representative severe-miss case: left-sided pneumothorax. Dashed box marks the finding region. Vanilla RL omits the finding; RCRFT flags absent lung markings and recommends follow-up. (D) Representative ambiguous case: right lower lobe consolidation. Vanilla RL commits to pneumonia; RCRFT hedges with differential and recommends clinical correlation.
+
+directly motivates the experimental design choice of reporting high-risk subset utility and severe-case false-negative rates as primary evaluation metrics alongside aggregate measures. 
+
+F. EDIT MONOTONICITY AND SCOPE 
+
+Proposition 3 and Corollary 1 establish sufficient conditions under which the edit-augmented objective Jedit strictly exceeds the risk objective Jrisk . The central quantity is the net edit gain G(x, y) = R(x, ˜y) − R(x, y) − η d(˜y, y), which is the reward improvement from the edited response minus the drift penalty. The Proposition shows that Jedit ≥ Jrisk + ρ (τ −
+
+ε) Pr (Sτ ) when edits are applied only to the set Sτ where the estimated gain exceeds threshold τ > ε . Restricting edit scope to a single clinical finding token span satisfies this condition more reliably than sentence-level rewriting: narrow scope reduces the drift penalty d(˜y, y) while preserving reward improvement on the targeted span, thereby keeping G(x, y)positive on a larger fraction of rollouts. These results formalize the design constraint that edit scope should be as local as is consistent with the clinical correction objective, and provide the theoretical basis for treating edit granularity as a design parameter subject to ablation. 
+
+G. PROOF OF THE SEVERITY-TILTED DISTRIBUTION PROPOSITION 
+
+Proof: We first verify that the proposed density ratio defines a probability distribution. Since s(x) ∈ [0 , 1] and γ ≥ 0, the function 1 + γ s(x) is nonnegative for every x. Therefore 1 + γ s(x)
+
+Zγ
+
+≥ 0 for all x. (43) Next, by definition of Zγ ,
+
+∫ 1 + γ s(x)
+
+Zγ
+
+dD(x) = 1
+
+Zγ
+
+∫
+
+(1 + γ s(x)) dD(x)
+
+= 1
+
+Zγ
+
+E[1 + γ s(x)] 
+
+= Zγ
+
+Zγ
+
+= 1.
+
+Hence Dγ is a valid probability distribution absolutely continuous with respect to D.Now compute the expectation of R under Dγ :
+
+Ex∼Dγ , y∼πθ (·| x)[R(x, y)] 
+
+=
+
+∫
+
+Ey∼πθ (·| x)[R(x, y)] dDγ (x)
+
+=
+
+∫ 1 + γ s(x)
+
+Zγ
+
+Ey∼πθ (·| x)[R(x, y)] dD(x).
+
+Multiply both sides by Zγ :
+
+Zγ Ex∼Dγ , y∼πθ (·| x)[R(x, y)] 
+
+=
+
+∫
+
+(1 + γ s(x)) Ey∼πθ (·| x)[R(x, y)] dD(x). 
+
+> 115500 VOLUME 14, 2026 Y. Su, P. Wang: Severity Matters: RCRFT for Clinically Aligned Medical VLMs
+
+By the tower property, the right-hand side is exactly 
+
+Ex∼D, y∼πθ (·| x)
+
+[(1 + γ s(x)) R(x, y)] = Jrisk (πθ ). (44) Therefore 
+
+Jrisk (πθ ) = Zγ E x∼Dγ 
+
+> y∼πθ(·| x)
+
+[R(x, y)] , (45) which proves the proposition. □
+
+H. PROOF OF THE BINARY HIGH-RISK THEOREM 
+
+Proof: Assume s(x) = 1H (x) with pH = Pr (H ) ∈ (0 , 1). Starting from the definition of the objective, 
+
+Jrisk (πθ ) = E[(1 + γ 1H (x)) R(x, y)]
+
+= E[R(x, y)] + γ E[1H (x)R(x, y)] . (46) We evaluate the first term using the law of total expectation :
+
+E[R(x, y)] = E[R(x, y) | H ] Pr( H ) + E[R(x, y) | H c] Pr( H c)
+
+= pH μH (πθ ) + (1 − pH )μL (πθ ). (47) For the second term, 
+
+E[1H (x)R(x, y)] = E[E[1H (x)R(x, y) | H , H c]].
+
+More directly, because 1H (x) = 1 on H and 1H (x) = 0 on 
+
+H c,
+
+E[1H (x)R(x, y)] = Pr( H )E[R(x, y) | H ] + Pr( H c) · 0
+
+= pH μH (πθ ). (48) Substituting Eq. 47 and Eq. 48 into Eq. 46 yields 
+
+Jrisk (πθ ) = (pH μH (πθ ) + (1 − pH )μL (πθ )) + γ pH μH (πθ )
+
+= (1 − pH )μL (πθ )
+
++ (1 + γ )pH μH (πθ ),
+
+which proves Eq. 22. Now consider two policies π1 and π2. Applying the decomposition above to both policies gives 
+
+Jrisk (π1) − Jrisk (π2) = (1 − pH )(μL (π1) − μL (π2))
+
++ (1 + γ )pH
+
+(μH (π1) − μH (π2)).
+
+If μL (π1) = μL (π2), then the first term vanishes and we obtain 
+
+Jrisk (π1) − Jrisk (π2) = (1 + γ )pH
+
+(μH (π1) − μH (π2)).
+
+(49) Since pH > 0 and 1 + γ > 0, the sign of the objective difference is the sign of the high-risk conditional difference. Hence the policy with larger μH is preferred. This completes the proof. □
+
+I. PROOF OF THE AVERAGE-RISK TRADE-OFF THEOREM 
+
+Proof: By Lemma 1, 
+
+Jc(π1) = Eπ1 [R] + γ Cov π1 (s, R) (50) and 
+
+Jc(π2) = Eπ2 [R] + γ Cov π2 (s, R). (51) Subtracting the second equality from the first yields 
+
+Jc(π1) − Jc(π2) = (Eπ1 [R] − Eπ2 [R])
+
++ γ (Cov π1 (s, R) − Cov π2 (s, R)).
+
+By definition of 1μ and 1c, this is exactly 
+
+Jc(π1) − Jc(π2) = 1μ + γ 1 c. (52) This proves Eq. 25. Assume now that 1μ1c < 0. Then 1μ and 1c have opposite signs, so 
+
+γ ⋆ = − 1μ
+
+1c
+
+(53) is strictly positive. Substituting γ = γ ⋆ into Eq. 25 gives 
+
+Jc(π1) − Jc(π2) = 1μ +
+
+(
+
+− 1μ
+
+1c
+
+)
+
+1c = 0. (54) Hence the two policies are tied at γ = γ ⋆.To show uniqueness, suppose ¯γ also satisfies Jc(π1) =
+
+Jc(π2). Then 0 = 1μ + ¯ γ 1 c. (55) Since 1c̸ = 0, solving for ¯γ gives 
+
+¯γ = − 1μ
+
+1c
+
+= γ ⋆. (56) So the threshold is unique. If 1c > 0 and γ > γ ⋆, then 
+
+Jc(π1) − Jc(π2) = 1μ + γ 1 c
+
+= 1μ + γ ⋆1c + (γ − γ ⋆)1c
+
+= 0 + (γ − γ ⋆)1c.
+
+Because both factors on the right-hand side are positive, the difference is positive, so Jc(π1) > Jc(π2). If 1c < 0 and γ < γ ⋆, then the same decomposition gives 
+
+Jc(π1) − Jc(π2) = (γ − γ ⋆)1c. (57) Now both factors are negative, so their product is positive. Hence Jc(π1) > Jc(π2) in this regime as well. This proves the theorem. □ 
+
+> VOLUME 14, 2026 115501 Y. Su, P. Wang: Severity Matters: RCRFT for Clinically Aligned Medical VLMs
+> J. PROOF OF THE PROXY-ROBUSTNESS PROPOSITION
+
+Proof: We begin with the risk objective. By definition, 
+
+˜Jrisk (πθ ) − Jrisk (πθ )
+
+= E[(1 + γ s(x)) ˜R(x, y)]
+
+− E[(1 + γ s(x)) R(x, y)]
+
+= E[(1 + γ s(x))( ˜R(x, y) − R(x, y)) ].
+
+Taking absolute values and applying the triangle inequality gives 
+
+∣∣˜ Jrisk (πθ ) − Jrisk (πθ )∣∣ ≤ E[(1 + γ s(x)) |˜R(x, y) − R(x, y)|].
+
+Since 0 ≤ s(x) ≤ 1, we have 1 + γ s(x) ≤ 1 + γ . Since Eq. 33 holds uniformly, 
+
+|˜R(x, y) − R(x, y)| ≤ ε. (58) Therefore 
+
+∣∣˜ Jrisk (πθ ) − Jrisk (πθ )∣∣ ≤ E[(1 + γ )ε]
+
+= (1 + γ )ε. 
+
+This proves Eq. 34. Now consider the edit objective. By definition, 
+
+˜Jedit (πθ ) = ˜Jrisk (πθ )
+
++ ρE[˜R(x, ˜y)
+
+− ˜R(x, y) − ηd(˜y, y)].
+
+Subtract the true edit objective :
+
+˜Jedit (πθ ) − Jedit (πθ )
+
+= (˜Jrisk (πθ ) − Jrisk (πθ ))
+
++ ρE[(˜R(x, ˜y) − R(x, ˜y)) 
+
+− (˜R(x, y) − R(x, y)) ].
+
+Taking absolute values and using the triangle inequality, 
+
+∣∣˜ Jedit (πθ ) − Jedit (πθ )∣∣ ≤ ∣∣˜ Jrisk (πθ ) − Jrisk (πθ )∣∣
+
++ ρE[|˜R(x, ˜y) − R(x, ˜y)|+ | ˜R(x, y) − R(x, y)|].
+
+Each absolute term is bounded by ε, so 
+
+∣∣˜ Jedit (πθ ) − Jedit (πθ )∣∣ ≤ (1 + γ )ε + ρE[ε + ε]
+
+= (1 + γ )ε + 2ρε 
+
+= ((1 + γ ) + 2ρ)ε. 
+
+This proves Eq. 35. □
+
+> K. PROOF OF THE THRESHOLDED EDIT-SELECTION THEOREM
+
+Proof: Recall the true edit gain 
+
+G(x, y) = R(x, ˜y) − R(x, y) − ηd(˜y, y). (59) The uniform approximation condition Eq. 30 implies 
+
+G(x, y) ≥̂ G(x, y) − ε for all ( x, y). (60) Take any ( x, y) ∈ Sτ . By definition of the thresholded set, ̂
+
+G(x, y) ≥ τ. (61) Combining this with Eq. 60 yields 
+
+G(x, y) ≥ τ − ε for all ( x, y) ∈ Sτ . (62) Outside Sτ , the edit operator is not applied. Hence ˜y = y
+
+on Sc 
+
+> τ
+
+. Therefore 
+
+R(x, ˜y) − R(x, y) = 0 and d(˜y, y) = 0 (63) for all ( x, y) ∈ Sc 
+
+> τ
+
+, which implies 
+
+G(x, y) = 0 for all ( x, y) ∈ Sc 
+
+> τ
+
+. (64) By definition of Jedit ,
+
+Jedit (πθ ) − Jrisk (πθ ) = ρE[G(x, y)] 
+
+= ρE[G(x, y)1Sτ ]
+
++ ρE[G(x, y)1Sc 
+
+> τ
+
+].
+
+Using Eq. 64, the second term is zero. Using Eq. 62, the first term satisfies 
+
+E[G(x, y)1Sτ ] ≥ E[( τ − ε)1Sτ ]
+
+= (τ − ε)E[1Sτ ]
+
+= (τ − ε) Pr( Sτ ).
+
+Hence 
+
+Jedit (πθ ) − Jrisk (πθ ) ≥ ρ Pr( Sτ )( τ − ε), (65) which proves Eq. 32. Because τ > ε , the quantity τ − ε is strictly positive. Therefore the lower bound is always nonnegative and is strictly positive whenever Pr( Sτ ) > 0. □
+
+> VI. DISCUSSION
+
+The results demonstrate that incorporating explicit clinical risk into the post-training objective yields a qualitatively different trade-off profile than standard RL: aggregate quality is preserved or improved while the largest gains concentrate on high-severity cases (utility: 0 .65 → 0.74; FN rate: 9 .8% →
+
+5.6%), consistent with the decomposition in Section III where the policy optimizes alignment between performance and clinical importance rather than mean performance alone. Leave-one-out ablations confirm that gains are distributed across all components rather than concentrated in a single design choice, with severity weighting contributing the most when removed (0 .77 → 0.69), followed by slot-aware edits ( −0.06), grounding ( −0.04), and calibration ( −0.03). Several caveats constrain these claims. The severity scorer is rule-based and derived from CheXpert labels, so gains may not transfer if it does not reflect genuine downstream cost, and the framework is validated only on chest X-ray report generation and grounding, leaving generalization to more interactive or multimodal clinical settings open. Metric entanglement is bounded rather than eliminated, since the severity score s(x), the clinical-consistency reward, and the  
+
+> 115502 VOLUME 14, 2026 Y. Su, P. Wang: Severity Matters: RCRFT for Clinically Aligned Medical VLMs
+
+default evaluation strata share a common CheXpert/CheXbert lineage and could therefore inflate apparent improvements. Two factors limit this risk. First, the grounding reward already draws on a separate bounding-box annotation source. Second, our robustness experiment re-derives the evaluation strata under CheXbert, NegBio, and a radiologist-annotated subset, and the safety-critical gains persist even under the NegBio and radiologist labels that do not share the CheXpert lineage, so they are not solely an artifact of the CheXpert stratifier shared by training and the default evaluation. The residual coupling runs along the CheXpert axis shared by the severity scorer and the default strata, and the radiologist-annotated re-derivation provides the label-disjoint check that bears most directly on it. Nevertheless, the results show that trust-related properties such as calibration-sensitive conservatism [75] and severity-aware emphasis can be partially addressed at the objective level rather than deferred entirely to post-hoc auditing; the modular design also means that a learned severity scorer derived from clinician preference data or escalation policies can be substituted without structural change, and future work may further combine risk-calibrated objectives with selective prediction mechanisms [50] to enable more principled abstention on high-uncertainty cases. 
+
+VII. CONCLUSION 
+
+This paper proposes RCRFT, a post-training framework for medical vision-language models that integrates severity-weighted rewards, slot-aware post-rollout edits, and calibration-sensitive safety penalties. Theoretically, we show that the objective decomposes into mean utility, a severity-scaling term, and a risk–reward covariance term; under severity centering, it reduces to mean utility plus covariance, providing an analyzable alternative to average-reward optimization. Empirically, RCRFT consistently improves both aggregate performance and risk-sensitive behavior over matched RL baselines. It enhances report generation and visual grounding quality while substantially improving high-risk performance, increasing high-risk utility and reducing severe-case false-negative rates. Ablation studies further confirm that all components contribute independently. These results suggest that medical multimodal post-training should be framed in terms of clinically meaningful utility rather than benchmark averages, with implications for reward design, objective formulation, and evaluation protocols. Future work will extend this framework to broader clinical settings, including multimodal reasoning, structured reporting, and human-in-the-loop severity annotation. 
+
+ACKNOWLEDGMENT 
+
+The authors gratefully acknowledge Jilin Province Science and Technology Innovation Center for Network Database Application Software, Changchun, China, for providing the computational infrastructure. 
+
+Disclosure of AI-Assisted Tools. In accordance with IEEE policy, the authors disclose that a large language model (GPT, OpenAI) was used solely for English language polishing and grammar refinement of the manuscript text. No AI-generated content was used for the research design, methodology, experimental implementation, data analysis, figure generation, or interpretation of results. All scientific contributions, theoretical derivations, and experimental conclusions are entirely the work of the authors. 
+
+REFERENCES 
+
+[1] R. Tanno et al., ‘‘Collaboration between clinicians and vision–language models in radiology report generation,’’ Nature Med. , vol. 31, no. 2, pp. 599–608, 2025. [2] L. Ouyang, J. Wu, X. Jiang, D. Almeida, C. Wainwright, P. Mishkin, C. Zhang , S. Agarwal, K. Slama, A. Ray, J. Schulman, J. Hilton, F. Kelton ,L. Miller , M. Simens, A. Askell, P. Welinder, P. Christiano, J. Leike ,and R. Lowe , ‘‘Training language models to follow instructions with human feedback,’’ in Proc. Adv. Neural Inf. Process. Syst. 35 , 2022, pp. 27730–27744. [3] Q. Lin, Y. Zhu, B. Pu, L. Huang, H. Luo, J. Ma, F. Wu, K. He, J. Xu, Z. Peng, T. Zhao, F. Xu, J. Zhang, Z. Ou, E. Cambria, S. Mishra, and M. Feng, ‘‘Toward clinically explainable AI for medical diagnosis: A foundation model with human-compatible reasoning via reinforcement learning,’’ 2025, 
+
+arXiv:2509.03906 .[4] J. Pan, C. Liu, J. Wu, F. Liu, J. Zhu, H. Bran Li, C. Chen, C. Ouyang, and D. Rueckert, ‘‘MedVLM-r1: Incentivizing medical reasoning capability of vision-language models (VLMs) via reinforcement learning,’’ 2025, 
+
+arXiv:2502.19634 .[5] Y. Lai, J. Zhong, M. Li, S. Zhao, Y. Li, K. Psounis, and X. Yang, ‘‘Med-r1: Reinforcement learning for generalizable medical reasoning in vision-language models,’’ 2025, arXiv:2503.13939 .[6] R. S. Sutton and A. G. Barto, Reinforcement Learning: An Introduction ,2nd ed., Cambridge, MA, USA: MIT Press, 2018. [7] D. Hein, Z. Chen, S. Ostmeier, J. Xu, M. Varma, E. P. Reis , A. E. Michalson ,C. Bluethgen, H. J. Shin, C. Langlotz, and A. S. Chaudhari, ‘‘CheXalign: Preference fine-tuning in chest X-ray interpretation models without human feedback,’’ 2024, arXiv:2410.07025 .[8] X. Liang, J. Hu, D. Wang, Z. Ma, L. Zhao, R. Li, B. Wan, and Q. Wang , ‘‘CheXPO: Preference optimization for chest X-ray VLMs with counterfactual rationale,’’ 2025, arXiv:2507.06959 .[9] K. Zhang, C. Malon, L. Sun, and M. R. Min, ‘‘EditGRPO: Reinforcement learning with post -rollout edits for clinically accurate chest X-ray report generation,’’ in Proc. 14th Int. Joint Conf. Natural Lang. Process. 4th Conf. Asia–Pacific Chapter Assoc. Comput. Linguistics , 2025, pp. 304–316. [10] N. Deperrois, H. Matsuo, S. Ruipérez-Campillo, M. Vandenhirtz, S. Laguna ,A. Ryser, K. Fujimoto, M. Nishio, T. M. Sutter, J. E. Vogt, J. Kluckert, T. Frauenfelder, C. Blüthgen, F. Nooralahzadeh, and M. Krauthammer ,‘‘RadVLM: A multitask conversational vision-language model for radiology,’’ 2025, arXiv:2502.03333 .[11] A. Sellergren et al., ‘‘MedGemma technical report,’’ 2025, 
+
+arXiv:2507.05201 .[12] S. Bannur et al., ‘‘MAIRA-2: Grounded radiology report generation,’’ 2024, 
+
+arXiv:2406.04449 .[13] F. Yu, M. Endo, R. Krishnan, I. Pan, A. Tsai, E. P. Reis, E. K. U. N. Fonseca, H. M. H. Lee, Z. S. H. Abad, A. Y. Ng, C. P. Langlotz, V. K. Venugopal, and P. Rajpurkar, ‘‘Evaluating progress in automatic chest X-ray radiology report generation,’’ Patterns , vol. 4, no. 9, Sep. 2023, Art. no. 100802. [14] P. Rajpurkar, J. Irvin, K. Zhu, B. Yang, H. Mehta, T. Duan, D. Ding, A. Bagul, C. Langlotz, K. Shpanskaya, M. P. Lungren, and A. Y. Ng, ‘‘CheXNet: Radiologist-level pneumonia detection on chest X-rays with deep learning,’’ 2017, arXiv:1711.05225 .[15] J. Irvin et al., ‘‘CheXpert: A large chest radiograph dataset with uncertainty labels and expert comparison,’’ in Proc. AAAI Conf. Artif. Intell. , vol. 33, 2019, pp. 590–597. [16] F. Wang, W. Zhou, J. Y. Huang, N. Xu, S. Zhang, H. Poon, and M. Chen , ‘‘MDPO: Conditional preference optimization for multimodal large language models,’’ in Proc. Conf. Empirical Methods Natural Lang. Process. , 2024, pp. 8078–8088. [17] K. Zhu, P. Xia, Y. Li, H. Zhu, S. Wang, and H. Yao, ‘‘MMedPO: Aligning medical vision-language models with clinical-aware multimodal preference optimization,’’ in Proc. 42nd Int. Conf. Mach. Learn. (ICML) , 2025.  
+
+> VOLUME 14, 2026 115503 Y. Su, P. Wang: Severity Matters: RCRFT for Clinically Aligned Medical VLMs
+
+[18] A. Tamar, Y. Chow, M. Ghavamzadeh, and S. Mannor, ‘‘Policy gradient for coherent risk measures,’’ in Proc. Adv. Neural Inf. Process. Syst. , vol. 28, 2015, pp. 1468–1476. [19] Z. Gao, Z. Fu, M. Wen, Y. Guo, and Y. Zhang, ‘‘Physical informed neural network for thermo-hydral analysis of fire-loaded concrete,’’ Eng. Anal. Boundary Elements , vol. 158, pp. 252–261, Jan. 2024. [20] Y. Zhang, Z. Gao, X. Wang, and Q. Liu, ‘‘Image representations of numerical simulations for training neural networks,’’ Comput. Model. Eng. Sci. ,vol. 134, no. 2, pp. 821–833, 2023. [21] X. Wang, Y. Zhang, Q. Liu, and H. Wang, ‘‘Prediction of the pore-pressure built-up and temperature of fire-loaded concrete with Pix2Pix,’’ Comput., Mater. Continua , vol. 79, no. 2, pp. 2907–2922 ,2024. [22] Y. Zhang, Z. Gao, X. Wang, and Q. Liu, ‘‘Predicting the pore-pressure and temperature of fire-loaded concrete by a hybrid neural network,’’ Int. J. Comput. Methods , vol. 19, no. 8, Oct. 2022, Art. no. 2142011. [23] Z. Chen, Y. Shen, Y. Song, and X. Wan, ‘‘Cross-modal memory networks for radiology report generation,’’ in Proc. 59th Annu. Meeting Assoc. Comput. Linguistics 11th Int. Joint Conf. Natural Lang. Process. , 2021, pp. 5904–5914. [24] A. Nicolson, J. Dowling, and B. Koopman, ‘‘Improving chest X-ray report generation by leveraging warm starting,’’ Artif. Intell. Med. , vol. 144, Oct. 2023, Art. no. 102633. [25] S. Yang, X. Wu, S. Ge, S. K. Zhou, and L. Xiao, ‘‘Knowledge matters: Chest radiology report generation with general and specific knowledge,’’ 
+
+Med. Image Anal. , vol. 80, Aug. 2022, Art. no. 102510. [26] Z. Huang, X. Zhang, and S. Zhang, ‘‘KiUT: Knowledge-injected U-transformer for radiology report generation,’’ in Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR) , Jun. 2023, pp. 19809–19818. [27] C. Wu, X. Zhang, Y. Zhang, Y. Wang, and W. Xie, ‘‘MedKLIP: Medical knowledge enhanced language-image pre-training for X-ray diagnosis,’’ in Proc. IEEE/CVF Int. Conf. Comput. Vis. (ICCV) , Oct. 2023, pp. 21315–21326. [28] W. Hou, K. Xu, Y. Cheng, W. Li, and J. Liu, ‘‘ORGAN: Observation-guided radiology report generation via tree reasoning,’’ in Proc. 61st Annu. Meeting Assoc. Comput. Linguistics (Volume 1: Long Papers) , 2023, pp. 8108–8122. [29] M. Li, B. Lin, Z. Chen, H. Lin, X. Liang, and X. Chang, ‘‘Dynamic graph enhanced contrastive learning for chest X-ray report generation,’’ in 
+
+Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR) , Jun. 2023, pp. 3334–3343. [30] Z. Wang, L. Liu, L. Wang, and L. Zhou, ‘‘METransformer: Radiology report generation by transformer with multiple learnable expert tokens,’’ in 
+
+Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR) , Jun. 2023, pp. 11558–11567. [31] T. Tanida, P. Müller, G. Kaissis, and D. Rueckert, ‘‘Interactive and explainable region-guided radiology report generation,’’ in Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR) , Jun. 2023, pp. 7433–7442. [32] T. Gu, D. Liu, Z. Li, and W. Cai, ‘‘Complex organ mask guided radiology report generation,’’ in Proc. IEEE/CVF Winter Conf. Appl. Comput. Vis. (WACV) , Jan. 2024, pp. 7980–7989. [33] S. Li, P. Qiao, L. Wang, M. Ning, L. Yuan, Y. Zheng, and J. Chen, ‘‘An organ-aware diagnosis framework for radiology report generation,’’ IEEE Trans. Med. Imag. , vol. 43, no. 12, pp. 4253–4265 ,Dec. 2024. [34] H. Jin, H. Che, Y. Lin, and H. Chen, ‘‘PromptMRG: Diagnosis-driven prompts for medical report generation,’’ in Proc. AAAI Conf. Artif. Intell. ,2024, vol. 38, no. 3, pp. 2607–2615. [35] F. Wang, S. Du, and L. Yu, ‘‘Hergen: Elevating radiology report generation with longitudinal data,’’ in Proc. Eur. Conf. Comput. Vis. (ECCV) , 2024, pp. 183–200. [36] Z. Zhao, S. Wang, J. Gu, Y. Zhu, L. Mei, Z. Zhuang, Z. Cui, Q. Wang, and D. Shen, ‘‘ChatCAD+: Toward a universal and reliable interactive CAD using LLMs,’’ IEEE Trans. Med. Imag. , vol. 43, no. 11, pp. 3755–3766 ,Nov. 2024. [37] C. Liu, Y. Tian, W. Chen, Y. Song, and Y. Zhang, ‘‘Bootstrapping large language models for radiology report generation,’’ in Proc. AAAI Conf. Artif. Intell. , 2024, vol. 38, no. 17, pp. 18635–18643. [38] L. Wang, M. Ning, D. Lu, D. Wei, Y. Zheng, and J. Chen, ‘‘An inclusive task-aware framework for radiology report generation,’’ in Proc. Med. Image Comput. Comput. Assist. Intervent (MICCAI) . Cham, Switzerland: Springer, 2022, pp. 568–577. [39] P. Peng, W. Fan, Y. Shen, W. Liu, X. Yang, Q. Zhang, X. Wei, and D. Zhou, ‘‘Eye gaze guided cross-modal alignment network for radiology report generation,’’ IEEE J. Biomed. Health Informat. , vol. 28, no. 12, pp. 7406–7419, Dec. 2024. [40] Z. Xu, W. Xu, R. Wang, J. Chen, C. Qi, and T. Lukasiewicz, ‘‘Hybrid reinforced medical report generation with M-linear attention and repetition penalty,’’ IEEE Trans. Neural Netw. Learn. Syst. , vol. 36, no. 2, pp. 2206–2220, Feb. 2025. [41] W. Chen, L. Shen, J. Lin, J. Luo, X. Li, and Y. Yuan, ‘‘Fine-grained image-text alignment in medical imaging enables explain-able cyclic image-report generation,’’ in Proc. 62nd Annu. Meet-ing Assoc. Comput. Linguistics (Volume 1: Long Papers) , 2024, pp. 9494–9509. [42] A. Liu, Y. Guo, J.-H. Yong, and F. Xu, ‘‘Multi-grained radiol-ogy report generation with sentence-level image-language contrastive learning,’’ IEEE Trans. Med. Imag. , vol. 43, no. 7, pp. 2657–2669 ,Jul. 2024. [43] D. Guo et al., ‘‘DeepSeek-R1 incentivizes reasoning in LLMs through reinforcement learning,’’ Nature , vol. 645, pp. 633–638 ,Jul. 2025. [44] C. Li, C. Wong, S. Zhang, N. Usuyama, H. Liu, J. Yang, T. Naumann, H. Poon, and J. Gao, ‘‘LLaVA-med: Training a large language-and-vision assistant for biomedicine in one day,’’ in Proc. Adv. Neural Inf. Process. Syst. 36 , 2023, pp. 28541–28564. [45] G. Liu, T.-M. H. Hsu, M. McDermott, W. Boag, W.-H. Weng, P. Szolovits, and M. Ghassemi, ‘‘Clinically accurate chest X-ray report generation,’’ in Proc. 4th Mach. Learn. Healthcare Conf. (MLHC) , vol. 106, 2019, pp. 249–269. [46] J.-B. Delbrouck, P. Chambon, C. Bluethgen, E. Tsai, O. Almusa, and C. Langlotz, ‘‘Improving the factual correctness of radiology report generation with semantic rewards,’’ in Proc. Findings Assoc. Comput. Linguistics (EMNLP) , 2022, pp. 4348–4360. [47] B. Du, H. Yang, and X. Li, ‘‘RadHiera: Semantic hierarchical reinforcement learning for medical report generation,’’ 2025, arXiv:2511.10065 .[48] M. G. Bellemare, W. Dabney, and R. Munos, ‘‘A distributional perspective on reinforcement learning,’’ in Proc. 34th Int. Conf. Mach. Learn. , 2017, pp. 449–458. [49] W. Dabney, M. Rowland, M. G. Bellemare, and R. Munos, ‘‘Distributional reinforcement learning with quantile regression,’’ in Proc. AAAI Conf. Artif. Intell. , 2018, vol. 32, no. 1, pp. 2892–2901. [50] Y. Geifman and R. El-Yaniv, ‘‘SelectiveNet: A deep neural network with an integrated reject option,’’ in Proc. 36th Int. Conf. Mach. Learn. , 2019, pp. 2151–2159. [51] C. Guo, G. Pleiss, Y. Sun, and K. Q. Weinberger, ‘‘On calibration of modern neural networks,’’ in Proc. 34th Int. Conf. Mach. Learn. PMLR, 2017, pp. 1321–1330. [52] C. Elkan, ‘‘The foundations of cost-sensitive learning,’’ in Proc. 17th Int.Joint Conf. Artif. Intell. , 2001, pp. 973–978. [53] J. García and F. Fernández, ‘‘A comprehensive survey on safe rein-forcement learning,’’ J. Mach. Learn. Res. , vol. 16, pp. 1437–1480 ,Jul. 2015. [54] K. Papineni, S. Roukos, T. Ward, and W.-J. Zhu, ‘‘BLEU: A method for automatic evaluation of machine translation,’’ in Proc. 40th Annu. meeting Assoc. Comput. Linguistics , 2002, pp. 311–318. [55] C.-Y. Lin, ‘‘Rouge: A package for automatic evaluation of summaries,’’ in 
+
+Proc. Text Summarization Branches Out , 2004, pp. 74–81. [56] T. Zhang, V. Kishore, F. Wu, K. Q. Weinberger, and Y. Artzi, ‘‘BERTScore: Evaluating text generation with BERT,’’ in Proc. Int. Conf. Learn. Represent. , 2020. [57] S. Jain, A. Agrawal, A. Saporta, S. Q. H. Truong, D. N. Duong, T. Bui, P. Chambon, Y. Zhang, M. P. Lungren, A. Y. Ng, C. P. Langlotz, and P. Rajpurkar, ‘‘RadGraph: Extracting clinical entities and relations from radiology reports,’’ 2021, arXiv:2106.14463 .[58] J.-B. Delbrouck, P. Chambon, Z. Chen, M. Varma, A. Johnston, L. Blankemeier , D. Van Veen, T. Bui, S. Truong, and C. Langlotz, ‘‘RadGraph-XL: A large-scale expert-annotated dataset for entity and relation extraction from radiology reports,’’ in Proc. Findings Assoc. Comput. Linguistics ACL , 2024, pp. 12902–12915. [59] A. Smit, S. Jain, P. Rajpurkar, A. Pareek, A. Ng, and M. Lungren, ‘‘Combining automatic labelers and expert annotations for accurate radiology report labeling using BERT,’’ in Proc. Conf. Empirical Methods Natural Lang. Process. (EMNLP) , 2020, pp. 1500–1519.  
+
+> 115504 VOLUME 14, 2026 Y. Su, P. Wang: Severity Matters: RCRFT for Clinically Aligned Medical VLMs
+
+[60] S. Ostmeier, J. Xu, Z. Chen, M. Varma, L. Blankemeier, C. Bluethgen ,A. E. Michalson, M. Moseley, C. Langlotz, A. S. Chaudhari, and J.-B. Delbrouck , ‘‘GREEN: Generative radiology report evaluation and error notation,’’ in Proc. Findings Assoc. Comput. Linguistics, EMNLP , 2024, pp. 374–390. [61] E. Altman, Constrained Markov Decision Processes . Boca Raton, FL, USA: CRC Press, 1999. [62] J. Achiam, D. Held, A. Tamar, and P. Abbeel, ‘‘Constrained policy optimization,’’ in Proc. 34th Int. Conf. Mach. Learn. , 2017, pp. 22–31. [63] D. Di Castro, A. Tamar, and S. Mannor, ‘‘Policy gradients with variance related risk criteria,’’ in Proc. 29th Int. Conf. Mach. Learn. , 2012. [64] W. Hoeffding, ‘‘Probability inequalities for sums of bounded random variables,’’ J. Amer. Stat. Assoc. , vol. 58, no. 301, pp. 13–30, Mar. 1963. [65] Z. Shao, P. Wang, Q. Zhu, R. Xu, J. Song, X. Bi, H. Zhang, M. Zhang, Y. K. Li, Y. Wu, and D. Guo, ‘‘DeepSeekMath: Pushing the limits of mathematical reasoning in open language models,’’ 2024, 
+
+arXiv:2402.03300 .[66] Q. Yu et al., ‘‘DAPO: An open-source LLM reinforcement learning system at scale,’’ 2025, arXiv:2503.14476 .[67] A. E. W. Johnson, T. J. Pollard, S. J. Berkowitz, N. R. Greenbaum, M. P. Lungren, C.-Y. Deng, R. G. Mark, and S. Horng, ‘‘MIMIC-CXR, a de-identified publicly available database of chest radiographs with free-text reports,’’ Sci. Data , vol. 6, no. 1, p. 317, Dec. 2019. [68] D. Demner-Fushman, M. D. Kohli, M. B. Rosenman, S. E. Shooshan, L. Rodriguez, S. Antani, G. R. Thoma, and C. J. McDonald, ‘‘Preparing a collection of radiology examinations for distribution and retrieval,’’ J. Amer. Med. Inform. Assoc. , vol. 23, no. 2, pp. 304–310, Mar. 2016. [69] E. J. Hu, Y. Shen, P. Wallis, Z. Allen-Zhu, Y. Li, S. Wang, L. Wang, and W. Chen, ‘‘LoRA: Low-rank adaptation of large language models,’’ 2021, 
+
+arXiv:2106.09685 .[70] Z. Chen et al., ‘‘A vision-language foundation model to enhance efficiency of chest X-ray interpretation,’’ 2024, arXiv:2401.12208 .[71] J. M. Z. Chaves et al., ‘‘A clinically accessible small multimodal radiology model and evaluation metric for chest X-ray findings,’’ Nature Commun. ,vol. 16, no. 1, p. 3108, Apr. 2025. [72] S. Bai et al., ‘‘Qwen3-VL technical report,’’ 2025, arXiv:2511.21631 .[73] L. Gao, J. Schulman, and J. Hilton, ‘‘Scaling laws for reward model overoptimization,’’ in Proc. 40th Int. Conf. Mach. Learn. , 2023, pp. 10835–10866. [74] J. Skalse, N. H. R. Howe, D. Krasheninnikov, and D. Krueger, ‘‘Defining and characterizing reward gaming,’’ in Proc. Adv. Neural Inf. Process. Syst. ,vol. 35, 2022. [75] S. Kadavath et al., ‘‘Language models (Mostly) know what they know,’’ 2022, arXiv:2207.05221 .
+
+YU SU received the B.S. degree from Changchun University of Science and Technology, Changchun, China, where she is currently pursuing the Ph.D. degree. Her research interests include medical vision–language models, reinforcement learning, and clinical AI safety. 
+
+PENG WANG is currently a Professor with Changchun University of Science and Technology, Changchun, China. His research interests include computer vision, natural language processing, and their applications in medical imaging and clinical decision support.
