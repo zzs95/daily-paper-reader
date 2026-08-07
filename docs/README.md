@@ -12,14 +12,14 @@
       <span class="dpr-home-dashboard-kicker">2026-08-07</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 0 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 14 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
-    <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>0</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>2 次</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>14</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>0</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-08-07 01:29:46 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-08-07 21:35:33 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -30,7 +30,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日无新推荐，系统未产出可展示论文。</p>
+<p>今日精读14篇，聚焦医学问答与大模型技术，速读0篇。最值得关注的是小语言模型结合检索增强用于医学问答，以及多模态大模型后训练方向的系统综述。建议后续沿这两个方向深入实验，并补充相关速读资料。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -39,10 +39,10 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">0 篇</strong>
+    <strong class="dpr-home-dashboard-count">14 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p class="dpr-home-dashboard-empty">今日暂无推荐。</p>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="A Novel Approach Based on Integrating Small Language Models and Retrieval-Augmented Generation for Medical Question Answering">A Novel Approach Based on Integrating Small Language Models and Retrieval-Augmented Generation for Medical Question Answering</span></li><li><span class="dpr-home-dashboard-paper-title" title="A Survey on Post-Training of Multimodal Large Language Models">A Survey on Post-Training of Multimodal Large Language Models</span></li><li><span class="dpr-home-dashboard-paper-title" title="AHRS-Net: Anatomical Hierarchical Refining Semantic Network for Anatomy-Aware Spatially Grounded Radiology Report Generation">AHRS-Net: Anatomical Hierarchical Refining Semantic Network for Anatomy-Aware Spatially Grounded Radiology Report Generation</span></li></ul>
   </div>
 
 </section>
