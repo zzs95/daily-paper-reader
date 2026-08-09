@@ -1,0 +1,362 @@
+Title: MedLLM: An Open Medical Language Model at the Sub-Billion Scale
+
+URL Source: https://arxiv.org/pdf/2607.27490
+
+Published Time: Fri, 31 Jul 2026 00:20:17 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# MedLLM: An Open Medical Language Model at the Sub-Billion Scale 
+
+# Maxx Richard Rahman 1,2 ∗, Asim Ahmed 1, Mihan Mohagheghzadeh 1, Wolfgang Maass 1,2 
+
+> 1
+
+German Research Center for Artificial Intelligence (DFKI), Germany 
+
+> 2
+
+Saarland University, Germany maxx_richard.rahman@dfki.de, asim.ahmed@dfki.de, mihan.mohagheghzadeh@dfki.de, wolfgang.maass@dfki.de 
+
+Abstract 
+
+Open medical language models have converged on a sin-gle scale: every widely used system runs at 7B parameters or more, leaving the sub-billion regime uncharacterized. We present MedLLM, an open 0.1B-parameter medical language model trained through a fully open three-phase pipeline: gen-eral pretraining with curriculum sequence-length scheduling, domain fine-tuning on MedFineWeb, a reference-guided med-ical corpus we release that is selected from general web data by embedding similarity to medical question-answering (QA) data, and preference-aligned fine-tuning combining SFT with direct preference optimization (DPO). Across medical bench-marks, MedLLM shows a pattern visible only at sub-billion scale: medical competence does not degrade uniformly under compression but splits by task type. On context-grounded QA it comes within 2.9 pp of a medically adapted 7B model and surpasses the instruction-tuned and general-purpose 7B base-lines; on knowledge-recall QA it stays near the task floor on clinical-vignette MedQA yet significantly exceeds every 7B and sub-7B baseline on MedMCQA, indicating that where recall fails the constraint is model capacity rather than adapta-tion. This dissociation is masked at 7B, where both capabilities are present, and surfaces only when capacity is scarce. 
+
+# Introduction 
+
+Evidence-based medicine relies on the accurate recall, syn-thesis, and application of vast bodies of clinical and biomed-ical knowledge (Sackett et al. 1996). Large language models (LLMs) encode and retrieve such knowledge at scale (Sing-hal et al. 2023a; Nori et al. 2023; Brown et al. 2020), prompting substantial interest in medical LLMs for clini-cal decision-making, medical education, and biomedical re-search (Thirunavukarasu et al. 2023). Yet the most capa-ble medical LLMs are either closed-source with undisclosed training details, such as GPT-4 and Med-PaLM-2 (Nori et al. 2023; Singhal et al. 2023b), or open but large, operating at 7B to 540B parameters (Chen et al. 2023; Singhal et al. 2023a; Peng et al. 2023). Both properties limit access and reproducibility, and they leave a basic question unanswered: below 7B, which medical capabilities survive, and which col-lapse? The entire sub-billion regime, where a model is small enough to train, audit, and deploy on modest hardware, re-mains uncharacterized. 
+
+> ∗
+
+Corresponding author. 
+
+Adapting an LLM to medicine is difficult because of dis-tributional mismatch. General-purpose models are trained on web text whose distribution Pweb diverges sharply from medical text Pmed (Gururangan et al. 2020; Lee et al. 2020): medical language combines long-tail terminology, structured clinical reasoning, domain-specific abbreviations, and high-precision requirements where factual errors carry serious consequences (Gu et al. 2021; Peng et al. 2023). Prior work narrows this gap through continued pretraining on biomed-ical corpora (Wu et al. 2023; Chen et al. 2023), instruction tuning on medical QA (Han et al. 2023; Zhang et al. 2024), and preference optimization (Singhal et al. 2023b), and con-tinued pretraining is known to allocate a model’s capacity toward the target distribution rather than the full breadth of 
+
+Pweb (Gururangan et al. 2020; Gupta et al. 2023). Every one of these efforts, however, operates at 7B parameters or more. As a result, it is unknown whether the same recipe trans-fers to a model an order of magnitude smaller, or whether reduced capacity forces some medical capabilities to break before others. Key contributions: 1. We propose MedLLM, a 0.1B-parameter open medical language model, with its full three-phase pipeline, placing a reproducible medical modeling baseline an order of magnitude below existing open medical LLMs. 2. We introduce MedFineWeb, a medical pretraining corpus selected from general web text by embedding similarity to medical QA, which requires no curated medical source and transfers to any domain given a small set of target-domain QA examples. 3. We identify a task-structured dissociation under compres-sion: the 0.1B model reaches 7B-competitive accuracy on context-grounded QA yet remains capacity-bound on knowledge-recall QA, as the binding constraint at sub-billion size. 
+
+# Related Works 
+
+Medical Language Models and Domain Adaptation 
+
+Continued pretraining on domain-specific corpora is the dominant paradigm for building medical LLMs. Early encoder-only efforts, BioBERT (Lee et al. 2020) and Pub-MedBERT (Gu et al. 2021), pretrained BERT on PubMed text and improved biomedical NLP, while Gururangan et al. (2020) showed that domain- and task-adaptive pretraining arXiv:2607.27490v1 [cs.AI] 29 Jul 2026 yield additive gains, confirmed at larger scales (Gupta et al. 2023; Ke et al. 2023). With decoder-only architectures the approach scaled sharply: PMC-LLaMA (Wu et al. 2023) continued pretraining LLaMA-7B on 4.8M PubMed Central papers; Meditron (Chen et al. 2023) extended this to 7B and 70B parameters on a curated 48.1B-token corpus of PubMed articles, abstracts, and clinical guidelines, establishing open baselines that approach closed-source systems (Singhal et al. 2023a,b); GatorTronGPT (Peng et al. 2023) pretrained a 20B model on 227B clinical and English tokens; MedAlpaca (Han et al. 2023) and AlpaCare (Zhang et al. 2024) instruction-tuned at 7B and 13B; Med-PaLM and Med-PaLM 2 (Singhal et al. 2023a,b) instruction-tuned 540B-parameter models to near expert-level licensing-exam performance; and Clinical-Camel (Toma et al. 2023) adapted Llama-2-70B via QLoRA on clinical dialogues. All operate at 7B parameters or above and depend on large, manually curated medical sources. Medical domain adaptation at substantially smaller scale, and from web-selected rather than curated data, remains un-explored, the gap MedLLM and MedFineWeb address. 
+
+Preference Optimization for Language Model Alignment 
+
+Reinforcement learning from human feedback (RLHF) trains a separate reward model from preference data and optimizes the policy via proximal policy optimization (Ouyang et al. 2022; Christiano et al. 2017), while direct preference opti-mization (DPO) (Rafailov et al. 2023) removes the reward model by reparametrizing the reward in terms of the pol-icy itself, provably optimizing the same objective under the Bradley-Terry model (Bradley and Terry 1952). DPO has been applied broadly, for instance Zephyr (Tunstall et al. 2024), which used distilled DPO to make a 7B model compet-itive with larger instruction-tuned systems, and in medicine HuatuoGPT-II (Chen et al. 2024), which applied one-stage preference alignment, alongside RLHF efforts aimed at re-ducing hallucination in clinical text (Thirunavukarasu et al. 2023). Its behavior on small-scale medical models, however, has not been studied. We provide the first analysis of DPO for medical QA at the 0.1B scale, showing that preference align-ment sharply amplifies the log-probability margin between correct and incorrect answers while yielding only limited accuracy change, evidence that at this scale DPO refines ex-isting discrimination rather than creating new knowledge. 
+
+# MedLLM Model 
+
+Model Architecture 
+
+Tokenization and Embedding. MedLLM is a decoder-only transformer of 0.1B parameters (Figure 1). Inputs are tokenized with a SentencePiece (Kudo and Richardson 2018) vocabulary of V = 32 ,000 and embedded into d = 512 
+
+dimensions, mapping each token xt to et = Ext with E ∈
+
+RV ×d. The vocabulary-to-width ratio V /d = 62 .5 is large, so an untied output projection would be the single largest tensor in the model, exceeding any transformer layer. We therefore tie the input embedding to the output projection (Press and Wolf 2017): tying removes a separate V × d = 16 .38 M-parameter matrix, 14% of the untied 116 .7M-parameter total, and constrains the input and output representations of each token to share one geometry, which reduces the effective parameter count and acts as a regularizer that is known to help most when d is small relative to V .
+
+Transformer Layers. The model stacks L = 20 layers. Each layer places RMSNorm on the output of the attention and feed-forward sublayers rather than on their input, so normalization sits inside the residual branch: 
+
+h′ 
+
+> ℓ
+
+= hℓ−1 + RMSNorm (MHA (hℓ−1)) , (1) 
+
+hℓ = h′ 
+
+> ℓ
+
++ RMSNorm (SwiGLU (h′
+
+> ℓ
+
+)) , (2) with h0 the embedded sequence. This reordered placement normalizes each sublayer’s contribution before it is added back, which keeps the residual stream at a controlled scale across depth and improves training stability over the input-normalized pre-norm arrangement (Walsh et al. 2025). We use RMSNorm (Zhang and Sennrich 2019), RMSNorm (x) = x
+
+RMS (x) ⊙g, RMS (x) = 
+
+q 1
+
+> d
+
+Pdi=1 x2 
+
+> i
+
+,
+
+(3) which drops the mean-centering of LayerNorm and enforces scale invariance of its argument, lowering per-step cost while preserving optimization stability. Because every sublayer remains a perturbation of the identity, gradients propagate through the depth-20 stack without the vanishing that would otherwise threaten a deep, narrow model. 
+
+Masked Multi-Head Self-Attention with RoPE. Atten-tion uses H = 8 heads of dimension dh = d/H = 64 ,with per-head projections Qi = hW Qi , Ki = hW Ki ,
+
+Vi = hW Vi and WQi , WKi , WVi ∈ Rd×dh . Queries and keys are RMSNorm-normalized per head before the dot prod-uct (QK-norm), which bounds attention-logit magnitudes and prevents the score blow-ups that destabilize small-model training. Relative position is supplied by rotary embeddings (RoPE) (Su et al. 2024), which apply to the query at po-sition m and the key at position n a block-diagonal rota-tion RΘ,m composed of 2D rotations by angle mθ j in the 
+
+j-th coordinate pair, with frequencies θj = b−2j/d h and base b = 10 ,000 . Because rotations compose additively, 
+
+R⊤
+
+> Θ,m
+
+RΘ,n = RΘ, n −m, the attention score depends on the two positions only through their offset, 
+
+(RΘ,m q)⊤(RΘ,n k) = q⊤RΘ, n −m k, (4) so relative position is encoded multiplicatively inside the score without additive position embeddings and without con-suming parameters. A causal mask restricts token t to posi-tions ≤ t.
+
+SwiGLU Feed-Forward Network. The feed-forward block uses SwiGLU (Shazeer 2020): SwiGLU (h) =(W1h ⊙ SiLU (Wg h)) W2, with W1, Wg ∈ Rdff ×d, W2 ∈
+
+Rd×dff , dff = 2048 = 4 d, and SiLU (x) = x · σ(x). The data-dependent gate SiLU (Wg h) modulates each hidden unit multiplicatively, which improves language-modeling per-plexity over the additive nonlinearities of ReLU and GELU gating (Shazeer 2020). The gate adds a third projection, so Figure 1: MedLLM model: 0.1B-parameter decoder-only transformer with 20 layers. the block costs 3 d d ff parameters against 2 d d ff for a standard two-matrix feed-forward network of equal width; at dff = 4 d
+
+this places 62 .7% of the model’s parameters in position-wise feature transformation (Table 1), a deliberate allocation to-ward the sublayer where, at small scale, added capacity is used most efficiently. 
+
+Output Projection. A final RMSNorm precedes the tied output projection, zt = E⊤RMSNorm (h(t) 
+
+> L
+
+) ∈ RV , produc-ing the vocabulary logits at each position. These logits are additionally regularized during training by a z-loss term that penalizes their log-partition function. 
+
+Parameter Allocation. Table 1 accounts for the full bud-get. With V /d = 62 .5, the tied embedding already consumes 
+
+16 .3% of the model, so of the ∼ 84 M parameters that remain for computation the design places the majority in the feed-forward sublayers ( 62 .7% ) and the remainder in attention (20 .9% ), spending depth ( L = 20 ) rather than width to favor compositional transformation over a wider, shallower alter-native at equal budget, consistent with evidence that at fixed parameter count depth contributes more than width until it saturates (Levine et al. 2020). This accounting makes the central constraint of the paper concrete: at 0.1B parameters there is no capacity to spare for redundant tensors. 
+
+Reference-Guided Medical Corpus 
+
+MedLLM is domain-adapted on MedFineWeb, a medical plain-text corpus we construct from general web data by reference-guided selection. 
+
+General Pretraining Corpus. The general corpus Dgen 
+
+comprises 46,083,165 documents totaling approximately 29.5B tokens (45 GB), drawn from RedPajama-V2 (Together Computer 2023) (7,554,494 documents), C4 (Raffel et al. 2020) (32,000,000 documents), OpenWebText (Gokaslan Table 1: Parameter allocation of MedLLM ( d=512 , L=20 ,
+
+H=8 , dff =2048 , V =32 ,000 ). 
+
+Component Parameters Share 
+
+Token embedding (tied) 16.38M 16.3% Attention ( 20 ×) 20.97M 20.9% Feed-forward ( 20 ×) 62.91M 62.7% Normalization gains 0.02M < 0.1% 
+
+Total 100.29M 100% and Cohen 2019) (8,013,769 documents), and Wikipedia (6,407,814 documents). Tokenized into 29,498 shards at 634.13 tokens per document on average, it provides the broad linguistic coverage on which general pretraining is performed and from which MedFineWeb is selected. 
+
+Candidate Pool and Reference Sets. PubMed supplies abundant biomedical text but is dominated by abstract-style scientific writing, which underrepresents the explanatory, health-information, and question-oriented style of down-stream medical QA. To cover that style without a manually curated medical source, we select medical passages directly from general web text. We split Dgen into fixed-size can-didate chunks of approximately 1000 words, yielding 2M candidates, each retaining source metadata, and score every candidate by semantic similarity to medical QA data. We use three medical QA datasets as semantic references only: MedMCQA, MedQA, and PubMedQA (Pal, Umapathi, and Sankarasubbu 2022; Jin et al. 2021, 2019). These datasets are never added to MedFineWeb as text; they define what medical content looks like for retrieval. For each reference example we concatenate its prompt and response fields, and to keep retrieval tractable we use up to 20,000 references per Algorithm 1: Reference-Guided MedFineWeb Construction 
+
+Input : General-domain collection Dgen ; medical QA refer-ence sets R = {MedMCQA , MedQA , PubMedQA }; em-bedding model fϕ; top fraction α = 0 .50 
+
+Output : MedFineWeb plain-text corpus  
+
+> 1:
+
+Split Dgen into 1000-word chunks {c1, . . . , c N } 
+
+> 2:
+
+for each reference set R ∈ R do  
+
+> 3:
+
+Concatenate prompt and response of each reference example  
+
+> 4:
+
+Embed up to 20000 references with fϕ; build a FAISS inner-product index  
+
+> 5:
+
+for each candidate chunk ci do  
+
+> 6:
+
+Embed ci; retrieve top-5 nearest references  
+
+> 7:
+
+sR(ci) ← average top-5 cosine similarity  
+
+> 8:
+
+end for  
+
+> 9:
+
+Rank candidates by sR(ci) and keep the top αN  
+
+> 10:
+
+end for  
+
+> 11:
+
+Merge the per-reference selections and deduplicate at the text level  
+
+> 12:
+
+return MedFineWeb dataset (20,000 MedMCQA, 10,178 MedQA, and 20,000 PubMedQA). 
+
+Similarity Scoring. All candidate chunks and reference examples are embedded with the same Sentence Trans-former (Reimers and Gurevych 2019) and L2-normalized, so that inner product equals cosine similarity. For each refer-ence dataset R we build a FAISS inner-product index (John-son, Douze, and Jégou 2021), which compares 2M candi-dates against thousands of references without explicit pair-wise computation. For each candidate chunk c we retrieve its top-5 nearest references and score it by their average cosine similarity, sR(c) = 15
+
+P5 
+
+> i=1
+
+cos( fϕ(c), f ϕ(ri)) , where fϕ
+
+is the embedding model and ri is the i-th nearest reference in R. Averaging over five neighbors rather than taking the single nearest makes the score robust to an accidental match and measures similarity to a local neighborhood of medical content rather than to one reference point. 
+
+MedFineWeb. For each reference set we rank all 2M can-didates by sR and keep the top 50%, giving three per-reference selections of 1M chunks each (Table 2). Although the three rankings draw from a shared candidate pool, they select largely disjoint halves: the top-50% sets by similar-ity to MedMCQA, MedQA, and PubMedQA overlap only marginally, so merging and text-level deduplication remove a negligible fraction and yield MedFineWeb at 3M chunks. This near-disjointness is itself informative, indicating that the three reference styles (multiple-choice exam questions, USMLE vignettes, and abstract-based research questions) retrieve different regions of the web corpus rather than con-verging on one medical subset. MedFineWeb totals approx-imately 3B SentencePiece tokens, averaging about 1000 to-kens per chunk, remains entirely plain text, and is never converted to QA format. 
+
+Leakage and Contamination Analysis. Because the ref-erence sets also serve as evaluation benchmarks, we ver-Table 2: Per-reference selections comprising MedFineWeb (top 50% by similarity to each reference set). 
+
+Reference Set Selected Chunks Size 
+
+MedMCQA top 50% 1M 6.48GB MedQA top 50% 1M 6.45GB PubMedQA top 50% 1M 6.48GB ify that MedFineWeb contains no benchmark examples. Its chunks are drawn only from Dgen , never from the benchmark data. Comparing the selected chunks against MedMCQA, MedQA, and PubMedQA by normalized full-text hashing finds no exact matches, and a 20-word n-gram overlap check flags 22 chunks (about 0.0018%), which manual inspection confirms are shared biomedical phrasings rather than bench-mark items. However, verbatim checks do not address the deeper concern that selection by similarity to the bench-marks could inject answer knowledge even without copying text. Our results indicate it does not, by an argument inter-nal to the outcomes. Were similarity-based selection leaking answers, the datasets used as references would be the ones to improve, and would improve together; instead the effect is task-structured, not reference-structured: MedMCQA and MedQA, both references, remain near the task floor after adaptation, while the gain concentrates on context-grounded PubMedQA, where the answer is recoverable from the pro-vided passage rather than from selected pretraining text. A leakage account predicts the opposite pattern, so the evi-dence runs against answer-level contamination rather than for it. We therefore read the results as in-domain medical per-formance under reference-guided adaptation: selection shifts MedFineWeb toward medical topic and style without supply-ing benchmark answers. 
+
+Training and Optimization 
+
+MedLLM training proceeds in two stages: pretraining, comprising general pretraining and domain fine-tuning on MedFineWeb, followed by task-specific alignment via super-vised fine-tuning (SFT) and direct preference optimization (DPO). All configurations are given in Table 3. 
+
+General Pretraining. From random initialization, we pre-train the 0.1B model on Dgen (approximately 29.5B tokens) for 200,000 steps on 2 × NVIDIA H100 GPUs under the causal language modeling objective 
+
+LCLM (θ) = − X
+
+> t
+
+log pθ (xt | x<t ), (5) to which we add the z-loss regularizer on the output logits, 
+
+L(θ) = LCLM (θ) + λz Et
+
+log 2 P 
+
+> v
+
+exp( zt,v ) , (6) where zt,v is the logit for vocabulary item v at position t
+
+and λz = 10 −4. The z-loss penalizes drift in the logit log-partition function, keeping the softmax normalizer near unity and preventing the output-scale instabilities that a tied em-bedding of V = 32 ,000 can otherwise induce at small width. We apply curriculum sequence-length scheduling (Bengio et al. 2009), raising the maximum length in three stages (128 → 256 → 512 tokens), so the model consolidates lo-cal dependencies before attending to longer contexts, which stabilizes optimization at small scale. The final checkpoint reaches a validation loss of 4.005, with loss falling rapidly early in training and improving steadily thereafter. 
+
+Domain Fine-Tuning (DFT). We continue pretraining on MedFineWeb under the same objective for 25,000 steps at a learning rate of 5 × 10 −5, adapting the model from the general distribution Pweb toward medical text Pmed . Valida-tion perplexity decreases monotonically, from 27.3 at step 1,000 to 15.68 at step 8,000 and 13.62 at step 25,000, with no overfitting; we carry the final step-25,000 checkpoint into all subsequent phases. 
+
+Supervised Fine-Tuning (SFT). To measure per-benchmark generalization, we fine-tune a separate SFT model for each benchmark from the shared DFT checkpoint, at learning rate 2 × 10 −5 under the label-prediction objective 
+
+LSFT (θ) = − log pθ (y⋆ | q, a 1: K ), (7) where each question q is presented with all K answer op-tions a1: K and y⋆ is the correct answer label. Per-benchmark settings are given in Table 3. Table 3: Per-benchmark SFT and DPO training configuration.                           
+
+> Benchmark Train SFT Steps Batch DPO Steps
+> MedMCQA 182,822 8,000 32 2,000 MedQA 10,178 4,000 8500 PubMedQA 211,269 6,000 64 2,000
+> All runs: LR 2×10 −5(SFT); LR 5×10 −6,β= 0 .1(DPO). MMLU has no training set; it is evaluated with the MedMCQA model.
+
+Direct Preference Optimization (DPO). Each SFT model serves as the reference policy pref for its DPO run. We build preference pairs per benchmark by pairing the correct an-swer (preferred) with each incorrect answer (dispreferred), 
+
+(q, y +, y −), and minimize the DPO objective (Rafailov et al. 2023) 
+
+LDPO = − E(q,y +,y −) log σ
+
+
+
+β log pθ (y+|q) 
+
+> pref (y+|q)
+
+− β log pθ (y−|q)
+
+> pref (y−|q)
+
+
+
+,
+
+(8) at learning rate 5 × 10 −6 with temperature β = 0 .1. The KL-penalty strength in DPO scales as 1/β , so the small β
+
+permits large deviation from the reference and amplifies the attained preference margin; we quantify this amplification in the results. On MedMCQA, validation loss decreases from 0.6699 (step 500) to 0.6611 (step 2,000), which we select as the best checkpoint. 
+
+Inference. We score all MedLLM evaluations by top-token selection: for a multiple-choice question q with op-tions {a1, . . . , a K } we predict ˆa = arg max k log pθ (ak | q),which avoids the generation and parsing artifacts that penal-ize small models. Both finetuned MedLLM and the DFT-only pretrained model are evaluated zero-shot. For 7B baselines we follow Chen et al. (2023), using 3-shot in-context learn-ing in the pretrained comparison and top-token selection after finetuning. 
+
+# Experiments 
+
+Datasets 
+
+We evaluate on four standard medical benchmarks spanning two task types. PubMedQA (Jin et al. 2019) is context-grounded: each item pairs a PubMed abstract with a yes/no/-maybe question, and we use the 500 expert-labeled examples in the reasoning-required setting. The remaining three are knowledge-recall benchmarks. MedMCQA (Pal, Umapathi, and Sankarasubbu 2022) contains over 194K 4-option ques-tions from Indian medical entrance exams (AIIMS/NEET) across 2,400 topics and 21 subjects; we evaluate on the 4,183-question validation set, since the test answer keys are not pub-lic. MedQA (Jin et al. 2021) consists of USMLE-style clin-ical vignettes; we use the 4-option English variant, training on GBaker/MedQA-USMLE-4-options (10,178 exam-ples) and evaluating on the 1,273-question test set (MedQA). MMLU (Hendrycks et al. 2021) aggregates nine medical subjects (1,862 questions) and provides no training set; we evaluate the MedMCQA-finetuned model on it to measure cross-domain transfer. 
+
+Baselines 
+
+We evaluate MedLLM against models from 0.1B to 7B: the medically adapted PMC-LLaMA-7B (Wu et al. 2023), general-purpose Falcon-7B (Almazrouei et al. 2023), and instruction-tuned Mistral-7B-instruct (Jiang et al. 2023) and Zephyr-7B-β (Tunstall et al. 2024) (DPO-aligned), together with the sub-7B open baselines Gemma-2B (Gemma Team 2024), BioMedLM-2.7B (Bolton et al. 2024), and BioGPT-Large (Luo et al. 2022). To match MedLLM’s per-benchmark fine-tuning, PMC-LLaMA-7B and Falcon-7B are individu-ally fine-tuned on each benchmark’s training set, whereas the instruction-tuned Mistral-7B and Zephyr-7B-β are eval-uated with their released weights, since they are designed for zero-shot use. 
+
+Experimental Settings 
+
+Evaluation Protocol. We score MedLLM and all finetuned models by top-token selection, choosing the option with the highest log-probability among the answer candidates; MedLLM is evaluated zero-shot. Pretrained (non-finetuned) baselines use 3-shot in-context learning with demonstrations sampled from the training set across three random seeds. Be-cause MMLU has no training set, its MedLLM result comes from the MedMCQA-finetuned model and is a cross-domain transfer measurement rather than in-domain performance. 
+
+Training Configuration. General pretraining runs on 2 ×
+
+NVIDIA H100 GPUs; SFT and DPO run on 2 × NVIDIA A100 GPUs. Phase A uses 200K steps on 29.5B tokens with curriculum lengths 128 → 256 → 512 ; DFT uses 25K steps at LR 5 × 10 −5, carrying the final checkpoint forward. Phase B (SFT, LR 2 × 10 −5) and Phase C (DPO, LR 5 × 10 −6,
+
+β = 0 .1) are run per benchmark, with settings in Table 3. Figure 2: Pretrained model comparison across scales. 
+
+# Results 
+
+Pretrained Model Evaluation 
+
+Figure 2 shows results for the pretraining, with MedLLM evaluated after DFT only. The comparison is conservative for MedLLM, since the baselines use 3-shot in-context learn-ing whereas MedLLM is evaluated zero-shot by top-token selection, in-context learning being unreliable at 0.1B pa-rameters. Despite this handicap and its 70 × smaller size, MedLLM attains the highest average accuracy in the figure at 
+
+35 .1% , ahead of every 7B and sub-7B baseline including the instruction-tuned Zephyr-7B-β (32 .4% ) and the medically adapted PMC-LLaMA-7B ( 30 .6% ); the lead is carried by the two recall-oriented multiple-choice benchmarks, where MedLLM is the top model on both MMLU ( 29 .8% , ahead of Zephyr-7B-β at 28 .0% ) and MedMCQA ( 30 .0% , ahead of BioMedLM-2.7B at 29 .5% ), showing that domain adap-tation on MedFineWeb already lifts the small model above larger systems on these tasks before any task-specific fine-tuning. The pretrained comparison already exhibits the split that finetuning later sharpens: the 0.1B model is competitive-to-leading where the answer is a short factual or context-grounded choice, and weakest on the benchmark demanding multi-step clinical recall. 
+
+Fine-Tuned Model Evaluation 
+
+Table 4 shows results after task-specific finetuning, and the ordering separates by task type. On the two multiple-choice recall benchmarks, MedLLM (DPO) outperforms, reaching 32 .4% on MMLU and 34 .9% on MedMCQA and significantly exceeding every 7B and sub-7B baseline un-der McNemar’s test, including the medically adapted PMC-LLaMA-7B. On MedQA it does not clear this bar, at 
+
+28 .1% only 3.1 pp above the four-option floor and sig-nificantly behind the instruction-tuned baselines, so its re-call competence does not extend to longer USMLE vi-gnettes. On context-grounded PubMedQA the ordering in-verts: MedLLM reaches 58 .2% after DPO, significantly ahead of Zephyr-7B-β (43 .0% ) and Mistral-7B ( 17 .8% )but significantly behind the PubMedQA-finetuned PMC-LLaMA-7B ( 72 .9% ) and Falcon-7B ( 65 .3% ), so at 70 ×
+
+fewer parameters the model clears the instruction-tuned sys-tems on context while the continued-pretraining baselines retain a supervision advantage. Finally, DPO adds accuracy over SFT (MedMCQA 33 .9 → 34 .9% , MedQA +1 .5 pp, 0 5k 10k 15k 20k 25k  
+
+> DFT Step
+> 10 15 20 25 30 35
+> Validation Perplexity
+> Step 1k PPL=27.3 Step 8k PPL=15.7 Step 25k PPL=13.6
+
+Figure 3: Validation perplexity during medical domain fine-tuning. PubMedQA +0 .3 pp, a slight MMLU regression) yet ampli-fies the mean correct-versus-incorrect log-probability margin 
+
+5.2×, from 0.1037 to 0.5403 , the O(1 /β ) separation the ob-jective predicts at β = 0 .1 (Eq. 8), showing that at this scale preference alignment sharpens discrimination the model al-ready has rather than supplying absent knowledge, consistent with stored knowledge being the binding constraint at 0.1B. 
+
+Analysis on Continued Pretraining 
+
+Training Dynamics. Figure 3 shows validation perplexity during domain fine-tuning. It decreases monotonically, from 
+
+27 .3 at step 1,000 to 15 .68 at step 8,000 and 13 .62 at step 
+
+25 ,000 , with no overfitting at any checkpoint, so we carry the final checkpoint into all SFT and DPO experiments. The curve is strongly front-loaded: perplexity halves within the first 10 ,000 steps and improves by only about 1.3 over the remaining 15 ,000 , indicating that a 0.1B model absorbs the distributional characteristics of the corpus quickly and then saturates. Perplexity on medical text falls by half, yet MedM-CQA accuracy after DFT reaches only 27 .9% , barely above the 25% four-option floor. Fitting the medical token distri-bution and acquiring retrievable medical facts are therefore separable at this scale, consistent with the task-structured gap observed after finetuning: domain adaptation reliably teaches the model medical language, but not the stored knowledge that recall benchmarks require. 
+
+Intermediate Checkpoint Evaluation. Table 6 makes this separation explicit by tracking downstream accuracy across the same fine-tuning run, evaluated few-shot following Chen et al. (2023). Over 1.26 B tokens of domain fine-tuning, during which validation perplexity roughly halves, bench-mark accuracy does not move: MMLU shifts by +0 .4 pp (29 .3 → 29 .7), MedMCQA by +0 .2 pp ( 26 .5 → 26 .7), Pub-MedQA by −0.3 pp ( 33 .8 → 33 .5), and the average stays at 
+
+≈ 30% (29 .9 → 30 .0), all within seed noise. The two curves therefore diverge: perplexity improves substantially while ac-curacy is flat, which is direct evidence that at 0.1B the corpus teaches medical form (lower perplexity) without depositing the retrievable facts that these benchmarks score. It also im-plies that perplexity is an unreliable model-selection signal at this scale, since the lowest-perplexity checkpoint is not the most accurate one. Table 4: Task-specific finetuning results, showing acc ± std. over three seeds. Baselines marked with ∗ are instruction-tuned. Significance is assessed per benchmark by McNemar’s test, comparing the item-level predictions of MedLLM (DPO) against each baseline: † marks a baseline that MedLLM (DPO) significantly exceeds, and ‡ marks a baseline by which MedLLM (DPO) is significantly exceeded ( p < 0.05 ). 
+
+Model Size MMLU PubMedQA MedMCQA MedQA Avg. 
+
+7B-scale (top-token selection) 
+
+Mistral ∗ 7B 25 .8 ± 0.9† 17 .8 ± 1.5† 30 .2 ± 0.6† 41 .1 ± 1.1‡ 28.7 Zephyr-β∗ 7B 32 .1 ± 1.0 43 .0 ± 1.8† 33 .0 ± 0.6† 42.5 ± 1.2‡ 37.7 PMC-LLaMA 7B 26 .4 ± 0.9† 72.9 ± 1.6‡ 26 .6 ± 0.6† 25 .5 ± 1.0† 37.9 Falcon 7B 23 .6 ± 0.8† 65 .3 ± 1.7‡ 31 .8 ± 0.6† 21 .0 ± 0.9† 35.4 
+
+sub-7B-scale (top-token selection) 
+
+Gemma 2B 27 .6 ± 0.9† 60 .8 ± 1.8‡ 27 .7 ± 0.6† 30 .6 ± 1.0† 36.7 BioMedLM 2.7B 23 .8 ± 0.8† 55 .2 ± 1.8 32 .2 ± 0.6† 30 .6 ± 1.0† 35.5 BioGPT-Large 1.5B 21 .6 ± 0.8† 60 .1 ± 1.8‡ 33 .1 ± 0.6† 31 .3 ± 1.0† 36.5 
+
+MedLLM (0.1B, top-token selection) 
+
+MedLLM (SFT) 0.1B 29 .7 ± 1.0 57 .9 ± 1.8 33 .9 ± 0.6 26 .6 ± 1.0 37.0 MedLLM (DPO) 0.1B 32.4 ± 1.0 58 .2 ± 1.8 34.9 ± 0.6 28 .1 ± 1.0 38.4 
+
+Table 5: Ablation on training phases evaluated by top-token selection on the per-benchmark fine-tuned models. 
+
+Configuration MMLU PubMedQA MedMCQA MedQA Avg. 
+
+SFT ( w/o DFT) 31.1 55.0 32.8 25.8 36.2 SFT (DFT Step 8k) 30.5 55.7 32.8 27.8 36.7 SFT (DFT Step 20k) 30.4 55.5 33.6 27.3 36.7 SFT (DFT Step 25k) 29.7 57.9 33.9 26.6 37.0 SFT + DPO 32.4 58.2 34.9 28.1 38.4 Table 6: Few-shot evaluation of intermediate DFT check-points.                               
+
+> Step Tokens MMLU PubMedQA MedMCQA Avg.
+> 0 (base) 029.3 33.8 26.5 29.9 2,000 ∼126M 27.7 33.8 26.6 29.4 5,000 ∼315M 28.3 33.7 26.8 29.6 8,000 ∼504M 29.2 33.5 27.1 29.9 20,000 ∼1.26B 29.7 33.5 26.7 30.0
+
+Ablation Studies 
+
+Table 5 isolates each training phase, evaluated on the per-benchmark fine-tuned models. Domain fine-tuning alone barely moves aggregate accuracy, which rises modestly from 
+
+36 .2 to 37 .0 across 25 ,000 steps ( 36 .2 → 36 .7 → 36 .7 → 37 .0)even as validation perplexity halves over the same interval (27 .3 → 13 .62 , Figure 3); what DFT changes is the distri-bution of competence, not its level, with MedMCQA ris-ing ( 32 .8 → 33 .9) and MMLU declining ( 31 .1 → 29 .7), while MedQA remains roughly stable ( 25 .8 → 26 .6), the signature of capacity reallocation rather than knowledge ac-quisition at 0.1B. DPO then adds a genuine +1 .4 pp to the average ( 37 .0 → 38 .4), but concentrated rather than broad: it gains +1 .0 pp on MedMCQA and +2 .7 pp on MMLU transfer while leaving context-grounded PubMedQA flat ( 57 .9 → 58 .2) and recovering MedQA to 28 .1. The same step amplifies the mean log-probability margin between cor-rect and incorrect answers 5.2×, from 0.1037 to 0.5403 ,the O(1 /β ) separation the objective predicts at β = 0 .1
+
+(Eq. 8), so preference alignment sharpens discrimination the model already possesses far more than it supplies new knowledge, and aggregate accuracy understates both phases’ effects, which are task-structured redistributions the average partly cancels. 
+
+# Conclusions 
+
+We presented MedLLM, an open 0.1B-parameter medical language model, and MedFineWeb, the web-selected cor-pus on which it is domain adapted, both released to make sub-billion medical modeling reproducible. Against 7B and sub-7B baselines, medical competence does not degrade uni-formly under compression but splits by task type. On context-grounded PubMedQA the model falls within 2.9 pp of a medically adapted 7B system at 70 × fewer parameters, and on the recall benchmark MedMCQA it significantly exceeds every 7B and sub-7B baseline, so where recall succeeds the binding constraint is model capacity rather than adaptation; on the harder USMLE-style MedQA, however, it stays near the four-option floor, the one task on which the capacity limit is not overcome. At sub-billion scale, medical capability is therefore best sourced from retrieval and supplied context rather than from parametric recall. MedLLM remains con-strained in the breadth of knowledge it can encode and our log-probability ranking does not assess free-form generation. References 
+
+Almazrouei, E.; Alobeidli, H.; Alshamsi, A.; Cappelli, A.; Cojocaru, R.; Debbah, M.; Goffinet, É.; Hesslow, D.; Lau-nay, J.; Malartic, Q.; Mazzotta, D.; Penedo, G.; and Muber, B. 2023. The Falcon Series of Open Language Models. arXiv:2311.16867. Bengio, Y.; Louradour, J.; Collobert, R.; and Weston, J. 2009. Curriculum Learning. In Proceedings of the 26th Interna-tional Conference on Machine Learning , 41–48. Bolton, E.; Venigalla, A.; Yasunaga, M.; Hall, D.; Xiong, B.; Lee, T.; Daneshjou, R.; Frankle, J.; Liang, P.; Carbin, M.; and Manning, C. D. 2024. BioMedLM: A 2.7B Parameter Language Model Trained on Biomedical Text. arXiv preprint arXiv:2403.18421 .Bradley, R. A.; and Terry, M. E. 1952. Rank Analysis of Incomplete Block Designs: I. The Method of Paired Com-parisons. Biometrika , 39(3/4): 324–345. Brown, T. B.; Mann, B.; Ryder, N.; Subbiah, M.; Kaplan, J.; Dhariwal, P.; Neelakantan, A.; Shyam, P.; Sastry, G.; Askell, A.; et al. 2020. Language Models Are Few-Shot Learners. In Advances in Neural Information Processing Systems , vol-ume 33, 1877–1901. Chen, J.; Gui, R.; Wang, A.; Zhang, S.; Wan, X.; and Zhu, B. 2024. HuatuoGPT-II: One-Stage Training for Medical Adaption of LLMs. arXiv:2311.09774. Chen, Z.; Hernández Cano, A.; Romanou, A.; Bonnet, A.; Matoba, K.; Salvi, F.; Pagliardini, M.; Fan, S.; Köpf, A.; Mohtashami, A.; Sallinen, A.; Sakhaeirad, A.; Swamy, V.; Krawczuk, I.; Bayazit, D.; Marmet, A.; Montariol, S.; Hart-ley, M.-A.; Jaggi, M.; and Bosselut, A. 2023. MEDITRON-70B: Scaling Medical Pretraining for Large Language Mod-els. arXiv:2311.16079. Christiano, P. F.; Leike, J.; Brown, T. B.; Martic, M.; Legg, S.; and Amodei, D. 2017. Deep Reinforcement Learning from Human Preferences. In Advances in Neural Information Processing Systems , volume 30, 4299–4307. Gemma Team. 2024. Gemma: Open Models Based on Gemini Research and Technology. arXiv preprint arXiv:2403.08295 .Gokaslan, A.; and Cohen, V. 2019. OpenWebText Corpus. http://skylion007.github.io/OpenWebTextCorpus/. Gu, Y.; Tinn, R.; Cheng, H.; Lucas, M.; Usuyama, N.; Liu, X.; Naumann, T.; Gao, J.; and Poon, H. 2021. Domain-Specific Language Model Pretraining for Biomedical Natural Language Processing. ACM Transactions on Computing for Healthcare , 3(1): 1–23. Gupta, K.; Thérien, B.; Ibrahim, A.; Richter, M. L.; Anthony, Q.; Belilovsky, E.; Rish, I.; and Lesort, T. 2023. Continual Pre-Training of Large Language Models: How to (Re)warm Your Model? arXiv:2308.04014. Gururangan, S.; Marasović, A.; Swayamdipta, S.; Lo, K.; Beltagy, I.; Downey, D.; and Smith, N. A. 2020. Don’t Stop Pretraining: Adapt Language Models to Domains and Tasks. In Proceedings of the 58th Annual Meeting of the Association for Computational Linguistics , 8342–8360. Han, T.; Adams, L. C.; Papaioannou, J.-M.; Grundmann, P.; Oberhauser, T.; Löser, A.; Truhn, D.; and Bressem, K. K. 2023. MedAlpaca: An Open-Source Collection of Medical Conversational AI Models and Training Data. arXiv:2304.08247. Hendrycks, D.; Burns, C.; Basart, S.; Zou, A.; Mazeika, M.; Song, D.; and Steinhardt, J. 2021. Measuring Massive Multitask Language Understanding. In Proceedings of the International Conference on Learning Representations .Jiang, A. Q.; Sablayrolles, A.; Mensch, A.; Bamford, C.; Singh Chaplot, D.; de las Casas, D.; Bressand, F.; Lengyel, G.; Lample, G.; Saulnier, L.; Lavaud, L. R.; Lachaux, M.-A.; Stock, P.; Le Scao, T.; Lavril, T.; Wang, T.; Lacroix, T.; and El Sayed, W. 2023. Mistral 7B. arXiv:2310.06825. Jin, D.; Pan, E.; Oufattole, N.; Weng, W.-H.; Fang, H.; and Szolovits, P. 2021. What Disease Does This Patient Have? A Large-Scale Open Domain Question Answering Dataset from Medical Exams. Applied Sciences , 11(14): 6421. Jin, Q.; Dhingra, B.; Liu, Z.; Cohen, W.; and Lu, X. 2019. PubMedQA: A Dataset for Biomedical Research Question Answering. In Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing , 2567– 2577. Johnson, J.; Douze, M.; and Jégou, H. 2021. Billion-Scale Similarity Search with GPUs. IEEE Transactions on Big Data , 7(3): 535–547. Ke, Z.; Shao, Y.; Lin, H.; Koncel-Kedziorski, R.; Iyer, B.; Xiao, C.; and Neubig, G. 2023. Continual Pre-training of Language Models. arXiv:2302.03241. Kudo, T.; and Richardson, J. 2018. SentencePiece: A Simple and Language Independent Subword Tokenizer and Detok-enizer for Neural Text Processing. In Proceedings of the 2018 Conference on Empirical Methods in Natural Language Pro-cessing: System Demonstrations , 66–71. Lee, J.; Yoon, W.; Kim, S.; Kim, D.; Kim, S.; So, C. H.; and Kang, J. 2020. BioBERT: A Pre-Trained Biomedical Lan-guage Representation Model for Biomedical Text Mining. 
+
+Bioinformatics , 36(4): 1234–1240. Levine, Y.; Wies, N.; Sharir, O.; Bata, H.; and Shashua, A. 2020. Limits to Depth Efficiency of Self-Attention. In 
+
+Advances in Neural Information Processing Systems , vol-ume 33, 22640–22651. Luo, R.; Sun, L.; Xia, Y.; Qin, T.; Zhang, S.; Poon, H.; and Liu, T.-Y. 2022. BioGPT: Generative Pre-trained Trans-former for Biomedical Text Generation and Mining. Briefings in Bioinformatics , 23(6). Nori, H.; King, N.; McKinney, S. M.; Carignan, D.; and Horvitz, E. 2023. Capabilities of GPT-4 on Medical Chal-lenge Problems. arXiv:2303.13375. Ouyang, L.; Wu, J.; Jiang, X.; Almeida, D.; Wainwright, C.; Mishkin, P.; Zhang, C.; Agarwal, S.; Slama, K.; Ray, A.; et al. 2022. Training Language Models to Follow Instructions with Human Feedback. In Advances in Neural Information Processing Systems , volume 35, 27730–27744. Pal, A.; Umapathi, L. K.; and Sankarasubbu, M. 2022. MedMCQA: A Large-Scale Multi-Subject Multi-Choice Dataset for Medical Domain Question Answering. In Pro-ceedings of the Conference on Health, Inference, and Learn-ing , 248–260. Peng, C.; Yang, X.; Chen, A.; Smith, K. E.; PourNejatian, N.; Costa, A. B.; Martin, C.; Flores, M. G.; Zhang, Y.; Magoc, T.; Lipori, G.; Mitchell, D. A.; Ospina, N. S.; Ahmed, M. M.; Hogan, W. R.; Shenkman, E. A.; Bian, J.; and Wu, Y. 2023. A Study of Generative Large Language Model for Medical Research and Healthcare. npj Digital Medicine , 6: 210. Press, O.; and Wolf, L. 2017. Using the Output Embedding to Improve Language Models. Rafailov, R.; Sharma, A.; Mitchell, E.; Manning, C. D.; Er-mon, S.; and Finn, C. 2023. Direct Preference Optimiza-tion: Your Language Model Is Secretly a Reward Model. In Advances in Neural Information Processing Systems , vol-ume 36, 53728–53741. Raffel, C.; Shazeer, N.; Roberts, A.; Lee, K.; Narang, S.; Matena, M.; Zhou, Y.; Li, W.; and Liu, P. J. 2020. Explor-ing the Limits of Transfer Learning with a Unified Text-to-Text Transformer. Journal of Machine Learning Research ,21(140): 1–67. Reimers, N.; and Gurevych, I. 2019. Sentence-BERT: Sen-tence Embeddings Using Siamese BERT-Networks. Sackett, D. L.; Rosenberg, W. M.; Gray, J. M.; Haynes, R. B.; and Richardson, W. S. 1996. Evidence Based Medicine: What It Is and What It Isn’t. BMJ , 312(7023): 71–72. Shazeer, N. 2020. GLU Variants Improve Transformer. arXiv:2002.05202. Singhal, K.; Azizi, S.; Tu, T.; Mahdavi, S. S.; Wei, J.; Chung, H. W.; Scales, N.; Tanwani, A.; Cole-Lewis, H.; Pfohl, S.; Payne, P.; Seneviratne, M.; Gamble, P.; Kelly, C.; Babiker, A.; Schärli, N.; Chowdhery, A.; Mansfield, P.; Demner-Fushman, D.; Agüera y Arcas, B.; Webster, D.; Corrado, G. S.; Matias, Y.; Chou, K.; Gottweis, J.; Tomasev, N.; Liu, Y.; Rajko-mar, A.; Barral, J.; Semturs, C.; Karthikesalingam, A.; and Natarajan, V. 2023a. Large Language Models Encode Clini-cal Knowledge. Nature , 620(7972): 172–180. Singhal, K.; Tu, T.; Gottweis, J.; Sayres, R.; Wulczyn, E.; Hou, L.; Clark, K.; Pfohl, S.; Cole-Lewis, H.; Neal, D.; Schaekermann, M.; Wang, A.; Amin, M.; Lachgar, S.; Mans-field, P.; Prakash, S.; Green, B.; Dominowska, E.; Agüera y Arcas, B.; Tomasev, N.; Liu, Y.; Wong, R.; Semturs, C.; Mahdavi, S. S.; Barral, J.; Webster, D.; Corrado, G. S.; Ma-tias, Y.; Azizi, S.; Karthikesalingam, A.; and Natarajan, V. 2023b. Towards Expert-Level Medical Question Answering with Large Language Models. arXiv:2305.09617. Su, J.; Ahmed, M.; Lu, Y.; Pan, S.; Bo, W.; and Liu, Y. 2024. RoFormer: Enhanced Transformer with Rotary Position Em-bedding. Thirunavukarasu, A. J.; Ting, D. S. J.; Elangovan, K.; Gutier-rez, L.; Tan, T. F.; and Ting, D. S. W. 2023. Large Language Models in Medicine. Together Computer. 2023. RedPajama: An Open Dataset for Training Large Language Models. https://together.ai/blog/ redpajama. Toma, A.; Lawler, P. R.; Ba, J.; Krishnan, R. G.; Ru-bin, B. B.; and Wang, B. 2023. Clinical Camel: An Open-Source Expert-Level Medical Language Model with Dialogue-Based Knowledge Encoding. arXiv:2305.12031. Tunstall, L.; Beeching, E.; Lambert, N.; Rajani, N.; Rasul, K.; Belkada, Y.; Huang, S.; von Werra, L.; Fourrier, C.; Habib, N.; et al. 2024. Zephyr: Direct Distillation of LM Align-ment. In Proceedings of the First Conference on Language Modeling .Walsh, P.; Soldaini, L.; Groeneveld, D.; Lo, K.; Arora, S.; Bhagia, A.; et al. 2025. 2 OLMo 2 Furious. In Proceedings of the Conference on Language Modeling .Wu, C.; Lin, W.; Zhang, X.; Zhang, Y.; Xie, W.; and Wang, Y. 2023. PMC-LLaMA: Towards Building Open-Source Lan-guage Models for Medicine. arXiv:2304.14454. Zhang, B.; and Sennrich, R. 2019. Root Mean Square Layer Normalization. Advances in Neural Information Processing Systems , 32. Zhang, X.; Li, C.; Zong, X.; Tian, Z.; Yu, J.; and Yan, F. 2024. AlpaCare: Instruction-Tuned Large Language Models for Medical Application. arXiv:2310.14558.

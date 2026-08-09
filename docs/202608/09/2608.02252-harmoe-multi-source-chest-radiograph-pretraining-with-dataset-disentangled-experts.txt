@@ -1,0 +1,531 @@
+Title: HarMoE: Multi-Source Chest Radiograph Pretraining with Dataset-Disentangled Experts
+
+URL Source: https://arxiv.org/pdf/2608.02252
+
+Published Time: Tue, 04 Aug 2026 02:28:22 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# HarMoE: Multi-Source Chest Radiograph Pretraining with Dataset-Disentangled Experts 
+
+# Haozhe Luo ∗† 
+
+haozhe.luo@unibe.ch ARTORG Center for Biomedical Engineering Research, University of Bern Bern, Switzerland Kaiko.AI Zurich, Switzerland 
+
+# Ziyu Zhou ∗
+
+zhouziyu@sjtu.edu.cn Shanghai Jiao Tong University Shanghai, China 
+
+# Shelley Zixin Shu 
+
+zixin.shu@unibe.ch ARTORG Center for Biomedical Engineering Research, University of Bern Bern, Switzerland 
+
+# Mauricio Reyes 
+
+mauricio.reyes3@unibe.ch ARTORG Center for Biomedical Engineering Research, University of Bern Bern, Switzerland 
+
+## Abstract 
+
+Recent vision-language models for chest X-ray understanding are largely built on image-report alignment and therefore rely heavily on MIMIC-CXR as the dominant pretraining source. While effec-tive at scale, this paradigm underexplores an important alterna-tive source of supervision: a range of existing multi-label classifi-cation datasets, which provide cleaner and more explicit disease signals than free-text reports, and can offer broader pathology coverage when combined across sources. However, learning from such heterogeneous datasets is nontrivial, as differences in label ontologies, annotation protocols, acquisition pipelines, and report styles can cause models to entangle clinical semantics with dataset identity, leading to poor transfer despite increased scale. In this work, we revisit radiology VLM construction from the perspec-tive of harmonized multi-source learning. We propose HarMoE, a dataset-aware mixture-of-experts framework that learns shared cross-dataset medical semantics while confining source-specific variation to lightweight residual experts in deeper decoder layers. To further exploit clean supervision from labeled datasets, we train in a unified disease vocabulary with masked multi-dataset supervi-sion, enabling the model to leverage complementary annotations without introducing false negatives. Experiments on large-scale chest X-ray benchmarks show that HarMoE consistently improves zero-shot classification, out-of-distribution transfer, and grounding over strong baselines. Our results suggest that building robust radi-ology VLMs requires moving beyond single-source image-report alignment toward structured knowledge construction from het-erogeneous datasets with cleaner supervision and broader cover-age. Code and the 873k harmonized dataset will be released at https://github.com/Roypic/harmoe. 
+
+## CCS Concepts 
+
+• Computing methodologies → Computer vision .
+
+> ∗Haozhe Luo and Ziyu Zhou contributed equally to this work.
+> †Corresponding author.
+> This work is licensed under a Creative Commons Attribution 4.0 International License.
+> MM ’26, Rio de Janeiro, Brazil
+> © 2026 Copyright held by the owner/author(s). ACM ISBN 979-8-4007-2213-4/2026/11 https://doi.org/10.1145/3767308.3835205
+
+## Keywords 
+
+Vision Language Pretraining, Zero-shot Diagnosis, Heterogeneous Data 
+
+ACM Reference Format: 
+
+Haozhe Luo, Ziyu Zhou, Shelley Zixin Shu, and Mauricio Reyes. 2026. Har-MoE: Multi-Source Chest Radiograph Pretraining with Dataset-Disentangled Experts. In Proceedings of the 34th ACM International Conference on Multi-media (MM ’26), November 10–14, 2026, Rio de Janeiro, Brazil. ACM, New York, NY, USA, 10 pages. https://doi.org/10.1145/3767308.3835205 
+
+## 1 Introduction 
+
+Chest radiography is among the most frequently performed diag-nostic imaging procedures worldwide, yet its interpretation remains labor-intensive and subject to substantial inter-observer variabil-ity [9, 15]. This bottleneck has driven sustained interest in vision-language pretraining (VLP): by aligning chest X-ray images with radiology reports through contrastive learning, methods such as ConVIRT [47], GLoRIA [17], KAD [46], and MedKLIP [41] enable zero-shot classification without manual annotation. More recently, CarZero [22] and RadZero [30] have shown that classification-level prompts yield cleaner supervision while retaining semantic ground-ing. Despite this diversity, the field remains constrained by a shared dependency on a single institutional source, predominantly MIMIC-CXR [21] (377K images, 43 conditions) as shown in Fig. 1 (a). This single-source dependency is limiting because data scale and diversity are among the strongest predictors of representation quality. CLIP [32] and ALIGN [20] demonstrated robust zero-shot transfer from massive image-text corpora, with subsequent work confirming power-law scaling with data size [8]. Radiology can-not replicate this directly: datasets are institutionally siloed, and the majority of large-scale chest X-ray collections discard free-text reports in favor of structured labels. ChestX-ray14 [40] (112K), CheXpert [18] (224K), and PadChest [6] (160K) are inaccessible to standard contrastive VLP pipelines despite their clinical value. Com-bining them with report-bearing corpora would more than double the pretraining pool, from 377K to 873K images, while expanding pathology coverage from 43 to 229 conditions (Fig. 1 (b)). The technical barrier to such aggregation is not data access but 
+
+representation quality under multi-source supervision . Each dataset reflects a distinct combination of acquisition hardware, patient demographics, and annotation protocol [29, 44]; naively pooling arXiv:2608.02252v1 [cs.CV] 3 Aug 2026 MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Haozhe Luo, Ziyu Zhou, Shelley Zixin Shu, and Mauricio Reyes 
+
+sources induces spurious correlations between dataset identity and diagnostic labels [10], and treating unannotated classes as nega-tive introduces systematic false negatives that distort the learned decision boundary [4]. These failure modes are well-studied in multi-domain learning [14], but existing VLP methods do not ad-dress them directly, as they operate within single-source pipelines where they do not arise by construction. We approach this as a multi-source supervised pretraining problem with partial labels and heterogeneous domain shifts ,and hypothesize that effective multi-source learning requires archi-tecturally separating what is shared (pathology-relevant features that generalize across institutions) from what is source-specific (ac-quisition and annotation artifacts), rather than leaving this separa-tion to emerge from data alone. One could instead pursue domain-adversarial alignment [13] or naive joint training, but both are suboptimal: adversarial alignment risks removing clinically rele-vant variation (e.g., disease prevalence differences reflecting gen-uine epidemiological variation), while naive joint training encodes source-specific shortcuts that inflate in-domain scores at the cost of transferability. HarMoE takes a middle path: a shared decoder cap-tures cross-dataset pathology semantics, augmented by lightweight low-rank residual modules deterministically routed by dataset iden-tity , reflecting that distributional shifts in multi-site imaging are systematic and institutional rather than instance-level. At inference, the residual modules are discarded; the training objective ensures the shared pathway alone carries sufficient diagnostic signal. Class-level supervision sacrifices the compositional richness of free-text reports, but is more directly aligned with the zero-shot multi-label evaluation objective and, crucially, unlocks three datasets providing 496K additional images and 186 additional dis-ease categories inaccessible to any existing VLP method. The prompts retain sufficient semantic structure for the text encoder to general-ize to unseen disease categories, as we demonstrate empirically. Our contributions are as follows: 
+
+(i) We formalize multi-source chest X-ray pretraining under a uni-fied disease vocabulary of 229 classes, constructed by harmonizing four major datasets (MIMIC-CXR, CheXpert, ChestX-ray14, PadCh-est) into a shared label space with tri-state encoding (1, 0, −1 for present, absent, unknown) and masked supervision to prevent false negatives from unannotated entries. 
+
+(ii) We propose HarMoE, an architecture that separates shared pathology representations from dataset-specific residuals via con-strained low-rank expert modules deterministically routed by dataset identity and discarded at inference, enabling multi-source scaling from 377K to 873K images without encoding source-dependent confounds into the transferable representation. 
+
+(iii) We evaluate on 11 benchmarks spanning in-domain and out-of-distribution settings and demonstrate consistent improvements in zero-shot classification, with the largest gains on out-of-distribution benchmarks: +2.9% AUC on RSNA, +4.6% AUC on COVID-QU-Ex, and +4.1% AUC on Montgomery. We additionally report improve-ments in zero-shot visual grounding without grounding-specific supervision. 
+
+## 2 Related Work 
+
+Vision-Language Pretraining for Chest X-rays. Contrastive alignment between chest X-ray images and radiology reports has become the dominant pretraining paradigm. Early methods es-tablished global alignment (ConVIRT [47]) and local region-word matching (GLoRIA [17]), while BioViL [5] and BioViL-T [3] ex-tended this with token-level and temporal modeling. Knowledge-enhanced methods such as KAD [46] and MedKLIP [41] improve grounding through structured entity extraction. More recently, CarZero [22], RadZero [30], and DeViDe [26] move toward classification-level prompts or multi-attribute decomposition, while KEPIL [24] explicitly improves robustness to prompt variation through ontology-guided knowledge enrichment. MAVL [31] decomposes visual fea-tures into attribute-specific components for finer-grained recogni-tion. Complementary self-supervised approaches learn anatomy-aware chest X-ray representations through consistent embedding [48], compositional decomposition [49], or multi-perspective anatomi-cal constraints [50]. Beyond recognition, DWARF [23] and hybrid explanation-guided learning [36] refine diagnostic attention using expert or self-supervised guidance, while XBench [25] systemati-cally evaluates visual-language explanations in chest radiography. These advances improve prompt robustness, anatomical represen-tation, or grounding, but remain centered on single-source training. HarMoE instead exploits complementary supervision across het-erogeneous classification-only datasets. 
+
+Multi-Domain Learning and Dataset Bias in Medical Imag-ing. Distribution shifts across medical imaging datasets are well documented [29, 44] and known to produce spurious correlations between source identity and diagnostic labels [10, 14]. Existing responses include domain-adversarial training [13], invariant risk minimization [2], and adapter-based approaches such as LoRA [16] and residual adapters [33]; partial-label learning [4] further ad-dresses missing annotations in multi-label settings. Human-guided representation alignment has likewise been shown to affect both out-of-distribution generalization and demographic fairness in med-ical imaging [27]. HarMoE draws on these ideas but makes a distinct choice: rather than adversarially removing domain information, which risks discarding clinically relevant variation, it determin-istically assigns lightweight low-rank residual experts by dataset identity, confining source-specific variation to a controlled path-way that is discarded at inference, thereby preserving cross-dataset knowledge while preventing domain confounds from contaminat-ing the transferable representation. 
+
+Mixture-of-Experts Architectures. Sparse mixture-of-experts models, in which a learned router activates a subset of expert mod-ules per input, have proven effective for scaling model capacity in language modeling [12] and vision [34]. In these systems, routing is input-conditioned and learned end-to-end. Our design departs from this convention: HarMoE routes deterministically by dataset identity, reflecting the fact that the dominant distributional shifts in multi-site medical imaging are systematic and institutional rather than instance-level. Each expert is a low-rank residual (LoRA) in-jected into the shared decoder, adding minimal parameters. This is closer in spirit to multi-domain adapters [16, 33] than to classical sparse MoE, and we use the term “mixture of experts” to denote the HarMoE: Multi-Source Chest Radiograph Pretraining with Dataset-Disentangled Experts MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil 
+
+parallel expert bank and routing mechanism, not input-conditioned sparse gating. (a) Previous paradigms  
+
+> Text Encoder Visual Encoder
+> 227K Reports
+> …
+> …
+> 377K Images
+> …
+> Only 43 diseases
+> ☹With noises
+> ☹
+> ☹
+> Text Encoder Visual Encoder
+> …
+> More diseases: 229 diseases Larger data ✅
+> ✅
+> Less noise ✅
+> (b) HarMoE (Ours)
+> There is nodule
+> Class prompts
+> There is cardiomegaly There is atelectasis
+> …
+> 873K Images
+> CheXpert PadChest MIMIC-CXR ChestX-ray14
+> …
+
+Figure 1: Single-source vs. multi-source pretraining for chest X-ray understanding. (a) Existing VLP methods depend on paired image-report data from a single source (e.g., MIMIC-CXR: 377K images, 43 conditions). (b) HarMoE harmonizes four heterogeneous datasets into a unified 229-class vocabu-lary, scaling to 873K images while accommodating sources with and without free-text reports. 
+
+## 3 Method 
+
+We present HarMoE, a framework for multi-source supervised pretraining over heterogeneous chest X-ray datasets with par-tial and inconsistent labels. The method has three components: (1) multi-source label harmonization that unifies heterogeneous annotations into a shared disease vocabulary; (2) prompt-based multimodal encoding that replaces free-text reports with stable disease-level text prompts, enabling the inclusion of classification-only datasets; and (3) dataset bias disentanglement block (DA-MoE) that separates shared pathology representations from source-specific residuals via deterministic expert routing, with the experts discarded at inference to yield a domain-general representation. We describe each component below and conclude with the training objective. 
+
+## 3.1 Multi-Source Label Harmonization 
+
+The four pretraining datasets use incompatible annotation schemes: MIMIC-CXR [21] provides free-text reports, CheXpert [18] uses a 14-class ontology with uncertainty labels, ChestX-ray14 [40] pro-vides 14 NLP-extracted binary labels, and PadChest [6] annotates 174 findings. As shown in Fig. 2 (a), we harmonize multi-source datasets in three steps. First, for datasets with free-text reports, we apply an LLM to extract per-finding binary labels. Second, we construct a global vocabulary C of |C| = 229 conditions by taking the union of all dataset-specific label sets after resolving synonyms. Third, each sample is assigned a tri-state encoding label vector 
+
+y ∈ {− 1, 0, 1}| C | , where 1, 0, and −1 denote present, absent, and unknown respectively; unknown entries are excluded from the loss rather than treated as negatives, preventing the false nega-tives when projecting sparse, dataset-specific annotations into a significantly expanded global vocabulary. 
+
+## 3.2 Prompt-Based Multimodal Encoding 
+
+Building on the harmonized label space, we encode each disease concept as a fixed text embedding, bypassing the variance of free-text reports. As shown in Fig. 2 (b), for each condition 𝑐 ∈ C , we generate a prompt (“There is 𝑐 .”) and encode it with a frozen clinical text encoder to obtain F𝑡 ∈ R| C | × 𝐷 . Simultaneously, a vision back-bone extracts visual tokens F𝑣 ∈ R𝑃 ×𝐷 from the input radiograph, where 𝑃 and 𝐷 denote the number of patches and embedding di-mension. This prompt-based interface provides a unified encoding for datasets with and without reports alike, and supports zero-shot generalization to unseen disease categories without architectural modification. 
+
+## 3.3 Dataset Bias Disentanglement 
+
+The central architectural contribution is a decoder that separates shared pathology representations from source-specific variation through two parallel paths: a shared path that captures dataset-invariant cross-modal semantics, and a dataset-routed expert path 
+
+that absorbs source-dependent distributional differences via light-weight low-rank residual modules. The decoder consists of 𝑁 cas-caded layers. At inference time, the expert path is discarded entirely, and only the shared representation is used for prediction. This is not a post-hoc simplification: the training objective (Section 3.4) is specifically designed so that the shared path alone carries suffi-cient diagnostic signal, while the expert path serves as a controlled absorber of domain confounds during optimization. 
+
+Shared Path. The shared path performs cross-attention between disease queries and visual tokens to distill pathology-relevant fea-tures that transfer across all sources. At the first layer ( 𝑙 = 1), queries are derived from the text prompt embeddings F𝑡 and cross-attend to visual tokens F𝑣 . For subsequent layers ( 𝑙 > 1), queries are updated from the previous shared output F(𝑙 −1) 
+
+> 𝑠
+
+, while keys and values remain the visual tokens F𝑣 throughout: 
+
+F(𝑙 ) 
+
+> 𝑠
+
+= Attn 
+
+
+
+F(𝑙 −1) 
+
+> 𝑠
+
+W𝑞 , F𝑣 W𝑘 , F𝑣 W𝑣 
+
+
+
+W𝑜 , (1) where F(0) 
+
+> 𝑠
+
+= F𝑡 , and W𝑞 , W𝑘 , W𝑣 , W𝑜 are learnable projection matrices shared across all datasets. This path is trained on data from all sources and captures the dataset-invariant component of the cross-modal alignment. 
+
+Dataset-Routed Expert Path. In parallel, a dataset-routed path injects low-rank residual modules into the attention projections to model source-specific distributional differences. The design ra-tionale is as follows: by modulating the query, key, value, and output projections of cross-attention, the expert modules can shift 
+
+what the model attends to and how it aggregates information in a dataset-specific manner, without altering the shared feature space itself. Specifically, a dataset-ID router receives the source indi-cator D𝑘 and deterministically selects the corresponding expert from a bank of K experts. Routing is deterministic (not learned or input-conditioned) because the dominant distributional shifts across medical imaging datasets are systematic and institutional (scanner hardware, annotation conventions, patient demograph-ics) rather than instance-level. For a given input z and attention projection 𝑚 ∈ {𝑞, 𝑘, 𝑣, 𝑜 }, the expert-augmented projection is 
+
+ez𝑚 = zW 𝑚 + 𝛼 · zA (𝑘 ) 
+
+> 𝑚
+
+B(𝑘 ) 
+
+> 𝑚
+
+, where W𝑚 is the shared projection MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Haozhe Luo, Ziyu Zhou, Shelley Zixin Shu, and Mauricio Reyes ℒ = ℒ !"# + ℒ $%&' + ℒ %#( 
+
+(a) Multi-Source Label Harmonization     
+
+> Dataset with Reports
+> Global Disease Label Set
+> 𝐶 = 𝐶 !∪ 𝐶 "∪ 𝐶 #∪ ⋯ 𝐶 $
+
+Total Diseases 
+
+> Length(𝐶) = 229
+
+LLM 
+
+> PadChest ChestX-ray14 CheXpert Datasets with labels
+> Tri-state encoding
+> : present : absent : unknown
+> Label meanings
+> 10-1
+
+…0 1 -1 0 -1 01 0
+
+> …
+
+𝑭 - Dataset Indicator 𝒟 .
+
+Full Feature 𝑔 )
+
+𝑔 ) = 𝑔 * + 𝑔 +
+
+Linear Predictor 
+
+…0 1 -1 0 -1 
+
+ℒ!"# 
+
+Image Encoder 
+
+There is nodule 
+
+Class prompts 
+
+There is cardiomegaly There is atelectasis 
+
+> …
+
+Text Encoder ❄
+
+𝐶 classes Vision Tokens 𝑭 -
+
+> ……
+
+Text Embeddings 𝑭 /
+
+Length =𝐶 
+
+𝐼 from dataset 𝒟 ,
+
+(b) Pretraining Pipeline 
+
+N× 
+
+𝑭 /
+
+Shared Feature 𝑔 * Dataset Feature 𝑔 +
+
+ℒ$%&' 
+
+(Orthogonal Loss) 
+
+Dataset Bias Disentanglement Block (DA-MoE) 
+
+…0.2 0.9 0.6 0.1 0.4 
+
+> Ignore index
+
+LoRA Regularization : ℒ%#( 
+
+𝑭 - 𝑭 -
+
+> Attn
+> QVK
+
+𝒟 .𝑭 01 + 𝑭 21 (𝑭 𝒕 , 𝑙 = 0 ) 
+
+> LoRA ∆!𝒟 !
+> Dataset-ID Router 𝑊 !
+
+𝑭 0167 𝑭 2167 
+
+𝒟 .𝒟 .𝒟 .
+
+𝒟 .
+
+Dataset Bias Disentanglement Block (DA-MoE)     
+
+> 𝑊 #𝑊 $
+> 𝑊 %
+> O
+> Shared Path Dataset-Routed Expert Path
+> LoRA ∆#𝒟 !
+> Dataset-ID Router LoRA ∆$𝒟 !
+> Dataset-ID Router LoRA ∆%𝒟 !
+> Dataset-ID Router
+
+Figure 2: Overview of HarMoE. (a) Annotations from 𝐾 datasets are unified into a 229-class vocabulary via LLM-based extraction and ontology alignment, producing tri-state labels ( 1/0/−1: present/absent/unknown). (b) Disease prompts and visual tokens interact in 𝑁 decoder layers, each containing a shared path for dataset-invariant semantics and a dataset-routed expert path with low-rank (LoRA) residuals selected by dataset identity. The full representation g𝑓 = g𝑠 + g𝑑 is used during training; at inference, the expert path is discarded and only g𝑠 drives prediction. The model is trained with masked classification ( Lbce ), orthogonality ( Lorth ), and expert regularization ( Lreg ). 
+
+(identical to the shared path), A(𝑘 ) 
+
+> 𝑚
+
+∈ R𝐷 ×𝑟 and B(𝑘 ) 
+
+> 𝑚
+
+∈ R𝑟 ×𝐷 are the low-rank expert parameters for dataset 𝑘 , 𝑟 ≪ 𝐷 is the expert rank, and 𝛼 controls the residual strength. Each expert adds only 2 × 4 × 𝐷 × 𝑟 parameters per decoder layer, a small fraction of the shared decoder. The query input mirrors the shared path: at layer 𝑙 ,queries take the dataset-routed decoder state F(𝑙 −1) 
+
+> 𝑑
+
+(with F(0) 
+
+> 𝑑
+
+= F𝑡 ), while keys and values take F𝑣 . The dataset-routed output at layer 𝑙 
+
+is: ˆF(𝑙 ) 
+
+> 𝑑
+
+= Attn 
+
+ez(𝑙 ) 
+
+> 𝑞
+
+, ez(𝑙 ) 
+
+> 𝑘
+
+, ez(𝑙 )
+
+> 𝑣
+
+
+
+, (2) 
+
+F(𝑙 ) 
+
+> 𝑑
+
+= ˆF(𝑙 ) 
+
+> 𝑑
+
+W𝑜 + 𝛼 · ˆF(𝑙 ) 
+
+> 𝑑
+
+A(𝑘 ) 
+
+> 𝑜
+
+B(𝑘 ) 
+
+> 𝑜
+
+, (3) where the output expert applies a final residual module. To allow the shared path to first establish a stable cross-modal alignment before introducing source-specific adaptation, expert modules are injected starting from the second decoder layer only. 
+
+Additive Feature Decomposition. After 𝑁 decoder layers, the shared feature and dataset-routed output are summarized via mean pooling: g𝑠 = MeanPool (F(𝑁 ) 
+
+> 𝑠
+
+), g𝑑 = MeanPool (F(𝑁 ) 
+
+> 𝑑
+
+).
+
+The full feature is their sum, g𝑓 = g𝑠 + g𝑑 . This additive archi-tecture explicitly decomposes the learned representation into a universal shared component and a source-specific correction. Con-sequently, g𝑠 is optimized to encapsulate fundamental diagnostic signals independently of dataset-specific variances. Furthermore, the orthogonality constraint (Section 3.4) ensures that g𝑠 and g𝑑 HarMoE: Multi-Source Chest Radiograph Pretraining with Dataset-Disentangled Experts MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil 
+
+encode complementary, non-redundant information, preventing the loss of pathology-relevant features. 
+
+Bias-Agnostic Inference Protocol. At test time, the dataset-routed expert path is deactivated, allowing the model to rely solely on generalized pathology representations. The shared feature g𝑠 
+
+alone is passed to the linear predictor to compute per-class diagnos-tic scores. This protocol effectively filters out imaging artifacts and institutional biases encoded in g𝑑 without compromising prediction accuracy. Crucially, this bias-agnostic strategy requires no prior knowledge of a sample’s origin, facilitating robust and seamless deployment across heterogeneous clinical environments. 
+
+## 3.4 Training Objective 
+
+The training objective combines three terms that ensure classifica-tion accuracy and effective bias disentanglement. 
+
+Masked binary cross-entropy. A linear predictor maps the full feature g𝑓 to per-class logits ˆ 𝑦 𝑐 for each disease 𝑐 ∈ C . Since each dataset annotates a different subset of conditions, we apply a masked loss that supervises only entries with known labels, directly implementing the tri-state encoding from Section 3.1: 
+
+Lbce = 1
+
+𝐵 
+
+> 𝐵
+
+∑︁ 
+
+> 𝑖 =1
+
+∑︁ 𝑐 ∈Ω𝑖 
+
+BCE ( ˆ𝑦 𝑖,𝑐 , 𝑦 𝑖,𝑐 ), (4) where Ω𝑖 ⊆ C denotes the set of classes with known annotations (𝑦 ∈ { 0, 1}) for sample 𝑖 in a mini-batch of size 𝐵 , and all unknown entries ( 𝑦 = −1) are excluded. This is the mechanism that prevents false negatives from unannotated classes: a 14-class dataset con-tributes supervision for its 14 conditions only, leaving the remaining 215 dimensions unaffected. 
+
+Orthogonality loss. Without explicit constraints, the expert path may duplicate the shared representation, rendering the disen-tanglement trivial. We enforce complementarity by minimizing the squared cosine similarity between the shared and dataset-specific features: 
+
+Lorth = 1
+
+𝐵 
+
+> 𝐵
+
+∑︁ 
+
+> 𝑖 =1
+
+g⊤ 
+
+> 𝑠,𝑖
+
+g𝑑,𝑖 
+
+∥g𝑠,𝑖 ∥2 ∥g𝑑,𝑖 ∥2 + 𝜖 
+
+!2
+
+. (5) This encourages g𝑠 and g𝑑 to occupy orthogonal subspaces, ensur-ing that discarding g𝑑 at inference removes source-specific variation without eliminating pathology-relevant signal. 
+
+Expert regularization. Unconstrained low-rank experts may grow excessively large and overfit to source-specific artifacts. We penalize the Frobenius norm of the expert parameters: 
+
+Lreg = 1
+
+𝑁 
+
+> 𝑁
+
+∑︁ 
+
+> 𝑙 =1
+
+∑︁ 𝑚 ∈ { 𝑞,𝑘,𝑣,𝑜 }
+
+
+
+∥A(𝑙 ) 
+
+> 𝑚
+
+∥2 
+
+> 𝐹
+
++ ∥ B(𝑙 ) 
+
+> 𝑚
+
+∥2
+
+> 𝐹
+
+
+
+, (6) which keeps the expert residuals small relative to the shared projec-tions, reinforcing their role as lightweight corrections rather than dominant feature extractors. 
+
+Total objective. The three terms are combined as L = Lbce +
+
+𝜆 orth Lorth + 𝜆 reg Lreg , where 𝜆 orth and 𝜆 reg control the strength of the decomposition constraints. 
+
+## 4 Experimental Settings 4.1 Pretraining Configuration 
+
+Pretraining datasets. HarMoE is pretrained on the four-dataset consortium described in Section 3.1: MIMIC-CXR [21] (377K im-ages), CheXpert [18] (224K images), ChestX-ray14 [40] (112K im-ages), and PadChest [6] (160K images), totaling 873K images over 229 unified disease classes. For datasets provided with unstruc-tured reports (e.g., MIMIC-CXR), we utilize Qwen3 [43] as the large language model to distill structured tri-state labels. 
+
+Model Configurations. The framework employs a ViT-B/16 as the image encoder, initialized with M3AE [7] weights. For the text encoder, we utilize BioClinicalMPBERT [22] to encode disease prompts. The decoder consists of 𝑁 = 4 cascaded dataset bias disentanglement blocks. Dataset-routed expert paths are injected starting from the second layer. The LoRA expert rank is 𝑟 = 8, and the loss weights are set to 𝜆 orth = 𝜆 reg = 1. 
+
+Optimization Strategy. Training uses AdamW with an initial learning rate of 5 × 10 −5, weight decay of 0.02, and a cosine decay schedule over 100 epochs with a 20-epoch linear warm-up. The batch size is 32. The text encoder remains frozen throughout; the image encoder, decoder, and linear predictor are fully optimized. All experiments are conducted on two NVIDIA H200 GPUs with a model training time of approximately 72 hours. 
+
+## 4.2 Evaluation Protocol 
+
+Zero-shot inference. All evaluations are performed without fine-tuning or linear probing. The pretrained model is applied directly to each benchmark: for a given test image, the shared feature g𝑠 is extracted from the decoder (with expert modules deactivated, as described in Section 3.3) and passed through the linear predictor to produce per-class scores. 
+
+Benchmarks. We evaluate on 11 datasets spanning in-domain (ID) and out-of-distribution (OOD) settings. CheXpert and ChestX-ray14 serve as ID benchmarks because they overlap with the pre-training sources, although evaluation is conducted exclusively on their held-out test splits. The remaining benchmarks—OpenI [11], RSNA [42], ChestDR [39], VinDr-CXR [28], SIIM [1], COVID-QU-Ex [37], JSRT [35], Montgomery [19], and Shenzhen [19]—are en-tirely unseen during pretraining and cover diverse acquisition condi-tions, patient populations, and disease categories, including COVID-19. 
+
+Metrics. We report two complementary metrics. Area Under the ROC Curve (AUC) measures ranking quality, the model’s ability to assign higher scores to positive cases. Matthews Correlation Co-efficient (MCC) measures class-level decision reliability at a fixed operating threshold, capturing the balance between sensitivity and specificity. Reporting both is important because a model with high AUC but low MCC produces good rankings but poor binary deci-sions, a distinction that matters for clinical deployment. 
+
+Baselines. We compare against 11 vision-language methods spanning three categories: (i) contrastive image-report alignment (ConVIRT [47], GLoRIA [17], BioViL [5], BioViL-T [3], BioMed-CLIP [45], CheXzero [38]); (ii) knowledge-enhanced pretraining (KAD [46], MedKLIP [41], MAVL [31], DeViDe [26]); and (iii) prompt-level supervision (CarZero [22], RadZero [30]). All baselines are evaluated under the same zero-shot protocol for fair comparison. MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Haozhe Luo, Ziyu Zhou, Shelley Zixin Shu, and Mauricio Reyes 
+
+Table 1: Zero-shot multi-label classification (AUC, MCC) on two in-domain (ID) and three out-of-domain (OOD) benchmarks. Bold/underlined indicates best/second-best AUC. LT denotes datasets with long-tailed class distributions. 
+
+CheXpert (ID) ChestX-ray14 (ID) OpenI (OOD) ChestDR (OOD, LT) VinDr-CXR (OOD) Method AUC MCC AUC MCC AUC MCC AUC MCC AUC MCC GLoRIA (ICCV 2021) 0.664 0.220 0.568 0.087 0.630 0.191 0.566 0.094 0.537 0.101 ConVIRT (TMLR 2022) 0.807 0.396 0.651 0.132 0.637 0.188 0.664 0.165 0.669 0.170 BioViL (ECCV 2022) 0.780 0.398 0.635 0.138 0.655 0.191 0.672 0.187 0.650 0.169 CheXzero (Nature. Biomed. Eng. 2022) 0.890 0.554 0.685 0.159 0.703 0.255 0.716 0.220 0.673 0.191 BioViL-T (CVPR 2023) 0.827 0.451 0.631 0.136 0.662 0.175 0.714 0.211 0.664 0.180 BioMedCLIP (NEJM AI 2023) 0.634 0.201 0.596 0.079 0.570 0.096 0.656 0.159 0.594 0.151 KAD (Nature Com. 2023) 0.871 0.510 0.770 0.263 0.692 0.284 0.623 0.140 0.623 0.140 MedKLIP (ICCV 2023) 0.911 0.581 0.727 0.201 0.588 0.138 0.630 0.146 0.604 0.160 MAVL (CVPR 2024) 0.901 0.606 0.736 0.203 0.665 0.163 0.617 0.125 0.591 0.120 CarZero (CVPR 2024) 0.924 0.609 0.796 0.269 0.722 0.353 0.698 0.207 0.671 0.201 DeViDe (IEEE BIBM 2025) 0.900 0.566 0.776 0.270 0.683 0.279 0.661 0.145 0.724 0.274 RadZero (NeurIPS 2025) 0.902 0.551 0.759 0.241 0.818 0.394 0.704 0.213 0.749 0.284 HarMoE (Ours) 0.926 (+0.2%) 0.603 0.810 (+1.4%) 0.305 (+3.5%) 0.836 (+1.8%) 0.464 (+7%) 0.756 (+4%) 0.255 (+3.5%) 0.753 (+0.4%) 0.269 
+
+Table 2: Zero-shot single-label classification (AUC, MCC) on six OOD benchmarks. Bold/underlined indicates best/second-best AUC.                                                                                                                                                                                          
+
+> RSNA (OOD) SIIM (OOD) COVID-QU-Ex (OOD) JSRT (OOD) Montgomery (OOD) Shenzhen (OOD) Method AUC MCC AUC MCC AUC MCC AUC MCC AUC MCC AUC MCC GLoRIA (ICCV 2021) 0.740 0.362 0.591 0.139 0.775 0.430 0.522 0.126 0.733 0.490 0.558 0.140 ConVIRT (TMLR 2022) 0.576 0.167 0.630 0.221 0.681 0.393 0.649 0.272 0.842 0.738 0.816 0.529 BioViL (ECCV 2022) 0.811 0.600 0.571 0.320 0.722 0.423 0.688 0.308 0.921 0.823 0.889 0.658 CheXzero (Nature. Biomed. Eng. 2022) 0.900 0.636 0.784 0.393 0.517 0.057 0.653 0.315 0.784 0.504 0.675 0.311 BioViL-T (CVPR 2023) 0.860 0.675 0.731 0.403 0.689 0.373 0.672 0.292 0.901 0.803 0.891 0.671 BioMedCLIP (NEJM AI 2023) 0.778 0.414 0.629 0.201 0.337 0.000 0.481 0.126 0.725 0.571 0.802 0.474 KAD (Nature Com. 2023) 0.778 0.414 0.874 0.561 0.728 0.446 0.607 0.205 0.897 0.783 0.804 0.558 MedKLIP (ICCV 2023) 0.889 0.611 0.781 0.394 0.769 0.484 0.552 0.155 0.854 0.619 0.585 0.228 MAVL (CVPR 2024) 0.907 0.647 0.709 0.289 0.870 0.585 0.624 0.267 0.845 0.692 0.650 0.317 CarZero (CVPR 2024) 0.803 0.472 0.910 0.660 0.838 0.512 0.641 0.244 0.909 0.807 0.773 0.532 DeViDe (IEEE BIBM 2025) 0.887 0.625 0.895 0.609 0.730 0.470 0.658 0.271 0.879 0.742 0.871 0.586 RadZero (NeurIPS 2025) 0.856 0.540 0.931 0.692 0.832 0.562 0.738 0.367 0.908 0.770 0.916 0.707
+> HarMoE (Ours) 0.936 (+2.9%) 0.726 (+7.9%) 0.943 (+1.2%) 0.719 (+2.7%) 0.916 (+4.6%) 0.675 (+9.0%) 0.740 (+0.2%) 0.423 (+5.6%) 0.950 (+4.1%) 0.878 (+7.1%) 0.925 (+0.9%) 0.738 (+2.9%)
+
+Table 3: Zero-shot visual grounding results (Dice score, Point-ing game accuracy) on four benchmarks. Model ChestXray14 RSNA SIIM Covid-Qu-Ex PG ↑ Dice ↑ PG ↑ Dice ↑ PG ↑ Dice ↑ PG ↑ Dice ↑
+
+KAD 0.350 0.236 0.701 0.421 0.010 0.043 0.120 0.315 DeViDe 0.372 0.247 0.708 0.402 0.065 0.069 0.074 0.325 CARZero 0.437 0.276 0.837 0.505 0.135 0.112 0.628 0.366 RadZero 0.572 0.392 0.765 0.446 0.210 0.163 0.688 0.458 
+
+MAVL 0.262 0.192 0.293 0.201 0.051 0.056 0.273 0.230 MedKLIP 0.318 0.233 0.428 0.331 0.010 0.037 0.408 0.299 
+
+HarMoE (Ours) 0.620 0.394 0.847 0.521 0.221 0.156 0.647 0.422 
+
+## 5 Results 5.1 Zero-Shot Multi-Label Classification 
+
+Tab. 1 reports zero-shot multi-label classification results on two in-domain benchmarks (CheXpert and ChestXray14) and three out-of-distribution benchmarks (OpenI, ChestDR, and VinDr-CXR). HarMoE achieves the best AUC on all five datasets, demonstrating that harmonized learning over heterogeneous supervision yields robust transfer beyond the pretraining domain. In particular, Har-MoE improves over the second-best method by +4.0% on ChestDR, +1.4% on ChestXray14, +1.8% on OpenI, +0.2% on CheXpert, and +0.4% on VinDr-CXR in terms of AUC. The gains are especially pronounced on OOD datasets, where conventional VLP models are more easily affected by dataset-specific shortcut learning. HarMoE also delivers competitive or best MCC on most benchmarks, includ-ing clear improvements on ChestXray14 (+3.5%), OpenI (+7.0%), and ChestDR (+3.5%), indicating that the performance gains are not limited to ranking quality but also translate into more reliable class-level predictions. Overall, these results suggest that unified multi-dataset supervision and controlled dataset-specific specializa-tion enable the model to preserve transferable pathology semantics while reducing overfitting to individual source distributions. 
+
+## 5.2 Zero-Shot Single-Label Classification 
+
+HarMoE achieves state-of-the-art performance on all six OOD single-label benchmarks as shown in Tab. 2, with particularly strik-ing gains on Montgomery (0.950 AUC, +4.1%) and COVID-QU-Ex (0.916 AUC, +4.6%), followed by RSNA (0.936 AUC, +2.9%) and SIIM (0.943 AUC, +1.2%). The corresponding MCC improvements are equally substantial: +7.9% on RSNA, +9.0% on COVID-QU-Ex, and +7.1% on Montgomery, confirming that these gains reflect genuine class-level decision consistency. Notably, COVID-QU-Ex contains disease categories entirely absent from training data, yet HarMoE achieves its largest improvement there. This suggests the model leverages semantic correlations captured by the text encoder to infer unseen classes, rather than relying on dataset-specific visual shortcuts. These results validate the core HarMoE hypothesis: de-coupling shared semantic knowledge from dataset-specific residuals HarMoE: Multi-Source Chest Radiograph Pretraining with Dataset-Disentangled Experts MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil 
+
+Figure 3: Radar plot comparing HarMoE, Sparse MoE, and naive joint training (w/o DA-MoE) across all evaluation benchmarks. DA-MoE improves out-of-distribution general-ization by preventing the shared representation from over-fitting to source-specific patterns in the training data. 
+
+through structured mixture-of-experts routing prevents overfitting to individual dataset statistics and yields harmonized representa-tions that transfer robustly across heterogeneous medical domains. 
+
+## 5.3 Zero-Shot Visual Grounding 
+
+Tab. 3 reports zero-shot visual grounding results in terms of Dice score and pointing game accuracy. HarMoE achieves the highest scores on the majority of benchmarks, with the most notable im-provement on ChestX-ray14, where pointing game accuracy rises from 0.572 to 0.620 (+4.8% relative), followed by RSNA with Dice score improving from 0.505 to 0.521 and pointing game accuracy from 0.837 to 0.847. Importantly, no grounding-specific supervision is used during training; these gains arise solely from the cross-attention alignment learned under classification-level objectives. Qualitative examples in Fig. 7 corroborate these quantitative find-ings. Prior VLP methods frequently produce diffuse or background-biased attention maps, whereas HarMoE yields spatially concen-trated activations that align more closely with the anatomical extent of the target pathology. This effect is particularly evident for dif-fuse abnormalities ( e.g. , atelectasis, pleural effusion) and small focal lesions ( e.g. , nodule, pneumothorax). These results indicate that the shared–dataset feature decomposition introduced by HarMoE not only strengthens classification performance but also produces more spatially faithful cross-modal representations. 
+
+## 5.4 Ablation Study 
+
+We conduct ablations to verify that HarMoE’s improvements stem from its architectural design choices. Specifically, we examine three aspects: (i) the effect of the Dataset Bias Disentanglement Block (DA-MoE), (ii) the contribution of individual regularization terms, and (iii) the scaling behavior under multi-source supervision. 
+
+Figure 4: Ablation on regularization terms (None, Res only, Orth only, Res+Orth) evaluated on SIIM and ChestDR. Com-bining both orthogonality and residual regularization yields the best performance. 
+
+Figure 5: Scaling behavior across pretraining paradigms and data scales on four OOD benchmarks. HarMoE with multi-source supervision scales more reliably than contrastive learning. HarMoE (Dataset Expert deactivated)  HarMoE (Dataset Expert activated) 
+
+Figure 6: UMAP visualization of learned representations. Ac-tivating the dataset experts, features cluster by dataset source; deactivating the experts, the shared representation becomes better aligned across datasets. MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Haozhe Luo, Ziyu Zhou, Shelley Zixin Shu, and Mauricio Reyes Atelectasis   
+
+> CarZero HarMoE (Ours) DeViDe RadZero
+> Effusion
+> KAD Original
+> Nodule
+> MAVL MedKLIP
+> Pneumothorax
+
+Figure 7: Qualitative comparison of zero-shot attention maps for four pathologies (Atelectasis, Effusion, Nodule, Pneumothorax) across methods. HarMoE produces more concentrated and anatomically aligned activations than prior methods. Effect of DA-MoE. Fig. 3 compares HarMoE with Sparse MoE[12] and naive joint training across all evaluation benchmarks. Naive joint training yields a modest improvement on the in-domain ChestX-ray14 benchmark (from 0.810 to 0.822 AUC) but causes consistent degradation on OOD benchmarks: Montgomery drops from 0.950 to 0.917 and VinDr-CXR from 0.753 to 0.667. This confirms that naive joint training without explicit shared–dataset decomposition en-courages the model to encode source-specific shortcuts that inflate in-domain scores at the cost of transferability. While Sparse MoE partially recovers OOD performance over naive joint training, Har-MoE achieves consistently higher AUC across the most challenging cross-domain benchmarks, with notable improvements on OpenI (0.722 vs. 0.836) and Covid-QU-Ex (0.804 vs. 0.916), while remaining competitive on in-domain datasets such as ChestX-ray14 and CheX-pert. This suggests that soft routing alone is insufficient to fully disentangle dataset-specific biases from transferable features, and that the explicit shared–private decomposition in DA-MoE is the key factor driving cross-domain generalization. The UMAP visual-ization in Fig. 6 provides complementary evidence: activating the dataset expert, representations cluster primarily by dataset source, whereas deactivating the expert, the shared features become better aligned across datasets, with source-dependent variation confined to the residual branch. 
+
+Effect of Regularization Terms. Fig. 4 isolates the contribu-tions of the orthogonality loss Lorth and the LoRA regularization 
+
+Lreg . On SIIM, applying either term alone yields only marginal im-provement over the unregularized baseline (0.940 vs. 0.939), while their combination achieves 0.943. The effect is more pronounced on ChestDR, where neither term alone exceeds 0.736 AUC, but the full configuration reaches 0.756, a gain of 2.0% absolute. These results indicate that the two terms play complementary roles: Lorth 
+
+prevents the residual branch from duplicating information already captured by the shared representation, while Lreg constrains ex-pert magnitude to preserve generalization. Their joint application is necessary for effective disentanglement. 
+
+Effect of Scaling with Multi-Source Data. Fig. 5 compares three pretraining configurations on four OOD benchmarks: image– report contrastive learning on MIMIC-CXR, HarMoE trained on MIMIC-CXR alone, and HarMoE trained on all four source datasets. Two observations emerge. First, on the same data (MIMIC-CXR), replacing contrastive supervision with classification-level prompts yields consistent improvements across all benchmarks ( e.g. , SIIM AUC increases from 0.784 to 0.936). Second, incorporating addi-tional heterogeneous datasets further improves all benchmarks ( ChestDR: 4%, Vindr-CXR: 1.2%), whereas contrastive learning offers no mechanism to incorporate classification-only datasets. These results demonstrate that HarMoE scales more effectively under multi-source supervision by leveraging cleaner supervisory signals while controlling dataset bias. 
+
+## 6 Conclusion 
+
+In this work, we introduced HarMoE, a dataset-specialized mixture-of-experts framework for learning from heterogeneous chest X-ray datasets. By incorporating classification-only datasets, HarMoE expands pretraining from 377K to 873K images while separating shared disease features from dataset-specific biases. Experiments show consistent improvements in zero-shot classification, out-of-distribution transfer, and visual grounding. These results demon-strate the value of structured multi-source supervision for building robust and generalizable radiology VLMs. HarMoE: Multi-Source Chest Radiograph Pretraining with Dataset-Disentangled Experts MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil 
+
+## References 
+
+[1] Carol Wu Anna Zawacki, Julia Elliott George Shih, ParasLakhani Mikhail Fomitchev, Mohannad Hussain, and Shunxing Bao Phil Culliton. 2019. SIIM-ACR Pneumothorax Segmentation. https://kaggle.com/competitions/siim-acr-pneumothorax-segmentation. [2] Martin Arjovsky, Léon Bottou, Ishaan Gulcevich, and David Lopez-Paz. 2019. Invariant Risk Minimization. In arXiv preprint arXiv:1907.02893 .[3] Shruthi Bannur, Stephanie Hyland, Qianchu Liu, Fernando Perez-Garcia, Maxim-ilian Ilse, Daniel C Castro, Benedikt Boecking, Harshita Sharma, Kenza Bouzid, Anja Thieme, et al. 2023. Learning to exploit temporal structure for biomed-ical vision-language processing. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition . 15016–15027. [4] Jessa Bekker and Jesse Davis. 2020. Learning from positive and unlabeled data: A survey. Machine learning 109, 4 (2020), 719–760. [5] Benedikt Boecking, Naoto Usuyama, Shruthi Bannur, Daniel C Castro, Anton Schwaighofer, Stephanie Hyland, Maria Wetscherek, Tristan Naumann, Aditya Nori, Javier Alvarez-Valle, et al. 2022. Making the most of text semantics to im-prove biomedical vision–language processing. In European conference on computer vision . Springer, 1–21. [6] Aurelia Bustos, Antonio Pertusa, Jose-Maria Salinas, and Maria De La Iglesia-Vaya. 2020. Padchest: A large chest x-ray image dataset with multi-label annotated reports. Medical image analysis 66 (2020), 101797. [7] Zhihong Chen, Yuhao Du, Jinpeng Hu, Yang Liu, Guanbin Li, Xiang Wan, and Tsung-Hui Chang. 2022. Multi-modal masked autoencoders for medical vision-and-language pre-training. In International Conference on Medical Image Comput-ing and Computer-Assisted Intervention . Springer, 679–689. [8] Mehdi Cherti, Romain Beaumont, Ross Wightman, Mitchell Wortsman, Gabriel Ilharco, Cade Gordon, Christoph Schuhmann, Ludwig Schmidt, and Jenia Jitsev. 2023. Reproducible scaling laws for contrastive language-image learning. In 
+
+Proceedings of the IEEE/CVF conference on computer vision and pattern recognition .2818–2829. [9] Dwayne C Clark and KA Conrad. 1995. Interobserver Variability in Interpreting Chest Radiographs. Archives of Internal Medicine 155, 13 (1995), 1453–1453. [10] Alex J DeGrave, Joseph D Janizek, and Su-In Lee. 2021. AI for radiographic COVID-19 detection selects shortcuts over signal. Nature Machine Intelligence 3, 7 (2021), 610–619. [11] Dina Demner-Fushman, Marc D Kohli, Marc B Rosenman, Sonya E Shooshan, Laritza Rodriguez, Sameer Antani, George R Thoma, and Clement J McDonald. 2016. Preparing a collection of radiology examinations for distribution and retrieval. Journal of the American Medical Informatics Association 23, 2 (2016), 304–310. [12] William Fedus, Barret Zoph, and Noam Shazeer. 2022. Switch transformers: Scaling to trillion parameter models with simple and efficient sparsity. Journal of Machine Learning Research 23, 120 (2022), 1–39. [13] Yaroslav Ganin, Evgeniya Ustinova, Hana Ajber, Pascal Germain, Hugo Larochelle, François Laviolette, Mario Marchand, and Victor Lempitsky. 2016. Domain-Adversarial Training of Neural Networks. In Journal of Machine Learning Research , Vol. 17. 1–35. [14] Robert Geirhos, Jörn-Henrik Jacobsen, Claudio Michaelis, Richard Zemel, Wieland Brendel, Matthias Bethge, and Felix A Wichmann. 2020. Shortcut learn-ing in deep neural networks. Nature Machine Intelligence 2, 11 (2020), 665–673. [15] Sebastian Gündel, Arnaud AA Setio, Florin C Ghesu, Sasa Grbic, Bogdan Georgescu, Andreas Maier, and Dorin Comaniciu. 2021. Robust classification from noisy labels: Integrating additional knowledge for chest radiography abnormality assessment. Medical Image Analysis 72 (2021), 102087. [16] Edward J. Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Lu Wang, and Weizhu Chen. 2022. LoRA: Low-Rank Adaptation of Large Language Models. In International Conference on Learning Representations (ICLR) .[17] Shih-Cheng Huang, Liyue Shen, Matthew P Lungren, and Serena Yeung. 2021. Gloria: A multimodal global-local representation learning framework for label-efficient medical image recognition. In Proceedings of the IEEE/CVF International Conference on Computer Vision . 3942–3951. [18] Jeremy Irvin, Pranav Rajpurkar, Michael Ko, Yifan Yu, Silviana Ciurea-Ilcus, Chris Chute, Henrik Marklund, Behzad Haghgoo, Robyn Ball, Katie Shpanskaya, et al. 2019. Chexpert: A large chest radiograph dataset with uncertainty labels and expert comparison. In Proceedings of the AAAI conference on artificial intelligence ,Vol. 33. 590–597. [19] Stefan Jaeger, Sema Candemir, Sameer Antani, Yì-Xiáng J Wáng, Pu-Xuan Lu, and George Thoma. 2014. Two public chest X-ray datasets for computer-aided screening of pulmonary diseases. Quantitative imaging in medicine and surgery 
+
+4, 6 (2014), 475. [20] Chao Jia, Yinfei Yang, Ye Xia, Yi-Ting Chen, Zarana Parekh, Hieu Pham, Quoc Le, Yun-Hsuan Sung, Zhen Li, and Tom Duerig. 2021. Scaling up visual and vision-language representation learning with noisy text supervision. In International conference on machine learning . PMLR, 4904–4916. [21] Alistair EW Johnson, Tom J Pollard, Nathaniel R Greenbaum, Matthew P Lungren, Chih-ying Deng, Yifan Peng, Zhiyong Lu, Roger G Mark, Seth J Berkowitz, and Steven Horng. 2019. MIMIC-CXR-JPG, a large publicly available database of labeled chest radiographs. arXiv preprint arXiv:1901.07042 (2019). [22] Haoran Lai, Qingsong Yao, Zihang Jiang, Rongsheng Wang, Zhiyang He, Xi-aodong Tao, and S Kevin Zhou. 2024. Carzero: Cross-attention alignment for radiology zero-shot classification. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition . 11137–11146. [23] Haozhe Luo, Aurélie Pahud de Mortanges, Oana Inel, and Mauricio Reyes. 2024. DWARF: Disease-Weighted Network for Attention Map Refinement. In ISIC, iMIMIC, EARTH, and DeCaF Workshops at MICCAI . Springer, 59–68. doi:10.1007/ 978-3-031-77610-6_6 [24] Haozhe Luo, Shelley Zixin Shu, Ziyu Zhou, Robert Berke, and Mauricio Reyes. 2026. KEPIL: Knowledge-Enhanced Prompt-Image Learning for Prompt-Robust Disease Detection. arXiv preprint arXiv:2605.09132 (2026). doi:10.48550/arXiv. 2605.09132 [25] Haozhe Luo, Shelley Zixin Shu, Ziyu Zhou, Sebastian Otálora, and Mauricio Reyes. 2026. XBench: A Comprehensive Benchmark for Visual-Language Explanations in Chest Radiography. In 2026 IEEE International Symposium on Biomedical Imaging (ISBI) . IEEE, 1–5. doi:10.1109/ISBI61048.2026.11515566 [26] Haozhe Luo, Ziyu Zhou, Ming Hou, Corentin Royer, Mauricio Reyes, Anjany Sekuboyina, and Bjoern Menze. 2025. DeViDe: Faceted Medical Knowledge to Enhance Vision Foundation Model Pretraining for Radiology. In 2025 IEEE International Conference on Bioinformatics and Biomedicine (BIBM) . IEEE, 1779– 1782. doi:10.1109/BIBM66473.2025.11357035 [27] Haozhe Luo, Ziyu Zhou, Shelley Zixin Shu, Aurélie Pahud de Mortanges, Robert Berke, and Mauricio Reyes. 2025. On the Interplay of Human-AI Alignment, Fairness, and Performance Trade-Offs in Medical Imaging. In Medical Image Computing and Computer Assisted Intervention (MICCAI) . Springer, 420–430. doi:10.1007/978-3-032-05185-1_41 [28] Ha Q Nguyen, Khanh Lam, Linh T Le, Hieu H Pham, Dat Q Tran, Dung B Nguyen, Dung D Le, Chi M Pham, Hang TT Tong, Diep H Dinh, et al. 2022. VinDr-CXR: An open dataset of chest X-rays with radiologist’s annotations. Scientific Data 9, 1 (2022), 429. [29] Luke Oakden-Rayner, Jared Dunnmon, Gustavo Carneiro, and Christopher Ré. 2020. Hidden stratification causes clinically meaningful failures in machine learning for medical imaging. In Proceedings of the ACM conference on health, inference, and learning . 151–159. [30] Jonggwon Park, Soobum Kim, Byungmu Yoon, and Kyoyun Choi. 2025. RadZero: Similarity-Based Cross-Attention for Explainable Vision-Language Alignment in Radiology with Zero-Shot Multi-Task Capability. arXiv e-prints (2025), arXiv– 2504. [31] Vu Minh Hieu Phan, Yutong Xie, Yuankai Qi, Lingqiao Liu, Liyang Liu, Bowen Zhang, Zhibin Liao, Qi Wu, Minh-Son To, and Johan W Verjans. 2024. Decom-posing disease descriptions for enhanced pathology detection: A multi-aspect vision-language pre-training framework. In Proceedings of the IEEE/CVF Confer-ence on Computer Vision and Pattern Recognition . 11492–11501. [32] Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya Ramesh, Gabriel Goh, Sandhini Agarwal, Girish Sastry, Amanda Askell, Pamela Mishkin, Jack Clark, et al. 2021. Learning transferable visual models from natural language supervision. In International conference on machine learning . PMLR, 8748–8763. [33] Sylvestre-Alvise Rebuffi, Hakan Bilen, and Andrea Vedaldi. 2017. Learning Multi-ple Visual Domains with Residual Adapters. In Advances in Neural Information Processing Systems (NeurIPS) , Vol. 30. [34] Carlos Riquelme, Joan Puigcerver, Basil Mustafa, Maxim Neumann, Rodolphe Jenatton, André Susano Pinto, Daniel Keysers, and Neil Houlsby. 2021. Scal-ing Vision with Sparse Mixture of Experts. In Advances in Neural Information Processing Systems (NeurIPS) , Vol. 34. [35] Junji Shiraishi, Shigehiko Katsuragawa, Junpei Ikezoe, Tsuneo Matsumoto, Takeshi Kobayashi, Ken-ichi Komatsu, Mitate Matsui, Hiroshi Fujita, Yoshie Kodera, and Kunio Doi. 2000. Development of a digital image database for chest radiographs with and without a lung nodule: receiver operating characteristic analysis of radiologists’ detection of pulmonary nodules. American Journal of Roentgenology 174, 1 (2000), 71–74. [36] Shelley Zixin Shu, Haozhe Luo, Alexander Poellinger, and Mauricio Reyes. 2025. Hybrid Explanation-Guided Learning for Transformer-Based Chest X-Ray Di-agnosis. In Interpretability of Machine Intelligence in Medical Image Computing (Lecture Notes in Computer Science, Vol. 16464) . Springer, 33–42. doi:10.1007/978-3-032-17611-0_4 [37] Anas M Tahir, Muhammad EH Chowdhury, Amith Khandakar, Tawsifur Rah-man, Yazan Qiblawey, Uzair Khurshid, Serkan Kiranyaz, Nabil Ibtehaz, M Sohel Rahman, Somaya Al-Maadeed, et al. 2021. COVID-19 infection localization and severity grading from chest X-ray images. Computers in biology and medicine 
+
+139 (2021), 105002. [38] Ekin Tiu, Ellie Talius, Pujan Patel, Curtis P Langlotz, Andrew Y Ng, and Pranav Rajpurkar. 2022. Expert-level detection of pathologies from unannotated chest X-ray images via self-supervised learning. Nature Biomedical Engineering 6, 12 (2022), 1399–1406. [39] Dequan Wang, Xiaosong Wang, Lilong Wang, Mengzhang Li, Qian Da, Xiaoqiang Liu, Xiangyu Gao, Jun Shen, Junjun He, Tian Shen, et al. 2023. A real-world dataset MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Haozhe Luo, Ziyu Zhou, Shelley Zixin Shu, and Mauricio Reyes 
+
+and benchmark for foundation model adaptation in medical image classification. 
+
+Scientific Data 10, 1 (2023), 574. [40] Xiaosong Wang, Yifan Peng, Le Lu, Zhiyong Lu, Mohammadhadi Bagheri, and Ronald M Summers. 2017. Chestx-ray8: Hospital-scale chest x-ray database and benchmarks on weakly-supervised classification and localization of common thorax diseases. In Proceedings of the IEEE conference on computer vision and pattern recognition . 2097–2106. [41] Chaoyi Wu, Xiaoman Zhang, Ya Zhang, Yanfeng Wang, and Weidi Xie. 2023. Medklip: Medical knowledge enhanced language-image pre-training for x-ray diagnosis. In Proceedings of the IEEE/CVF International Conference on Computer Vision . 21372–21383. [42] Linghua Wu, Jing Zhang, Yilin Wang, Rong Ding, Yueqin Cao, Guiqin Liu, Chang-sheng Liufu, Baowei Xie, Shanping Kang, Rui Liu, et al. 2024. Pneumonia detection based on RSNA dataset and anchor-free deep learning detector. Scientific Reports 
+
+14, 1 (2024), 1929. [43] An Yang, Anfeng Li, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chang Gao, Chengen Huang, Chenxu Lv, et al. 2025. Qwen3 technical report. arXiv preprint arXiv:2505.09388 (2025). [44] John R Zech, Marcus A Badgeley, Manway Liu, Anthony B Costa, Joseph J Titano, and Eric Karl Oermann. 2018. Variable generalization performance of a deep learning model to detect pneumonia in chest radiographs: a cross-sectional study. 
+
+PLoS medicine 15, 11 (2018), e1002683. [45] Sheng Zhang, Yanbo Xu, Naoto Usuyama, Hanwen Xu, Jaspreet Bagga, Robert Tinn, Sam Preston, Rajesh Rao, Mu Wei, Naveen Valluri, et al. 2023. Biomed-clip: a multimodal biomedical foundation model pretrained from fifteen million scientific image-text pairs. arXiv preprint arXiv:2303.00915 (2023). [46] Xiaoman Zhang, Chaoyi Wu, Ya Zhang, Weidi Xie, and Yanfeng Wang. 2023. Knowledge-enhanced visual-language pre-training on chest radiology images. 
+
+Nature Communications 14, 1 (2023), 4542. [47] Yuhao Zhang, Hang Jiang, Yasuhide Miura, Christopher D Manning, and Curtis P Langlotz. 2022. Contrastive learning of medical visual representations from paired images and text. In Machine Learning for Healthcare Conference . PMLR, 2–25. [48] Ziyu Zhou, Haozhe Luo, Jiaxuan Pang, Xiaowei Ding, Michael Gotway, and Jianming Liang. 2023. Learning Anatomically Consistent Embedding for Chest Radiography. In British Machine Vision Conference (BMVC) . BMVA Press, 617–619. http://proceedings.bmvc2023.org/617/ [49] Ziyu Zhou, Haozhe Luo, Mohammad Reza Hosseinzadeh Taher, Jiaxuan Pang, Xiaowei Ding, Michael B. Gotway, and Jianming Liang. 2025. ACE: Anatomically Consistent Embeddings in Composition and Decomposition. In 2025 IEEE/CVF Winter Conference on Applications of Computer Vision (WACV) . IEEE, 3823–3833. doi:10.1109/WACV61041.2025.00376 [50] Ziyu Zhou, Haozhe Luo, Mohammad Reza Hosseinzadeh Taher, Jiaxuan Pang, Xiaowei Ding, Michael B. Gotway, and Jianming Liang. 2025. Lamps: Learning Anatomy from Multiple Perspectives via Self-supervision in Chest Radiographs. In Foundation Models for General Medical AI (Lecture Notes in Computer Science, Vol. 16112) . Springer, 1–11. doi:10.1007/978-3-032-07845-2_1

@@ -1,0 +1,525 @@
+Title: Learning How Much, Not Just What: Cross-Patient Burden Order for CT Vision-Language Pretraining
+
+URL Source: https://arxiv.org/pdf/2608.00231
+
+Published Time: Tue, 04 Aug 2026 00:11:08 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# Learning How Much, Not Just What: Cross-Patient Burden Order for CT Vision-Language Pretraining 
+
+Guoliang You 1, Haifan Gong 2, Xiaomeng Chu 3 ∗
+
+> 1
+
+University of Pennsylvania, 2The Chinese University of Hong Kong, Shenzhen, 3Yale University 
+
+Abstract 
+
+Volumetric CT vision–language pretraining learns 3D repre-sentations from scan–report pairs, but global and anatomy-aware objectives supervise only correspondence: they estab-lish what is present and leave how much unconstrained. Noth-ing separates a mild from an extensive case of the same finding along a consistent direction, so the graded burden language in reports collapses into a present/absent signal. Longitudinal supervision would supply this order, but patient-matched CT pairs are scarce at scale; cross-sectional cohorts already en-code weak burden cues across different patients. We introduce Spectrum, an anatomy-conditioned framework that represents each study at whole-study and organ scopes. For each organ-mapped pathology, a rule-based scorer mines confidence-filtered lower-to-higher pairs of different patients, and Burden-Direction Alignment (BDA) aligns the pathology-conditioned image delta with the report delta at each scope, separating that direction from its reverse. Because the endpoints are different people, a target-conditioned aligner first makes them compa-rable, so the delta reflects burden rather than between-patient variation. BDA further separates the selected direction from its reverse, anchors it to the observed higher-burden endpoint, and enforces consistency across ordered triplets. Since every pair is drawn within a single pathology, BDA is designed to constrain intra-class structure that image–report contrast alone never touches. Spectrum attains 85.6 zero-shot AUROC on CT-RATE and 72.7 on external RAD-ChestCT, with consis-tent gains in linear probing and retrieval. Weak cross-patient order is thus a scalable complement to anatomy-aware corre-spondence, yielding burden-aware CT representations without longitudinal data. 
+
+I. Introduction 
+
+Computed tomography is a cornerstone of clinical imaging, yet reading a volumetric study means reviewing hundreds of slices and integrating evidence across several anatomical sys-tems (Blankemeier et al. 2026; Gong et al. 2024; Huang et al. 2025; Wang et al. 2026; Chen et al. 2023). Volumetric CT vi-sion–language pretraining (VLP) therefore offers a scalable route to transferable 3D representations, learning from the scan–report pairs that hospitals already produce (Hamamci et al. 2026; Blankemeier et al. 2026; Chen et al. 2023). What makes chest CT reports particularly valuable is not only that they name findings and their locations, but that they grade  
+
+> ∗
+
+Corresponding author. (A) Global and Local Vision-Language Pretrain  
+
+> 3D CT volume
+> 𝒙 𝒂
+> Global Alignment
+> Whole Volume Feature Whole Report Tokens
+> Report
+> 𝒓 𝒂
+> Organ Alignment
+> Organ Volume Feature Organ Report Tokens
+> What matches ? Which direction does burden moves ?
+
+(B) Lower-to-Higher Burden Order (Ours)          
+
+> 𝒙 𝒂 𝒓 𝒂
+> 𝒙 𝒃 𝒓 𝒃
+> Patient a(lower burden)
+> Patient b(higher burden)
+> What matches ? Which direction does burden moves ?
+> Patient a(lower burden)
+> Patient b(higher burden) 3D CT volume Report
+> 𝐴𝑙𝑖𝑔𝑛
+> ∆#∆$
+
+Figure 1: Correspondence versus burden order. (A) Global and organ objectives match a volume to its report at two anatomical scopes. (B) Spectrum mines ordered pairs of dif-ferent patients, a (lower burden) and b (higher), and aligns image delta ∆I with report delta ∆T at both scopes. Corre-spondence fixes what matches ; the order supplies how much .them: a nodule is recorded as smaller than 5 mm or as 66 ×
+
+55 mm, consolidation as mild or as extensive. This graded language costs nothing to collect, exists at the scale of entire cohorts. Nevertheless, current objectives compress it into a binary present/absent signal. The dominant formulation aligns a whole volume with a whole report (Hamamci et al. 2026; Blankemeier et al. 2026), and recent methods extend this to local or anatomy-aware correspondence (Shui et al. 2025). These objectives answer one question well: which visual and textual observations be-long together? But correspondence alone is directionless. A model may learn that lung evidence matches a lung snippet with no constraint that “extensive” disease lie beyond “mild” arXiv:2608.00231v1 [cs.CV] 31 Jul 2026 disease along a consistent pathology-burden direction. The cost is a representation organized by category but not by de-gree: cases sharing a pathology are pulled toward a common region of feature space regardless of how much disease they contain, so anatomy localizes correspondence while burden order within that anatomy is left unconstrained. Direct longitudinal supervision could impose such order, but repeat CT studies carrying comparable pathology evi-dence are difficult to assemble at the scale VLP requires. Cross-sectional cohorts, in contrast, are both large and al-ready annotated in the relevant way: labels, negation, size mentions, burden descriptors, and organ-specific report frag-ments jointly indicate which of two patients carries more of a given pathology. This motivates our central question: can weak cross-patient order extend anatomy-aware correspon-dence toward burden-aware representations? 
+
+Our key insight is to use anatomy as the common frame for both correspondence and order, so that each mined relation constrains burden direction within the same scopes in which correspondence is learned. Using two different patients as endpoints, however, raises a difficulty. The difference be-tween their features reflects not only burden but also body habitus, acquisition protocol, and anatomical variation, none of which should define a burden direction. We therefore do not treat the raw feature difference as the supervision target: a target-conditioned aligner first makes the lower-burden rep-resentation comparable with its higher-burden counterpart, and only the residual delta is aligned across modalities. Fig. 1 illustrates this shift. We introduce Spectrum, an anatomy-conditioned VLP framework. Spectrum maintains a whole-study represen-tation and mask-gated organ representations in parallel, grounds them with the whole report and with organ-specific report snippets, and uses a fixed pathology-to-organ map to keep representation learning, burden ordering, and evalua-tion anatomically consistent. Burden-Direction Alignment (BDA) is designed to supply the missing direction signal. For each organ-mapped pathology, a fixed rule-based scorer mines confidence-filtered lower-to-higher relations from la-bels and report language across different patients, and each relation is applied separately at the whole-study scope and, when valid, at the corresponding organ scope. At its core, BDA aligns the pathology-conditioned image and report delta and favors the selected direction over its reverse. Two auxiliary constraints keep that orientation well posed: an endpoint consistency supplies an additional training signal, and a composition constraint keeps pairwise directions co-herent across ordered triplets of increasing burden. All BDA modules act in feature space and are discarded after training, leaving inference unchanged. We evaluate Spectrum on CT-RATE and RAD-ChestCT through zero-shot abnormality diagnosis, frozen-encoder lin-ear probing, image–image and report–image retrieval, com-ponent and aligner ablations, and qualitative burden-order analysis. Spectrum reaches 85.6 AUROC on CT-RATE, 7.8 points above the strongest prior method, and trans-fers to external RAD-ChestCT at 72.7 AUROC. It further raises frozen-encoder linear probing to 87.5 AUROC and report–image R@5 from 2.9 to 18.8. Our contributions are: 
+
+• We introduce Spectrum, an anatomy-conditioned CT vi-sion–language framework that learns not only which find-ings a report describes but how much disease is present, by mining weak ordered relations between different pa-tients in place of the longitudinal data such order would otherwise require. 
+
+• We formulate Burden-Direction Alignment, which condi-tions both modalities on a pathology embedding, removes between-patient variation with a target-conditioned aligner, and aligns the resulting image and report delta under directional and composition constraints with aux-iliary endpoint consistency. 
+
+• We show that Spectrum reaches 85.6 AUROC on CT-RATE and 72.7 AUROC on external RAD-ChestCT, with consistent gains in frozen-encoder linear probing and re-trieval, and we isolate the contribution of each constraint and of the aligner through controlled ablations. 
+
+II. Related Work 
+
+A. Medical VLP as correspondence learning. 
+
+Contrastive VLP learns transferable representations from paired or semantically matched image–text data (Radford et al. 2021; Zhai et al. 2022; Zhang et al. 2022; Wang et al. 2022b; Tiu et al. 2022; Gong et al. 2021, 2022). Medical models exploit report semantics through radiology-specific text modeling, global/local or multi-granular alignment, and structured entity/knowledge supervision (Boecking et al. 2022; Huang et al. 2021; Wang et al. 2022a; Müller et al. 2022; Wu et al. 2023; Jain et al. 2021). Broader biomed-ical models scale this paradigm to millions of scientific image–text pairs (Zhang et al. 2025; Lin et al. 2023). Despite these advances, existing VLP objectives primarily organize 
+
+what matches , rather than explicitly constraining a consis-tent lower-to-higher burden direction among cases sharing the same pathology. 
+
+B. Volumetric and anatomy-aware CT VLP. 
+
+Volumetric CT methods establish whole-volume–report alignment, transfer radiographic knowledge, or incorporate structured, generative, and image-only objectives for repre-sentation learning (Hamamci et al. 2026; Bai et al. 2024; Cao et al. 2024; Blankemeier et al. 2026; Lai et al. 2025; Wald et al. 2025). CT-GLIP and fVLM localize correspon-dence by constructing organ-level image–text pairs or ex-tracting mask-guided organ representations (Lin et al. 2024; Shui et al. 2025). These methods expose anatomy-specific evidence. Rather than introducing another correspondence granularity, Spectrum uses the whole-study and pathology-mapped organ scopes to learn weak cross-patient burden direction by aligning ordered image–text deltas. 
+
+C. Relative order and temporal supervision. 
+
+Pairwise ranking and severity-aware representation learning impose order from preferences or explicit severity annota-tions (Burges et al. 2005; Nguyen et al. 2024). Longitudi-nal medical VLP derives change supervision from patient-Case a (Lower Burden) Case b (Higher Burden)            
+
+> 3D Encoder
+> Whole Report 𝒓 𝒂
+> Findings:
+> There are …
+> Impression:
+> There are …
+> Organ Report 𝒓 𝒂 𝒐
+> Lung: … Heart: … Aorta: …
+> Esophagus :…
+> Text Encoder
+> CT Volume 𝒙 𝒂
+> Organ Mask 𝒎 𝒂 𝒐
+> Lung Heart Esophagus Aorta
+> 3D Encoder Text Encoder
+> CT Volume 𝒙 𝒃
+> Organ Mask 𝒎 𝒃 𝒐
+> Lung Heart Esophagus Aorta
+> Global Query Decoder Mask-Gated Organ-query Global Query Decoder Mask-Gated Organ-query Global Feature 𝒛 𝑰,𝒂 𝒈
+> Organ Feature 𝒛 𝑰,𝒂 𝒐
+> Global Text Embedding Organ Text Embedding
+> 𝒛 𝑻,𝒂 𝒈
+> 𝒛 𝑻,𝒂 𝒐
+> 𝒛 𝑻,𝒃 𝒈
+> 𝒛 𝑻,𝒃 𝒐
+> Global Text Embedding Organ Text Embedding Global Feature 𝒛 𝑰,𝒃 𝒈
+> Organ Feature 𝒛 𝑰,𝒃 𝒐
+> Burden-Direction Alignment (BDA)
+> Direct Text-Delta Path (No Aligner)
+> 𝑑 ()
+> 𝑑 (*
+
+…
+
+> 𝒖 𝑻,𝒂 𝒑,𝒈
+
+…   
+
+> 𝒖 𝑻,𝒃 𝒑,𝒈
+> 𝒖 𝑻,𝒂 𝒑,𝒐 𝒖 𝑻,𝒃 𝒑,𝒐
+> 𝒖 𝑰,𝒂 𝒑,𝒈 𝒖 𝑰,𝒃 𝒑,𝒈
+> 𝒖 𝑰,𝒂 𝒑,𝒐 𝒖 𝑰,𝒃 𝒑,𝒐
+> Target-conditioned Gated Residual Aligner
+> 𝑑 ,)
+> 𝑑 ,*
+
+BDA-Loss 
+
+> Pathology-Conditioned Image Adapter Pathology-Conditioned Image Adapter Pathology-Conditioned Image Adapter Pathology-Conditioned Image Adapter Pathology-Conditioned Text Adapter Pathology-Conditioned Text Adapter Pathology-Conditioned Text Adapter Pathology-Conditioned Text Adapter Shared Weights
+> What Matches ?BDA Loss: Which Moves ?Global Contrast
+
+…                   
+
+> Whole Volume ⟷Whole Report
+> Organ Contrast
+> Organ Volume ⟷Organ Report
+> Delta Loss
+> 𝑑 ,𝑑 (
+> 1 − 𝑑 !, 𝑑 "
+> Direction Loss
+> Forward: case a ⟶case b Reverse: case b ⟶case a
+> Endpoint Consistency Loss
+> ∆+
+> Case a ⟶Case b ⟶Case c
+> ∆-⟶/ + ∆ /⟶0 ≈ ∆ -⟶0
+> Triplet Composition Loss Whole Report 𝒓 𝒃
+> Findings:
+> There are …
+> Impression:
+> There are …
+> Organ Report 𝒓 𝒃 𝒐
+> Lung: … Heart: … Aorta: …
+> Esophagus :…
+> case a case b Shared Weights Shared Weights Shared Weights
+
+Figure 2: Architecture of Spectrum. A mined relation orders two different patients, a (lower burden) and b (higher), for pathology 
+
+p. Shared encoders embed both studies at whole-study and mask-gated organ scopes, where paired contrastive objectives fix correspondence ( what matches ). Burden-Direction Alignment (BDA) adds order ( which moves ), aligning image and report delta directions dI and dT at each scope. BDA is training-only. matched prior/current radiographs and their reports (Ban-nur et al. 2023; Yang and Shen 2025). These methods ob-tain order from explicit severity supervision. In contrast, BDA mines confidence-filtered lower-to-higher pathology-burden relations from labels and report language across cross-sectional CT studies from different patients. 
+
+III. Method 
+
+A. Problem Formulation and Overview 
+
+Each study i contains a CT volume xi, organ masks 
+
+mi = {moi }o∈O , a whole report ri, organ-specific re-port snippets {roi }o∈O , and CT-RATE abnormality la-bels yi ∈ {0, 1}18 . We use four organ groups, O =
+
+{lung , heart , esophagus , aorta }, together with a global scope 
+
+g. Here, a scope q ∈ { g} ∪ O denotes paired image and text representations at one anatomical level. A fixed pathology-to-organ map σ assigns 16 of the 18 labels to one organ: 11 pulmonary findings to the lung, 3 cardiac findings to the heart, hiatal hernia to the esophagus, and arterial wall calcifi-cation to the aorta. BDA is applied to these 16 organ-mapped pathologies, while medical material and lymphadenopathy remain global-only. A selected relation (a, b, p ) encodes a lower-to-higher order between two different patients for pathology p. Fig. 2 summarizes the framework. Spectrum or-ganizes each study into complementary anatomy-conditioned scopes. A whole-study representation retains global context, while four mask-gated organ queries produce organ-specific representations; paired image–text objectives align each vi-sual representation with its whole-report or organ-snippet counterpart. These scopes define where correspondence is learned; by aligning pathology-conditioned image and text deltas, BDA defines how lower-to-higher pathology-burden order is imposed at the global and organ scopes. 
+
+B. Anatomy-Conditioned Scopes 
+
+Global and organ-specific representations. A 3D en-coder produces the feature map Fi = Eθ (xi). A learned global query decoder G aggregates the feature map into the whole-study feature gi = G(Fi). For each organ o, the mask 
+
+moi is downsampled to the feature-map resolution and used as an attention mask; the mask-gated organ-query aggregator 
+
+H, with one learned query per organ, pools the valid anatom-ical features into hoi = H(Fi, m oi ). A shared text encoder maps the whole report and organ-specific report snippets to 
+
+tgi = Eϕ(ri) and toi = Eϕ(roi ), respectively. A global visual projection head P gI , an organ-scope visual projection head 
+
+P oI , and a shared text projection head PT map these features to the embeddings used by the correspondence objectives: 
+
+zgI,i = P gI (gi), zgT,i = PT (tgi ),zoI,i = P oI (hoi ), zoT,i = PT (toi ). (1) Invalid organ masks are excluded by a validity indicator voi .The organ visual projection P oI is shared across organs, while 
+
+PT is shared by whole reports and organ snippets. 
+
+Global and organ correspondence. Let ZgI and ZgT stack a mini-batch of projected whole-study representations. Global correspondence is learned with a symmetric image–text con-trastive loss using diagonal image–report pairs: 
+
+Lglobal = 12
+
+h
+
+CE( ZgI ZgT
+
+> ⊤
+
+, I ) + CE( ZgT ZgI
+
+> ⊤
+
+, I )
+
+i
+
+. (2) For each organ o, let Bo = {i ∈ B : voi = 1 } denote the valid studies, and let ZoI and ZoT stack their organ image and snippet representations. We define the organ-level similarity matrix as So = ZoI ZoT
+
+> ⊤
+
+/τ o. Organ correspondence is learned with the same symmetric paired contrastive objective: 
+
+Lorgan = 12|O B |
+
+X
+
+> o∈O B
+
+h
+
+CE( So, I o) + CE 
+
+
+
+(So)⊤, I o
+
+i 
+
+, (3) 
+
+where Io is the diagonal pairing target over Bo, and OB
+
+contains organs with sufficient valid image–snippet pairs in the mini-batch. Together, Lglobal and Lorgan establish what matches at the whole-study and organ scopes, while cross-patient lower-to-higher order is introduced only by BDA. 
+
+C. Burden-Direction Alignment 
+
+Rule-based burden scoring and cross-patient relation mining. For each organ-mapped pathology p, a fixed, non-learned scorer ϕp combines the label yi,p with the whole report and corresponding organ-specific report snippet to produce a burden-evidence score spi and confidence ρpi . Both 
+
+spi ∈ R≥0 and ρpi ∈ R≥0 are additive, non-normalized scores rather than probabilities. Different patients form an eligible candidate relation when 
+
+(spi , ρ pi ) = ϕp(yi,p , r i, r σ(p) 
+
+> i
+
+),
+
+(a, b, p ) ∈ eP ⇐⇒ a̸ = b, spb − spa ≥ δ, spa, s pb ≥ smin , ρpa, ρ pb ≥ η. 
+
+(4) 
+
+Here, δ requires sufficient separation between the two burden-evidence scores, smin requires both endpoints to con-tain adequate evidence for pathology p, and η filters low-confidence relations. The scorer parses pathology mentions, negation patterns, burden or severity descriptors, size or com-parative cues, and uncertainty language. Its score supports relative ordering. Within mini-batches, eligible candidates from all active pathologies are assigned the reliability weight 
+
+wpab = ( spb − spa) × min( ρpa, ρ pb ), and the top-K candidates form the selected relation set P ⊆ eP. Each selected triple de-fines a cross-patient relation a → b, in which study a carries weaker burden cues than study b for pathology p.Relation mining is scope-independent: each triple (a, b, p )
+
+is selected once and then evaluated at the whole-study scope 
+
+q = g and the corresponding organ scope q = σ(p). At 
+
+q = g, the pathology embedding ep conditions the two whole-study representations, yielding a pathology-indexed global burden direction rather than a generic whole-study burden axis. At q = σ(p), the same relation constrains the corresponding organ-specific representations, grounding the burden direction in the mapped anatomy. 
+
+Pathology-conditioned delta construction. For each se-lected relation (a, b, p ) and scope q ∈ { g, σ (p)}, we first condition the corresponding image and text representations on a learned pathology embedding ep using modality-specific gated residual adapters: 
+
+up,q M,i = CM (zqM,i ; ep), M ∈ { I, T }, i ∈ { a, b }. (5) 
+
+For each modality, CM concatenates the selected representa-tion with ep; modality-specific two-layer update and sigmoid-gate networks produce a gated residual that is added to the Case a (Lower) Case b (Higher)     
+
+> 𝒖 𝑰,𝒂 𝒑,𝒒 𝒖 𝑰,𝒃 𝒑,𝒒
+> 𝑓 !" = [𝑢 #,! %,& ; 𝑢 #," %,& ; 𝑢 #,! %,& − 𝑢 #," %,& ; 𝑢 #,! %,& ⨀𝑢 #," %,& ; ]
+> Residual MLP
+> 𝐻 '(𝑓 !" )
+> Sigmoid Gate
+> 𝐺 '(𝑓 !" )
+> ⨀⨁
+> Raw Visual Delta
+> -∆#= 𝑢 #," %,& − / 𝑢 #,! %,&
+> "𝑢 ',( ),*
+> 𝒖 𝑰,𝒂 𝒑,𝒒
+
+… 
+
+> 𝒖 𝑻,𝒂 𝒑,𝒒
+> Case a (Lower) Case b (Higher)
+
+…   
+
+> 𝒖 𝑻,𝒃 𝒑,𝒒
+> Raw Text Delta
+> -∆(= 𝑢 (," %,& − 𝑢 (,! %,&
+> Project & Normalize Project & Normalize
+> 𝑑 '𝑑 ,
+> b) Direct Text-Delta Path (No Aligner)
+> 𝒖 𝑻,𝒂 𝒑,𝒒 𝒖 𝑻,𝒃 𝒑,𝒒
+> a) Target-conditioned Gated Residual Aligner
+
+Figure 3: Delta construction in BDA for pathology p at scope 
+
+q. A target-conditioned aligner maps endpoint a (lower bur-den) toward b (higher) before differencing, giving dI , while the aligner-free text path gives dT . The endpoints are differ-ent patients, so only the residual difference isolates burden from habitus and protocol. input. The image and text adapters are shared across studies, anatomical scopes, and pathologies, with p changing only the embedding ep rather than selecting an independent net-work. Each relation is therefore conditioned within one active whole-study or organ-local scope. Before measuring visual difference, a target-conditioned aligner produces a target-aware visual source, as shown in Fig. 3(a). The aligned visual source, pre-projection image and text differences, and normalized projected directions dM for 
+
+M ∈ { I, T } are 
+
+bup,q I,a = A(up,q I,a , u p,q I,b ), e∆a→b,p,q I = up,q I,b − bup,q I,a ,
+
+e∆a→b,p,q T = up,q T,b − up,q T,a , da→b,p,q M = norm   e∆a→b,p,q M
+
+. (6) 
+
+The aligner A concatenates the visual source, target, their signed difference, and element-wise interaction; a two-layer MLP predicts a residual update modulated by a learned sig-moid gate and added to the source. For the forward relation 
+
+a → b, only the source feature is transformed, while the tar-get feature remains unchanged. The text branch bypasses the aligner and uses the direct difference between pathology-conditioned report representations, retaining the textual dif-ference as a direct semantic reference. The modality-specific projectors map both differences into a shared delta space, and norm denotes ℓ2 normalization. 
+
+Direction-aware and geometric constraints. The deltas above define pathology-conditioned cross-patient difference. The core BDA term makes this difference cross-modal by aligning the unit image and text directions: 
+
+L∆ = 1 −
+
+D
+
+da→b,p,q I , d a→b,p,q T
+
+E
+
+. (7) 
+
+Because both directions are ℓ2-normalized, L∆ performs cosine direction matching rather than batch-level contrastive learning; Lglobal and Lorgan preserve the absolute image–text correspondence. We omit the common indices (p, q ) in the following auxiliary terms. To distinguish the selected orienta-tion from undirected similarity, let sfwd = ⟨da→bI , d a→bT ⟩ and 
+
+srev = ⟨db→aI , d a→bT ⟩. Here, db→aI is recomputed by swap-ping the visual source and target through the same aligner and delta projector, rather than being defined as −da→bI . The auxiliary constraints are 
+
+Ldir = [ μ − (sfwd − srev )] + ,
+
+Lend = MSE 
+
+
+
+Ψ
+
+
+
+[buI,a ; e∆a→bI ]
+
+
+
+, u I,b 
+
+
+
+,
+
+Lcomp = MSE 
+
+
+
+da→cI , norm 
+
+
+
+da→bI + db→cI
+
+ 
+
+.
+
+(8) 
+
+Here, [x]+ = max(0 , x ). The direction term enforces 
+
+sfwd ≥ srev + μ while keeping the textual reference fixed in the selected a → b direction. The endpoint head Ψ maps 
+
+[buI,a ; e∆a→bI ] ∈ R2D to the observed higher-burden visual endpoint, so Lend serves as an auxiliary latent endpoint-consistency regularizer rather than an image-reconstruction. For an eligible same-pathology triplet with spa < s pb < s pc ,
+
+Lcomp encourages the direct a → c direction to agree with the normalized two-step path a → b → c.Using the reliability weight wpab defined during relation mining, let Pq denote the selected relations whose represen-tations are valid at scope q. The pairwise and scope-level objectives are 
+
+ℓp,q ab = L∆ + λdir Ldir + λend Lend ,
+
+Lq 
+
+> BDA
+
+=
+
+P 
+
+> (a,b,p )∈P q
+
+wpab ℓp,q ab 
+
+P 
+
+> (a,b,p )∈P q
+
+wpab 
+
++ λcomp Lq
+
+> comp
+
+. (9) 
+
+Lq 
+
+> comp
+
+averages eligible same-pathology triplets at scope q
+
+and is zero when none exists; a scope with Pq = ∅ is omitted from the batch objective. Thus, the same mined relation is supervised at the whole-study scope and, when valid, at the corresponding pathology-mapped organ scope. 
+
+D. Training Objective 
+
+Before cross-modal training, we warm up the visual branch with Lwarm = Lanchor + λrank Lrank . Lanchor applies label-supervised prediction at the whole-study scope and at valid pathology-mapped organ scopes. At both scopes, Lrank uses a margin hinge so that a label-positive study scores above a label-negative study for the same pathology. This stage establishes coarse disease-sensitive representations by sep-arating pathology presence from absence, but does not or-der different burden states among studies sharing the same pathology; the lower-to-higher relations used by BDA are subsequently mined from labels and report cues. During image–text training, the 3D backbone is frozen, while the global decoder, organ-query module, projection layers, text encoder, and BDA-specific modules remain trainable. The training objective combines paired whole-study and organ-local correspondence with cross-patient burden order: 
+
+Ltrain = Lglobal + λorgan Lorgan 
+
+| {z }
+
+> correspondence
+
++ λBDA 
+
+1
+
+|Q B |
+
+X
+
+> q∈Q B
+
+Lq
+
+> BDA
+
+| {z }
+
+> cross-patient burden order
+
+. (10) 
+
+Here, QB = {q : Pq̸ = ∅} contains the whole-study and pathology-mapped organ scopes with at least one selected relation valid in the current mini-batch. When QB is empty, the aggregate BDA term is set to zero. 
+
+IV. Experiments 
+
+A. Datasets and Metrics 
+
+Datasets. We evaluate Spectrum on two public datasets: CT-RATE and RAD-ChestCT. CT-RATE contains 25,692 non-contrast 3D scans from 21,304 patients, expanded to 50,188 reconstructed volumes with paired radiology re-ports and abnormality labels (Hamamci et al. 2026). RAD-ChestCT is a non-contrast chest CT abnormality dataset from Duke University, comprising 36,316 volumes collected be-tween 2012 and 2017 with 83 abnormality labels (Draelos et al. 2021). Its public subset contains 3,630 scans. 
+
+Metrics. We consider four evaluation tasks: zero-shot ab-normality diagnosis, frozen-encoder linear probing, image– image retrieval, and report–image retrieval. For zero-shot diagnosis evaluation, we follow the protocol of CT-CLIP (Hamamci et al. 2026). These tasks assess zero-shot diagnostic prediction, linear separability, and retrieval-based representation quality. For zero-shot diagnosis, we report AUROC, ACC, F1, and precision; for linear probing, we re-port AUPRC and AUROC; for image–image retrieval, we report MAP@5/10/50; and for report–image retrieval, we re-port Recall@5/10/50/100. Reported baseline results follow their published protocols, and missing metrics are marked as “–”. We additionally inspect cross-patient burden order through one pathology-specific three-study chain. 
+
+B. Implementation Details 
+
+The CT encoder is a 3D ResNet-18. Organ masks are grouped into lung, heart, esophagus, and aorta and used to select organ-specific evidence from the 3D feature map. A four-query global decoder and four mask-gated organ queries pro-duce 512-dimensional visual representations, while CXR-BERT encodes whole reports and organ-specific report snip-pets as 768-dimensional text features. Across visual warm-up and image–text training, we set λrank = λorgan = 0 .10 ,
+
+λBDA = 0 .64 , λdir = 0 .50 , λend = 0 .25 , λcomp = 0 .03 ,and τo = 0 .07 . During image–text training, we use AdamW with batch size 4 and learning rates of 10 −5 and 10 −4 for the text encoder and projection modules, respectively. BDA uses δ = η = smin = 0 .75 , K = 32 , at most eight eligible triplets per mini-batch, a 256-dimensional delta space, and margin μ = 0 .10 . BDA losses are averaged equally across active whole-study and organ scopes. All experiments were conducted using NVIDIA A100 GPUs. CT-RATE ↑ RAD-ChestCT ↑                                                                 
+
+> Method AUROC ACC F1 Prec. AUROC ACC F1 Prec. CT-Net (Draelos et al. 2021) 60.3 58.1 63.1 23.9 54.4 54.0 58.7 28.5 CT-CLIP (Hamamci et al. 2026) 73.1 66.8 70.7 32.3 62.9 59.5 64.2 33.6 BIUD (Cao et al. 2024) 71.3 68.1 71.6 33.8 62.9 60.6 65.2 33.7 Merlin (Blankemeier et al. 2026) 72.8 67.2 70.9 33.7 64.4 61.9 66.3 34.8 COLIPRI-C †(Wald et al. 2025) 76.3 –––69.1 –––fVLM (Shui et al. 2025) 77.8 71.8 75.1 37.9 68.0 64.7 68.8 37.4
+> Spectrum (Ours) 85.6 79.0 81.2 46.2 72.7 67.7 71.9 39.7
+
+Table 1: Zero-shot abnormality diagnosis. No downstream classifier or evaluation-set tuning is used. AUROC, ACC (accuracy), F1 and Prec. (precision), in %; “–”: not reported; †: contrastive-only variant. Higher is better.                           
+
+> CT-RATE RAD-ChestCT Method AUPRC AUROC AUPRC AUROC Curia (Dancette et al. 2025) 45.9 78.0 39.2 65.7 CT-CLIP –75.1 –64.7 CT-FM (Pai et al. 2025) 53.5 82.1 42.4 68.5 Merlin 54.8 82.6 45.3 70.9 COLIPRI-C 55.1 82.6 46.3 71.2
+> Spectrum (Ours) 64.7 87.5 52.2 72.5
+
+Table 2: Frozen-encoder linear probing. A linear classifier is fitted on frozen image features. AUPRC and AUROC in %; “– ”: not reported. Higher is better. The advantage of Spectrum persists with the encoder frozen. 
+
+C. Main Results 
+
+Zero-shot abnormality diagnosis. Table 1 compares Spectrum with existing CT methods on CT-RATE and RAD-ChestCT. Here, zero-shot follows the CT VLP inference pro-tocol: no downstream classifier is fitted and no evaluation-set fine-tuning is performed. On CT-RATE, Spectrum achieves the highest result among the compared methods for every metric, reaching 85.6 AUROC, 79.0 ACC, 81.2 F1, and 46.2 precision. Relative to fVLM, these scores improve by 7.8, 7.2, 6.1, and 8.3 points; Spectrum also surpasses the contrastive-only COLIPRI-C variant by 9.3 AUROC points. On RAD-ChestCT, Spectrum obtains 72.7 AUROC, 67.7 ACC, 71.9 F1, and 39.7 precision, exceeding the prior AUROC in the table by 3.6 points and outperforming fVLM by 4.7 AUROC points. The gains across both datasets demonstrate stronger in-domain diagnosis and external zero-shot transfer. 
+
+Frozen-encoder linear probing. Table 2 evaluates the dis-criminative quality of the frozen image representation under a linear classifier. On CT-RATE, Spectrum achieves 64.7 AUPRC and 87.5 AUROC, surpassing the strongest base-line by 9.6 and 4.9 points, respectively. On RAD-ChestCT, it reaches 52.2 AUPRC and 72.5 AUROC, improving over the strongest baseline by 5.9 and 1.3 points. These results show that Spectrum produces more linearly separable features for both in-domain and external abnormality classification. 
+
+Image–image retrieval. Table 3 shows that Spectrum achieves mAP@5/10/50 of 71.2/61.6/54.2. Compared with             
+
+> Method Img2Img MAP@5/10/50 ↑
+> Rpt2Img Recall@5/10/50/100 ↑
+> CT-Net 59.4 / 48.1 / 40.7 – / – / – / – Merlin 62.6 / 51.3 / 43.9 1.5 / 2.7 / 7.7 / 12.7 CT-CLIP 68.3 / 57.2 / 48.9 2.9 / 5.0 / 18.0 / 28.7 – ClassFine 67.9 / 56.8 / 48.5 – / – / – / – fVLM 49.1 / 36.8 / 26.0 0.8 / 1.5 / 4.9 / 8.3
+> Spectrum (Ours) 71.2 / 61.6 / 54.2 18.8 / 26.3 / 51.8 / 64.3
+
+Table 3: CT-RATE retrieval. Image–image MAP measures abnormality-overlap retrieval, while report–image Recall evaluates paired cross-modal retrieval. CT-CLIP, these results improve by 2.9, 4.4, and 5.3 points, respectively. The increasing margin at deeper retrieval cut-offs demonstrates that the learned image space preserves abnormality-aware neighborhood structure beyond the near-est scans. Together with the diagnosis and linear-probing re-sults, this confirms that anatomy-conditioned burden-order learning improves both category discrimination and the or-ganization of CT representations. 
+
+Report–image retrieval. For report–image retrieval, Spectrum achieves R@5/10/50/100 of 18.8/26.3/51.8/64.3, compared with 2.9/5.0/18.0/28.7 for CT-CLIP. These corre-spond to gains of 15.9, 21.3, 33.8, and 35.6 points, respec-tively. The substantial improvements across retrieval depths demonstrate that Spectrum preserves strong report–scan cor-respondence while learning anatomy-conditioned pathology-burden directions. BDA therefore complements the global and organ-local correspondence objectives and strengthens the resulting cross-modal representation space. 
+
+D. Ablation and Analysis 
+
+BDA loss ablation. Table 4 compares the correspondence-only baseline with the cumulative addition of the four BDA losses under the same representation architecture and op-timization protocol. Without BDA supervision, the model obtains 76.7 AUROC. Adding the core image–text delta-alignment loss L∆ raises performance to 83.9, a gain of 7.2 points. Forward–reverse discrimination Ldir and endpoint consistency Lend further improve it to 84.3 and 84.5, re-spectively. The complete objective reaches 85.6 AUROC. In L∆ Ldir Lend Lcomp AUROC ↑
+
+– – – – 76.7 
+
+✓ – – – 83.9 
+
+✓ ✓ – – 84.3 
+
+✓ ✓ ✓ – 84.5 
+
+✓ ✓ ✓ ✓ 85.6 
+
+Table 4: BDA loss ablation on CT-RATE. Columns add delta alignment, forward–reverse direction, endpoint consistency and ordered-triplet composition in turn. Lung (11) Heart (3) Esophagus (1) Aorta (1) Unmapped (2)   
+
+> 65 70 75 80 85 90 95 100
+> 73.7 87.2 72.2 88.2 75.2 82.5 93.9 86.3 94.7 84.8
+> Global-only image-report Spectrum (complete)
+
+Figure 4: Global-prediction AUROC by organ group on CT-RATE. Spectrum is compared with global-only image–report alignment, a matched internal control rather than a prior method. Groups follow the pathology-to-organ map, with pathologies per group in parentheses and “unmapped” the two global-only labels. particular, the 1.1-point gain from Lcomp shows that pairwise delta alignment benefits substantially from path consistency across ordered a → b → c triplets. 
+
+Aligner controls. Table 5 keeps the complete BDA ob-jective fixed and changes only how the lower-burden image representation is aligned before computing its delta. Remov-ing the higher-burden representation from the aligner in-put reduces AUROC from 85.6 to 84.5, while bypassing the aligner entirely yields 84.2. Thus, target context contributes 1.1 points over the target-blind variant, and the complete target-conditioned aligner contributes 1.4 points over direct source-to-target subtraction. 
+
+Organ-group behavior. Fig. 4 groups the 18 abnormal-ities predicted from the global representation by their pathology-to-organ assignment. Compared with global-only image–report alignment, the complete framework improves lung, heart, esophagus, aorta, and the two unmapped patholo-gies by 8.8, 6.7, 14.1, 6.5, and 9.6 AUROC points, raising the overall score from 76.8 to 85.6. The positive gain in every group demonstrates that the improvement is not driven by a single dominant organ or pathology family. Notably, the two unmapped abnormalities also improve, showing that the anatomy-conditioned and burden-order training signals are encoded beyond their directly mapped organ scopes in the shared whole-study representation. 
+
+Model-derived burden-order geometry. For each or-dered pair, we report the forward–reverse similarity differ-ence sfwd − srev , averaged over the whole-study and or-gan scopes. A positive value indicates that the visual transi-
+
+Aligner Target input Learned AUROC ↑
+
+Identity – – 84.2 Target-blind – ✓ 84.5 Target-conditioned ✓ ✓ 85.6 
+
+Table 5: Visual-aligner controls on CT-RATE. All rows use the complete BDA objective and differ only in how the lower-burden image representation is aligned before constructing its delta. Target input indicates whether the higher-burden representation is visible to the aligner; Identity bypasses the learned aligner while retaining the target representation for delta construction. Lower Medium Higher 
+
+> Report cue: pulmonary nodules, <5 mm, both lungs
+> Lung nodule
+> Report cue: solid pulmonary nodule, 14 mm, coarse calcification Report cue: nodular lesion, wide cavitation, 66 mm × 55 mm
+
+Figure 5: Model-supported burden order for lung nodule. BDA mines these three studies, one per patient, as a lower– medium–higher chain; the report size cues rise accordingly, and cyan contours delineate the lungs. All three forward– reverse similarity gaps are positive, so the trained model prefers the displayed direction to its reverse. The order is cross-patient, not longitudinal. tion agrees more strongly with the selected report direction than with its swapped reverse. For the lung-nodule triplet in Fig. 5, the lower-to-medium, medium-to-higher, and lower-to-higher gaps are +0 .034 , +0 .011 , and +0 .060 , respec-tively. A least-squares one-dimensional fit jointly summa-rizes the three pairwise gaps; within-triplet min–max nor-malization yields coordinates 0.000 /0.716 /1.000 , recover-ing the lower–medium–higher order. 
+
+V. Discussion and Conclusion 
+
+Spectrum advances volumetric CT VLP from anatomy-aware correspondence to anatomy-conditioned burden direction. By mining confidence-filtered lower-to-higher relations from cross-sectional labels and reports, BDA aligns pathology-conditioned image and text deltas at the whole-study and pathology-mapped organ scopes, converting weak cross-patient cues into structured feature-space order. The complete framework raises CT-RATE AUROC from 76.8 to 85.6 over matched global-only image–report alignment and achieves 72.7 AUROC on external RAD-ChestCT; consistent gains in frozen-encoder linear probing, retrieval, and pathology-group analysis further demonstrate stronger and more trans-ferable representations. These results establish weak cross-patient order as a scalable complement to anatomy-aware correspondence. More broadly, Spectrum moves CT VLP beyond learning only what matches toward encoding consis-tent lower-to-higher pathology-burden directions from rou-tine cross-sectional data, without requiring longitudinal CT. References 
+
+Bai, F.; Du, Y.; Huang, T.; Meng, M. Q.-H.; and Zhao, B. 2024. M3d: Advancing 3d medical image analysis with multi-modal large language models. arXiv preprint arXiv:2404.00578 .Bannur, S.; Hyland, S.; Liu, Q.; Perez-Garcia, F.; Ilse, M.; Castro, D. C.; Boecking, B.; Sharma, H.; Bouzid, K.; Thieme, A.; et al. 2023. Learning to exploit temporal structure for biomedical vision-language processing. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , 15016–15027. Blankemeier, L.; Kumar, A.; Cohen, J. P.; Liu, J.; Liu, L.; Van Veen, D.; Gardezi, S. J. S.; Yu, H.; Paschali, M.; Chen, Z.; et al. 2026. Merlin: a computed tomography vision– language foundation model and dataset. Nature , 652(8112): 1318–1328. Boecking, B.; Usuyama, N.; Bannur, S.; Castro, D. C.; Schwaighofer, A.; Hyland, S.; Wetscherek, M.; Naumann, T.; Nori, A.; Alvarez-Valle, J.; et al. 2022. Making the most of text semantics to improve biomedical vision–language pro-cessing. In European conference on computer vision , 1–21. Springer. Burges, C.; Shaked, T.; Renshaw, E.; Lazier, A.; Deeds, M.; Hamilton, N.; and Hullender, G. 2005. Learning to rank using gradient descent. In Proceedings of the 22nd international conference on Machine learning , 89–96. Cao, W.; Zhang, J.; Xia, Y.; Mok, T. C.; Li, Z.; Ye, X.; Lu, L.; Zheng, J.; Tang, Y.; and Zhang, L. 2024. Bootstrapping chest ct image understanding by distilling knowledge from x-ray expert models. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 11238–11247. Chen, J.; Xia, Y.; Yao, J.; Yan, K.; Zhang, J.; Lu, L.; Wang, F.; Zhou, B.; Qiu, M.; Yu, Q.; Yuan, M.; Fang, W.; Tang, Y.; Xu, M.; Zhou, J.; Zhao, Y.; Wang, Q.; Ye, X.; Yin, X.; Shi, Y.; Chen, X.; Zhou, J.; Yuille, A.; Liu, Z.; and Zhang, L. 2023. CancerUniT: Towards a Single Unified Model for Effective Detection, Segmentation, and Diagnosis of Eight Major Cancers Using a Large Collection of CT Scans. In 
+
+Proceedings of the IEEE/CVF International Conference on Computer Vision , 21327–21338. Dancette, C.; Khlaut, J.; Saporta, A.; Philippe, H.; Ferreres, E.; Callard, B.; Danielou, T.; Alberge, L.; Machado, L.; Tord-jman, D.; et al. 2025. Curia: A Multi-Modal Foundation Model for Radiology. arXiv preprint arXiv:2509.06830 .Draelos, R. L.; Dov, D.; Mazurowski, M. A.; Lo, J. Y.; Henao, R.; Rubin, G. D.; and Carin, L. 2021. Machine-learning-based multiple abnormality prediction with large-scale chest computed tomography volumes. Medical image analysis , 67: 101857. Gong, H.; Chen, G.; Liu, S.; Yu, Y.; and Li, G. 2021. Cross-Modal Self-Attention with Multi-Task Pre-Training for Med-ical Visual Question Answering. In Proceedings of the 2021 International Conference on Multimedia Retrieval , 456–460. ACM. Gong, H.; Chen, G.; Mao, M.; Li, Z.; and Li, G. 2022. VQAMix: Conditional Triplet Mixup for Medical Visual Question Answering. IEEE Transactions on Medical Imag-ing , 41(11): 3332–3343. Gong, H.; Huang, W.; Zhang, H.; Wang, Y.; Wan, X.; Shen, H.; Li, G.; and Li, H. 2024. Intensity Confusion Matters: An Intensity-Distance Guided Loss for Bronchus Segmentation. In 2024 IEEE International Conference on Multimedia and Expo (ICME) , 1–6. Hamamci, I. E.; Er, S.; Wang, C.; Almas, F.; Simsek, A. G.; Esirgun, S. N.; Dogan, I.; Durugol, O. F.; Hou, B.; Shit, S.; et al. 2026. Generalist foundation models from a multimodal dataset for 3D computed tomography. Nature Biomedical Engineering , 1–19. Huang, S.-C.; Shen, L.; Lungren, M. P.; and Yeung, S. 2021. Gloria: A multimodal global-local representation learning framework for label-efficient medical image recognition. In 
+
+Proceedings of the IEEE/CVF international conference on computer vision , 3942–3951. Huang, W.; Gong, H.; Zhang, H.; Wang, Y.; Wan, X.; Li, G.; Li, H.; and Shen, H. 2025. BCNet: Bronchus Classifi-cation via Structure Guided Representation Learning. IEEE Transactions on Medical Imaging , 44(1): 489–498. Jain, S.; Agrawal, A.; Saporta, A.; Truong, S.; Duong, D. N.; Bui, T.; Chambon, P.; Zhang, Y.; Lungren, M. P.; Ng, A. Y.; et al. 2021. RadGraph: Extracting Clinical Entities and Rela-tions from Radiology Reports. In Thirty-fifth Conference on Neural Information Processing Systems Datasets and Bench-marks Track (Round 1) .Lai, H.; Jiang, Z.; Yao, Q.; Wang, R.; He, Z.; Tao, X.; Lv, W.; Wei, W.; and Zhou, S. K. 2025. Bridged semantic alignment for zero-shot 3D medical image diagnosis. IEEE Journal of Biomedical and Health Informatics .Lin, J.; Xia, Y.; Zhang, J.; Yan, K.; Cao, K.; Lu, L.; Luo, J.; and Zhang, L. 2024. Ct-glip: 3d grounded language-image pretraining with ct scans and radiology reports for full-body scenarios. arXiv preprint arXiv:2404.15272 .Lin, W.; Zhao, Z.; Zhang, X.; Wu, C.; Zhang, Y.; Wang, Y.; and Xie, W. 2023. Pmc-clip: Contrastive language-image pre-training using biomedical documents. In International Conference on Medical Image Computing and Computer-Assisted Intervention , 525–536. Springer. Müller, P.; Kaissis, G.; Zou, C.; and Rueckert, D. 2022. Joint learning of localized representations from medical images and reports. In European conference on computer vision ,685–701. Springer. Nguyen, H.; Nguyen, H.; Chang, M.; Pham, H.; Narayanan, S.; and Pazzani, M. 2024. ConPro: learning severity repre-sentation for medical images using contrastive learning and preference optimization. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,5105–5112. Pai, S.; Hadzic, I.; Bontempi, D.; Bressem, K.; Kann, B. H.; Fedorov, A.; Mak, R. H.; and Aerts, H. J. 2025. Vision foundation models for computed tomography. arXiv preprint arXiv:2501.09001 .Radford, A.; Kim, J. W.; Hallacy, C.; Ramesh, A.; Goh, G.; Agarwal, S.; Sastry, G.; Askell, A.; Mishkin, P.; Clark, J.; et al. 2021. Learning transferable visual models from natural language supervision. In International conference on machine learning , 8748–8763. PmLR. Shui, Z.; Zhang, J.; Cao, W.; Wang, S.; Guo, R.; Lu, L.; Yang, L.; Ye, X.; Liang, T.; Zhang, Q.; et al. 2025. Large-scale and Fine-grained Vision-language Pre-training for Enhanced CT Image Understanding. In The Thirteenth International Conference on Learning Representations .Tiu, E.; Talius, E.; Patel, P.; Langlotz, C. P.; Ng, A. Y.; and Ra-jpurkar, P. 2022. Expert-level detection of pathologies from unannotated chest X-ray images via self-supervised learning. 
+
+Nature biomedical engineering , 6(12): 1399–1406. Wald, T.; Hamamci, I. E.; Gao, Y.; Bond-Taylor, S.; Sharma, H.; Ilse, M.; Lo, C.; Melnichenko, O.; Schwaighofer, A.; Codella, N. C.; et al. 2025. Comprehensive language-image pre-training for 3D medical image understanding. arXiv preprint arXiv:2510.15042 .Wang, F.; Zhou, Y.; Wang, S.; Vardhanabhuti, V.; and Yu, L. 2022a. Multi-granularity cross-modal alignment for gener-alized medical visual representation learning. Advances in neural information processing systems , 35: 33536–33549. Wang, S.; Gong, H.; Cui, R.; Wan, B.; Hu, Z.; Yang, H.; Zhou, J.; Jiang, H.; and Lin, L. 2026. Costal Cartilage Segmenta-tion with Topology Guided Deformable Mamba: Method and Benchmark. Expert Systems with Applications , 300: 130085. Wang, Z.; Wu, Z.; Agarwal, D.; and Sun, J. 2022b. Med-clip: Contrastive learning from unpaired medical images and text. In Proceedings of the 2022 Conference on Empirical Methods in Natural Language Processing , 3876–3887. Wu, C.; Zhang, X.; Zhang, Y.; Wang, Y.; and Xie, W. 2023. Medklip: Medical knowledge enhanced language-image pre-training for x-ray diagnosis. In Proceedings of the IEEE/CVF international conference on computer vision , 21372–21383. Yang, Z.; and Shen, L. 2025. Tempa-vlp: Temporal-aware vision-language pretraining for longitudinal exploration in chest x-ray image. In 2025 IEEE/CVF Winter Conference on Applications of Computer Vision (WACV) , 4625–4634. IEEE. Zhai, X.; Wang, X.; Mustafa, B.; Steiner, A.; Keysers, D.; Kolesnikov, A.; and Beyer, L. 2022. Lit: Zero-shot trans-fer with locked-image text tuning. In Proceedings of the IEEE/CVF conference on computer vision and pattern recog-nition , 18123–18133. Zhang, S.; Xu, Y.; Usuyama, N.; Xu, H.; Bagga, J.; Tinn, R.; Preston, S.; Rao, R.; Wei, M.; Valluri, N.; et al. 2025. A mul-timodal biomedical foundation model trained from fifteen million image–text pairs. Nejm Ai , 2(1): AIoa2400640. Zhang, Y.; Jiang, H.; Miura, Y.; Manning, C. D.; and Lan-glotz, C. P. 2022. Contrastive learning of medical visual representations from paired images and text. In Machine learning for healthcare conference , 2–25. PMLR.
