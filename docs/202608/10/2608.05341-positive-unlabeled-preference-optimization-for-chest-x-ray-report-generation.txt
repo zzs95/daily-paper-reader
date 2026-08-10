@@ -1,0 +1,1730 @@
+Title: Positive-Unlabeled Preference Optimization For Chest X-ray Report Generation
+
+URL Source: https://arxiv.org/pdf/2608.05341
+
+Published Time: Fri, 07 Aug 2026 00:14:17 GMT
+
+Number of Pages: 38
+
+Markdown Content:
+# Positive-Unlabeled Preference Optimization For Chest X-ray Report Generation 
+
+Yuta Kobayashi ∗
+
+Columbia University 
+
+Pradyun Ramesh ∗
+
+Columbia University 
+
+Muhammad Ahmed Chaudhry 
+
+Stanford University 
+
+Vincent Jeanselme 
+
+Columbia University 
+
+Judy Wawira Gichoya 
+
+Emory University 
+
+Sanmi Koyejo 
+
+Stanford University 
+
+Kathleen Capaccione 
+
+Columbia University 
+
+Shalmali Joshi 
+
+Columbia University 
+
+Abstract 
+
+Vision-Language Models (VLMs) for radiology report generation are typically trained on retrospective clinical reports, which suffer from omission noise: clin-ically present findings are left unreported due to the omission of subtle findings. For example, prior studies show that cardiomegaly may be omitted from ICU chest X-ray reports when the imaging request is focused on monitoring support device placement [Jain et al., 2021b]. As a result, models trained with standard approaches inherit these omissions, learning to under-report findings themselves. We propose PU-DPO, a preference optimization framework to prevent omission noise from corrupting the preference signal. We reformulate the objective under a positive-unlabeled (PU) learning framework, treating absent mentions as unlabeled rather than truly negative. Our framework provides preference supervision using constructed contrastive pairs, generated using edits to model responses, producing variants that explicitly mention or omit a specific finding. Generated responses that mention the finding are naturally preferred in the context of visual evidence. Across semi-synthetic experiments and analyses on real-world chest radiograph bench-marks where adjudicated labels are available, PU-DPO yields consistent gains in detection rates and recovery of hidden positives across multiple pathologies, and is more robust to omission noise than prior approaches. 
+
+1 Introduction 
+
+Automated report generation is a promising application of Vision-Language Models (VLMs), where, given a medical image, the model conditionally generates text detailing pathological findings and abnormalities. Typically, these models are trained on retrospective clinical reports rather than prospective. That is, exhaustively labeled annotations (that explicitly record both present and absent/negated findings), are rarely available at scale. Historically, the predominant training paradigm for radiology report generation has been Supervised Fine-Tuning (SFT), where the model maximizes the conditional likelihood of the clinician-generated reference report, which is treated as a gold-standard ‘ground-truth’ given the input chest X-ray, a process conceptually analogous to imitation learning [Ouyang et al., 2022]. While this process successfully aligns the model’s output with reporting standards, it is fundamentally constrained by the quality of annotations.          
+
+> ∗Equal contribution, Corresponding author: yk3043@cumc.columbia.edu Preprint. arXiv:2608.05341v1 [cs.CV] 5 Aug 2026 Clinical Training Data Contains Omission Noise
+> Provide a description of the findings in the radiology image
+> Preference Optimization with Positive Unlabeled Data
+> Preference Dataset Construction
+> (Radiologist) There is blunting of the right costophrenic angle, unchanged…
+> … suggests small right pleural effusion or thickening
+> Negative reward, treated as hallucinations despite correct!
+> (LLM Response) Slight blunting of the right costophrenic angle suggests small right pleural effusion or thickening SFT (imitation) Automated RL Process Rewards Noise-Aware Optimization
+> PU Loss Identifies hidden unlabeled positives!
+> 𝜋 Ref 𝜋 DPO
+> Base LLM
+> Sample response Construct Pair (Image) Small right pleural effusion
+> LLM Training  Noisy Dataset
+> There is pulmonary edema and bilateral effusions… There is pulmonary edema…
+> Presence vs Absence
+> Unlabeled Image
+> There is pulmonary edema and bilateral effusions…
+> No Finding Finding No Finding Finding
+> +
+> Model Response:
+
+Figure 1: Overview of Omission Noise and Proposed PU Learning Framework. (Left ) We highlight the challenge of omission noise in training medical VLMs, where clinical findings are visually present but omitted from reports due to standard clinical workflow variability. ( Right ) Our proposed approach mitigates this by constructing preference pairs that evaluate the presence versus absence of a single finding. We then apply a noise-aware preference optimization technique rooted in PU learning, enabling the model to detect hidden positives otherwise lost in the unannotated data. We introduce the notion of omission noise in radiology report generation as one-sided noise in which positive visual findings are unlabeled in retrospective reports, not because of diagnostic uncertainty or interpretative disagreement but due to clinical workflow and prioritization [Rudolph et al., 2021, Majkowska et al., 2020, Jain et al., 2021b]. A clinician might omit the diagnosis of mild cardiomegaly owing to the subtlety compared to other pathologies prioritized in the Intensive Care Unit (ICU) [Jain et al., 2021b, Yu et al., 2022]. We confirm this in a study we conducted with practicing radiologists. That is, retrospective reports may omit clinically present findings (Table 1, Section 5.1), suggesting that the supervisory signal itself is systematically incomplete. Report generation quality has been improved using post-training alignment methods that incorporate reinforcement learning (RL) to optimize for clinical correctness rather than surface-level text similar-ity, using automated, accuracy-based reward functions (e.g., RadGraph-F1, RadCLIQ) aggregated over the entire report [Fan et al., 2025, Liang et al., 2025, Liu et al., 2026]. This is also combined with training strategies that distill "reasoning" ability into the VLM by generating chain-of-thought (CoT) tokens prior to the final response [Myronenko et al., 2025]. However, approaches that derive reward signals or CoT supervision from the retrospective reference report remain inherently bound by omission noise (Fig. 1). Consequently, principled strategies for distilling fine-grained generation capabilities from noisy annotations are lacking. To address this shortcoming, we propose Positive-Unlabeled Direct Preference Optimization (PU-DPO) with positive-and-unlabeled (PU) learning, a scalable and principled framework for RL-based finetuning that explicitly targets the fine-grained subtypes of disease presentation. Our finetuning framework is flexible and compatible with both standard and CoT-based VLMs. Our approach consists of two main steps. First, we decompose a target pathology into subtypes defined by characteristics such as anatomical loanatomical location and severity, and generate a synthetic preference dataset by editing on-policy responses from a reference VLM to produce targeted contrastive pairs: one that explicitly mentions the finding, and one that omits it. Table 1: Omission and hidden positive rates of findings in retrospective reference reports in the CheXpert dataset, compared to radiolo-gists’ annotations of radiograph in the study. 
+
+Condition Omission Rate Hidden Positive Rate Pleural Effusion 16/142 (11.3%) 16/81 (19.8%) Atelectasis 21/55 (38.2%) 21/213 (9.9%) Cardiomegaly 14/32 (43.8%) 14/195 (7.2%) 
+
+However, under standard preference optimization, omission noise creates systematic unlabeled "false negatives" that teach the model, incorrectly, that ex-cluding the pathology is preferred. To handle this, we adopt PU learning [Elkan and Noto, 2008, Bekker and Davis, 2020]. We treat explicitly mentioned patholo-gies as positive labels and absent mentions as unla-beled rather than truly negative. We operate under the selected-completely-at-random (SCAR) assump-tion, which posits that the probability of each unique pathology being labeled (i.e., mentioned in the report) is uniform and independent of the input. We reformulate the standard DPO objective under this assumption to account for omission noise, and pair this with a known or estimated class prior. Our contributions are: 2• Novel Objective Function: We propose PU-DPO, a principled approach for preference opti-mization under omission noise, demonstrated in chest radiograph report generation. We construct preference pairs comparing the presence and absence of observations and incorporate PU learning into a novel objective function. • Scalable Alignment Algorithm: We introduce a scalable fine-tuning framework that integrates PU-DPO for granular multi-pathology detection. Our approach is model-agnostic, supporting both standard and CoT-based VLMs. • Empirical Evaluation: We validate PU-DPO in semi-synthetic settings and across two chest radiograph benchmarks and three base VLM architectures, demonstrating consistent robustness to omission noise compared to standard alignment baselines. 
+
+2 Related Work 
+
+Report Generation via VLMs. We focus on VLM architectures for chest X-ray (CXR) report generation that fuse visual tokens directly into a large-scale, autoregressive language decoder, such as Flamingo-CXR [Tanno et al., 2025], Llava-RAD [Zambrano Chaves et al., 2025], and MedGemma [Sellergren et al., 2025]. To optimize the autoregressive policy, the prevailing strategy involves a two-stage process: Supervised Fine-Tuning (SFT) followed by Reinforcement Learning (RL). Methods such as RadVLM and MRG-R1 [Gundersen et al., 2026, Wang et al., 2025] utilize Group-Relative Policy Optimization (GRPO) with clinically informed reward functions. RadVLM directly optimizes RadCliQ [Yu et al., 2023], a metric combining BLEU [Papineni et al., 2002], ROUGE [Lin, 2004], BERTScore [Zhang et al., 2019], CheXbert similarity [Smit et al., 2020], and RadGraph-F1 [Jain et al., 2021a], to better capture radiological accuracy when compared to a reference report. Frameworks such as UniRG and VALOR [Liu et al., 2026, Bose et al., 2025] scale these optimizations using additional image-based rewards to improve visual grounding. Parallel to this, recent work has sought to incorporate visual reasoning using Chain-of-Thought (CoT) tokens in language modeling [Myronenko et al., 2025]. However, we argue that even with perfect grounding and reasoning, these strategies remain fundamentally bottlenecked and inherently subject to the omission noise in retrospective clinical reports. 
+
+Positive-Unlabeled (PU) Learning. PU-learning is the problem of learning a binary classifier from positive and unlabeled data [De Comité et al., 1999, Bekker and Davis, 2020]. The formulation of PU as one-sided label noise contrasts from general bidirectional label noise [Frénay and Verleysen, 2013]. PU learning has been studied under various structural formulations (e.g., case-control versus one-sample scenarios) [Niu et al., 2016] and depends heavily on specific identifiability and labeling mechanisms, such as the Selected Completely At Random (SCAR) assumption or allowing forms of selection bias [Bekker and Davis, 2018, Kato et al., 2019]. Various methods have been proposed, but the approach most relevant to our work is the unbiased empirical risk approach [Elkan and Noto, 2008, Du Plessis et al., 2015, Kiryo et al., 2017], which requires an estimation of the positive class prior to correct for risk estimation in the unlabeled set containing a hidden mixture of both true positives and true negatives [Du Plessis and Sugiyama, 2014, Jain et al., 2016, Garg et al., 2021]. We detail the formulation and assumptions used in our work in Section 3.1. 
+
+Training Language Models under Noisy Feedback. Transitioning to LLMs necessitates a redefi-nition of what constitutes a label, as labels are often token sequences such as responses, reasoning chains, or preference feedback. To mitigate noisy responses in SFT, one approach, RobustFT [Luo et al., 2024], detects and denoises uncertain responses using an “Expert" LLM, using clean samples as demonstrations. For noise in preference data characterized by symmetric preference label flips, methods have been proposed to denoise preference feedback or use noise-aware optimization methods [Liang et al., 2024, Kong et al., 2024, Chowdhury et al., 2024], with theoretical guarantees [Im and Li, 2025]. We contrast this with our novel framing of preference noise as a structured, one-sided missing-positive problem. 
+
+Offline Synthetic Preference Data Generation. Diverse offline preference data collection has been an effective approach for preference optimization [Xiong et al., 2023, Tajwar et al., 2024], and can be achieved through synthetic data generation [Wang et al., 2023, Dong et al., 2024] and manual editing [Gao et al., 2024]. For report generation, EditGRPO [Zhang et al., 2025] corrects on-policy samples during training. 33 Background and Problem Setup 
+
+Let X ∈ X denote an input image (e.g., a chest X-ray), and let Y = {Y1, . . . , Y d} denote a set of 
+
+d target findings corresponding to a multi-task learning scenario. We consider each finding as a binary random variable Y ∈ Y = {− 1, +1 }. Random variables are denoted in uppercase, and their realizations in lowercase. For notational simplicity, we consider the problem setup for diagnosing a single, specific clinical finding, where the underlying presence or absence of the finding is denoted by Y . We extend our proposed method to a multi-task setting with d pathology subtypes defined by granular attributes such as anatomical location and severity in Section 4.2. 
+
+3.1 Positive-Unlabeled Data 
+
+To address omission noise, we frame our problem using the Positive-Unlabeled (PU) setting, specifi-cally under the one-sample scenario [Elkan and Noto, 2008, Coudray et al., 2023]. In this scenario, we observe a dataset D = {(xi, s i)}ni=1 where samples xi are drawn i.i.d. from the marginal distri-bution PX and si ∈ { +1 , −1} indicates whether sample xi has been labeled as positive. Crucially, 
+
+si = −1 does not imply xi is a true negative, it is simply unlabeled. We denote the class-conditional distributions as Pp = P(X | Y = +1) and Pn = P(X | Y = −1) , so the marginal decomposes as 
+
+PX = α Pp + (1 − α) Pn, where α = P(Y = +1) is the true positive class prior. Under the selected-completely-at-random (SCAR) assumption, the labeling mechanism satisfies 
+
+P(S=+1 | X, Y =+1) = P(S=+1 | Y =+1) = c for some constant c ∈ (0 , 1] , i.e., the likelihood of labeling a case is independent of X. In other words, there is no selection bias in the labeling of positive cases: P(X | Y =+1 , S =+1) = P(X | Y =+1 , S =−1) [Elkan and Noto, 2008]. The labeled positives Dp = {xi ∈ D : si = 1 } are therefore an i.i.d. sample from Pp, while the full dataset D is a sample from the marginal PX .
+
+Research Question We now consider a setting where we have access to an observational dataset 
+
+Dobs = {(xi, ˜ai, s i)}ni=1 of images ( xi), reports ( ˜ai), extracted label indicators ( si) corresponding to samples from the joint distribution (X, ˜A, S ) ∼ Pobs . Each report ˜ai may describe multiple clinical findings j ∈ { 1, ..., d }. Each finding j is associated with a latent ground truth yij ∈ { +1 , −1}
+
+indicating its true presence or absence in image xi. However, the report only partially reveals these labels: let sij be the labeling indicator denoting whether observation j is explicitly mentioned in report ˜ai. When sij = +1 , we assume that it is present yij = +1 (assuming no false-positives and label extraction error); however, sij = −1 does not imply yij = −1. The true label may be unknown as the finding may be present but unreported. A positive-unlabeled structure is induced at the level of individual findings: explicitly mentioned findings correspond to observed positives, while unmentioned findings are unlabeled. We treat each finding as a conditionally independent PU learning problem with a per-finding PU structure. 
+
+Research Question 
+
+How can preference optimization be corrected when positive visual findings are systematically unlabeled in retrospective reports? 
+
+3.2 Direct Preference Optimization 
+
+To contextualize our approach, we first establish the standard formulation of Direct Preference Optimization (called DPO) [Rafailov et al., 2023]. We denote πϕ as a vision-language model (VLM) parameterized by ϕ, which takes in an input image 
+
+X ∈ X (in practice with an instruction), and outputs a discrete probability distribution πϕ(· | x) over the vocabulary space V. We denote A ∈ A as the generated model response, and πϕ(a | x) as the VLM’s probability of generating the output response given input x. Preference optimization requires a dataset of pairwise responses, defined as follows: 
+
+Definition 3.1 (Preference data) . Consider two responses aw, a l for an input prompt x. We denote 
+
+aw ≻ al if aw is preferred over al. We call aw the preferred response and al the non-preferred 
+
+4response. Each triplet (x, a w, a l) is referred to as a preference. Furthermore, the empirical dataset 
+
+D = {(xi, a w,i , a l,i )}Ni=1 consists of N such triplets sampled from a preference distribution. 
+
+We consider the objective corresponding to the generalized form of preference optimization: 
+
+E(x,a w ,a l)∼D 
+
+
+
+f
+
+
+
+β
+
+
+
+log πϕ(aw | x)
+
+πref (aw | x) − log πϕ(al | x)
+
+πref (al | x)
+
+ 
+
+,
+
+where β > 0 is a scaling parameter, πref is the base model (for example, initialized by SFT), and the function f : R → R maps the preference margin to a loss value. Instantiating f with the negative log-sigmoid function, f (z) = − log σ(z), recovers the DPO formulation. The above objective can also be interpreted as maximizing a latent reward model rϕ(x, a ) = 
+
+β log πϕ(a | x)/π ref (a | x) [Rafailov et al., 2023]. By defining the preference score difference as z = rϕ(x, a w) − rϕ(x, a l), the objective effectively maximizes the latent reward for the preferred response aw while minimizing it for the dispreferred response al. Under the Bradley-Terry model [Bradley and Terry, 1952], this margin z yields the predicted probability that aw is preferred over al:
+
+Pϕ(aw ≻ al | x) = σ(z).To optimize the policy, the standard approach is to perform Maximum Likelihood Estimation (MLE) over a noise-free dataset D. This corresponds to minimizing the expected negative log-likelihood of the true preferences with respect to the model parameters ϕ:
+
+LMLE (ϕ) = E(x,a w ,a l)∼D [− log Pϕ(aw ≻ al | x)] = E(x,a w ,a l)∼D [− log σ(z)] 
+
+We consider a variant of DPO where aw and al are constructed from sampling on-policy responses from πϕ [Tajwar et al., 2024]. However, a naive approach assumes that the preference labels in D are ground-truth: aw is genuinely preferred over al for every pair. This assumption is violated due to omission noise. To bridge this gap, we introduce a framework that formalizes DPO for contrastive clinical comparisons and replacing the observed preference-label assumption with a PU loss estimator. 
+
+4 Method 
+
+In Section 4.1, we first formalize how preference pairs are constructed via contrastive edits to a base response, producing variants that include or omit a clinical finding. Then we incorporate positive-unlabeled learning into the objective to correct for the systematic mislabeling that arises when absent mentions in reports do not indicate absent findings. Finally, in Section 4.2, we detail how to incorporate these ideas into a full general post-training algorithm. 
+
+4.1 PU-DPO: Positive-Unlabeled Direct Preference Optimization using Contrastive Edits Contrastive Edits We drop the sample index i for ease of exposition and propose our method for a single finding j. Given a base response a to prompt S sampled from πref , we construct a contrastive pair via an edit function g : A × Y → A , producing a+ 
+
+> j
+
+= g(a, +1) and a− 
+
+> j
+
+= g(a, −1) , where a+
+
+> j
+
+includes the finding j and a− 
+
+> j
+
+omits it. We denote P as the joint distribution over (X, A + 
+
+> j
+
+, A − 
+
+> j
+
+, Y j ).Recall that Pϕ(a+ 
+
+> j
+
+≻ a− 
+
+> j
+
+| x) is the probability that the response containing the finding j is preferred. The ground truth preference is determined by Yj : when Yj = +1 , a+ 
+
+> j
+
+should be preferred (i.e., 
+
+Pϕ(a+ 
+
+> j
+
+≻ a− 
+
+> j
+
+| x) should be high), and when Yj = −1, a− 
+
+> j
+
+should be preferred (i.e., Pϕ(a+ 
+
+> j
+
+≻ a− 
+
+> j
+
+| x)
+
+should be low). The standard log-loss for noiseless positive-negative learning is then given by 
+
+Rj (ϕ) = EP
+
+−IYj =+1 log Pϕ(a+ 
+
+> j
+
+≻ a− 
+
+> j
+
+| x) − IYj =−1 log(1 − Pϕ(a+ 
+
+> j
+
+≻ a− 
+
+> j
+
+| x))  (1) 
+
+= αR + 
+
+> p,j
+
+(ϕ) + (1 − α)R− 
+
+> n,j
+
+(ϕ) (2) where the decomposition is the weighted sum of the expected log loss for true positives and negatives: 
+
+R+ 
+
+> p,j
+
+(ϕ) = EPp [− log Pϕ(a+ 
+
+> j
+
+≻ a− 
+
+> j
+
+| x)] and R− 
+
+> n,j
+
+(ϕ) = EPn [− log(1 − Pϕ(a+ 
+
+> j
+
+≻ a− 
+
+> j
+
+| x))] .
+
+Learning From Positive Unlabeled Data This framing allows us to model Positive-Unlabeled (PU) data as a special case of preference noise, where we model the dominant error mode as one-sided omissions of true positives. This allows us to directly integrate a PU learning approach into the preference optimization objective. 5In the PU setting, we cannot directly compute Equation (1) and R− 
+
+> n
+
+(ϕ) is unknown. We can rewrite the log-loss for PU-DPO as follows 
+
+Rj (ϕ) = αR + 
+
+> p,j
+
+(ϕ) − αR − 
+
+> p,j
+
+(ϕ) + R− 
+
+> X,j
+
+(ϕ) (3) where R− 
+
+> X,j
+
+(ϕ) = EPX [− log Pϕ(a− 
+
+> j
+
+≻ a+ 
+
+> j
+
+| x)] is the expected loss for preferring absence a− 
+
+> j
+
+, taken over the full marginal distribution of images. Because this distribution mixes true negatives with all positives (both labeled and hidden), R− 
+
+> X,j
+
+(ϕ) is a contaminated estimate of the expected loss for preferring absence R− 
+
+> n,j
+
+(ϕ). The PU decomposition resolves this by subtracting off the contamination, where the term αR − 
+
+> p,j
+
+(ϕ) captures the expected loss contribution from positives (both labeled and hidden) being incorrectly pushed toward absence, weighted by the class prior α. Removing this term from R− 
+
+> X,j
+
+(ϕ) leaves an unbiased estimate of (1 − α)R− 
+
+> n,j
+
+(ϕ), recovering the noiseless expected preference loss using only quantities we can compute from the observed data. We show that the estimator in Equation (3) is an unbiased estimate of Equation (1) in Appendix A.1. Gradient derivations to enable learning are provided in Appendix A.2, showing that the oracle, noise-free gradient is reconstructed in expectation under SCAR and correct specification of α.
+
+4.2 Bridging the Gap: A Multi-task Loss for Granular Pathology Detection 
+
+We now describe how PU-DPO is integrated into a complete post-training pipeline for report gener-ation. The key design choice is the granularity of the observation variable Y . Rather than treating each attribute independently, we define Yj as a disease subtype: a conjunction of finding, location, and clinical characteristics. For example, Yj may represent “small left-sided pleural effusion” or “severe right basilar atelectasis.” Each subtype constitutes a separate PU problem (Sj , Y j ) with its own class prior αj and labeling rate, and we adopt a weaker multi-SCAR assumption to model heterogeneity in labeling rates: SCAR holds within each subtype, but labeling rate may vary across subtypes (Section 3.1). Therefore, the final multi-task expected preference loss is given by 
+
+Rmulti (ϕ) = Ej∼Unif (1 ,d )
+
+h
+
+αj R+ 
+
+> p,j
+
+(ϕ) − αj R− 
+
+> p,j
+
+(ϕ) + R− 
+
+> X,j
+
+(ϕ)
+
+i
+
+(4) 
+
+Remark 4.1. We note that uniform sampling of j leads to a shift in the joint distribution from the original dataset distribution P to a uniform target distribution over diagnostic tasks Ptar . Additionally, under PU assumptions and sufficient support over edited responses, minimizing the multi-task loss in (4) recovers the optimal marginal preference for each subtype under Ptar . While this provides a principled local training signal, we note that globally optimal report generation is not guaranteed without additional assumptions on the joint reward. 
+
+We provide theoretical intuition and additional discussion of these design choices in Appendix A.3. Building on this analysis, we now describe the resulting training algorithm at a high level; full implementation details for each step are deferred to Appendix B.6. 
+
+Preference Dataset Construction. Starting from an SFT-initialized model πref , we sample a base response a ∼ πref (· | x) for each input image x. We then draw a target subtype j ∼ Unif(1 , d ) and pass a to a separate editor LLM (GPT-OSS 120B), which produces a contrastive pair (a+ 
+
+> j
+
+, a − 
+
+> j
+
+): a+
+
+> j
+
+explicitly mentions subtype Yj while a− 
+
+> j
+
+omits it. Editing proceeds in two stages: the editor first observes the reference report and revises a to correct any inconsistencies, then conditions on the target subtype Yj to produce the contrastive edit. Editing prompts are provided in Appendix B.7, and we provide a study to audit these responses with a radiologist in Appendix D. To ensure that edits remain on-policy with respect to πref , we discard any pair for which the token length of a+ 
+
+> j
+
+or a−
+
+> j
+
+differs from a by more than τ tokens. 
+
+Training . At each training step, we sample a finding j uniformly at random, and construct a batch consisting entirely of preference pairs comparing a+ 
+
+> j
+
+and a− 
+
+> j
+
+. This ensures that the inner loss estimate of Eq. (4) obtained in a training batch is computed over a homogeneous comparison axis (i.e. comparing the presence vs. absence for a single clinical finding) with a shared class prior αj .For a batch size of ns with np positive samples, we can construct empirical estimates of the loss by computing individual terms in Eq. (4) such as ˆR+ 
+
+> p,j
+
+(ϕ) = 1
+
+> np
+
+Pnp 
+
+> i=1
+
+− log ˆPϕ(a+ 
+
+> j
+
+≻ a− 
+
+> j
+
+| xi). To ensure numerical stability, batches are constructed with stratified sampling guaranteeing np > 0
+
+labeled positives. 65 Experiments 
+
+5.1 CheXpert Radiologist Study: Omission Noise in Retrospective Annotations 
+
+To assess whether the training data contains omission noise, we conducted an independent review with two board-certified radiologists (Details deferred to Appendix C). The study was approved by Columbia IRB (AAAV6261). Each radiologist reviewed a set of chest radiographs from the CheXpert dataset and labeled three key clinical findings. We derived a reference label for each finding by taking the disjunction of the two annotations: a finding was treated as potentially present if either radiologist marked it as definitely or probably present. Comparing these reference labels against the original CheXpert reports (collectively from findings and impression sections), we measured how often a finding that may be judged as present by the radiologists was not mentioned in the original report. We define the omission rate as the frequency at which a finding is not explicitly mentioned in the original reports (and therefore our training data), despite being visually identified by at least one radiologist. Conversely, the hidden positive rate measures the likelihood that a finding is present (as determined by the radiologists) when it was omitted from the dataset’s original report. Table 1 demonstrates both the omission rate and the hidden positive rates. Notably, the reference reports can omit the finding in up to 43.8% of cases, as seen with cardiomegaly. These results demonstrate that "unlabeled" data often contains visual evidence of clinical conditions that are not present in the original reports, strongly motivating our PU learning approach. 
+
+5.2 Semi-synthetic Evaluation 
+
+We first validate that the PU correction in PU-DPO recovers fully supervised performance in the presence of positive label omissions. As a proof of concept, we focus on detecting two clinically significant findings from chest X-rays: pleural effusion and cardiomegaly. 
+
+Datasets For each pathology, we construct a clean, fully labeled dataset from CheXpert by sampling images with confirmed positive and negative annotations. Because explicit true negative labels (indicating the definitive absence of a finding) exist for a subset of CheXpert cases, this setup provides an ideal gold standard for rigorously evaluating noise robustness. We create semi-synthetic training datasets by removing findings in true positive reports with different noise rates by taking confirmed positive cases and removing their mentions at varying rates c ∈ { 0.1, 0.2, 0.3}, following a SCAR mechanism. This produces datasets with increasing proportions of hidden positives. 
+
+Models For each noise rate, we finetune three models from the base Medgemma model [Sellergren et al., 2025]: (1) a DPO ablation that treats all unlabeled cases as true negatives, (2) Dr-DPO, a state-of-the-art approach for robust DPO under preference noise [Wu et al., 2024], and (3) PU-DPO, which applies the PU correction. For our semi-synthetic experiments, we provide PU-DPO with the ground-truth class prior α = 0 .5, achieved by resampling the dataset so that positive and negative examples are balanced. We study robustness to α misspecification under this controlled setting (Appendix Table 13). Each method is also trained on the initial fully-labeled noiseless dataset (i.e., 
+
+c = 0 ), which serves as an oracle. We evaluate the models’ pathology-detection performance on a held-out set of images and their corresponding ground-truth labels. 0% 10% 20% 30%                 
+
+> Noise Rate
+> 0.70 0.75 0.80 0.85 0.90
+> F1 Score
+> Pleural Effusion
+> 0% 10% 20% 30%
+> Noise Rate
+> 0.75 0.80 0.85 Cardiomegaly
+> 0.65 0.70 0.75
+> Sensitivity (TPR)
+> 0.90 0.92 0.94 0.96
+> Specificity (TNR)
+> Pleural Effusion
+> 0.70 0.73 0.75 0.78 0.80
+> Sensitivity (TPR)
+> 0.86 0.88 0.90
+> Cardiomegaly
+> DPO DR-DPO PU-DPO (Ours) Base 10% noise 20% noise 30% noise
+
+Figure 2: Our PU learning approach maintains a high F1 score as the noise rate increases. Sensitivity decreases significantly for naive approaches. ntest = 5000 per task with 95% CI via bootstrap 
+
+PU-DPO is an effective post-training mechanism. We first note that preference optimization using contrastive edits is an effective strategy. Compared to the out-of-the-box base model performance (base) in Table 10 and 11 in Appendix E.4, finetuning improves sensitivity and specificity for all 7approaches at 0% noise rate. We also examine the learned preference probabilities using log loss and Brier score using the ground truth disease label as the target in Table 12 (Appendix E.4). The table also compares to SFT with our PU learning correction, serving as an ablation for using contrastive signals (and the explicit negative gradient with DPO) as opposed to only maximizing the likelihood of the preferred response. The results demonstrate that DPO is beneficial for learning to separate candidate presence vs. absence responses. However, we note in that Appendix Fig. 11 that DPO leads to overconfidence and inferior calibration with respect to the distribution of pathologies in the dataset. 
+
+PU correction recovers hidden positives during training. We evaluate each method by extracting predicted labels from the generated reports and computing the F1 score, sensitivity (recall of true positives), and specificity (recall of true negatives). Fig. 2 and appendix Table 10 compare PU-DPO with naive labels against PU-DPO across increasing hidden positive rates. As the flip rate increases, naive DPO exhibits a monotonic decline in sensitivity, indicating that the model increasingly fails to mention findings that are truly present. This is an expected failure mode since hidden positives in the unlabeled set are treated as true negatives, teaching the model that omitting the finding is preferred. PU-DPO mitigates this by correcting for the contaminated preference signal, maintaining sensitivity at 0.76-77 even at the highest noise rate while preserving comparable specificity (not introducing false positives/hallucinations). The overall F1 score reflects this: PU-DPO remains close to the oracle across all noise levels, whereas naive DPO degrades significantly. One might expect that robustness to preference noise could handle the hidden positive problem. However, comparing Dr-DPO to PU-DPO in Table 10, we find that Dr-DPO presents low sensitivity at higher noise rates. Two factors explain this phenomenon. First, PU-DPO explicitly incorporates the class prior α, which directly quantifies the expected contamination in the unlabeled set and allows the loss to correct for it. Dr-DPO has no access to this information. Second, Dr-DPO is motivated by distributionally robust optimization and relies on the log-likelihoods of the trained model to downweight the gradients of high-loss samples, under the assumption that systematically mislabeled pairs will incur disproportionately high loss. However, if the trained model does not inherently separate out preferences, then reweighting fails to identify and suppress them. 
+
+5.3 Real-world CXR Report Generation 
+
+We evaluate PU-DPO on two standard, large-scale medical imaging benchmarks: MIMIC-CXR and CheXpert, focusing on three conditions (pleural effusion, cardiomegaly, and atelectasis) that are known to exhibit omissions [Majkowska et al., 2020]. 
+
+Datasets For our real-world evaluation, we test our approach using two distinct settings: (1) We directly assess whether real hidden positive samples were successfully recovered using a radiologist-adjudicated test set of image-label pairs (n=500). Available specifically for the CheXpert dataset, this adjudicated set contains ground-truth labels established through majority voting by five radiologists, alongside the CheXbert labels extracted from the original reports [Saporta et al., 2022]. (2) We evaluate diagnostic accuracy and overall report quality using a larger test dataset constructed from both the original CheXpert (n=45764) and MIMIC-CXR (n=42643) test split reports, using known positives and negatives. 
+
+Models We evaluate the robustness and generalizability of our multi-task approach. To ensure our method is agnostic to pretraining and architectural differences, we conduct our analyses using three distinct VLM backbones for our SFT-initialized reference policy ( πref ): LLaVA-Rad [Zam-brano Chaves et al., 2025], MedGemma [Sellergren et al., 2025], and NV-reason (NVIDIA-reason) [Myronenko et al., 2025]. We selected these models because they offer a diverse range of initial capa-bilities and output strategies, specifically allowing us to verify that our approach remains compatible with chain-of-thought reasoning. We compare our approach against our own ablations and established baselines from the literature: (1) standard Supervised Fine-Tuning (SFT) on the target dataset, as well as (2) a widely-adopted, GRPO-based approach [Gundersen et al., 2026] that utilizes RadCliQ process rewards—a composite metric scoring text overlap, pathology-level F1, and granular concept F1 via Radgraph. For our approach, we apply multi-task PU-DPO training using seven pathology subtypes: small left, right, and bilateral pleural effusions; mild left, right, and bilateral atelectasis; and mild cardiomegaly. We also compare against the same multi-task PU-DPO without the PU correction using the same preference dataset (DPO). The subtypes used were curated in collaboration with a board-certified radiologist, 8and aim to define pathology-specific subtypes defined by attributes (e.g., size, spatial location, and severity) that may influence labeling difficulty. As a motivating example, we demonstrate in Appendix Fig. 8 that Medgemma model predictions for these subtypes have low detection rates with respect to CheXpert-derived labels. This effect is obscured when evaluation is limited to broad pathology categories. Additional details for the dataset, training, and evaluation are provided in Appendix B. 
+
+α-Estimation. Finally, we consider two methods of estimating the class prior α in our real-world experiments. For a purely data-driven approach, we estimate αBBE using Best-Bin Estimation (BBE) (see Appendix A.4) [Garg et al., 2021], training a LightGBM positive-vs-unlabeled classifier for each subtype. Inputs are image embeddings extracted from the frozen MedGemma vision encoder. Second, we generate an estimate αadjudicated that has access to the oracle using the adjudicated test set, computing the empirical frequency of hidden positives to obtain pathology-level estimates of 
+
+P(Ypathology = +1 | S = −1) , and multiplying with P(Ysubtype | Ypathology = +1) obtained via empirical frequencies in the training dataset. These estimates for real-world datasets are provided in Appendix E.3. 
+
+Figure 3: Relative improvement in Micro-F1, omission recovery, and specificity compared to the base model for the three findings (pleural effusion, atelectasis, cardiomegaly), for the adjudicated test set from CheXpert. 
+
+Omission recovery in adjudicated test set. On the adjudicated test set we compute omission recovery, the rate at which a model reports a finding that the original clinical report omitted but the adjudicating radiologists confirmed as present (i.e. recovery of hidden positives). The evaluation on Figure 3 shows evidence that PU-DPO achieves the intended effect of improving omission recovery over DPO. Because PU-DPO is exactly our DPO baseline plus a α-scaled PU loss correction term, the choice of α effectively acts as a calibration factor. It dictates the extent to which the VLM shifts its internal diagnostic threshold, controlling the trade-off between sensitivity and specificity. Our underlying DPO approach aims to teach the model to better capture pathology signals. PU-DPO builds on this as a well-specified α calibrates the model to maintain sensitivity when faced with hidden positives in training, without sacrificing the benefits of DPO. However, given the sample size we cannot yet conclude with statistical certainty that our finetuned models yield consistent improvements on all metrics across a broader clinical deployment distribution. 
+
+Robustness to SCAR violation and α misspecification. Using the adjudicated test set, we evaluate our method’s robustness against violations of the SCAR assumption and the misspecification of α.First, a kernel MMD test reveals that cardiomegaly exhibits statistically significant selection bias (violating SCAR), whereas atelectasis and pleural effusion maintain indistinguishable distributions between labeled and hidden positives (Table 18). As a result, pathology-specific metrics (Appendix Fig. 12, 13, and 14) show that the PU loss correction is ineffective for cardiomegaly, with omission recovery failing to improve over the naive DPO baseline. This suggests that the real-world efficacy of PU-DPO may depend on the SCAR assumption holding true. Second, our sensitivity analysis (Fig. 15, 16, and 17) demonstrates how α effectively controls the sensitivity-specificity tradeoff. When training data contains hidden positives, conservatively underestimating α serves as a safe strategy, although it may not yield the full performance benefits of PU-DPO. 
+
+Improvements in detection rate across subtypes. PU-DPO achieves consistently higher F1 scores across datasets and pathologies, driven by the gains in sensitivity (Fig. 4, Appendix Table 14, 15 and 16). The benefit of the PU correction is clearest against the standard DPO ablation, which uses the same contrastive-edit preference data but optimizes a noise-unaware objective. In contrast, offline RadCliq-GRPO yields inconsistent gains at the pathology level for two reasons: (1) it optimizes an 9Figure 4: Relative improvement in Micro-F1, sensitivity, and specificity compared to the base model for the three findings (pleural effusion, atelectasis, cardiomegaly), across both the CheXpert (left) and MIMIC-CXR (right) dataset. aggregate reward that conflates multiple objectives, and (2) the training signal is limited to naive base model responses, reducing the diversity and controllability of the data. For isolating the effect of the reward mechanism and training data, we run GRPO on a fixed dataset matched in size to DPO, which provides a fair comparison but may understate its performance relative to online variants. However, we provide two caveats: (i) some models show modest specificity degradation relative to the base model, which we attribute either to overestimation of αj or to base models already calibrated for high specificity (e.g., LLaVA-RAD); and (ii) the chain-of-thought variant (NV-Reason) does not strongly benefit from PU-DPO in the CheXpert dataset, which we suspect reflects either high initial sensitivity, or limitations in the editor LLM’s ability to produce contrastive edits over long reasoning traces, and a stronger editor or expert adjudication of preference pairs may lead to improvements. 
+
+PU-DPO does not compromise report quality. Report generation quality is also measured using natural language metrics. In table 15 and table 16 of Appendix E.5, we demonstrate that PU-DPO maintains robust performance when evaluating overall report quality, such as BLEU, ROUGE, RadGraph-F1 and ChexBert-F1. Details for each metric are provided in and results across datasets and models are included in Appendix B.8. Notably, there is minimal degradation in report quality with respect to these metrics. 
+
+6 Discussion 
+
+In this work, we introduced the problem of omission noise in observational chest radiology reports and presented PU-DPO, a preference optimization method for training VLMs under this form of noise. We formalized report generation as a positive-unlabeled (PU) learning problem, treating unmentioned findings as unlabeled rather than negative. We proposed a principled offline preference optimization algorithm that constructs preference pairs via contrastive edits and optimizes a noise-aware objective. We then empirically validated PU-DPO across semi-synthetic and real-world settings, demonstrating robustness to omission noise and consistent improvements in detection rates across multiple pathologies. Our comparisons show that prior noise-aware DPO variants do not adequately address omission noise, and that prior task-specific approaches for radiology report generation lead to unpredictable behavior, thereby establishing the effectiveness and necessity of PU-DPO. 
+
+Limitations. (i) Although theoretically grounded, our method depends on accurate estimation of the class prior α, a well-known practical challenge in PU learning. We evaluate a data-driven estimator in this work, but alternative strategies, such as eliciting ground-truth prevalence estimates from radiologists, may yield more reliable values. (ii) Our analysis relies on the multi-SCAR assumption, which posits that within each pathology subtype, true positives have a uniform labeling probability. In other medical imaging settings, omission likelihood may depend on factors such as imaging view and patient context (e.g., ICU vs. outpatient). Relaxing this assumption to accommodate such dependencies is an important direction for future work. Furthermore, scaling up radiologist adjudication would strengthen the verification of our SCAR assumption and α estimates, while also increasing the statistical confidence of our real-world validation. (iii) Radiologist reporting typically rely on multiple views, while our experimental validation was restricted to single frontal-views for report generation. 10 References 
+
+Jessa Bekker and Jesse Davis. Learning from positive and unlabeled data under the selected at random assumption. In Second International Workshop on Learning with Imbalanced Domains: Theory and Applications , pages 8–22. PMLR, 2018. Jessa Bekker and Jesse Davis. Learning from positive and unlabeled data: A survey. Machine learning , 109(4):719–760, 2020. Sarosij Bose, Ravi K Rajendran, Biplob Debnath, Konstantinos Karydis, Amit K Roy-Chowdhury, and Srimat Chakradhar. Visual alignment of medical vision-language models for grounded radiology report generation. arXiv preprint arXiv:2512.16201 , 2025. Ralph Allan Bradley and Milton E Terry. Rank analysis of incomplete block designs: I. the method of paired comparisons. Biometrika , 39(3/4):324–345, 1952. Pierre Chambon, Jean-Benoit Delbrouck, Thomas Sounack, Shih-Cheng Huang, Zhihong Chen, Maya Varma, Steven QH Truong, Chu The Chuong, and Curtis P Langlotz. Chexpert plus: Augmenting a large chest x-ray dataset with text radiology reports, patient demographics and additional image formats. arXiv preprint arXiv:2405.19538 , 2024. Sayak Ray Chowdhury, Anush Kini, and Nagarajan Natarajan. Provably robust dpo: Aligning language models with noisy feedback. arXiv preprint arXiv:2403.00409 , 2024. Olivier Coudray, Christine Keribin, Pascal Massart, and Patrick Pamphile. Risk bounds for positive-unlabeled learning under the selected at random assumption. Journal of Machine Learning Research , 24(107):1–31, 2023. Francesco De Comité, François Denis, Rémi Gilleron, and Fabien Letouzey. Positive and unlabeled examples help learning. In International conference on algorithmic learning theory , pages 219–230. Springer, 1999. Qingxiu Dong, Li Dong, Xingxing Zhang, Zhifang Sui, and Furu Wei. Self-boosting large language models with synthetic preference data. arXiv preprint arXiv:2410.06961 , 2024. Marthinus Du Plessis, Gang Niu, and Masashi Sugiyama. Convex formulation for learning from positive and unlabeled data. In International conference on machine learning , pages 1386–1394. PMLR, 2015. Marthinus Christoffel Du Plessis and Masashi Sugiyama. Class prior estimation from positive and unlabeled data. IEICE TRANSACTIONS on Information and Systems , 97(5):1358–1362, 2014. Charles Elkan and Keith Noto. Learning classifiers from only positive and unlabeled data. In 
+
+Proceedings of the 14th ACM SIGKDD international conference on Knowledge discovery and data mining , pages 213–220, 2008. Ziqing Fan, Cheng Liang, Chaoyi Wu, Ya Zhang, Yanfeng Wang, and Weidi Xie. Chestx-reasoner: Advancing radiology foundation models with reasoning through step-by-step verification. arXiv preprint arXiv:2504.20930 , 2025. Benoît Frénay and Michel Verleysen. Classification in the presence of label noise: a survey. IEEE transactions on neural networks and learning systems , 25(5):845–869, 2013. Ge Gao, Alexey Taymanov, Eduardo Salinas, Paul Mineiro, and Dipendra Misra. Aligning llm agents by learning latent preference from user edits. Advances in neural information processing systems ,37:136873–136896, 2024. Saurabh Garg, Yifan Wu, Alexander J Smola, Sivaraman Balakrishnan, and Zachary Lipton. Mixture proportion estimation and pu learning: A modern approach. Advances in Neural Information Processing Systems , 34:8532–8544, 2021. Benjamin Gundersen, Nicolas Deperrois, Samuel Ruiperez-Campillo, Thomas M Sutter, Julia E Vogt, Michael Moor, Farhad Nooralahzadeh, and Michael Krauthammer. Radvlm-grpo: Enhancing chest x-ray report generation and visual grounding via reinforcement learning. Proceedings of Machine Learning Research , 150:1–34, 2026. 11 Edward J Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Liang Wang, Weizhu Chen, et al. Lora: Low-rank adaptation of large language models. Iclr , 1(2):3, 2022. Shawn Im and Sharon Li. How well can preference optimization generalize under noisy feedback? 
+
+arXiv preprint arXiv:2510.01458 , 2025. Jeremy Irvin, Pranav Rajpurkar, Michael Ko, Yifan Yu, Silviana Ciurea-Ilcus, Chris Chute, Henrik Marklund, Behzad Haghgoo, Robyn Ball, Katie Shpanskaya, et al. Chexpert: A large chest radiograph dataset with uncertainty labels and expert comparison. In Proceedings of the AAAI conference on artificial intelligence , volume 33, pages 590–597, 2019. Saahil Jain, Ashwin Agrawal, Adriel Saporta, Steven QH Truong, Du Nguyen Duong, Tan Bui, Pierre Chambon, Yuhao Zhang, Matthew P Lungren, Andrew Y Ng, et al. Radgraph: Extracting clinical entities and relations from radiology reports. arXiv preprint arXiv:2106.14463 , 2021a. Saahil Jain, Akshay Smit, Steven QH Truong, Chanh DT Nguyen, Minh-Thanh Huynh, Mudit Jain, Victoria A Young, Andrew Y Ng, Matthew P Lungren, and Pranav Rajpurkar. Visualchexbert: addressing the discrepancy between radiology report labels and image labels. In Proceedings of the Conference on Health, Inference, and Learning , pages 105–115, 2021b. Shantanu Jain, Martha White, Michael W Trosset, and Predrag Radivojac. Nonparametric semi-supervised learning of class proportions. arXiv preprint arXiv:1601.01944 , 2016. Alistair EW Johnson, Tom J Pollard, Nathaniel R Greenbaum, Matthew P Lungren, Chih-ying Deng, Yifan Peng, Zhiyong Lu, Roger G Mark, Seth J Berkowitz, and Steven Horng. Mimic-cxr-jpg, a large publicly available database of labeled chest radiographs. arXiv preprint arXiv:1901.07042 ,2019. Masahiro Kato, Takeshi Teshima, and Junya Honda. Learning from positive and unlabeled data with a selection bias. In International conference on learning representations , 2019. Ryuichi Kiryo, Gang Niu, Marthinus C Du Plessis, and Masashi Sugiyama. Positive-unlabeled learning with non-negative risk estimator. Advances in neural information processing systems , 30, 2017. Keyi Kong, Xilie Xu, Di Wang, Jingfeng Zhang, and Mohan S Kankanhalli. Perplexity-aware correction for robust alignment with noisy preferences. Advances in Neural Information Processing Systems , 37:28296–28321, 2024. Xiao Liang, Jiawei Hu, Di Wang, Zhi Ma, Lin Zhao, Ronghan Li, Bo Wan, and Quan Wang. Chexpo: Preference optimization for chest x-ray vlms with counterfactual rationale. In Proceedings of the 33rd ACM International Conference on Multimedia , pages 2606–2615, 2025. Xize Liang, Chao Chen, Shuang Qiu, Jie Wang, Yue Wu, Zhihang Fu, Zhihao Shi, Feng Wu, and Jieping Ye. Ropo: Robust preference optimization for large language models. arXiv preprint arXiv:2404.04102 , 2024. Chin-Yew Lin. Rouge: A package for automatic evaluation of summaries. In Text summarization branches out , pages 74–81, 2004. Qianchu Liu, Sheng Zhang, Guanghui Qin, Yu Gu, Ying Jin, Sam Preston, Yanbo Xu, Sid Kiblawi, Wen-wai Yim, Tim Ossowski, et al. Scaling medical imaging report generation with multimodal reinforcement learning. arXiv preprint arXiv:2601.17151 , 2026. Junyu Luo, Xiao Luo, Kaize Ding, Jingyang Yuan, Zhiping Xiao, and Ming Zhang. Robustft: Robust supervised fine-tuning for large language models under noisy response. arXiv preprint arXiv:2412.14922 , 2024. Anna Majkowska, Sid Mittal, David F Steiner, Joshua J Reicher, Scott Mayer McKinney, Gavin E Duggan, Krish Eswaran, Po-Hsuan Cameron Chen, Yun Liu, Sreenivasa Raju Kalidindi, et al. Chest radiograph interpretation with deep learning models: assessment with radiologist-adjudicated reference standards and population-adjusted evaluation. Radiology , 294(2):421–431, 2020. 12 Andriy Myronenko, Dong Yang, Baris Turkbey, Mariam Aboian, Sena Azamat, Esra Akcicek, Hongxu Yin, Pavlo Molchanov, Marc Edgar, Yufan He, et al. Reasoning visual language model for chest x-ray analysis. arXiv preprint arXiv:2510.23968 , 2025. Gang Niu, Marthinus Christoffel Du Plessis, Tomoya Sakai, Yao Ma, and Masashi Sugiyama. Theo-retical comparisons of positive-unlabeled learning against positive-negative learning. Advances in neural information processing systems , 29, 2016. Long Ouyang, Jeffrey Wu, Xu Jiang, Diogo Almeida, Carroll Wainwright, Pamela Mishkin, Chong Zhang, Sandhini Agarwal, Katarina Slama, Alex Ray, et al. Training language models to follow instructions with human feedback. Advances in neural information processing systems , 35:27730– 27744, 2022. Kishore Papineni, Salim Roukos, Todd Ward, and Wei-Jing Zhu. Bleu: a method for automatic evaluation of machine translation. In Proceedings of the 40th annual meeting of the Association for Computational Linguistics , pages 311–318, 2002. Matt Post. A call for clarity in reporting bleu scores. In Proceedings of the third conference on machine translation: Research papers , pages 186–191, 2018. Rafael Rafailov, Archit Sharma, Eric Mitchell, Christopher D Manning, Stefano Ermon, and Chelsea Finn. Direct preference optimization: Your language model is secretly a reward model. Advances in neural information processing systems , 36:53728–53741, 2023. Jan Rudolph, Nicola Fink, Julien Dinkel, Vanessa Koliogiannis, Vincent Schwarze, Sophia Goller, Bernd Erber, Thomas Geyer, Boj Friedrich Hoppe, Maximilian Fischer, et al. Interpretation of thoracic radiography shows large discrepancies depending on the qualification of the physi-cian—quantitative evaluation of interobserver agreement in a representative emergency department scenario. Diagnostics , 11(10):1868, 2021. Adriel Saporta, Xiaotong Gui, Ashwin Agrawal, Anuj Pareek, Steven QH Truong, Chanh DT Nguyen, Van-Doan Ngo, Jayne Seekins, Francis G Blankenberg, Andrew Y Ng, et al. Benchmarking saliency methods for chest x-ray interpretation. Nature Machine Intelligence , 4(10):867–878, 2022. Andrew Sellergren, Sahar Kazemzadeh, Tiam Jaroensri, Atilla Kiraly, Madeleine Traverse, Timo Kohlberger, Shawn Xu, Fayaz Jamil, Cían Hughes, Charles Lau, et al. Medgemma technical report. 
+
+arXiv preprint arXiv:2507.05201 , 2025. Akshay Smit, Saahil Jain, Pranav Rajpurkar, Anuj Pareek, Andrew Y Ng, and Matthew Lungren. Combining automatic labelers and expert annotations for accurate radiology report labeling using bert. In Proceedings of the 2020 conference on empirical methods in natural language processing (EMNLP) , pages 1500–1519, 2020. Fahim Tajwar, Anikait Singh, Archit Sharma, Rafael Rafailov, Jeff Schneider, Tengyang Xie, Stefano Ermon, Chelsea Finn, and Aviral Kumar. Preference fine-tuning of llms should leverage suboptimal, on-policy data. arXiv preprint arXiv:2404.14367 , 2024. Ryutaro Tanno, David GT Barrett, Andrew Sellergren, Sumedh Ghaisas, Sumanth Dathathri, Abigail See, Johannes Welbl, Charles Lau, Tao Tu, Shekoofeh Azizi, et al. Collaboration between clinicians and vision–language models in radiology report generation. Nature Medicine , 31(2):599–608, 2025. Pengyu Wang, Shuchang Ye, Usman Naseem, and Jinman Kim. Mrg-r1: Reinforcement learning for clinically aligned medical report generation. arXiv preprint arXiv:2512.16145 , 2025. Yizhong Wang, Yeganeh Kordi, Swaroop Mishra, Alisa Liu, Noah A Smith, Daniel Khashabi, and Hannaneh Hajishirzi. Self-instruct: Aligning language models with self-generated instructions. In 
+
+Proceedings of the 61st annual meeting of the association for computational linguistics (volume 1: long papers) , pages 13484–13508, 2023. Junkang Wu, Yuexiang Xie, Zhengyi Yang, Jiancan Wu, Jiawei Chen, Jinyang Gao, Bolin Ding, Xiang Wang, and Xiangnan He. Towards robust alignment of language models: Distributionally robustifying direct preference optimization. arXiv preprint arXiv:2407.07880 , 2024. 13 Wei Xiong, Hanze Dong, Chenlu Ye, Ziqi Wang, Han Zhong, Heng Ji, Nan Jiang, and Tong Zhang. Iterative preference learning from human feedback: Bridging theory and practice for rlhf under kl-constraint. arXiv preprint arXiv:2312.11456 , 2023. Feiyang Yu, Mark Endo, Rayan Krishnan, Ian Pan, Andy Tsai, Eduardo Pontes Reis, Eduardo Kaiser Ururahy Nunes Fonseca, Henrique Min Ho Lee, Zahra Shakeri Hossein Abad, Andrew Y Ng, et al. Evaluating progress in automatic chest x-ray radiology report generation. Patterns , 4(9), 2023. Ke Yu, Shantanu Ghosh, Zhexiong Liu, Christopher Deible, and Kayhan Batmanghelich. Anatomy-guided weakly-supervised abnormality localization in chest x-rays. In International Conference on Medical Image Computing and Computer-Assisted Intervention , pages 658–668. Springer, 2022. Juan Manuel Zambrano Chaves, Shih-Cheng Huang, Yanbo Xu, Hanwen Xu, Naoto Usuyama, Sheng Zhang, Fei Wang, Yujia Xie, Mahmoud Khademi, Ziyi Yang, et al. A clinically acces-sible small multimodal radiology model and evaluation metric for chest x-ray findings. Nature Communications , 16(1):3108, 2025. Kai Zhang, Christopher Malon, Lichao Sun, and Martin Renqiang Min. Editgrpo: Reinforcement learning with post-rollout edits for clinically accurate chest x-ray report generation. In Proceedings of the 14th International Joint Conference on Natural Language Processing and the 4th Conference of the Asia-Pacific Chapter of the Association for Computational Linguistics , pages 304–316, 2025. Tianyi Zhang, Varsha Kishore, Felix Wu, Kilian Q Weinberger, and Yoav Artzi. Bertscore: Evaluating text generation with bert. arXiv preprint arXiv:1904.09675 , 2019. 14 A PU Learning 
+
+A.1 Unbiasedness Proposition A.1 (Unbiased PU Loss Estimator) . Let Pp and Pn denote the class-conditional distri-butions of X given Y = +1 and Y = −1 respectively, and let PX denote the marginal distribution of X. Let α = P(Y = +1) be the positive class prior. Hence, PX = αPp + (1 − α)Pn. Define the following per-class expected loss for a model Pϕ(a+ ≻ a− | x):
+
+R+ 
+
+> p
+
+(ϕ) = EPp
+
+ − log Pϕ(a+ ≻ a− | x)
+
+R− 
+
+> p
+
+(ϕ) = EPp
+
+ − log  1 − Pϕ(a+ ≻ a− | x) 
+
+R− 
+
+> n
+
+(ϕ) = EPn
+
+ − log  1 − Pϕ(a+ ≻ a− | x) 
+
+R− 
+
+> X
+
+(ϕ) = EPX
+
+ − log  1 − Pϕ(a+ ≻ a− | x) 
+
+Then the standard supervised loss 
+
+R(ϕ) = EP
+
+ − IY =+1 log Pϕ(a+ ≻ a− | x) − IY =−1 log(1 − Pϕ(a+ ≻ a− | x)) 
+
+admits the equivalent decomposition 
+
+R(ϕ) = α R + 
+
+> p
+
+(ϕ) − α R − 
+
+> p
+
+(ϕ) + R− 
+
+> X
+
+(ϕ)
+
+which depends only on expectations over Pp (labeled positives) and PX (the unlabeled marginal), and not on Pn.Proof. By the law of total expectation, conditioning on Y gives: 
+
+R(ϕ) = P(Y = +1) EPp
+
+ − log Pϕ(a+ ≻ a− | x)
+
++ P(Y = −1) EPn
+
+ − log(1 − Pϕ(a+ ≻ a− | x)) 
+
+= α R + 
+
+> p
+
+(ϕ) + (1 − α) R− 
+
+> n
+
+(ϕ)
+
+The challenge is that R− 
+
+> n
+
+(ϕ) requires expectations over Pn, which is unobserved in the PU setting. To eliminate this dependence, we decompose the marginal distribution using the standard mixture identity: 
+
+PX = α Pp + (1 − α) Pn
+
+Taking the expectation of − log(1 − Pϕ(a+ ≻ a− | x)) under PX and applying linearity: 
+
+R− 
+
+> X
+
+(ϕ) = α R − 
+
+> p
+
+(ϕ) + (1 − α) R− 
+
+> n
+
+(ϕ)
+
+Solving for the unobserved term gives: 
+
+(1 − α) R− 
+
+> n
+
+(ϕ) = R− 
+
+> X
+
+(ϕ) − α R − 
+
+> p
+
+(ϕ)
+
+Substituting this into the expression for R(ϕ) yields: 
+
+R(ϕ) = α R + 
+
+> p
+
+(ϕ) + R− 
+
+> X
+
+(ϕ) − α R − 
+
+> p
+
+(ϕ)= α (R+ 
+
+> p
+
+(ϕ) − R− 
+
+> p
+
+(ϕ)) + R− 
+
+> X
+
+(ϕ)
+
+The right-hand side involves only expectations over Pp and PX , completing the proof. 
+
+A.2 Gradient Derivation and Analysis 
+
+We derive the per-sample gradient of the PU-DPO objective. Using the shorthand 
+
+z = β log πϕ(a+ | x)
+
+πref (a+ | x) − β log πϕ(a− | x)
+
+πref (a− | x)
+
+the predicted preference probability is Pϕ(a+ ≻ a− | x) = σ(z). The gradient of z with respect to ϕ
+
+is 
+
+∇ϕz = β ∇ϕ log πϕ(a+ | x) − ∇ ϕ log πϕ(a− | x)
+
+The per-sample loss components have gradients: 15 • Positive loss ( R+ 
+
+> p
+
+): ∇ϕ[− log σ(z)] = −(1 − σ(z)) ∇ϕz
+
+• Flipped positive loss ( R− 
+
+> p
+
+): ∇ϕ[− log(1 − σ(z))] = σ(z) ∇ϕz
+
+• Marginal negative loss ( R− 
+
+> X
+
+): ∇ϕ[− log(1 − σ(z))] = σ(z) ∇ϕz
+
+The empirical PU loss over a batch of n samples, with np labeled positives and nu = n − np
+
+unlabeled, is 
+
+bR(ϕ) = α bR+ 
+
+> p
+
+(ϕ) + max 
+
+
+
+0, bR− 
+
+> X
+
+(ϕ) − α bR− 
+
+> p
+
+(ϕ)
+
+
+
+The gradient contributions per sample are as follows. 
+
+Labeled positive sample i: contributes to all three terms. 
+
+∇ϕLpos  
+
+> i
+
+= αnp
+
+ − (1 − σ(zi)) ∇ϕzi
+
+| {z } 
+
+> from R+
+> p
+
+− αnp
+
+σ(zi) ∇ϕzi
+
+| {z } 
+
+> from R−
+> p
+
++ 1
+
+n
+
+σ(zi) ∇ϕzi
+
+| {z } 
+
+> from R−
+> X
+
+=
+
+
+
+− αnp
+
++ 1
+
+n σ(zi)
+
+
+
+β ∇ϕ log πϕ(a+ 
+
+> i
+
+| xi) − ∇ ϕ log πϕ(a− 
+
+> i
+
+| xi)
+
+Unlabeled sample i: contributes only to R− 
+
+> X
+
+.
+
+∇ϕLunl  
+
+> i
+
+= 1
+
+n σ(zi) β ∇ϕ log πϕ(a+ 
+
+> i
+
+| xi) − ∇ ϕ log πϕ(a− 
+
+> i
+
+| xi)
+
+Therefore, the update via gradient descent increases the likelihood of a− for all samples, acting as a constant downward push. However, the upward correction push of the −α/n p term for known true positives is what reconstructs the noiseless gradient. 
+
+Deriving The Batch Gradient. We now derive the batch gradient by summing the gradients over the positive and unlabeled samples in a batch. 
+
+X
+
+> i∈P
+
+
+
+− αnp
+
++ σ(zi)
+
+n
+
+
+
+∇ϕzi + X
+
+> i∈U
+
+ σ(zi)
+
+n
+
+
+
+∇ϕzi
+
+= − αnp
+
+X
+
+> i∈P
+
+∇ϕzi
+
+| {z }
+
+> (I)
+
++ 1
+
+n
+
+X
+
+> i∈P
+
+σ(zi)∇ϕzi
+
+| {z }
+
+> (II)
+
++ 1
+
+n
+
+X
+
+> i∈U
+
+σ(zi)∇ϕzi
+
+| {z }
+
+> (III)
+
+= − αnp
+
+X
+
+> i∈P
+
+∇ϕzi + 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+σ(zi)∇ϕzi
+
+Comparison with Standard DPO To understand how PU-DPO compensates for hidden positives in the unlabeled set, we examine the batch-average gradient and contrast it with naive DPO. We decompose the unlabeled set as U = U+ ∪ U−, where U+ contains hidden positives drawn from Pp
+
+and U− contains true negatives drawn from Pn.Under PU-DPO, the batch gradient decomposes as 
+
+∇L PU = X
+
+> i∈P
+
+
+
+− αnp
+
++ σ(zi)
+
+n
+
+
+
+∇ϕzi
+
+| {z }
+
+> labeled positives
+
++ X
+
+> i∈U+
+
+σ(zi)
+
+n ∇ϕzi
+
+| {z }
+
+> hidden positives
+
++ X
+
+> i∈U−
+
+σ(zi)
+
+n ∇ϕzi
+
+| {z }
+
+> true negatives
+
+For comparison, naive DPO, which treats all unlabeled samples as true negatives, gives 
+
+∇L naive = X
+
+> i∈P
+
+
+
+− 1 − σ(zi)
+
+np
+
+
+
+∇ϕzi
+
+| {z }
+
+> labeled positives
+
++ X
+
+> i∈U+
+
+σ(zi)
+
+nu
+
+∇ϕzi
+
+| {z }
+
+> hidden positives
+
++ X
+
+> i∈U−
+
+σ(zi)
+
+nu
+
+∇ϕzi
+
+| {z }
+
+> true negatives
+
+In both objectives, the hidden positives in U+ contribute a wrong-direction gradient that pushes the model toward a−, even though these samples are truly positive. Naive DPO has no mechanism to counteract this contamination, and the wrong-direction gradient accumulates over training, leading to systematic suppression of true positives. 16 Example Consider a scenario where the n = 64 , np = 32 , and α = 0 .6. For illustration we can use a hypothetical model confidence: σ(z) = 0 .9 for all true positives, and σ(z) = 0 .2 for true negatives. Recall that each sample has a gradient ∇ϕzi = β ∇ϕ log πϕ(a+ | xi) − ∇ ϕ log πϕ(a− | xi). We can define g+ = Ex∼Pp [∇ϕz] and g− = Ex∼Pn [∇ϕz] as the average gradients for a true positive and negative sample respectively. We first consider the true gradient for standard DPO if there was no label noise. We can compute the expected theoretical gradient (oracle) by the weighted sum of the average positive and negative gradient: • Expected Gradient for all True Positives: α × [−(1 − σ(z))] g+ = 0 .6 × − (1 − 0.9) g+ =
+
+−0.06g +
+
+• Expected Gradient for all True Negatives: (1 −α)×[σ(z)] g− = 0 .4×(0 .2) g− = + 0.08g −
+
+Net Oracle Expected Gradient: −0.06 g+ + 0 .08 g−
+
+For the PU corrected loss with hidden positives, we have the following: • Contribution from Labeled Positives ( np): 32 ×  − 0.632 + 0.964 
+
+ g+ = −0.6g+ + 0 .45 g+ =
+
+−0.15g +
+
+• Contribution from Hidden Positives ( U+): 6.4 ×   0.964 
+
+ g+ = + 0.09g +
+
+• Contribution from True Negatives ( U−): 25 .6 ×   0.264 
+
+ g− = + 0.08g −
+
+Net PU-DPO Batch Gradient: −0.15 g+ + 0 .09 g+ + 0 .08 g− = −0.06 g+ + 0 .08 g−
+
+A.3 Discussion on Marginal Editing and Multi-task Loss 
+
+In this section, we provide theoretical intuition for our multi-task preference optimization algorithm by reframing report generation as the task of jointly determining an optimal set of finding-level decisions. We note that this set-based formulation is an analytical abstraction. In practice, VLMs generate reports as token sequences and maximize the joint likelihood over those sequences. Our framing treats each clinical finding as a discrete action to expose the structure of the multi-task objective, but the underlying model still operates over token-level distributions. 
+
+Setup. Treat each report as a d-dimensional binary vector a = ( a1, . . . , a d) with aj ∈ {− 1, +1 }
+
+indicating the absence or presence of pathology j. Given an input image x, we sample a base report 
+
+a ∼ πref (· | x), draw an index j ∼ Unif (1 , d ), and form a contrastive pair (a+ 
+
+> j
+
+, a − 
+
+> j
+
+) by setting the 
+
+j-th entry to +1 and −1 respectively while holding the other entries a\j fixed. Write fϕ(x, a \j ) = 
+
+Pϕ(a+ 
+
+> j
+
+≻ a− 
+
+> j
+
+| x, a \j ) for the model’s predicted preference probability and p∗(x, a \j ) = P(a+ 
+
+> j
+
+≻
+
+a− 
+
+> j
+
+| x, a \j ) for the true preference under the Bradley-Terry model. The PU-DPO objective then takes the form 
+
+R(ϕ) = Ej∼Unif (1 ,d )
+
+h
+
+EX,A \j
+
+ − p∗ log fϕ − (1 − p∗) log(1 − fϕ)i
+
+.
+
+The objective recovers per-finding preferences. The outer expectation over j is a uniform average of d terms, each depending on ϕ only through fϕ at index j. Minimization therefore decomposes across indices: for each fixed j and context (x, a \j ), the inner term is exactly the cross-entropy between the true preference p∗ and the model’s estimate fϕ. Decomposing this cross-entropy into entropy plus KL divergence, 
+
+−p∗ log fϕ − (1 − p∗) log(1 − fϕ) = H(p∗) + DKL (p∗ ∥ fϕ),
+
+the first term does not depend on ϕ, and the second is non-negative with equality only when fϕ = p∗.The minimizer therefore matches the true conditional preference at every (x, a \j ) and every index 
+
+j. In other words, the per-finding training signal, even though it only ever compares two reports differing in a single action, is enough for the model to recover the correct local preference structure across all positions and all contexts under sufficient coverage. 17 When does per-finding preferences compose into a global optimum? Recovering pointwise preferences is a useful property, but the quantity we ultimately care about is the globally optimal report a∗ = arg max a r∗(a | x), i.e. the set of actions that maximize the latent reward. We can argue that under strong assumptions on coverage and reward, any alternative report a′̸ = a∗ can be reached from a∗ via a sequence of single-action edits, and the model’s per-finding preferences correctly identify which direction is better at every step. Concretely, fix any a′̸ = a∗, and let K be the set of indices where a′ and a∗ disagree. Construct a path a′ = a(0) , a (1) , . . . , a (|K|) = a∗ by flipping one disagreeing index at a time. Each consecutive pair (a(t−1) , a (t)) differs in exactly one index kt, with shared context a(t) 
+
+> \kt
+
+. We assume that the latent reward r∗ admits a path of monotone single-action improvements from any a′ to a∗, i.e. the indices in 
+
+K can be ordered such that each step strictly increases r∗. Under this assumption, the Bradley-Terry model implies P(a∗ 
+
+> kt
+
+≻ a′ 
+
+> kt
+
+| x, a (t) 
+
+> \kt
+
+) > 0.5 at every step, and the previous paragraph guarantees that the trained model recovers exactly this preference direction. Following the model’s learned preferences therefore traces out a monotone path of single-action improvements from any starting report to a∗, identifying the global optimum without ever requiring the model to compare reports differing in more than one index simultaneously. 
+
+Example Consider a diagnostic setting with two actions (a1, a 2) ∈ {− 1, +1 }2 and suppose the globally optimal report is a∗ = (+1 , −1) . For the alternative a′ = ( −1, +1) , which differs in both coordinates, we must assume there exists the path (−1, +1) → (+1 , +1) → (+1 , −1) which strictly increases the latent reward. Then at the first step, the model evaluates P(a+1 ≻ a− 
+
+> 1
+
+| x, a 2 = +1) and correctly prefers a1 = +1 . At the second step, it evaluates P(a+2 ≻ a− 
+
+> 2
+
+| x, a 1 = +1) and correctly prefers a2 = −1.
+
+A.4 Mixture Proportion Estimation with Best Bin Estimation 
+
+Our method requires an strategy to estimate P(Y = +1) or equivalently α, the underlying marginal prevalence. While our approach is general and works with any PU estimator, we use the Best-Bin-Estimation (BBE) [Garg et al., 2021] method, which we briefly summarize here. The goal is to estimate α in the formulation Pu = αPp + (1 − α)Pn. Given a classifier f : X → [0 , 1] ,let q(c) = P(f (X) ≥ c) denote the true probability that a sample scores above a threshold c ∈ [0 , 1] .For a given dataset of size ns, this tail probability is approximated using the empirical estimator 
+
+ˆq(c) = 1
+
+> ns
+
+Pns 
+
+> i=1
+
+I[f (xi) ≥ c].The method estimates the optimal mixture proportion by finding the threshold that minimizes the ratio of these tail probabilities between the unlabeled and positive distributions: 
+
+ˆα = min 
+
+> c∈[0 ,1]
+
+ˆqu(c)ˆqp(c)
+
+Mathematically, because the unlabeled distribution is a mixture, the true theoretical ratio expands to: 
+
+qu(c)
+
+qp(c) = α + (1 − α) qn(c)
+
+qp(c)
+
+Since qn(c) ≥ 0 and qp(c) > 0, this ratio naturally serves as an upper bound for α. Intuitively, the minimization procedure searches for a sufficiently high threshold c where the classifier perfectly isolates positive samples such that no true negatives exceed the threshold (i.e., qn(c) = 0 ). At this critical threshold, assuming positive samples still exist ( qp(c) > 0), the bound becomes tight, and the calculated ratio exactly recovers the true mixture proportion α.
+
+B Training Procedures 
+
+B.1 Datasets 
+
+We evaluate our methodology on two large-scale publicly available chest X-ray datasets to show the generalizability of our approach. 18 Mimic-CXR contains 227,827 chest X-ray imaging studies from the Beth Israel Deaconess Medical Center, each paired with a structured free-text radiology report [Johnson et al., 2019]. 
+
+CheXpert/ CheXpert plus contains 224,316 chest radiographs from Stanford University labeled across 14 pathology categories using a rule-based extractor; we use the associated reports from CheXpert Plus [Irvin et al., 2019, Chambon et al., 2024]. A consistent 60/30/10 train/test/validation is applied on these datasets for the training and evaluation methodology described in the upcoming sections. We also filter to frontal views (PA/AP) to ensure compatibility across all pretrained models described in the next section. 
+
+B.2 Model Backbones 
+
+We conduct experiments across three different state of the art pretrained VLM models to cover different architectures and training methods. 
+
+LLava-Rad is a CXR adapted VLM that uses a CLIP-style vision encoder that is paired with a language decoder via contrastive alignment on large-scale radiology datasets [Zambrano Chaves et al., 2025]. 
+
+MedGemma is a medical foundational model built on the Gemma-3 architecture with a specialized SigLIP vision encoder. The model is instruction-tuned on diverse clinical text and image data and provides a strong zero shot report generation baseline across tasks like radiology report generation [Sellergren et al., 2025]. 
+
+NV-Reason is a Qwen-2.5 VL based chain of thought augmented VLM that generates reasoning tokens prior to generating radiology reports and labels. The model uses supervised fine-tuning followed by GRPO reinforcement learning to improve model performance [Myronenko et al., 2025]. 
+
+B.3 Model Hyperparameters 
+
+We detail the hyperparameters for supervised fine-tuning, Radcliq-GRPO, and DPO training in Tables 2 and 3 respectively. 
+
+Hyperparameter LLaVA-Rad NV-Reason-CXR MedGemma 
+
+Base model Vicuna-7B v1.5 NV-Reason-CXR-3B MedGemma-4B-IT Vision encoder BiomedCLIP-518px Qwen2.5-VL SigLIP (built-in) Learning rate 1 × 10 −4 1 × 10 −4 1 × 10 −4
+
+LR scheduler Cosine Cosine Cosine Warmup ratio 0.03 0.03 0.03 Weight decay 0.0 0.0 0.0 Max grad norm 1.0 0.3 0.3 Epochs 3 3 3Effective batch size 16 32 32 Max sequence length 2048 Default Default LoRA rank r 64 16 16 LoRA α 128 32 32 LoRA dropout 0.05 0.05 0.05 LoRA target modules All Linear Q,K,V,O proj Q,K,V,O proj Optimizer AdamW AdamW (fused) AdamW (fused) Attention implementation SDPA SDPA Flash Attention 2 Precision BF16 + TF32 BF16 + TF32 BF16 + TF32 Table 2: SFT Hyperparameters by Model 19 Hyperparameter GRPO DPO                                   
+
+> Global Shared Parameters (All Models & Methods)
+> Actor learning rate 1×10 −5
+> Gradient clipping 1.0 Rollout samples per prompt ( n)4Rollout temperature / top-p0.7 / 0.95 LoRA rank r/α16 / 32 LoRA target modules Q, K, V, O proj Mixed precision BF16
+> Method-Specific Training Parameters
+> Max training steps 300 200 Effective batch size 32 64 Warmup steps 50 –KL penalty 0.01 0.01 GRPO clip ϵlow /ϵhigh 0.20 / 0.28 –Reward function RadCliQ –DPO β–0.05
+> Model-Specific Parameters
+> Max response length (LLaVA-Rad, MedGemma) 1024 1024 Max response length (NV-Reason-CXR) 4096 4096
+
+Table 3: Consolidated Hyperparameters for GRPO and DPO across all models 
+
+B.4 Supervised Fine-Tuning Protocol 
+
+For all model-dataset combinations, SFT is performed by maximizing the conditional log-likelihood of the reference radiology report given the input image and instruction prompts. All three models are fine-tuned with LoRA adapters injected into the language-model attention projections; the vision encoder and the multimodal projector are kept frozen [Hu et al., 2022]. All models are fine-tuned using the AdamW optimizer with a cosine learning rate scheduler and a linear warmup over the first 3 % of steps. 
+
+Model Selection : We perform a grid search over learning rates ∈ { 10 −4, 10 −5} yielding two candidate runs per model-dataset combinations. For each run, we retain the two best checkpoints with the lowest validation loss as evaluated at regular intervals. Prior work has widely adopted micro/macro-averaged F1 scores of Chexpert labels as a primary factual correctness metric and directly optimize objectives [Tanno et al., 2025, Myronenko et al., 2025]. We use micro-averaged CheXbert F1 for checkpoint selection due to its greater stability under class imbalance. All candidate checkpoints are thus evaluated on the validation split using the micro-averaged CheXbert F1 score as the model selection criterion. This score is computed by running the CheXbert labeler on reference and generated reports and comparing the resulting 14 labels [Smit et al., 2020]. The checkpoint achieving the highest point-estimate validation CheXbert-F1, is selected as the final SFT model. For the final evaluation, we report both micro-averaged and macro-averaged CheXbert-F1. Information from the test set is not used at any stage of model selection. All experiments are trained for a maximum of 3 epochs with gradient checkpointing and early stopping to manage memory. 
+
+B.5 Radcliq-GRPO Baseline Protocol 
+
+We adapted the training paradigm of RadVLM-GRPO as the basis for our implementation for applying GRPO on VLMs for Chext X-Ray report generation tasks [Gundersen et al., 2026]. The training setup seeks to mimic the RadVLM-GRPO framework with the same optimizer, rollout and KL-penalty configuration as the RadVLM-GRPO codebase. GRPO is applied on the base models of Llava-Rad, Medgemma and NV-Reason. The RadVLM setup is modified to operate in an offline GRPO setup. All rollouts are generated once using the base model initialized reference policy prior to training. For each prompt, 4 rollouts are drawn from πref and are used to compute the group-relative advantages for the GRPO update. All other hyperparameters are obtained from the RadVLM-GRPO setup. To manage computational costs, training was capped at 9000 training samples and 1000 validation samples. This design choice is 20 deliberate: the dataset size is the same as the size in our DPO framework and ensures consistency across methods. The use of offline GRPO is motivated by the computational expense of online RadCliQ reward scoring and is used to ensure a consistent data budget with the DPO framework. However, we do acknowledge a known limitation of offline RL approaches as off-policy rollout distribution may drift from the improving policy over the course of training. 
+
+Reward Function : Consistent with the RadVLM-GRPO paper, which demonstrates that Radcliq achieves the most effective behavior amongst evaluated reward signals, we adopt RadCliq as the reward for report generation. RadCliq is a composite metric that aggregates BERTScore (lexical overlap), CheXbert similarity (14-label pathology classification) and RadGraph-F1 (granular clinical entity-relation overlap) [Yu et al., 2023]. 
+
+Model Selection : To maintain consistency with the SFT procedure, we apply the same checkpoint strategy: the two checkpoints with the lowest validation loss are evaluated on the validation set. The micro-averaged CheXbert F1 point estimate on the validation set is used as the model selection criterion. 
+
+B.6 PU-DPO and Ablation Protocol 
+
+α-Estimation. We estimate αj separately for each finding subtype j using the training split of each dataset. Labeled positives are training samples whose reference report explicitly mentions subtype 
+
+Yj ; the remaining samples form the unlabeled set, which contains both true negatives and unreported positives (i.e., images where the finding is present but its subtype is not mentioned). For each sample, we extract a chest X-ray embedding using the frozen MedGemma image encoder. We then train a positive-vs-unlabeled classifier on these embeddings using LightGBM, fitting a separate classifier per subtype with 3-fold cross-fitting. The resulting held-out prediction probabilities are passed to BBE (Appendix A.4). Note that this is the estimate of the fraction of hidden positives strictly within the unlabeled data, 
+
+P (Y = 1 | S = −1) . Because our setup follows the one-sample PU learning setting, this fraction does not equal the overall class prior P (Y = 1) . Therefore, for each training batch during PU-DPO, we compute the empirical prior ˆα (estimating P (Y = 1) ) by combining the known labeled positives (np) with the estimated hidden positives from the unlabeled set ( nu). Specifically, we compute 
+
+ˆα = np+nu ˆP (Y =1 |S=−1)  
+
+> n
+
+, where n is the total batch size. This batch-level ˆα is then used to scale the PU loss correction. 
+
+Preference Dataset : After sampling base responses from πref , we generate pairs using GPT-OSS 120B for editing the base response. We use the prompts in Appendix B.7 and perform a two stage generation process to first correct the base-model response to faithfully represent the diagnosis in the reference clinician report, and then insert and remove findings from the base-model response. We applied a length variation filter to ensure the generated responses do not deviate excessively from the original base response. Specifically, we enforce that the relative absolute difference in length between both candidate responses (chosen and rejected) and the base response is bounded by τ = 0 .5.Formally, a sample is kept if max(∆ La+ , ∆La− ) ≤ 0.5, where ∆La = || a|−| base ||  
+
+> max(1 ,|base |)
+
+.
+
+Training. Our training procedure deliberately deviates from the natural prevalence of pathologies in the preference dataset along two axes. First, at each training step we sample the target pathology j
+
+uniformly across types rather than according to its marginal frequency. Second, within each batch we use stratified sampling to enforce a balanced 50-50 split between labeled positives and unlabeled examples. The latter is a practical necessity: the marginal prevalence of fine-grained pathology subtypes (e.g., small left-sided atelectasis) is typically 1–5%, and unstratified batches would yield gradient estimates dominated by unlabeled examples and high-variance gradient estimates for the positive sample loss terms. This sampling scheme introduces a distributional shift relative to the natural data distribution, which in principle requires an off-policy correction. We do not observe practical issues from this shift in our setting, in part because PU-DPO is intended as a lightweight fine-tuning step on top of an already-trained SFT base model, analogous to the standard SFT → DPO pipeline, rather than as a from-scratch training procedure. Consistent with this scope, we fine-tune the base VLM for only 200 21 gradient steps. Longer training runs or applications outside this short-horizon fine-tuning regime may require principled importance reweighting or related corrections, which we leave to future work. 
+
+B.7 Prompts 
+
+The following prompts are used consistently across models and across protocols. Throughout this section, < display_name> and <dn> refer to the name of the specific finding (e.g., pleural effusion). 
+
+Report Generation Prompt Template 
+
+Provide a description of the findings and impressions in the chest X-ray image <image> .
+
+CheXpert Label Extraction Prompt Template 
+
+You are extracting CheXpert labels from a chest X-ray report. For each label, output 1 if the finding is present, otherwise 0. If the finding is uncertain, output -1. If the finding is not mentioned, output 0. Only output valid JSON with keys exactly matching these labels: <labels> .
+
+Report: <report_text> 
+
+Clinical Correction Prompt (1st Stage of Preference Dataset Construction) 
+
+You are reviewing a chest X-ray report for <display_name> . The following is the original clinician report for this study. Use it ONLY as a factual reference to align the base response. 
+
+Reference Report: <gt_report> 
+
+Task: 
+
+Edit the base response below so its treatment of <dn> is consistent with the reference report. • If the reference report DESCRIBES <dn> : ensure the base response also describes <dn> , using phrasing that captures the reference’s key clinical characteristics (size, laterality, severity, etc.). • If the reference report DOES NOT describe <dn> (or explicitly states it is absent / normal / clear): DELETE any sentence, bullet, or clause in the base response that mentions <dn> . This includes BOTH positive mentions (e.g., ‘small left pleural effusion’) AND negation/absence statements (e.g., ‘no pleural effusion’). If a sentence mentions 
+
+<dn> alongside other findings, drop only the <dn> portion while keeping the rest intact (e.g., ‘small left pleural effusion and associated atelectasis’ → ‘atelectasis’). Do NOT replace <dn> with a normal/absent descriptor — the corrected response should contain no reference to <dn> at all. • Leave all sentences that do not mention the finding completely unchanged, word for word. • Do NOT copy sentences verbatim from the reference report; borrow only clinical characteristics. • Do NOT include any temporal comparisons from the reference report (e.g., ‘unchanged from prior’, ‘increased since previous study’, ‘new compared to prior exam’). Describe findings as they appear on the current study only. 
+
+Rules: 
+
+• Return valid JSON only (no markdown, no explanation). • JSON must include the key: response .• response must be the full corrected report text. 
+
+Base Response: <base_response> 
+
+Output Schema: <json_schema> 
+
+CheXpert Variant Generation Template (Finding Removal): 2nd Stage of Preference Dataset Generation 
+
+You are editing a chest X-ray report. 
+
+Task: 
+
+Remove all mention of <dn> from the report below so that the resulting report simply does not discuss <dn> at all (neither as present nor as absent). Specifically: • DELETE any sentence, bullet, or clause that mentions <dn> (including positive mentions like ‘small left pleural effusion’ AND negation/absence statements like ‘no pleural effusion’ etc.). • If a sentence mentions <dn> alongside other findings, drop only the <dn> portion and keep the rest of the sentence intact (e.g., ‘cardiomegaly and small pleural effusion’ → ‘cardiomegaly’). • Do NOT replace <dn> with a normal/absent descriptor — the final report should contain no reference to <dn> at all. • Leave all sentences that do not mention the finding completely unchanged, word for word. • Maintain the overall structure and style of the report (bullets, summary line, etc.); just omit the <dn> content. 
+
+Rules: 
+
+• Return valid JSON only (no markdown, no explanation). 
+
+22 • JSON must include the key: response .• response must be the full edited report text.   
+
+> Base Report: <corrected_response>
+> Output Schema: <json_schema>
+
+CheXpert Variant Generation Template (Pathology Addition): 2nd Stage of Preference Dataset Generation                        
+
+> You are editing a chest X-ray report.
+> Task:
+> Modify the report below so that it is consistent with a study where <dn> IS present. Specifically: •If the report states that <dn> is absent/normal, rewrite that sentence to describe <dn> using EXACTLY the target attributes above. •If the report does not mention <dn> at all, add a description of <dn> using EXACTLY the target attributes above, integrated into the appropriate anatomical section of the report. •Leave all sentences that do not mention the finding completely unchanged, word for word. •Maintain the overall structure and style of the report.
+> Rules:
+> •Return valid JSON only (no markdown, no explanation). •JSON must include the key: response .•response must be the full edited report text.
+> Target attributes for the inserted <dn> :<target_confounder_json>
+> Each characteristic category maps attributes to true/false. Attributes set to true MUST be present in the inserted description; attributes set to false MUST NOT be present. If all attributes in a category are false, do not mention that category at all.
+> Base Report: <corrected_response>
+> Output Schema: <json_schema>
+
+B.8 Evaluation 
+
+The final evaluation uses a combination of clinical correctness metrics and linguistic metrics on the test set. 
+
+BLEU measures the n-gram precision between a generated report and reference reports. We report corpus-level BLEU-1 and BLEU-4 computed with SacreBLEU [Papineni et al., 2002, Post, 2018]. 
+
+ROUGE measures the recall-oriented n-gram overlap between the generated and reference text by computing the fraction of reference n-grams covered by the prediction [Lin, 2004]. We report ROUGE-1, ROUGE-2 and ROUGE-L (longest common subsequence). 
+
+CheXbert-F1 scores are computed using a BERT-based labeler that extract 14 radiological conditions from free-text reports [Smit et al., 2020]. We compute micro and macro averaged F1 between the predicted and reference condition labels. We report results under two condition subsets: the full 14 label set and a 3 label subset (Cardiomegaly, Atelectasis, Pleural Effusion). Additionally we report the omission rate (conditions where the reference is labeled as positive/uncertain that the prediction misses and are labeled as blank), wrong value rate (conditions where the reference is labeled as positive/uncertain but the predictions are labeled as explicit negatives) and hallucination rates (conditions where the reference is labeled as negative, but the predictions are labeled as positive/uncertain). 
+
+Radgraph F1 measures the overlap between clinical entities and their relationship using a knowledge graph [Jain et al., 2021a]. We use the partial reward level which award partial credit for correctly identified entities where relationship labels vary. Radgraph F1 scores compute F1 over matched graph elements. 
+
+Statistical reporting: All metrics are calculated with 95 % confidence intervals (1000 resamples) on the test set. 
+
+B.9 Reproducibility 
+
+All experiments are implemented in PyTorch and are publicly available at https://github.com/ reAIM-Lab/CXR-reason . Inference for all models uses greedy decoding with a standard report 23 generation length. We report results on a single seed and use standardized configuration files across experiments to ensure reproducibility. 
+
+B.10 Compute Details 
+
+All experiments were run on a server with 4 NVIDIA H100 NVL GPUs, 2 Intel(R) Xeon(R) Platinum 8480+ CPUs (56 cores each) with 2Tb of memory. 
+
+B.11 Runtime 
+
+This section details runtime statistics for a sample model Medgemma:                      
+
+> Statistics SFT GRPO PU-DPO
+> Training steps 7,902 300 200 Total wall-clock time 22.4 h 8.1 h 2.5 h Mean Time/training step 10.2 s 35.0 s 32.3 s Median Time/training step 11.1 s 31.7 s –Validation passes 712 4Mean Time/validation pass 1,216 s 906 s 904.8 s
+
+Table 4: Runtime Statistics for MedGemma model on 1 NVIDIA H100 NVL GPU Table 5: Runtime breakdown for preference dataset construction (10,000 images, 4 samples/image). 
+
+Pipeline Stage Runtime (h) 
+
+Base sample generation (vLLM) 1.4 Verification (vLLM) 2.6 Variant Generation 1.9 
+
+Total 5.9 
+
+24 C Radiologists annotations protocol 
+
+Annotation Protocol. To validate the quality of reports in the CheXpert dataset, we enrolled four radiologists in a structured annotation effort. 
+
+Patient Sampling Patients were sampled from CheXpert and stratified by age (discretized into 20-year bins) and sex. As our initial focus was on pleural effusion, a condition frequently misdiagnosed, we further stratified on pleural effusion status as extracted from original reports using CheXpert’s NLP labeler. For each stratum, we sampled 100 patients or the maximum available, yielding a final set of 332 chest X-rays. 
+
+Annotation Task Annotations were collected via Qualtrics, where the interface displayed clinical notes and different views of the X-ray. For each of the 332 images, radiologists independently assessed a predefined set of conditions using a 5-point Likert scale (definitely absent, probably absent, unsure, probably present, definitely present). When a condition was marked as present, radiologists additionally rated its severity as mild, moderate, or severe. For a random 10% subset ( 33 images), radiologists were also asked to write a full structured report, comprising separate findings and impression sections. 
+
+Radiologist Inclusion Annotations were performed independently. To ensure annotation quality, only radiologists who contributed more than 5 annotations were retained, resulting in 2 radiologists included in the final analysis. Table 6: Demographic characteristics of the study population. 
+
+Characteristic Proportion (%) 
+
+Sex 
+
+Male 54.0 Female 46.0 
+
+Race 
+
+Other 27.0 White 27.0 Black 23.0 Asian 23.0 
+
+Insurance Type 
+
+Private Insurance 35.0 Medicare 29.0 Medicaid 18.0 Unknown 16.0 Other 2.0 25 D Preference dataset audit 
+
+To assess the quality of the GPT-OSS generated preference dataset, we conducted a manual audit of the preference pairs used to train PU-DPO on the Chexpert Dataset. 
+
+Sampling The audit study was performed on the preference pairs generated for the Chexpert dataset. We focused our efforts on two pathologies - pleural effusion and cardiomegaly. For each, we sampled 35 preference pairs in which it served as the target condition. We further stratified by the pair’s original label status. Each sample is assigned one of three label statuses based on this extraction: 
+
+labeled_tp , where the pathology is documented as present; tn , where it is documented as absent; and unlabeled , where the pathology is not mentioned at all, leaving its true presence unknown. The unlabeled stratum receives the highest sample allocation because it represents 64% of the training dataset. Conversely, labeled_tp and tn pairs exhibit minimal ground-truth ambiguity and comprise a smaller share of the dataset. However, they are oversampled relative to their natural distribution to ensure sufficient sample sizes for evaluation. Specifically, for each pathology, we construct a 10/10/15 split across labeled_tp , tn , and unlabeled strata, yielding a total of 70 preference pairs for our study. 
+
+Rubric A board-certified radiologist reviewed each pair against four questions: 1. Chosen response accuracy: Does the chosen response accurately describe the target pathology and the target attributes when checked against the original report? 2. Target pathology edit Was the rejected side edit executed correctly? (The edit involves complete removal of the finding for labeled_tp pairs and accurate insertion of the specified attributed for unlabeled and tn pairs) 3. Preservation of unrelated attributes: Did the edit leave all other findings in the report unchanged? 4. Overall usability: Is the pair usable as clean training data overall? Alongside the reference report, we also provided the radiologist with the corresponding chest radiograph. While the editor never observes the image during the construction of these preference pairs, the image lets the radiologist verify that a counterfactual edit remains in-distribution. The radiologist was also instructed not to penalize a response for omitting a finding that the original report itself already omits to help isolate true editor failure. The radiologist was also provided a Notes section to help understand the reasoning behind the responses. 
+
+Results Table 7 reports per-question rates with Wilson 95% confidence intervals across the 70 audited pairs, broken down by label and pathology. We observe that the estimated correctness rate for the overall usability (97.1 %) and the preservation of unrelated findings (97.1%) score highly across every stratum. The one stratum where clinical correctness meaningfully degrades is labeled_tp where only an esti-mated 70% of chosen responses were judged to be clinically correct. An analysis of the radiologists’ notes for these examples shows that the chosen response inherits overstated diagnostic certainty from the reference reports rather than by errors introduced during editing. This reflects a property of the source report that the editor is instructed to align with, rather than an artifact introduced by the editor. We note that the source report likely had access to multiple views (i.e. lateral views) which allowed for greater diagnostic certainty. The tn and the unlabeled strata report high correctness rates across all questions. Results are also broadly consistent across pathologies: pleural effusion shows a modestly lower chosen-response correctness rate (85.7%) than cardiomegaly (91.4%) but the confidence intervals overlap and the difference is not statistically distinguishable. 26 Table 7: Radiologist audit of DPO preference pairs: per-question verdict counts and the rate of yes 
+
+verdicts among answered items, with Wilson 95% confidence intervals. Rates are computed over answered items only; blank answers are excluded. 
+
+Verdicts Yes rate (%) Question n yes unsure no Est. 95% CI 
+
+All reviewed pairs (n = 70 pairs) Chosen report clinically correct 70 62 4 4 88.6 [79.0, 94.1] Target-pathology edit correct 69 68 0 1 98.6 [92.2, 99.7] Unrelated findings preserved 69 67 0 2 97.1 [90.0, 99.2] Pair overall usable 69 67 1 1 97.1 [90.0, 99.2] 
+
+Stratum: labeled_tp (n = 20 pairs) Chosen report clinically correct 20 14 4 2 70.0 [48.1, 85.5] Target-pathology edit correct 19 19 0 0 100.0 [83.2, 100.0] Unrelated findings preserved 19 18 0 1 94.7 [75.4, 99.1] Pair overall usable 20 19 1 0 95.0 [76.4, 99.1] 
+
+Stratum: tn (n = 20 pairs) Chosen report clinically correct 20 20 0 0 100.0 [83.9, 100.0] Target-pathology edit correct 20 20 0 0 100.0 [83.9, 100.0] Unrelated findings preserved 20 19 0 1 95.0 [76.4, 99.1] Pair overall usable 20 20 0 0 100.0 [83.9, 100.0] 
+
+Stratum: unlabeled (n = 30 pairs) Chosen report clinically correct 30 28 0 2 93.3 [78.7, 98.2] Target-pathology edit correct 30 29 0 1 96.7 [83.3, 99.4] Unrelated findings preserved 30 30 0 0 100.0 [88.6, 100.0] Pair overall usable 29 28 0 1 96.6 [82.8, 99.4] 
+
+Pathology: cardiomegaly (n = 35 pairs) Chosen report clinically correct 35 32 1 2 91.4 [77.6, 97.0] Target-pathology edit correct 35 35 0 0 100.0 [90.1, 100.0] Unrelated findings preserved 35 34 0 1 97.1 [85.5, 99.5] Pair overall usable 35 34 1 0 97.1 [85.5, 99.5] 
+
+Pathology: pleural effusion (n = 35 pairs) Chosen report clinically correct 35 30 3 2 85.7 [70.6, 93.7] Target-pathology edit correct 34 33 0 1 97.1 [85.1, 99.5] Unrelated findings preserved 34 33 0 1 97.1 [85.1, 99.5] Pair overall usable 34 33 0 1 97.1 [85.1, 99.5] 
+
+27 E Additional Results 
+
+E.1 Subtype TPR 
+
+To assess model performance at finer granularity, we partition each pathology into clinically mean-ingful subtypes based on presentation characteristics curated with a board-certified radiologist. For each generated report, we extract a diagnostic prediction using CheXbert [Smit et al., 2020], a widely used automated label extractor, and compare it against the CheXbert-extracted label from the corresponding ground-truth report in the dataset. We restrict evaluation to samples for which the ground-truth report explicitly asserts the presence or absence of the finding, excluding cases where the label is uncertain or unmentioned. We use these results to select the set of target pathology subtypes that we use for illustrating our multi-task PU-DPO approach. 
+
+(a) Pleural Effusion (b) Atelectasis (c) Cardiomegaly Figure 5: Certain pathologies (atelectasis) and presentation subtypes (small unilateral pleural ef-fusions) are prone to a lower detection rate, demonstrating the possibility that annotation noise in training data is inherited by the model. 
+
+Different model We demonstrate that these empirical insights are model agnostic by replicating the results using a different model (NV-reason). 
+
+(a) Pleural Effusion (b) Atelectasis (c) Cardiomegaly Figure 6: Subgroup-wise marginal sensitivity for the NV-reason model, showing consistent patterns in subtypes with low detection rate. 
+
+Different label extractor We also investigate whether the results are reproduced using an alternative label extraction procedure using GPT-OSS 120B. 
+
+(a) Pleural Effusion (b) Atelectasis (c) Cardiomegaly Figure 7: We find consistent patterns with the GPT-OSS 120B model extracting clinical labels from the generated predictions and ground truth reports. 
+
+Different dataset Finally, we reproduce consistent results using the MIMIC dataset, a separate dataset. 28 (a) Pleural Effusion (b) Atelectasis (c) Cardiomegaly Figure 8: We find consistent patterns in the MIMIC dataset. 
+
+E.2 Within-pathology Variability in Sensitivity 
+
+We demonstrate that pathology-level detection rates (only considering pleural effusion F1 score) hides the granularity of pathology presentation. We find that models struggle with detecting certain pathology subtypes. 
+
+Figure 9: We plot the TPR of pleural effusion for the top 20 most frequent intersectional subtypes defined by size, laterality, and complexity. 29 Figure 10: We plot the TPR of atelectasis for the top 20 most frequent intersectional subtypes defined by size, laterality, and distribution. 
+
+E.3 BBE Estimation Results 
+
+We provide the estimated mixture proportion (hidden positive rates among unlabeled samples) from BBE. Table 8: Estimated prior probabilities ( α) by pathology and specific clinical subtype for CheXpert Dataset. Pathology Subtype Estimated α
+
+Atelectasis 
+
+Mild, Bilateral 0.1149 Mild, Left 0.0874 Mild, Right 0.1122 
+
+Cardiomegaly 
+
+Mild 0.0894 
+
+Pleural Effusion 
+
+Small, Bilateral 0.1059 Small, Left 0.1692 Small, Right 0.1016 30 Table 9: Estimated prior probabilities ( α) by pathology and specific clinical subtype for the MIMIC dataset. Pathology Subtype Estimated α
+
+Atelectasis 
+
+Mild, Bilateral 0.0905 Mild, Left 0.0885 Mild, Right 0.0935 
+
+Cardiomegaly 
+
+Mild 0.1553 
+
+Pleural Effusion 
+
+Small, Bilateral 0.1016 Small, Left 0.1419 Small, Right 0.1041 
+
+E.4 Semi-synthetic Experiment 
+
+Table 10: Results on Pleural Effusion under simulated preference noise. 95% bootstrap CIs in parentheses. Standard DPO Dr-DPO PU-DPO Noise Rate F1 Sens. Spec. F1 Sens. Spec. F1 Sens. Spec. 0% 0.83 (0.82–0.84) 0.75 (0.74–0.77) 0.94 (0.94–0.95) 0.84 (0.83–0.85) 0.76 (0.75–0.78) 0.94 (0.93–0.95) 0.84 (0.83–0.85) 0.76 (0.74–0.78) 0.95 (0.94–0.96) 
+
+10% 0.82 (0.80–0.83) 0.73 (0.71–0.74) 0.95 (0.94–0.96) 0.82 (0.81–0.84) 0.74 (0.72–0.75) 0.95 (0.94–0.96) 0.84 (0.83–0.86) 0.77 (0.75–0.79) 0.94 (0.94–0.95) 
+
+20% 0.80 (0.78–0.81) 0.69 (0.67–0.70) 0.96 (0.95–0.97) 0.79 (0.78–0.80) 0.68 (0.66–0.70) 0.96 (0.95–0.97) 0.84 (0.82–0.85) 0.76 (0.74–0.77) 0.95 (0.94–0.96) 
+
+30% 0.81 (0.80–0.82) 0.73 (0.71–0.74) 0.93 (0.92–0.94) 0.76 (0.74–0.77) 0.63 (0.61–0.65) 0.97 (0.96–0.97) 0.84 (0.83–0.85) 0.76 (0.75–0.78) 0.95 (0.94–0.96) 
+
+Base F1: 0.81 (0.79–0.82) Sens.: 0.74 (0.73–0.76) Spec.: 0.90 (0.89–0.91) 
+
+Table 11: Results on Cardiomegaly under simulated preference noise. 95% bootstrap CIs in parentheses. Standard DPO Dr-DPO PU-DPO Noise Rate F1 Sens. Spec. F1 Sens. Spec. F1 Sens. Spec. 0% 0.82 (0.80–0.83) 0.77 (0.75–0.79) 0.88 (0.87–0.89) 0.82 (0.81–0.83) 0.77 (0.76–0.79) 0.89 (0.87–0.90) 0.83 (0.81–0.84) 0.80 (0.78–0.82) 0.86 (0.85–0.88) 
+
+10% 0.82 (0.81–0.83) 0.79 (0.77–0.80) 0.87 (0.86–0.89) 0.82 (0.81–0.83) 0.77 (0.75–0.79) 0.89 (0.87–0.90) 0.82 (0.81–0.83) 0.79 (0.77–0.80) 0.88 (0.86–0.89) 
+
+20% 0.80 (0.79–0.81) 0.75 (0.73–0.76) 0.88 (0.87–0.90) 0.81 (0.79–0.82) 0.75 (0.73–0.77) 0.89 (0.88–0.90) 0.83 (0.82–0.84) 0.81 (0.80–0.83) 0.85 (0.84–0.86) 
+
+30% 0.77 (0.75–0.78) 0.68 (0.67–0.70) 0.91 (0.90–0.92) 0.78 (0.76–0.79) 0.69 (0.67–0.71) 0.91 (0.90–0.92) 0.82 (0.81–0.83) 0.78 (0.77–0.80) 0.87 (0.85–0.88) 
+
+Base F1: 0.77 (0.76–0.79) Sens.: 0.70 (0.68–0.72) Spec.: 0.89 (0.88–0.90) 
+
+We further evaluate PU-DPO by examining the calibration of the model’s learned preferences over contrastive-edit pairs. For each test image, we treat Pϕ(a+ ≻ a− | x) — the model’s probability of preferring the response that mentions the finding over the one that omits it, as a soft prediction that the pathology is present, and score it against the ground-truth label using log loss, Brier score, and expected calibration error (ECE). 31 Table 12: Uncertainty quantification metrics on the Pleural Effusion semi-synthetic experiment, examining learned preference probabilities over a set of noiseless present-absent validation pairs. PU-DPO maintains low Brier score and log loss across training data noise rates, demonstrating that the model maintains accurate preference probabilities. Flip Rate Method Mean Gap Brier ECE Log Loss 0.00 Base 0.269 0.238 (0.227, 0.250) 0.138 (0.108, 0.171) 0.665 (0.638, 0.691) 
+
+PU-SFT 0.248 0.233 (0.223, 0.243) 0.127 (0.100, 0.164) 0.654 (0.631, 0.678) 
+
+DPO 0.618 0.171 (0.161, 0.180) 0.184 (0.158, 0.209) 0.517 (0.495, 0.539) 
+
+Dr. DPO 0.623 0.169 (0.160, 0.179) 0.177 (0.152, 0.202) 0.514 (0.493, 0.536) 
+
+PU-DPO 0.628 0.170 (0.161, 0.180) 0.185 (0.160, 0.210) 0.515 (0.493, 0.538) 
+
+0.10 Base 0.169 0.238 (0.227, 0.250) 0.138 (0.108, 0.171) 0.665 (0.638, 0.691) 
+
+PU-SFT 0.170 0.232 (0.222, 0.242) 0.126 (0.099, 0.161) 0.651 (0.629, 0.674) 
+
+DPO 0.472 0.171 (0.163, 0.181) 0.178 (0.153, 0.203) 0.520 (0.500, 0.541) 
+
+Dr. DPO 0.477 0.170 (0.161, 0.180) 0.176 (0.149, 0.200) 0.517 (0.498, 0.539) 
+
+PU-DPO 0.502 0.170 (0.161, 0.180) 0.192 (0.167, 0.217) 0.515 (0.493, 0.537) 
+
+0.20 Base 0.072 0.238 (0.227, 0.250) 0.138 (0.108, 0.171) 0.665 (0.638, 0.691) 
+
+PU-SFT 0.082 0.231 (0.222, 0.242) 0.135 (0.105, 0.167) 0.650 (0.628, 0.673) 
+
+DPO 0.321 0.178 (0.169, 0.187) 0.170 (0.146, 0.196) 0.535 (0.516, 0.557) 
+
+Dr. DPO 0.331 0.176 (0.167, 0.185) 0.168 (0.151, 0.195) 0.531 (0.512, 0.552) 
+
+PU-DPO 0.353 0.174 (0.165, 0.184) 0.175 (0.149, 0.200) 0.525 (0.504, 0.548) 
+
+0.30 Base -0.049 0.238 (0.227, 0.250) 0.138 (0.108, 0.171) 0.665 (0.638, 0.691) 
+
+PU-SFT -0.027 0.232 (0.222, 0.242) 0.125 (0.100, 0.162) 0.651 (0.628, 0.674) 
+
+DPO 0.188 0.182 (0.173, 0.191) 0.154 (0.137, 0.183) 0.544 (0.524, 0.565) 
+
+Dr. DPO 0.194 0.179 (0.171, 0.189) 0.163 (0.147, 0.191) 0.540 (0.520, 0.561) 
+
+PU-DPO 0.213 0.173 (0.163, 0.182) 0.177 (0.153, 0.202) 0.521 (0.499, 0.543) 0.0 0.2 0.4 0.6 0.8 1.0 Noise rate = 0.00 Observed 
+
+Base PU-SFT DPO Dr. DPO PU-DPO 
+
+> 0.0 0.2 0.4 0.6 0.8 1.0 Noise rate = 0.10 Observed
+
+Base PU-SFT DPO Dr. DPO PU-DPO 
+
+> 0.0 0.2 0.4 0.6 0.8 1.0 Noise rate = 0.20 Observed
+
+Base PU-SFT DPO Dr. DPO PU-DPO      
+
+> 0.0 0.2 0.4 0.6 0.8 1.0 Predicted P(presence) 0.0 0.2 0.4 0.6 0.8 1.0 Noise rate = 0.30 Observed
+
+Base      
+
+> 0.0 0.2 0.4 0.6 0.8 1.0 Predicted P(presence)
+
+PU-SFT      
+
+> 0.0 0.2 0.4 0.6 0.8 1.0 Predicted P(presence)
+
+DPO      
+
+> 0.0 0.2 0.4 0.6 0.8 1.0 Predicted P(presence)
+
+Dr. DPO      
+
+> 0.0 0.2 0.4 0.6 0.8 1.0 Predicted P(presence)
+
+PU-DPO 
+
+Reliability diagrams Pleural Effusion    
+
+> Perfect calibration Observed P(y=1) Gap (|conf acc|)
+
+Figure 11: Calibration of learned preference probabilities for pleural effusion. PU-DPO leads to slight overconfidence in predicted probabilities. 
+
+Robustness to misspecification. A natural concern with PU-based objectives is sensitivity to the class prior α: in practice αj must be estimated, and downstream performance may degrade if the 32 estimate is off. To probe this, we evaluate PU-DPO on the pleural effusion task under 20% simulated omission noise, sweeping α values around the oracle setting (Table 13). The results show that PU-DPO is broadly robust to moderate misspecification of α. Setting α = 0 .6
+
+— overestimating the class prior — yields the best overall performance (F1 = 0.86, sensitivity = 0.81), exceeding both the oracle setting and standard DPO. Underestimating α at 0.4 collapses PU-DPO’s behavior toward DPO (F1 = 0.79, sensitivity = 0.69), which is consistent with the form of the PU objective: as α → 0, the contamination correction term vanishes and the loss reduces to standard DPO on the noisy preferences. Across all settings, specificity remains stable in the 0.93–0.96 range, indicating that misspecification primarily affects the trade-off between detection and conservatism rather than introducing spurious positives. These results have a useful practical implication: erring slightly on the high side when estimating 
+
+αj is preferable to erring low, since underestimation reverts to the noise-corrupted baseline while overestimation continues to suppress omission noise effectively. Table 13: Results on Pleural Effusion under simulated preference noise. 95% bootstrap CIs in parentheses. Noise Rate Method F1 Sens. Spec. 20% DPO 0.80 (0.78–0.81) 0.69 (0.67–0.70) 0.96 (0.95–0.97) 
+
+PU-DPO (oracle) 0.84 (0.82–0.85) 0.76 (0.74–0.77) 0.95 (0.94–0.96) 
+
+PU-DPO ( α = 0 .4) 0.79 (0.78–0.81) 0.69 (0.67–0.70) 0.96 (0.95–0.97) 
+
+PU-DPO ( α = 0 .6) 0.86 (0.85–0.87) 0.81 (0.79–0.83) 0.93 (0.92–0.94) 
+
+E.5 Real-world Experiment Finding-level F1 We show the pathology level F1 scores showing reliable gains in PU-DPO for F1 score. The NV-reason model does not show the highest performance, it improves over naive DPO and base model for almost all dataset-pathology configurations. Table 14: F1 by dataset, model, pathology, and method (mean [95% bootstrap CI], test-set resampling with 1000 draws) Dataset Model Pathology Base SFT RadCliq-GRPO DPO PU-DPO CheXpert Llava-RAD Atelectasis 0.728 [0.721, 0.734] 0.633 [0.625, 0.640] 0.742 [0.736, 0.748] 0.730 [0.724, 0.736] 0.743 [0.737, 0.749] 
+
+Cardiomegaly 0.743 [0.735, 0.751] 0.669 [0.661, 0.677] 0.745 [0.738, 0.753] 0.726 [0.718, 0.733] 0.736 [0.729, 0.744] 
+
+Pleural Effusion 0.845 [0.842, 0.849] 0.877 [0.874, 0.880] 0.854 [0.850, 0.858] 0.921 [0.919, 0.924] 0.929 [0.927, 0.931] 
+
+Medgemma Atelectasis 0.675 [0.668, 0.681] 0.559 [0.551, 0.566] 0.704 [0.697, 0.710] 0.690 [0.683, 0.696] 0.738 [0.732, 0.744] 
+
+Cardiomegaly 0.788 [0.781, 0.795] 0.691 [0.683, 0.700] 0.767 [0.759, 0.774] 0.815 [0.808, 0.821] 0.817 [0.811, 0.823] 
+
+Pleural Effusion 0.874 [0.870, 0.877] 0.888 [0.886, 0.891] 0.899 [0.896, 0.902] 0.907 [0.904, 0.910] 0.909 [0.907, 0.912] 
+
+NV-reason Atelectasis 0.746 [0.740, 0.752] 0.600 [0.592, 0.606] 0.715 [0.709, 0.722] 0.715 [0.708, 0.721] 0.740 [0.733, 0.745] 
+
+Cardiomegaly 0.735 [0.728, 0.743] 0.677 [0.668, 0.686] 0.751 [0.744, 0.759] 0.735 [0.728, 0.743] 0.735 [0.726, 0.742] 
+
+Pleural Effusion 0.880 [0.877, 0.883] 0.872 [0.869, 0.875] 0.880 [0.877, 0.883] 0.882 [0.879, 0.885] 0.892 [0.889, 0.894] 
+
+MIMIC-CXR Llava-RAD Atelectasis 0.700 [0.693, 0.707] 0.710 [0.703, 0.717] 0.729 [0.722, 0.735] 0.812 [0.807, 0.818] 0.865 [0.861, 0.870] 
+
+Cardiomegaly 0.661 [0.654, 0.668] 0.660 [0.653, 0.667] 0.662 [0.655, 0.669] 0.688 [0.681, 0.695] 0.732 [0.725, 0.737] 
+
+Pleural Effusion 0.799 [0.794, 0.805] 0.769 [0.763, 0.775] 0.807 [0.801, 0.812] 0.855 [0.851, 0.860] 0.860 [0.856, 0.865] 
+
+Medgemma Atelectasis 0.726 [0.719, 0.732] 0.488 [0.479, 0.496] 0.647 [0.639, 0.655] 0.776 [0.770, 0.782] 0.803 [0.797, 0.809] 
+
+Cardiomegaly 0.737 [0.731, 0.744] 0.628 [0.621, 0.636] 0.726 [0.719, 0.732] 0.768 [0.763, 0.774] 0.780 [0.774, 0.785] 
+
+Pleural Effusion 0.809 [0.803, 0.814] 0.795 [0.789, 0.801] 0.809 [0.804, 0.815] 0.834 [0.829, 0.839] 0.837 [0.832, 0.842] 
+
+NV-reason Atelectasis 0.796 [0.790, 0.801] 0.587 [0.579, 0.595] 0.755 [0.748, 0.761] 0.813 [0.807, 0.818] 0.829 [0.824, 0.834] 
+
+Cardiomegaly 0.597 [0.588, 0.604] 0.648 [0.640, 0.655] 0.625 [0.618, 0.633] 0.622 [0.615, 0.630] 0.642 [0.635, 0.649] 
+
+Pleural Effusion 0.769 [0.764, 0.774] 0.798 [0.793, 0.804] 0.739 [0.733, 0.744] 0.762 [0.756, 0.767] 0.770 [0.765, 0.776] 
+
+Additional metrics We report standard chest X-ray report generation metrics from the literature. As expected, surface-level text-similarity metrics (BLEU, ROUGE) are highest for SFT, since SFT directly optimizes for token-level overlap with the reference report. However, this high text overlap masks a substantial degradation in clinical performance: SFT shows lower sensitivity and F1 on the three findings of interest — denoted micro/macro F1 (3) and sensitivity (3) — than the base model itself, indicating that imitating the reference reports containing omission noise suppresses detection. We further hypothesize that SFT disproportionately suppresses pathologies with lower prevalence in the training distribution, since the model receives correspondingly fewer positive mentions to learn from. 33 In contrast, DPO and PU-DPO preserve text-overlap performance relative to the base model on BLEU and ROUGE, and in some cases improve on it, while delivering the detection-rate gains reported in the main paper. Crucially, both methods also maintain micro/macro F1 across all 14 CheXpert findings and RadGraph-F1 at base-model levels, indicating that gains on the targeted findings do not come at the cost of degraded performance on the broader set of clinical content. Table 15: Eval metrics for CheXpert by model, metric, and method (mean [CI]) Method Base SFT Radcliq-GRPO DPO PU-DPO Llava-RAD BLEU-1 0.122 [0.121, 0.123] 0.338 [0.336, 0.340] 0.119 [0.118, 0.120] 0.123 [0.123, 0.124] 0.122 [0.121, 0.123] 
+
+BLEU-4 0.013 [0.013, 0.013] 0.132 [0.131, 0.133] 0.013 [0.013, 0.013] 0.014 [0.014, 0.015] 0.014 [0.014, 0.015] 
+
+ROUGE-1 0.254 [0.253, 0.255] 0.378 [0.377, 0.379] 0.255 [0.255, 0.256] 0.260 [0.259, 0.261] 0.261 [0.261, 0.262] 
+
+ROUGE-2 0.063 [0.062, 0.063] 0.156 [0.155, 0.157] 0.064 [0.063, 0.064] 0.069 [0.068, 0.069] 0.070 [0.069, 0.070] 
+
+ROUGE-L 0.166 [0.166, 0.166] 0.281 [0.280, 0.282] 0.167 [0.167, 0.168] 0.168 [0.167, 0.168] 0.169 [0.168, 0.169] 
+
+Micro F1 (3) 0.790 [0.787, 0.793] 0.769 [0.766, 0.771] 0.799 [0.795, 0.802] 0.829 [0.827, 0.832] 0.840 [0.837, 0.842] 
+
+Micro F1 (14) 0.675 [0.673, 0.677] 0.747 [0.744, 0.749] 0.681 [0.679, 0.683] 0.692 [0.690, 0.694] 0.695 [0.693, 0.697] 
+
+Macro F1 (3) 0.772 [0.769, 0.776] 0.726 [0.722, 0.730] 0.780 [0.777, 0.784] 0.792 [0.789, 0.796] 0.803 [0.799, 0.806] 
+
+Macro F1 (14) 0.483 [0.479, 0.486] 0.522 [0.518, 0.525] 0.482 [0.479, 0.485] 0.503 [0.499, 0.506] 0.504 [0.500, 0.508] 
+
+Sensitivity (3) 0.726 [0.722, 0.731] 0.658 [0.654, 0.662] 0.734 [0.729, 0.738] 0.773 [0.770, 0.777] 0.793 [0.790, 0.797] 
+
+Sensitivity (14) 0.596 [0.593, 0.598] 0.658 [0.655, 0.660] 0.599 [0.596, 0.601] 0.599 [0.596, 0.601] 0.604 [0.602, 0.606] 
+
+Specificity (3) 0.890 [0.884, 0.896] 0.899 [0.893, 0.904] 0.892 [0.886, 0.898] 0.847 [0.840, 0.854] 0.817 [0.809, 0.824] 
+
+Specificity (14) 0.903 [0.901, 0.905] 0.929 [0.927, 0.930] 0.905 [0.903, 0.907] 0.901 [0.899, 0.903] 0.902 [0.900, 0.904] 
+
+RadGraph F1 0.040 [0.039, 0.041] 0.245 [0.244, 0.247] 0.041 [0.040, 0.041] 0.043 [0.043, 0.044] 0.044 [0.043, 0.045] 
+
+Medgemma BLEU-1 0.136 [0.135, 0.137] 0.293 [0.291, 0.296] 0.145 [0.144, 0.147] 0.096 [0.095, 0.097] 0.097 [0.096, 0.098] 
+
+BLEU-4 0.022 [0.021, 0.022] 0.112 [0.111, 0.113] 0.026 [0.026, 0.026] 0.013 [0.013, 0.013] 0.013 [0.013, 0.013] 
+
+ROUGE-1 0.270 [0.269, 0.271] 0.360 [0.359, 0.361] 0.279 [0.278, 0.280] 0.242 [0.241, 0.242] 0.243 [0.242, 0.243] 
+
+ROUGE-2 0.074 [0.074, 0.075] 0.143 [0.142, 0.143] 0.081 [0.080, 0.081] 0.067 [0.066, 0.067] 0.066 [0.066, 0.067] 
+
+ROUGE-L 0.165 [0.165, 0.166] 0.267 [0.266, 0.268] 0.172 [0.172, 0.173] 0.148 [0.147, 0.148] 0.149 [0.148, 0.149] 
+
+Micro F1 (3) 0.798 [0.796, 0.801] 0.761 [0.757, 0.764] 0.817 [0.814, 0.820] 0.826 [0.823, 0.828] 0.841 [0.838, 0.843] 
+
+Micro F1 (14) 0.691 [0.688, 0.693] 0.735 [0.733, 0.737] 0.669 [0.666, 0.671] 0.724 [0.722, 0.726] 0.723 [0.721, 0.725] 
+
+Macro F1 (3) 0.779 [0.776, 0.782] 0.713 [0.709, 0.717] 0.790 [0.786, 0.793] 0.804 [0.800, 0.807] 0.822 [0.818, 0.825] 
+
+Macro F1 (14) 0.431 [0.428, 0.434] 0.478 [0.475, 0.481] 0.408 [0.405, 0.411] 0.466 [0.462, 0.469] 0.459 [0.456, 0.462] 
+
+Sensitivity (3) 0.816 [0.813, 0.819] 0.658 [0.654, 0.662] 0.837 [0.834, 0.840] 0.827 [0.825, 0.830] 0.849 [0.846, 0.852] 
+
+Sensitivity (14) 0.657 [0.655, 0.659] 0.648 [0.646, 0.650] 0.626 [0.623, 0.628] 0.689 [0.687, 0.691] 0.683 [0.681, 0.686] 
+
+Specificity (3) 0.872 [0.865, 0.878] 0.870 [0.864, 0.876] 0.835 [0.828, 0.842] 0.849 [0.842, 0.856] 0.835 [0.828, 0.842] 
+
+Specificity (14) 0.914 [0.912, 0.915] 0.924 [0.922, 0.925] 0.902 [0.900, 0.904] 0.914 [0.913, 0.916] 0.923 [0.922, 0.925] 
+
+RadGraph F1 0.051 [0.050, 0.052] 0.223 [0.222, 0.225] 0.050 [0.049, 0.051] 0.047 [0.047, 0.048] 0.048 [0.047, 0.049] 
+
+NV-reason BLEU-1 0.040 [0.040, 0.041] 0.265 [0.263, 0.267] 0.040 [0.040, 0.041] 0.042 [0.041, 0.042] 0.042 [0.041, 0.042] 
+
+BLEU-4 0.004 [0.004, 0.004] 0.098 [0.097, 0.098] 0.004 [0.004, 0.004] 0.004 [0.004, 0.005] 0.004 [0.004, 0.005] 
+
+ROUGE-1 0.116 [0.116, 0.117] 0.328 [0.327, 0.330] 0.115 [0.115, 0.116] 0.118 [0.118, 0.119] 0.118 [0.118, 0.119] 
+
+ROUGE-2 0.033 [0.033, 0.033] 0.125 [0.124, 0.126] 0.033 [0.032, 0.033] 0.034 [0.034, 0.034] 0.034 [0.034, 0.034] 
+
+ROUGE-L 0.076 [0.076, 0.076] 0.243 [0.242, 0.244] 0.076 [0.075, 0.076] 0.078 [0.078, 0.078] 0.078 [0.078, 0.078] 
+
+Micro F1 (3) 0.814 [0.811, 0.817] 0.759 [0.755, 0.762] 0.808 [0.805, 0.811] 0.806 [0.803, 0.809] 0.818 [0.816, 0.821] 
+
+Micro F1 (14) 0.728 [0.726, 0.730] 0.714 [0.712, 0.716] 0.735 [0.733, 0.737] 0.709 [0.707, 0.711] 0.720 [0.718, 0.722] 
+
+Macro F1 (3) 0.787 [0.784, 0.790] 0.716 [0.712, 0.720] 0.782 [0.779, 0.785] 0.777 [0.774, 0.781] 0.789 [0.785, 0.792] 
+
+Macro F1 (14) 0.448 [0.444, 0.451] 0.460 [0.457, 0.463] 0.451 [0.447, 0.454] 0.430 [0.427, 0.433] 0.434 [0.431, 0.437] 
+
+Sensitivity (3) 0.849 [0.846, 0.852] 0.645 [0.641, 0.649] 0.833 [0.830, 0.836] 0.834 [0.831, 0.837] 0.847 [0.844, 0.850] 
+
+Sensitivity (14) 0.658 [0.656, 0.660] 0.612 [0.610, 0.614] 0.664 [0.662, 0.667] 0.635 [0.633, 0.637] 0.644 [0.641, 0.646] 
+
+Specificity (3) 0.751 [0.743, 0.760] 0.862 [0.855, 0.869] 0.741 [0.733, 0.749] 0.780 [0.772, 0.788] 0.765 [0.756, 0.773] 
+
+Specificity (14) 0.938 [0.937, 0.940] 0.925 [0.923, 0.926] 0.935 [0.934, 0.937] 0.945 [0.944, 0.947] 0.941 [0.939, 0.942] 
+
+RadGraph F1 0.036 [0.036, 0.037] 0.185 [0.184, 0.186] 0.036 [0.035, 0.037] 0.036 [0.035, 0.037] 0.036 [0.036, 0.037] 
+
+34 Table 16: Eval metrics for MIMIC by model, metric, and method (mean [CI]) Method Base SFT Radcliq-GRPO DPO PU-DPO Llava-RAD BLEU-1 0.289 [0.287, 0.290] 0.319 [0.317, 0.321] 0.290 [0.289, 0.292] 0.295 [0.294, 0.297] 0.292 [0.290, 0.293] 
+
+BLEU-4 0.081 [0.081, 0.082] 0.113 [0.112, 0.115] 0.083 [0.082, 0.084] 0.081 [0.080, 0.082] 0.080 [0.079, 0.081] 
+
+ROUGE-1 0.342 [0.341, 0.343] 0.383 [0.381, 0.384] 0.344 [0.343, 0.345] 0.347 [0.346, 0.348] 0.346 [0.345, 0.347] 
+
+ROUGE-2 0.125 [0.124, 0.126] 0.156 [0.155, 0.157] 0.127 [0.126, 0.128] 0.126 [0.125, 0.127] 0.125 [0.124, 0.126] 
+
+ROUGE-L 0.237 [0.236, 0.238] 0.284 [0.283, 0.286] 0.238 [0.237, 0.239] 0.237 [0.236, 0.238] 0.235 [0.234, 0.236] 
+
+Micro F1 (3) 0.722 [0.718, 0.726] 0.713 [0.709, 0.718] 0.735 [0.731, 0.738] 0.789 [0.786, 0.792] 0.821 [0.818, 0.824] 
+
+Micro F1 (14) 0.667 [0.664, 0.670] 0.634 [0.631, 0.637] 0.675 [0.673, 0.678] 0.707 [0.704, 0.709] 0.716 [0.713, 0.718] 
+
+Macro F1 (3) 0.720 [0.716, 0.724] 0.713 [0.708, 0.717] 0.733 [0.729, 0.736] 0.785 [0.782, 0.789] 0.819 [0.816, 0.822] 
+
+Macro F1 (14) 0.534 [0.530, 0.538] 0.471 [0.468, 0.476] 0.541 [0.537, 0.546] 0.566 [0.562, 0.571] 0.568 [0.564, 0.572] 
+
+Sensitivity (3) 0.678 [0.674, 0.683] 0.648 [0.643, 0.653] 0.697 [0.693, 0.702] 0.772 [0.768, 0.776] 0.825 [0.821, 0.828] 
+
+Sensitivity (14) 0.638 [0.635, 0.641] 0.597 [0.594, 0.601] 0.648 [0.645, 0.651] 0.683 [0.680, 0.685] 0.693 [0.690, 0.696] 
+
+Specificity (3) 0.935 [0.932, 0.937] 0.944 [0.941, 0.946] 0.932 [0.929, 0.935] 0.913 [0.909, 0.916] 0.888 [0.885, 0.892] 
+
+Specificity (14) 0.917 [0.915, 0.918] 0.911 [0.910, 0.912] 0.919 [0.918, 0.920] 0.921 [0.919, 0.922] 0.918 [0.916, 0.919] 
+
+RadGraph F1 0.222 [0.221, 0.223] 0.248 [0.246, 0.250] 0.227 [0.225, 0.228] 0.230 [0.228, 0.231] 0.234 [0.233, 0.236] 
+
+Medgemma BLEU-1 0.280 [0.278, 0.281] 0.349 [0.347, 0.351] 0.290 [0.288, 0.291] 0.177 [0.176, 0.178] 0.176 [0.174, 0.177] 
+
+BLEU-4 0.067 [0.066, 0.068] 0.117 [0.116, 0.118] 0.072 [0.071, 0.073] 0.036 [0.036, 0.037] 0.036 [0.035, 0.036] 
+
+ROUGE-1 0.350 [0.349, 0.352] 0.377 [0.376, 0.379] 0.354 [0.352, 0.355] 0.308 [0.307, 0.310] 0.310 [0.308, 0.311] 
+
+ROUGE-2 0.128 [0.127, 0.129] 0.148 [0.146, 0.149] 0.131 [0.130, 0.132] 0.105 [0.104, 0.106] 0.106 [0.105, 0.107] 
+
+ROUGE-L 0.242 [0.241, 0.243] 0.277 [0.276, 0.278] 0.248 [0.246, 0.249] 0.209 [0.208, 0.210] 0.210 [0.209, 0.211] 
+
+Micro F1 (3) 0.759 [0.756, 0.763] 0.649 [0.645, 0.654] 0.733 [0.729, 0.737] 0.794 [0.791, 0.798] 0.807 [0.804, 0.810] 
+
+Micro F1 (14) 0.673 [0.670, 0.675] 0.587 [0.584, 0.590] 0.655 [0.652, 0.658] 0.699 [0.697, 0.702] 0.708 [0.706, 0.711] 
+
+Macro F1 (3) 0.757 [0.754, 0.761] 0.637 [0.632, 0.642] 0.727 [0.723, 0.731] 0.793 [0.789, 0.796] 0.806 [0.803, 0.810] 
+
+Macro F1 (14) 0.476 [0.472, 0.480] 0.420 [0.416, 0.424] 0.454 [0.450, 0.457] 0.512 [0.508, 0.516] 0.516 [0.512, 0.520] 
+
+Sensitivity (3) 0.833 [0.830, 0.836] 0.628 [0.623, 0.633] 0.810 [0.807, 0.813] 0.861 [0.857, 0.864] 0.874 [0.871, 0.878] 
+
+Sensitivity (14) 0.709 [0.706, 0.712] 0.599 [0.596, 0.602] 0.701 [0.698, 0.703] 0.736 [0.733, 0.738] 0.745 [0.742, 0.747] 
+
+Specificity (3) 0.878 [0.874, 0.881] 0.942 [0.940, 0.945] 0.893 [0.890, 0.897] 0.857 [0.853, 0.861] 0.858 [0.854, 0.863] 
+
+Specificity (14) 0.908 [0.906, 0.909] 0.890 [0.888, 0.891] 0.912 [0.911, 0.914] 0.914 [0.912, 0.915] 0.918 [0.917, 0.920] 
+
+RadGraph F1 0.246 [0.244, 0.247] 0.246 [0.245, 0.248] 0.256 [0.254, 0.257] 0.221 [0.219, 0.222] 0.224 [0.222, 0.225] 
+
+NV-reason BLEU-1 0.072 [0.072, 0.073] 0.333 [0.332, 0.335] 0.070 [0.070, 0.071] 0.081 [0.081, 0.082] 0.082 [0.081, 0.082] 
+
+BLEU-4 0.012 [0.012, 0.012] 0.118 [0.117, 0.119] 0.012 [0.012, 0.012] 0.012 [0.012, 0.012] 0.012 [0.012, 0.013] 
+
+ROUGE-1 0.125 [0.125, 0.126] 0.377 [0.376, 0.379] 0.122 [0.122, 0.122] 0.133 [0.132, 0.133] 0.134 [0.133, 0.134] 
+
+ROUGE-2 0.038 [0.038, 0.038] 0.154 [0.153, 0.156] 0.036 [0.036, 0.036] 0.037 [0.036, 0.037] 0.037 [0.037, 0.037] 
+
+ROUGE-L 0.082 [0.082, 0.083] 0.281 [0.280, 0.283] 0.080 [0.080, 0.081] 0.086 [0.086, 0.086] 0.087 [0.087, 0.087] 
+
+Micro F1 (3) 0.729 [0.726, 0.733] 0.683 [0.679, 0.688] 0.712 [0.708, 0.715] 0.738 [0.734, 0.742] 0.752 [0.749, 0.756] 
+
+Micro F1 (14) 0.663 [0.661, 0.666] 0.616 [0.613, 0.618] 0.658 [0.656, 0.661] 0.659 [0.656, 0.661] 0.666 [0.663, 0.668] 
+
+Macro F1 (3) 0.720 [0.717, 0.724] 0.678 [0.673, 0.682] 0.706 [0.702, 0.710] 0.732 [0.728, 0.736] 0.747 [0.743, 0.751] 
+
+Macro F1 (14) 0.459 [0.455, 0.464] 0.454 [0.450, 0.457] 0.449 [0.445, 0.452] 0.448 [0.445, 0.452] 0.461 [0.456, 0.465] 
+
+Sensitivity (3) 0.867 [0.864, 0.871] 0.625 [0.620, 0.630] 0.845 [0.841, 0.848] 0.879 [0.876, 0.882] 0.889 [0.886, 0.892] 
+
+Sensitivity (14) 0.705 [0.702, 0.708] 0.593 [0.590, 0.597] 0.700 [0.697, 0.702] 0.699 [0.696, 0.702] 0.705 [0.702, 0.708] 
+
+Specificity (3) 0.802 [0.797, 0.807] 0.951 [0.949, 0.954] 0.755 [0.751, 0.761] 0.818 [0.814, 0.823] 0.820 [0.815, 0.824] 
+
+Specificity (14) 0.929 [0.928, 0.931] 0.908 [0.907, 0.909] 0.918 [0.917, 0.920] 0.938 [0.936, 0.939] 0.937 [0.935, 0.938] 
+
+RadGraph F1 0.131 [0.130, 0.131] 0.260 [0.259, 0.262] 0.131 [0.130, 0.132] 0.129 [0.128, 0.129] 0.130 [0.129, 0.131] 
+
+E.6 Adjudicated test set 
+
+We use the CheXpert test set (500 studies labeled by 5 radiologists), which serves as a radiologist adjudicated set that is also in-distribution (same institution) but unseen for our finetuned model. While the original reports are unavailable for these studies, the report-derived CheXbert labels are publicly available, so we evaluate recovery on hidden positives by treating the provided labels as the noisy diagnosis in the original radiologist report. We first report the statistics of this test set of 500 frontal images. Table 17: Per-pathology statistics of the radiologist-adjudicated CheXpert test set (500 studies). 
+
+Prevalence is the fraction of studies the adjudicating radiologists labeled positive. Hidden positives are radiologist-positive studies whose original clinical report never mentioned the finding (blank CheXbert label); they form the denominator of the omission-recovery metric. 
+
+Pathology Positive Prevalence Hidden positive 
+
+Cardiomegaly 151 30.2% 102 Atelectasis 153 30.6% 80 Pleural Effusion 104 20.8% 20 
+
+Multi-SCAR Assumption. Intuitively, the multi-SCAR assumption dictates that labeled positives are a representative subsample of all true positives for a particular disease subtype. When this assumption 35 is violated, for instance, if a certain finding is systematically reported only for ICU patients but present in both the ICU and ED, a distribution mismatch may occur between the labeled positives and the unlabeled hidden positives. Consequently, PU-DPO’s reliance on labeled positive samples as a proxy for hidden positives breaks down. We demonstrate a verification process for the SCAR assumption at the pathology level using our radiologist-adjudicated test set. To test for statistical independence between labeled and hidden positives, we extracted MedGemma image embeddings and evaluated the cohorts using a kernel MMD test, with corresponding p-values. As shown in Table 18, Cardiomegaly exhibits detectable selection bias (violating SCAR) with statistical significance, whereas Atelectasis and Pleural Effusion show indistinguishable distributions, indicating that the SCAR assumption may hold. Table 18: SCAR check on the radiologist-adjudicated CheXpert test set. For each finding, labeled positives (the original report asserts the finding) are compared against hidden positives (the report excludes but the adjudicating radiologists confirmed the finding) in MedGemma image-embedding space. Under SCAR the two cohorts are assumed as draws from the same distribution, so the kernel-MMD permutation test should not reject and the cross-validated labeled-vs-hidden; p-values are permutation tails over 5000 resamples. 
+
+Finding Labeled Hidden MMD 2 MMD p
+
+Cardiomegaly 46 102 0.0079 0.016 Atelectasis 73 80 -0.0040 0.979 Pleural Effusion 80 20 -0.0081 0.940 
+
+Pathology-specific results. We provide a breakdown of the metrics across pathologies. For car-diomegaly, we find that PU-DPO does not improve omission recovery compared to standard DPO. Because the preference dataset and training parameters were strictly controlled, this suggests that the α-correction term was ineffective at recovering hidden positives for this specific condition that violates SCAR. Conversely, for atelectasis, the PU-DPO loss successfully achieves its intended effect of hidden positive recovery, demonstrating noticeable gains over standard DPO. We will include these granular results, along with pathology-specific recall and F1 scores, and this corresponding interpretation in the revised manuscript. 
+
+Figure 12: Pathology-specific results for F1, omission recovery, and specificity, Medgemma model. 36 Figure 13: Pathology-specific results for F1, omission recovery, and specificity, NV-reason model. 
+
+Figure 14: Pathology-specific results for F1, omission recovery, and specificity, Llava-RAD model. 
+
+α Sensitivity Analysis We provide checks for robustness to α misspecification across all models, where we perturb the adjudicated α estimate by ±0.03 to simulate over- and under-estimation. 
+
+Figure 15: Sensitivity to α misspecification on F1, omission recovery, and specificity, Medgemma model. 37 Figure 16: Sensitivity to α misspecification on F1, omission recovery, and specificity, NV-reason model. 
+
+Figure 17: Sensitivity to α misspecification on F1, omission recovery, and specificity, Llava-RAD model. 38

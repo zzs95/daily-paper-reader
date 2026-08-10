@@ -1,0 +1,949 @@
+Title: RRC: Unlocking Generative Reward Models in LLM Reinforcement Learning via Ranking-Based Reward Construction
+
+URL Source: https://arxiv.org/pdf/2608.06310
+
+Published Time: Fri, 07 Aug 2026 01:20:32 GMT
+
+Number of Pages: 26
+
+Markdown Content:
+arXiv preprint 
+
+# RRC: U NLOCKING GENERATIVE REWARD MODELS IN LLM R EINFORCEMENT LEARNING VIA RANKING -BASED REWARD CONSTRUCTION 
+
+Chenglong Wang 1,2, Ziming Zhu 1, Yifu Huo 1, Bei Li 1, Qiaozhi He 1, Yan Ding 1,Xiaoyang Hao 1, Yuxin Gao 1, Tianhua Zhou 3, Xiaojia Chang 3, Tongran Liu 4,Jingbo Zhu 1,2, Zhengtao Yu 5, Tong Xiao 1,2∗
+
+> 1
+
+School of Computer Science and Engineering, Northeastern University, Shenyang, China 
+
+> 2
+
+NiuTrans Research, Shenyang, China 
+
+> 3
+
+Independent Researcher, Beijing, China 
+
+> 4
+
+CAS Key Laboratory of Behavioral Science, Institute of Psychology, CAS, Beijing, China 
+
+> 5
+
+Kunming University of Science and Technology 
+
+{wangchenglong, xiaotong }@mail.neu.edu.cn 
+
+## ABSTRACT 
+
+Recent advances in reward modeling show a paradigm shift from discriminative reward models to generative reward models. However, despite their strong ca-pabilities in response ranking, generative reward models have not realized their potential in reinforcement learning (RL). Our analysis reveals that this limitation arises from a mismatch between the comparative nature of generative reward mod-eling and the scalar scoring paradigm adopted by existing RL algorithms. To bridge this gap, we propose a Ranking-based Reward Construction (RRC) ap-proach, which enables generative reward models to provide more effective RL learning signals by deriving rewards from relative preference rankings. RRC in-troduces two complementary strategies: self-competitive ranking, which exploits comparisons among sampled responses, and anchor-guided ranking, which en-ables scalable ranking-based reward construction with a small set of reference re-sponses. Experiments across open-ended chat and reasoning benchmarks demon-strate that RRC substantially improves RL training with generative reward mod-els, achieving consistent gains over existing reward construction approaches ( e.g. ,35.8% →41.3% on AlpacaEval2 and 8.0% →11.2% on ArenaHardV2). Our code can be found at https://github.com/wangclnlp/RRC .
+
+## 1 INTRODUCTION 
+
+Reward models play a central role in reinforcement learning (RL) for large language models (LLMs) (Wang et al., 2024a; Ji et al., 2025; Xiao & Zhu, 2025; Wang et al., 2025a; 2026a). They are typically trained in a discriminative manner to assign scalar reward scores to sampled responses, which serve as learning signals for RL optimization. Despite their empirical success, discriminative reward models suffer from inherent limitations. Building on the backbone of LLMs, discriminative reward models do not fully utilize the text generation capabilities of LLMs. Consequently, they do not take advantage of key intrinsic strengths of LLMs, such as instruction fine-tuning and explicit chain-of-thought (CoT) reasoning (Wei et al., 2022; Zhang et al., 2024). This capability gap is not merely a practical inconvenience but rather a fundamental barrier. It prevents the reward model from capitalizing on insights revealed by recent advances in LLMs, including the use of large-scale fine-tuning to enhance generalization (Shi et al., 2023; Yang et al., 2024) and the use of additional inference-time computation to improve performance (Muennighoff et al., 2025). To overcome these limitations, recent research has explored generative approaches to developing re-ward models (Zhao et al., 2026; Hong et al., 2026). Unlike traditional discriminative reward models, generative reward models represent preferences through text generation. For instance, given an input 
+
+> ∗
+
+Corresponding author. 
+
+1arXiv:2608.06310v1 [cs.LG] 6 Aug 2026 arXiv preprint and a pair of responses, a generative reward model can produce a textual judgment that explicitly reflects which response is better and why. Although generative reward models have demonstrated strong performance in response ranking, their advantages have not yet been fully transferred to RL (Chen et al., 2025; Wang et al., 2025c; Guo et al., 2025b). As a result, how to better leverage gen-erative reward models within RL remains an open research question. To date, existing strategies are significantly insufficient to address this challenge. For example, GenRM (Zhang et al., 2024) uses the probability of a designated preference token as the reward scores. However, this approach often suffers from probability collapse when CoT reasoning is employed. Additionally, GRAM (Wang et al., 2025b) removes explicit CoT reasoning and generates only preference tokens, thereby producing scalar reward scores like discriminative reward models. All of the existing efforts overlook a fundamental distinction between discriminative and generative reward modeling paradigms: discriminative reward models are inherently designed to produce scalar reward scores, whereas generative reward models are naturally formulated to perform comparative ranking. We argue that forcing generative reward models into a scoring-based role within RL can lead to suboptimal preference prediction and policy optimization. To substantiate this claim, we design an analysis experiment that systematically compares discriminative and generative reward models across two settings (see Figure 1): response ranking and RL. The results reveal a clear mismatch between the comparative nature of generative reward modeling and the scalar scoring paradigm adopted by existing RL algorithms. 
+
+In this paper, we explore a solution to this limitation that leverages generative reward models solely for response ranking rather than requiring them to generate scalar reward scores in RL. To this end, we introduce a Ranking-based Reward Construction (RRC) approach, which constructs scalar re-ward scores directly from the relative preference orderings among sampled responses. Specifically, our RRC approach comprises two ranking mechanisms: self-competitive ranking and anchor-guided ranking, each providing a principled way to transform ranking information into usable reward scores. In self-competitive ranking, we can construct reward scores from the mutual comparisons among sampled responses. This basic idea is that responses generated by the current policy naturally form a competitive set, allowing relative quality differences to be exploited and guiding policy optimiza-tion. In anchor-guided ranking, we further consider scalability to larger sampled response sets by introducing a small number of anchor responses as reference points. This design reduces the number of calls to the generative reward model from O(m · log m) to O(m · n), where m is the number of sampled responses and n is the number of anchor responses. The resulting reward scores can be seamlessly integrated into existing RL algorithms, such as GRPO (Shao et al., 2024) and DAPO (Yu et al., 2025). Through extensive experiments on six benchmarks including open-ended chat and reasoning tasks, we show that RRC can provide a more effective way to leverage generative reward models within RL. Notably, compared to the probability-based reward baselines, RRC achieves significant im-provements in RL performance ( e.g. , 35.8% →41.3% on AlpacaEval2, 8.0% →11.2% on the Arena-HardV2, and 52.9% →57.3% on the MMLU-Redux). Beyond these gains, our results show that RL performance with RRC can be effectively scaled by increasing inference-time computation in generative reward models and by expanding the number of anchor responses (see Figure 3). This is appealing, as RRC introduces new dimensions for scal-ing RL. These empirical scaling behaviors are further supported by our theoretical analysis in Ap-pendix A, which suggests that RRC relaxes the constraints imposed by scalar rewards derived from discriminative reward models, thereby enabling a higher attainable performance ceiling for RL. 
+
+## 2 PRELIMINARIES 
+
+2.1 TRAINING REWARD MODELS 
+
+We define a reward model as a function rϕ(x, y ), where ϕ denotes the model parameters, x is the input, and y is the corresponding response. Throughout this work, an input refers to an arbitrary token sequence provided to the LLM, such as “ Why the sky appears blue? ”, and a response de-notes the token sequence generated by the LLM conditioned on that input, such as “ This is because shorter-wavelength light is scattered more strongly by molecules ”. To date, mainstream reward model architectures can be categorized into two types: discriminative and generative .2arXiv preprint 
+
+Discriminative Reward Models. Discriminative reward models produce scalar reward scores us-ing a regression-style architecture. They are typically implemented as a stack of Transformer en-coder layers, or as a Transformer decoder without a Softmax layer at the output. In practice, a pre-trained LLM is commonly used as the backbone. The concatenated input–response pair ( x, y )is fed into the backbone model, and the final-layer hidden representation is then mapped to a scalar reward score via a linear projection. This model can be trained via a Bradley-Terry loss function (Bradley & Terry, 1952): 
+
+Ld = −E(x,y a,y b)∼Dr
+
+ log( σ(rϕ(x, y a) − rϕ(x, y b)))  (1) where Dr is the training dataset consisting of tuples of input x and response pair (ya, y b) with the preference ya ≻ yb. Once trained, the reward model can be naturally used as a scoring function that assigns a numerical reward rϕ(x, y ).
+
+Generative Reward Models. Compared to discriminative reward models, generative reward mod-els fully leverage the text generation capabilities that LLMs are fundamentally designed for (Liang et al., 2025; Wang et al., 2025b), producing reward signals through natural language generation rather than direct scalar scoring. Specifically, they use an LLM to generate preference-related to-kens, given a natural language prompt c and a tuple (x, y a, y b). The prompt describes the task in natural language, and the model predicts a label token w that aligns with the human preference l,where l = A denotes preference for ya, and l = B indicates preference for yb. The model can be trained by 
+
+Lg = −E(c,x,y a,y b,l )∼Dr
+
+ log πϕ(w = l|s) (2) where s denotes the string [c, x, y a, y b], and πϕ(·) denotes the probability of token prediction. Building on this generative formulation, recent studies further showed that framing reward predic-tion as a reasoning task can better exploit the reasoning capabilities of LLMs, leading to improved reward modeling performance (Chen et al., 2025; Guo et al., 2025b; Wang et al., 2026b). In these approaches, the model is trained to generate explicit CoT, i.e. , analyzing and evaluating candidate responses individually, before producing the final preference prediction. 2.2 APPLYING REWARD MODELS TO RL In RL, the policy optimization objective can be written as max θ Ex∼D ,o ∼πθ (·| x)[rϕ(x, o )] , where x
+
+denotes an input prompt sampled from the dataset D, o denotes a response generated by the current policy πθ (·| x), and θ denotes the parameters of the policy model. A commonly used algorithm to op-timize this objective is proximal policy optimization (PPO) (Schulman et al., 2017). However, PPO is often complex and unstable due to its reliance on an additional critic model to estimate advantages. To address this issue, GRPO (Shao et al., 2024) replaces the learned value function with relative re-wards computed within a group of sampled responses {o1, o 2, . . . , o m}, where m denotes the group size. Specifically, the advantage for a sampled response ot is computed as At = rϕ(x,o t)−μσ , where 
+
+μ and σ denote the mean and standard deviation of reward values within the sampled group, re-spectively. Under this formulation, reward models are required to provide scalar-valued signals for each sampled response. Discriminative reward models naturally satisfy this requirement, as they are explicitly designed to assign scalar reward scores to individual responses. When applying generative reward models to RL, reward scores are typically constructed from the predicted probabilities of designated preference tokens (Zhang et al., 2024; Wang et al., 2025b). Specifically, the reward score is computed for a single input–response pair ( x, o ). During the RL training, we first obtain a reference response oref = arg max o πθ (o|x) via greedy decoding from the current policy. We then concatenate the context prompt c, the input x, the sampled response o, and the reference response oref into a single sequence so = [ c, x, o, o ref ]. The generative reward model 
+
+πϕ(·) is prompted to predict which response is preferred, and the final reward for the pair ( x, o ) is defined as the probability that o is preferred over oref . Concretely, if o is designated as “Response A” in the prompt, the reward score is 
+
+rϕ(x, o ) = πϕ(w = A | so) (3) where w denotes the predicted preference token and the resulting reward score lies in the range [0 , 1] .3arXiv preprint 
+
+## 3 RANKING VS . S CORING IN REWARD MODELS 
+
+Both discriminative and generative models are commonly adopted for reward modeling, but we found that generative models are better suited for response ranking, rather than for serving as a score-based role in RL. To study this issue, we trained both a discriminative and a generative reward model using the same labeled preference dataset with LLaMA-3.2-3B-Instruct serving as the back-bone 1. We then evaluated these models on pairwise ranking benchmarks, including RM-Bench (Liu et al., 2024) and JudgeBench (Tan et al., 2024), as well as in an RL setting where reward scores are constructed from the predicted probabilities of preference labels. As shown in Figure 1, generative reward models significantly outperform discriminative ones on response ranking tasks. However, this advantage largely diminishes in the RL setting. Although preliminary, these results are consis-tent with prior findings reported by Wang et al. (2025b) and Guo et al. (2025b): when trained on the same preference data, generative reward models significantly outperform discriminative models on response ranking, but yield only marginal improvements when used as a score-based role in RL. DRM GRM           
+
+> +voting@4 +voting@8
+> 74 76 78 80 82 84
+> +7.5%
+> Accuracy (%) RM-Bench
+> DRM GRM
+> +voting@4 +voting@8
+> 74 76 78 80
+> +4.2%
+> Accuracy (%) JudgeBench
+> (a) Performance on Response Ranking
+> 0100 200 300 400 500 600 700 800 900 24 26 28 30 32 34 36 +1.3%
+> Training Steps Accuracy (%)  RL w/ DRM RL w/ GRM
+> (b) Performance on RL
+
+Figure 1: Comparison between discriminative and generative reward models under response ranking and RL settings. RL performance is evaluated using AlpacaEval2. et al. 2025b). Specifically, the reward score is computed for a single input–response pair ( x, o ). During the RL training, we first obtain a reference response oref = arg max o πθ (o|x) via greedy decoding from the current policy. We then concate-nate the context prompt c, the input x, the sampled response 
+
+o, and the reference response oref into a single sequence 
+
+so = [ c, x, o, o ref ]. The generative reward model πϕ(·) is prompted to predict which response is preferred, and the fi-nal reward for the pair ( x, o ) is defined as the probability that o is preferred over oref . Concretely, if o is designated as “Response A” in the prompt, the reward score is 
+
+rϕ(x, o ) = πϕ(w = A | so) (3) where w denotes the predicted preference token and the re-sulting reward score lies in the range [0 , 1] .
+
+Ranking vs. Scoring in Reward Models 
+
+Both discriminative and generative models are commonly adopted for reward modeling, but we found that generative models are better suited for response ranking, rather than for serving as a score-based role in RL. To study this is-sue, we trained both a discriminative and a generative re-ward model using the same labeled preference dataset with LLaMA-3.2-3B-Instruct serving as the backbone 1. We then evaluated these models on pairwise ranking benchmarks, in-cluding RM-Bench (Liu et al. 2024) and JudgeBench (Tan et al. 2024), as well as in an RL setting where reward scores are constructed from the predicted probabilities of preference labels. As shown in Figure 1, generative reward models sig-
+
+with prior findings re et al. (2025b): when generative reward mo native models on res improvements when We attribute this d optimization objectiv requirements of scala native reward models reward score for eac the quality of the res ing signal in RL. In typically optimized comparative judgme tive reward models in preference tokens as preference prediction fers from inherent li On one hand, when preference token pro poorly calibrated as predicted probabiliti its judgment, which preference and migh 
+
+P
+
+We now describe our parative strengths of g briefly review the de We then introduce ou 
+
+Desiderata for Re 
+
+Given an input x and 
+
+ward function r(x, o )
+
+satisfy the following 
+
+Property 1. For a 
+
+the same input x, the ordering, e.g., oi ≻ o
+
+We refer to this pr 
+
+that policy updates a ence judgments, so t preferences are cons 
+
+Property 2. The r ative quality gap bet 
+
+∆qij , where ∆qij de gin between response 
+
+We refer to this pr 
+
+erty enables meaning preference difference tive during optimizat provide a proof from how this property di 
+
+Figure 1: Comparison between discriminative and generative reward models under response ranking and RL settings. RL performance is evaluated us-ing AlpacaEval2. We attribute this discrepancy to a mismatch between the optimization objective of gen-erative reward models and the requirements of scalar reward scoring. Specifically, dis-criminative reward models are designed to di-rectly predict a scalar reward score for each response, where the score represents the qual-ity of the response and can be easily used as a learning signal in RL. In contrast, generative reward models are typically optimized to ex-press preferences in the form of comparative judgments. In practice, when applying gener-ative reward models in RL, we use the prob-ability of predicted preference tokens as re-ward signals, thereby bridging textual prefer-ence prediction and scalar scoring. However, this suffers from inherent limitations, as illus-trated in Figure 2(a). On one hand, when ex-plicit reward reasoning is employed, prefer-ence token probabilities often collapse, mak-ing them poorly calibrated as reward scores. On the other hand, the predicted probabilities also reflect the model’s confidence in its judg-ment, which is not necessarily aligned with human preference and might be noise. There-fore, the potential of generative reward models in preference modeling are weakened when they are directly used as a score-based role. 
+
+## 4 PROPOSED METHOD 
+
+We now describe our approach for better leveraging the comparative strengths of generative reward models in RL. We first briefly review the desiderata for reward construction in RL. We then introduce our RRC approach. 4.1 DESIDERATA FOR REWARD CONSTRUCTION IN RL Given an input x and a sampled response o, an effective reward function r(x, o ) for LLM reinforce-ment learning should satisfy the following two properties. 
+
+Property 1. For any two responses ( oi, o j ) sampled under the same input x, the reward should preserve the preference ordering, e.g., oi ≻ oj → r(x, o i) > r (x, o j ).
+
+> 1
+
+The dataset includes human-annotated rationales, enabling explicit reward reasoning in the generative reward model. 
+
+4arXiv preprint GRM    
+
+> xooref
+> w<think >
+> Probability Frequency
+> 010.5
+
+...    
+
+> (1) Baseline-1
+> GRM
+> xooref
+> w<think >
+> (Removing Thinking) Probability Frequency
+> 010.5
+
+...       
+
+> (2) Baseline-2
+> (a) Probability-Based Reward Construction LLM
+> xo1
+> o2
+> om
+> ...GRM
+> o5
+> o3
+> o2
+> ...
+> Ranking via SCR
+> r(x, o 5) = 5
+> r(x, o 3) = 3
+> r(x, o 2) = 2
+> ...
+> Reward Scores
+> A5
+> A3
+> A2
+> ...
+> Updating Policy Model
+> (1) Our Method (Self-Competitive Ranking)
+> LLM REF
+> xo1
+> o2
+> om
+> ...GRM
+> a1a2an. . .
+> Outrank 7 Outrank 3 Outrank 5
+> ...
+> Ranking via AGR
+> r(x, o 1) = 7
+> r(x, o 2) = 3
+> r(x, o m) = 5
+> ...
+> Reward Scores
+> A1
+> A2
+> Am
+> ...
+> Updating Policy Model
+> (2) Our Method (Anchor-Guided Ranking)
+> (b) Ranking-Based Reward Construction
+
+Figure 2: (a) Probability-Based Reward Construction. We use the predicted probability of the preference token as the scalar reward signal (denoted as Baseline-1 ). We also remove explicit reasoning to encourage output diversity and improve margin awareness (denoted as Baseline-2 ). (b) Ranking-Based Reward Construction. We obtain reward scores from relative rankings obtained either among sampled responses or between sampled responses and anchor responses. Here, “REF” denotes the reference policy used to generate anchor responses. Guided by these two properties, we redesign the reward con-struction process when using generative reward models. As illustrated in Figure 2(b), we propose an RRC approach. Un-like previous work, we do not utilize preference token prob-abilities to construct reward scores. Instead, we construct re-ward scores solely from response rankings. Specifically, RRC is implemented through two complementary ranking mecha-nisms: self-competitive ranking and anchor-guided ranking .
+
+Self-Competitive Ranking. The goal of self-competitive ranking (SCR) is to construct reward signals purely from the relative ordering among sampled responses, rather than rely-ing on absolute scoring. In RL, responses generated under the same input naturally form a comparable set, and their relative quality provides a more reliable basis for reward construc-tion than isolated scalar scores (Yuan et al. 2023; Shao et al. 2024). This motivates us to treat these responses as competi-tors in a self-contained ranking process. Formally, given an input x, we sample a group of responses {o1, o 2, . . . , o m}
+
+from the current policy. We then query the generative reward model to perform pairwise preference judgments within this set. For each pair ( oi, o j ), the generative reward model pre-dicts a preference relation: 
+
+oi ≻ oj or oj ≻ oi (4) These pairwise preferences induce a tournament graph over the response set. Based on the pairwise comparisons, we assign each response a reward score via the number of wins: 
+
+r(x, o i) = α ×∑︂  
+
+> j̸=i
+
+1[oi ≻ oj ] (5) where 1(·) denotes the indicator function and α denotes a scaling factor. Intuitively, responses that are preferred over more competitors receive higher reward scores, reflecting stronger relative quality within the sampled group. This self-competitive construction satisfies both desider-ata for reward construction in RL. Order preservation is guar-anteed since higher-ranked responses receive larger rewards. Additionally, margin awareness emerges naturally, as reward differences reflect the number of relative wins against other responses, providing graded learning signals. 
+
+Majority Voting for Robust Ranking. Pairwise prefer-ence predictions from generative reward models can be stochastic, especially when the reward reasoning is involved, which may introduce noise into individual comparisons. To improve robustness, we allocate additional inference-time budget to stabilize preference estimation (Muennighoff et al. 2025; Chang et al. 2025). Specifically, we adopt a majority voting scheme when aggregating pairwise preferences. For each response pair ( oi, o j ), we query the generative reward model multiple times under identical inputs and collect a set of preference predictions. The final preference relation is then determined by majority vote across these predictions. 
+
+Conflict-Aware Ranking Adjustment. Pairwise prefer-ence predictions produced by generative reward models are not guaranteed to be globally consistent. In practice, cyclic inconsistencies may arise, such as 
+
+oi ≻ oj , oj ≻ ok, but ok ≻ oi (6) which violate transitivity and induce conflicts in the induced ranking. To mitigate this issue, we perform conflict-aware ranking adjustment by treating pairwise preferences as a di-rected weighted graph, as shown in Property 3. 
+
+Figure 2: (a) Probability-Based Reward Construction. We use the predicted probability of the preference token as the scalar reward signal (denoted as Baseline-1 ). We also remove explicit rea-soning to encourage output diversity and improve margin awareness (denoted as Baseline-2 ). (b) Ranking-Based Reward Construction. We obtain reward scores from relative rankings obtained either among sampled responses or between sampled responses and anchor responses. Here, “REF” denotes the reference policy used to generate anchor responses. The Python-style ranking algo-rithms for SCR (Alg. 1) and AGR (Alg. 2) are provided in the Appendix. We refer to this property as order preservation . It ensures that policy updates are directionally consistent with preference judgments, so that responses more aligned with human preferences are consistently reinforced. 
+
+Property 2. The reward difference should reflect the relative quality gap between responses: 
+
+r(x, o i) − r(x, o j ) ∝ ∆qij , where ∆qij denotes the latent oracle preference margin between re-sponses oi and oj .
+
+We refer to this property as margin awareness . This property enables meaningful advantage esti-mates, preventing all preference differences from being treated as equally informative during opti-mization. As shown in Appendix A, we further provide a proof from a policy gradient perspective, showing how this property directly affects the magnitude and effectiveness of optimization updates. 4.2 RANKING -B ASED REWARD CONSTRUCTION 
+
+When applying reward models in RL, optimization performance depends on whether the reward scores they provide satisfy both order preservation and margin awareness. Guided by these two properties, we redesign the reward construction process when using generative reward models. As illustrated in Figure 2(b), we propose an RRC approach. Unlike previous work, we do not utilize preference token probabilities to construct reward scores. Instead, we construct reward scores solely from response rankings. Specifically, RRC is implemented through two complementary ranking mechanisms: self-competitive ranking and anchor-guided ranking .
+
+Self-Competitive Ranking. The goal of self-competitive ranking (SCR) is to construct reward signals purely from the relative ordering among sampled responses, rather than relying on absolute scoring. In RL, responses generated under the same input naturally form a comparable set, and their relative quality provides a more reliable basis for reward construction than isolated scalar scores (Yuan et al., 2023; Shao et al., 2024). This motivates us to treat these responses as competitors in a self-contained ranking process. Formally, given an input x, we sample a group of responses 
+
+{o1, o 2, . . . , o m} from the current policy. We then query the generative reward model to perform pairwise preference judgments within this set. For each pair ( oi, o j ), the generative reward model predicts a preference relation: 
+
+oi ≻ oj or oj ≻ oi (4) 5arXiv preprint These pairwise preferences induce a tournament graph over the response set. Based on the pairwise comparisons, we assign each response a reward score via the number of wins: 
+
+r(x, o i) = α × X 
+
+> j̸=i
+
+1[oi ≻ oj ] (5) where 1(·) denotes the indicator function and α denotes a scaling factor. Intuitively, responses that are preferred over more competitors receive higher reward scores, reflecting stronger relative quality within the sampled group. This self-competitive construction satisfies both desiderata for reward construction in RL. Order preservation is guaranteed since higher-ranked responses receive larger rewards. Additionally, mar-gin awareness emerges naturally, as reward differences reflect the number of relative wins against other responses, providing graded learning signals. 
+
+Majority Voting for Robust Ranking. Pairwise preference predictions from generative reward models can be stochastic, especially when the reward reasoning is involved, which may introduce noise into individual comparisons. To improve robustness, we allocate additional inference-time budget to stabilize preference estimation (Muennighoff et al., 2025; Chang et al., 2025). Specifically, we adopt a majority voting scheme when aggregating pairwise preferences. For each response pair (oi, o j ), we query the generative reward model multiple times under identical inputs and collect a set of preference predictions. The final preference relation is then determined by majority vote across these predictions. 
+
+Conflict-Aware Ranking Adjustment. Pairwise preference predictions produced by generative reward models are not guaranteed to be globally consistent. In practice, cyclic inconsistencies may arise, such as 
+
+oi ≻ oj , oj ≻ ok, but ok ≻ oi (6) which violate transitivity and induce conflicts in the induced ranking. To mitigate this issue, we perform conflict-aware ranking adjustment by treating pairwise preferences as a directed weighted graph, as shown in Property 3. 
+
+Property 3. Given inconsistent pairwise preferences produced by a generative reward model, a Kemeny-rule-based aggregation can recover a globally consistent ranking that maximizes the weighted agreement with all pairwise preferences, where the weight of each preference is deter-mined by its support degree (e.g., voting count) from the model. 
+
+The proof of Property 3 is provided in Appendix A. Specifically, given a sampled set of responses, we construct a directed weighted graph G = ( V, E ), where each node vi ∈ V corresponds to a response oi, and each directed edge eij = ( oi → oj ) ∈ E denotes a predicted preference oi ≻ oj .The weight of each edge is defined as the number of times the preference oi ≻ oj is predicted by the generative reward model across multiple stochastic queries. Following the Kemeny rule’s core idea of minimizing global pairwise disagreements, we transform the conflict resolution problem into finding the minimum weight feedback edge set of G, where removing edges with the smallest total weight eliminates cycles while retaining as many high-weight preferences as possible. In practice, we adopt the efficient greedy heuristic from Davenport & Kalagnanam (2004) to iteratively select the pairwise preference with the largest weight difference between conflicting directions, fix its order according to the majority preference, and maintain the acyclicity of the graph via transitive closure propagation. 
+
+Anchor-Guided Ranking. While SCR provides a principled way to construct rewards from pair-wise comparisons, it requires O(m · log m) preference queries for a group of m sampled responses, which becomes computationally prohibitive when using generative reward models. This quadratic cost limits scalability, especially in modern RL algorithms that rely on large-scale sampling to im-prove exploration and stability. To solve this problem, we propose an anchor-guided ranking (AGR) mechanism that reduces the number of required comparisons while preserving relative ordering in-formation. The basic idea is to introduce a small set of reference responses, referred to as anchors ,which serve as stable landmarks for estimating the relative quality of sampled responses. Formally, given an input x, we collect a small set of anchor responses {a1, a 2, · · · , a n}, where n
+
+denotes the size of the anchor responses. Our experimental results show that even a small value 6arXiv preprint of n is sufficient to achieve strong performance (see Figure 3). For each sampled response oi and each anchor ak, we query the generative reward model to predict a pairwise preference relation, indicating whether oi ≻ ak or ak ≻ oi. Based on these comparisons, we define the reward score of the i-th sampled response as 
+
+r(x, o i) = α ×
+
+> n
+
+X
+
+> k=1
+
+1[oi ≻ ak] (7) Intuitively, responses that outperform more anchors are considered to have higher relative quality. Furthermore, our AGR naturally supports majority voting by querying the generative reward model multiple times for each anchor comparison (oi, a k) and aggregating the preferences. This provides an additional inference-time scaling dimension to improve reward reliability, while still keeping the overall query complexity at O(m · n). In this way, we provide a comparison between SCR and AGR in Appendix C.1. In this mechanism, anchor construction is key to its effectiveness. In this work, anchors are generated from a reference policy. As shown in Appendix A, our theoretical analyses indicate that, compared to alternative designs such as selecting anchors from the current policy’s samples, this strategy avoids coupling anchor quality with the evolving policy, thereby providing a more stable basis for comparison. 
+
+## 5 EXPERIMENTS 
+
+We evaluated RRC in open-ended RL settings, where reward models rather than verifiable rules must provide rewards. 5.1 EXPERIMENTAL SETUPS 
+
+Model Backbones. For reward model training, we employed LLaMA-3.1-8B-Instruct and LLaMA-3.2-3B-Instruct (Grattafiori et al., 2024) as backbone models. For RL training, we used LLaMA-3.1-8B-Instruct as the policy model. We also evaluated RRC on Qwen2.5-7B-Instruct (Team et al., 2024) to validate the effectiveness of RRC, as shown in Table 2 in the Appendix. 
+
+Training Datasets. For reward model training, we used the HelpSteer3 (Wang et al., 2025e), which comprises 40.5K labeled preference examples. Each example includes human-written feed-back and comparative analysis, which we treated as rationales when training generative reward mod-els. For discriminative reward models, we used the same binary preference labels ( i.e. , which re-sponse is preferred). Still, we did not provide access to the textual rationales to ensure a controlled and fair comparison between the two reward modeling approaches. For RL training, we followed the same supervised fine-tuning (SFT) and RL datasets used in Bhaskar et al. (2025). The SFT dataset consisted of 6K examples, while the RL dataset contained 7.5K examples. These datasets were designed for open-ended RL and covered a diverse set of tasks, reflecting realistic instruction-following scenarios. 
+
+Settings. We trained both discriminative and generative reward model baselines for one epoch us-ing a learning rate of 1e-5 and a batch size of 256. For all RL training runs in our main experiments, we used the GRPO algorithm, with a learning rate of 1e-6 and a batch size of 128, while keeping all other hyperparameters at their default values. To evaluate the robustness of our RRC, we conducted RL training under two policy settings. In the first setting, the policy model generated explicit CoT reasoning before producing the final response (denoted as reasoning-augmented policy ). In the sec-ond setting, the policy model generated only the final response without intermediate CoT reasoning. In the former setting, the generated reasoning paths were not provided to the reward models; only the final responses were evaluated. Additional training details are provided in Appendix B. 
+
+Baselines. Our main baseline was the probability-based reward construction approach (denoted as 
+
+PRC ), where the predicted probability of the preference token was used as the scalar reward score (Zhang et al., 2024; Wang et al., 2025c). Additionally, we considered a variant that removed explicit reward reasoning to encourage output diversity and improve margin awareness (Wang et al., 2025b) (denoted as PRC+Removing Reasoning ). We also included a discriminative reward model trained 7arXiv preprint Method w/ Thinking w/o Thinking                                                                                                                                                                                          
+
+> AE2 AH2 WiB MM RMATH AE2 AH2 WiB MM RMATH SFT ( w/ LLaMA-3.1-8B-Instruct )27.4 6.4 46.6 55.4 38.8 23.7 6.2 44.5 50.4 36.4 + DPO 29.8 7.0 48.8 52.1 39.6 26.1 7.5 45.3 51.4 36.8 + SimPO 31.2 7.2 50.3 54.7 40.4 28.2 7.0 48.4 50.2 38.6
+> RL Training with 3B-Scale Reward Models
+> + DRM 30.5 7.0 48.7 52.3 42.6 27.6 7.2 46.3 50.2 40.4 + GRM w/ PRC 31.4 7.8 50.2 52.4 44.8 28.4 6.8 48.1 51.7 41.2 +Removing Thinking 32.4 7.2 51.7 53.6 43.0 28.8 8.0 49.2 50.0 41.2 + GRM w/ RRC-SCR 36.4 8.8 55.6 54.4 45.6 33.1 8.2 53.0 52.4 42.0 +voting@8 37.8 9.8 56.7 56.7 47.2 33.8 9.0 53.2 53.7 44.8 + GRM w/ RRC-AGR 35.8 9.8 56.8 55.0 46.4 32.8 8.8 52.9 52.7 45.4 +voting@8 37.5 10.2 58.2 56.4 48.4 34.9 9.4 54.7 54.5 45.8
+> RL Training with 8B-Scale Reward Models
+> + DRM 33.2 7.4 49.8 52.7 42.0 30.1 7.0 47.2 51.4 40.2 + GRM w/ PRC 35.8 7.8 48.3 51.4 41.2 32.3 7.2 47.5 50.6 38.8 +Removing Thinking 35.1 8.0 50.1 52.9 43.6 32.5 7.4 46.5 50.8 41.6 + GRM w/ RRC-SCR 38.7 9.0 56.6 55.1 46.4 34.6 8.8 53.3 53.6 44.8 +voting@8 40.0 10.4 57.8 57.3 47.4 34.8 8.2 54.5 54.8 45.2 + GRM w/ RRC-AGR 39.4 11.0 58.1 55.4 47.8 35.2 9.0 55.1 53.4 45.0 +voting@8 41.3 11.2 59.8 56.9 48.6 34.8 9.8 55.8 56.2 46.8
+
+Table 1: Performance of models fine-tuned with explicit reasoning ( w/ Thinking ) and without explicit reasoning ( w/o Thinking ). Best results within each group are shown in bold . A dotted line separates baselines from our RRC. +voting@8 is that we use a majority voting of 8 to enhance RRC, together with conflict-aware ranking adjustment in the SCR. 3B-scale and 8B-scale reward models denote that models are trained based on LLaMA-3.2-3B-Instruct and LLaMA-3.1-8B-Instruct, respectively. DRM: Discriminative Reward Model; GRM: Generative Reward Model; PRC: Probability-Based Reward Construction. on the same preference dataset as the generative reward models. Furthermore, we compared RRC with several offline preference optimization approaches, including DPO (Rafailov et al., 2023) and 
+
+SimPO (Meng et al., 2024), trained on the same preference data. 
+
+Evaluation. We focused on three open-ended chat benchmarks: AlpacaEval2 (Li et al., 2023), ArenaHardV2 (Li et al., 2024), and WildBench (Lin et al., 2024), which are commonly used to assess the performance of LLMs trained with open-ended RL. We also evaluated our methods on knowl-edge and math reasoning benchmarks, including MMLU-Redux (Gema et al., 2025) and MATH-500 (Lightman et al., 2024). 5.2 MAIN RESULTS 
+
+Table 1 reports the performance of models fine-tuned from the LLaMA-3.1-8B-Instruct model. First, comparing DRM and GRM w/ PRC, we observe trends consistent with those in Figure 1: using probability-based reward construction does not effectively translate the ranking advantage of gen-erative reward models into RL. For example, under 3B-scale reward models with thinking, GRM w/ PRC achieves 31.4% on AlpacaEval2 and 7.8% on ArenaHardV2, only marginally better than DRM (30.5%/7.0%). Similar gaps are observed in the non-thinking setting (28.4% vs. 27.6% on AlpacaEval2). Second, across both 3B- and 8B-scale reward models, our proposed RRC approaches consistently outperform all baselines by a clear margin. The results show that constructing rewards from rankings rather than token probabilities is substantially more effective for generative reward models in RL. Third, we observe that the proposed majority voting mechanism further boosts per-formance. For example, under 3B reward models with thinking, RRC-SCR improves from 36.4% to 37.8% on AlpacaEval2 after applying voting@8 . This suggests that aggregating multiple stochastic preference judgments helps reduce noise in pairwise comparisons and yields more robust rankings. Furthermore, we further investigate the performance gain on two different ranking approaches in RRC. From the results, we find that AGR generally achieves stronger or comparable performance, especially when combined with voting. We attribute this advantage to the use of anchors generated 8arXiv preprint 0 1 2 3 4 5 6 7 8 930 32 34 36 38 40 42 44 46 48                                 
+
+> Number of Votes (log scale) Accuracy (%) GRM w/ RRC-SCR (3B) GRM w/ RRC-SCR (8B) GRM w/ PRC (3B) GRM w/ PRC (8B)
+> 012345678930 32 34 36 38 40 42 44 46 48 50
+> Number of Votes (log scale) Accuracy (%)
+> 012345678930 32 34 36 38 40 42 44
+> Number of Anchors (log scale) Accuracy (%) GRM w/ RRC-AGR (3B) GRM w/ RRC-AGR (8B) GRM w/ PRC (3B) GRM w/ PRC (8B)
+> 012345678930 32 34 36 38 40 42 44 46
+> Number of Anchors (log scale) Accuracy (%)
+> (a) Scaling the Number of Majority Votes (b) Scaling the Number of Anchors
+
+Figure 3: Scaling behavior of RRC. from the generative reward model yields better-aligned re-ward signals and thus more effective policy optimization. Similarly, increasing the number of anchors in AGR consis-tently improves performance, suggesting that denser anchor comparisons provide finer-grained relative quality estimates, which translate into more informative advantage signals in RL. Notably, the performance gains exhibit diminishing re-turns as the number of votes or anchors continues to increase, which is characteristic of scaling-law behavior (Kaplan et al. 2020). This shows that while larger comparison budgets im-prove reward calibration and margin estimation, the marginal benefit gradually decreases beyond a certain scale, indicating a trade-off between computational cost and performance. From the scaling behavior of the AGR, we can see that a relatively small number of anchors ( e.g. , 8 and 16) is al-ready sufficient to yield substantial performance gains. In-terestingly, when the number of anchors becomes very large (e.g. , 256), performance tends to saturate or even slightly degrade. We hypothesize that under large-scale anchor sam-pling, it becomes increasingly difficult to maintain sufficient diversity among anchor responses, leading to redundant or low-informative comparisons. 
+
+Related Work 
+
+Reward Modeling. Reward models play a central role in RLHF and other alignment strategies, such as direct prefer-ence optimization (DPO) and rejection sampling (Lee, Auli, and Ranzato 2021; Rafailov et al. 2023; Wang et al. 2024b; Zhou et al. 2024). Recent works on improving reward models could be classified into two groups. The first group focused on addressing the scarcity of preference data. For example, sev-eral studies constructed large-scale training datasets, either in task-specific settings (Stiennon et al. 2020; Xu et al. 2024) or as general-purpose preference datasets (Cui et al. 2023). Additionally, GRAM (Wang et al. 2025b) and POLAR (Dou et al. 2025) explored the use of unlabeled data for pre-training reward models. The second group explored stronger reward modeling approaches (Coste et al. 2024; Min et al. 2024). A major development in this line of work was the transition from discriminative to generative reward modeling. Build-ing on this shift, recent studies showed that incorporating explicit reward reasoning ( i.e. , CoT) into generative reward models was crucial for improving reward modeling (Chen et al. 2025; Wang et al. 2025c; Chen et al. 2025; Guo et al. 2025b; Wang et al. 2025d, 2026b). 
+
+RL with Reward Models. In RLHF, one straightforward way to construct reward signals is to design task-specific rules, an approach commonly referred to as reinforcement learning with verifiable rewards (RLVR), which has been widely used to improve the reasoning capabilities of LLMs (Guo et al. 2025a; Mu et al. 2025; Mroueh 2025). While such rule-based rewards can provide accurate supervision, their applicability is typically limited to narrowly defined tasks and does not generalize well to open-ended, real-world tasks (Bhaskar, Ye, and Chen 2025; Liang et al. 2026). As a result, the most widely adopted approach is to train re-ward models to provide learning signals (Ouyang et al. 2022; Wang et al. 2024a). In practice, this is typically implemented by training discriminative reward models that assign scalar scores to sampled responses. Motivated by the recent success of generative reward models, more recent studies have also explored using generative models in this score-based role (Zhang et al. 2024; Wang et al. 2025b). Different from these approaches, we argue that treating generative reward models solely as scalar score predictors underutilizes their compar-ative modeling capabilities, which motivates us to propose RRC. Recent efforts, such as Song et al. (2025), have also investigated reference-based reward construction for genera-tive reward models. However, these approaches still focus on deriving scalar rewards from reference comparisons, whereas RRC explores ranking-based reward construction. 
+
+Conclusions 
+
+We proposed an RRC approach for using generative reward models with reward reasoning capabilities in RL. Our ap-proach fully exploits the inherent strength of generative re-ward models in response ranking, rather than requiring them to produce scalar scores. We conducted extensive experi-ments on six benchmarks, and the results show that RRC enables more accurate and reliable reward signals. 
+
+Figure 3: Scaling behavior of RRC. from a fixed reference policy, which provides more stable and consistent comparison baselines and avoids coupling reward estimation to the rapidly evolving policy distribution. 
+
+## 6 ANALYSIS 
+
+6.1 SCALING BEHAVIOR OF RRC We investigate the scaling behavior of RRC along two key dimensions: 1) the number of votes used by the generative reward model, and 2) the number of anchors employed in AGR. All experiments are conducted using 3B-scale reward models, under two different sampling settings (sampling 8 and sampling 16 responses per prompt). The results are summarized in Figure 3. From the results, we see a clear and consistent scaling trend with respect to both the number of votes and the number of anchors. Specifically, increasing the number of votes leads to monotonic improvements in accuracy, indicating that more reliable preference aggregation from the generative reward model yields better-aligned reward signals and thus more effective policy optimization. Similarly, increasing the number of anchors in AGR consistently improves performance, suggesting that denser anchor comparisons provide finer-grained relative quality estimates, which translate into more informative advantage signals in RL. Notably, the performance gains exhibit diminishing returns as the number of votes or anchors continues to increase, which is characteristic of scaling-law behavior (Kaplan et al., 2020). This shows that while larger comparison budgets improve reward calibration and margin estimation, the marginal benefit gradually decreases beyond a certain scale, indicating a trade-off between computational cost and performance. From the scaling behavior of the AGR, we can see that a relatively small number of anchors ( e.g. , 8 and 16) is already sufficient to yield substantial performance gains. Interestingly, when the number of anchors becomes very large ( e.g. , 256), performance tends to saturate or even slightly degrade. We hypothesize that under large-scale anchor sampling, it becomes increasingly difficult to maintain sufficient diversity among anchor responses, leading to redundant or low-informative comparisons. 
+
+## 7 RELATED WORK 
+
+Reward Modeling. Reward models play a central role in RLHF and other alignment strategies, such as direct preference optimization (DPO) and rejection sampling (Lee et al., 2021; Rafailov et al., 2023; Wang et al., 2024b; Zhou et al., 2024). Recent works on improving reward models could be classified into two groups. The first group focused on addressing the scarcity of preference data. For example, several studies constructed large-scale training datasets, either in task-specific settings (Stiennon et al., 2020; Xu et al., 2024) or as general-purpose preference datasets (Cui et al., 2023). Additionally, GRAM (Wang et al., 2025b) and POLAR (Dou et al., 2025) explored the use of unlabeled data for pre-training reward models. The second group explored stronger reward modeling approaches (Coste et al., 2024; Min et al., 2024). A major development in this line of work was the transition from discriminative to generative reward modeling. Building on this shift, recent studies 9arXiv preprint showed that incorporating explicit reward reasoning ( i.e. , CoT) into generative reward models was crucial for improving reward modeling (Chen et al., 2025; Wang et al., 2025c; Chen et al., 2025; Guo et al., 2025b; Wang et al., 2025d; 2026c). 
+
+RL with Reward Models. In RLHF, one straightforward way to construct reward signals is to de-sign task-specific rules, an approach commonly referred to as reinforcement learning with verifiable rewards (RLVR), which has been widely used to improve the reasoning capabilities of LLMs (Guo et al., 2025a; Mu et al., 2025; Mroueh, 2025). While such rule-based rewards can provide accurate supervision, their applicability is typically limited to narrowly defined tasks and does not gener-alize well to open-ended, real-world tasks (Bhaskar et al., 2025; Liang et al., 2026). As a result, the most widely adopted approach is to train reward models to provide learning signals (Ouyang et al., 2022; Wang et al., 2024a). In practice, this is typically implemented by training discrimina-tive reward models that assign scalar scores to sampled responses. Motivated by the recent success of generative reward models, more recent studies have also explored using generative models in this score-based role (Zhang et al., 2024; Wang et al., 2025b). Different from these approaches, we argue that treating generative reward models solely as scalar score predictors underutilizes their comparative modeling capabilities, which motivates us to propose RRC. Recent efforts, such as Song et al. (2025), have also investigated reference-based reward construction for generative reward mod-els. However, these approaches still focus on deriving scalar rewards from reference comparisons, whereas RRC explores ranking-based reward construction. 
+
+## 8 CONCLUSIONS 
+
+We proposed an RRC approach for using generative reward models with reward reasoning capabili-ties in RL. Our approach fully exploits the inherent strength of generative reward models in response ranking, rather than requiring them to produce scalar scores. We conducted extensive experiments on six benchmarks, and the results show that RRC enables more accurate and reliable reward signals. 
+
+## REFERENCES 
+
+Nadja Betzler, Robert Bredereck, and Rolf Niedermeier. Theoretical and empirical evaluation of data reduction for exact kemeny rank aggregation. Autonomous Agents and Multi-Agent Systems ,28(5):721–748, 2014. Adithya Bhaskar, Xi Ye, and Danqi Chen. Language models that think, chat better. ArXiv preprint ,2025. Ralph Allan Bradley and Milton E Terry. Rank analysis of incomplete block designs: I. the method of paired comparisons. Biometrika , 1952. Kaiyan Chang, Yonghao Shi, Chenglong Wang, Hang Zhou, Chi Hu, Xiaoqian Liu, Yingfeng Luo, Yuan Ge, Tong Xiao, and Jingbo Zhu. Step-level verifier-guided hybrid test-time scaling for large language models. In Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing , pp. 18473–18488, 2025. Xiusi Chen, Gaotang Li, Ziqi Wang, Bowen Jin, Cheng Qian, Yu Wang, Hongru Wang, Yu Zhang, Denghui Zhang, Tong Zhang, et al. Rm-r1: Reward modeling as reasoning. ArXiv preprint , 2025. Thomas Coste, Usman Anwar, Robert Kirk, and David Krueger. Reward model ensembles help mitigate overoptimization. In The Twelfth International Conference on Learning Representations, ICLR 2024, Vienna, Austria, May 7-11, 2024 . OpenReview.net, 2024. Ganqu Cui, Lifan Yuan, Ning Ding, Guanming Yao, Wei Zhu, Yuan Ni, Guotong Xie, Zhiyuan Liu, and Maosong Sun. Ultrafeedback: Boosting language models with high-quality feedback. 2023. Andrew Davenport and Jayant Kalagnanam. A computational study of the kemeny rule for prefer-ence aggregation. In AAAI , pp. 697–702, 2004. Shihan Dou, Shichun Liu, Yuming Yang, Yicheng Zou, Yunhua Zhou, Shuhao Xing, Chenhao Huang, Qiming Ge, Demin Song, Haijun Lv, et al. Pre-trained policy discriminators are gen-eral reward models. ArXiv preprint , 2025. 10 arXiv preprint Yann Dubois, Percy Liang, and Tatsunori Hashimoto. Length-controlled alpacaeval: A simple debi-asing of automatic evaluators. In First Conference on Language Modeling , 2024. Aryo Pradipta Gema, Joshua Ong Jun Leang, Giwon Hong, Alessio Devoto, Alberto Carlo Maria Mancino, Rohit Saxena, Xuanli He, Yu Zhao, Xiaotang Du, Mohammad Reza Ghasemi Madani, et al. Are we done with mmlu? In Proceedings of the 2025 Conference of the Nations of the Amer-icas Chapter of the Association for Computational Linguistics: Human Language Technologies (Volume 1: Long Papers) , pp. 5069–5096, 2025. Aaron Grattafiori, Abhimanyu Dubey, Abhinav Jauhri, Abhinav Pandey, Abhishek Kadian, Ahmad Al-Dahle, Aiesha Letman, Akhil Mathur, Alan Schelten, Alex Vaughan, et al. The llama 3 herd of models. ArXiv preprint , abs/2407.21783, 2024. Daya Guo, Dejian Yang, Haowei Zhang, Junxiao Song, Ruoyu Zhang, Runxin Xu, Qihao Zhu, Shirong Ma, Peiyi Wang, Xiao Bi, et al. Deepseek-r1: Incentivizing reasoning capability in llms via reinforcement learning. ArXiv preprint , 2025a. Jiaxin Guo, Zewen Chi, Li Dong, Qingxiu Dong, Xun Wu, Shaohan Huang, and Furu Wei. Reward reasoning model. ArXiv preprint , 2025b. Ilgee Hong, Changlong Yu, Liang Qiu, Weixiang Yan, Zhenghao Xu, Haoming Jiang, Qingru Zhang, Qin Lu, Xin Liu, Chao Zhang, et al. Think-rm: Enabling long-horizon reasoning in generative reward models. Advances in Neural Information Processing Systems , 38:174227–174251, 2026. Jiaming Ji, Donghai Hong, Borong Zhang, Boyuan Chen, Josef Dai, Boren Zheng, Tianyi Alex Qiu, Jiayi Zhou, Kaile Wang, Boxun Li, et al. Pku-saferlhf: Towards multi-level safety alignment for llms with human preference. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pp. 31983–32016, 2025. Jared Kaplan, Sam McCandlish, Tom Henighan, Tom B Brown, Benjamin Chess, Rewon Child, Scott Gray, Alec Radford, Jeffrey Wu, and Dario Amodei. Scaling laws for neural language models. ArXiv preprint , abs/2001.08361, 2020. Ann Lee, Michael Auli, and Marc’Aurelio Ranzato. Discriminative reranking for neural machine translation. In Chengqing Zong, Fei Xia, Wenjie Li, and Roberto Navigli (eds.), Proceedings of the 59th Annual Meeting of the Association for Computational Linguistics and the 11th In-ternational Joint Conference on Natural Language Processing (Volume 1: Long Papers) , pp. 7250–7264, Online, 2021. Association for Computational Linguistics. Tianle Li, Wei-Lin Chiang, Evan Frick, Lisa Dunlap, Tianhao Wu, Banghua Zhu, Joseph E Gon-zalez, and Ion Stoica. From crowdsourced data to high-quality benchmarks: Arena-hard and benchbuilder pipeline. ArXiv preprint , abs/2406.11939, 2024. Xuechen Li, Tianyi Zhang, Yann Dubois, Rohan Taori, Ishaan Gulrajani, Carlos Guestrin, Percy Liang, and Tatsunori B. Hashimoto. Alpacaeval: An automatic evaluator of instruction-following models. https://github.com/tatsu-lab/alpaca_eval , 2023. Xiaobo Liang, Haoke Zhang, Juntao Li, Kehai Chen, Qiaoming Zhu, and Min Zhang. Generative reward modeling via synthetic criteria preference learning. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pp. 26755– 26769, 2025. Xiaobo Liang, Wanfu Wang, Qipeng Huang, Yuyang Ding, Zecheng Tang, Yixin Ji, Qianben Chen, Zhe Zhao, Kehai Chen, Juntao Li, et al. Dual rm: Beyond rule-based preference reward modeling via meta-reward. In Proceedings of the 64th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pp. 37281–37296, 2026. Hunter Lightman, Vineet Kosaraju, Yuri Burda, Harrison Edwards, Bowen Baker, Teddy Lee, Jan Leike, John Schulman, Ilya Sutskever, and Karl Cobbe. Let’s verify step by step. In The Twelfth International Conference on Learning Representations, ICLR 2024, Vienna, Austria, May 7-11, 2024 . OpenReview.net, 2024. 11 arXiv preprint Bill Yuchen Lin, Yuntian Deng, Khyathi Chandu, Faeze Brahman, Abhilasha Ravichander, Valentina Pyatkin, Nouha Dziri, Ronan Le Bras, and Yejin Choi. Wildbench: Benchmarking llms with challenging tasks from real users in the wild. ArXiv preprint , abs/2406.04770, 2024. Yantao Liu, Zijun Yao, Rui Min, Yixin Cao, Lei Hou, and Juanzi Li. Rm-bench: Benchmarking reward models of language models with subtlety and style. ArXiv preprint , 2024. Yu Meng, Mengzhou Xia, and Danqi Chen. Simpo: Simple preference optimization with a reference-free reward. In Amir Globersons, Lester Mackey, Danielle Belgrave, Angela Fan, Ulrich Paquet, Jakub M. Tomczak, and Cheng Zhang (eds.), Advances in Neural Information Processing Systems 38: Annual Conference on Neural Information Processing Systems 2024, NeurIPS 2024, Vancouver, BC, Canada, December 10 - 15, 2024 , 2024. Do June Min, Veronica Perez-Rosas, Ken Resnicow, and Rada Mihalcea. Dynamic reward ad-justment in multi-reward reinforcement learning for counselor reflection generation. In Nico-letta Calzolari, Min-Yen Kan, Veronique Hoste, Alessandro Lenci, Sakriani Sakti, and Nianwen Xue (eds.), Proceedings of the 2024 Joint International Conference on Computational Linguis-tics, Language Resources and Evaluation (LREC-COLING 2024) , pp. 5437–5449, Torino, Italia, 2024. ELRA and ICCL. Youssef Mroueh. Reinforcement learning with verifiable rewards: Grpo’s effective loss, dynamics, and success amplification. ArXiv preprint , 2025. Yongyu Mu, Jiali Zeng, Bei Li, Xinyan Guan, Fandong Meng, Jie Zhou, Tong Xiao, and Jingbo Zhu. Dissecting long reasoning models: An empirical study. ArXiv preprint , 2025. Niklas Muennighoff, Zitong Yang, Weijia Shi, Xiang Lisa Li, Li Fei-Fei, Hannaneh Hajishirzi, Luke Zettlemoyer, Percy Liang, Emmanuel Cand` es, and Tatsunori B Hashimoto. s1: Simple test-time scaling. In Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing , pp. 20286–20332, 2025. Long Ouyang, Jeffrey Wu, Xu Jiang, Diogo Almeida, Carroll L. Wainwright, Pamela Mishkin, Chong Zhang, Sandhini Agarwal, Katarina Slama, Alex Ray, John Schulman, Jacob Hilton, Fraser Kelton, Luke Miller, Maddie Simens, Amanda Askell, Peter Welinder, Paul F. Christiano, Jan Leike, and Ryan Lowe. Training language models to follow instructions with human feedback. In Sanmi Koyejo, S. Mohamed, A. Agarwal, Danielle Belgrave, K. Cho, and A. Oh (eds.), Ad-vances in Neural Information Processing Systems 35: Annual Conference on Neural Information Processing Systems 2022, NeurIPS 2022, New Orleans, LA, USA, November 28 - December 9, 2022 , 2022. Rafael Rafailov, Archit Sharma, Eric Mitchell, Christopher D. Manning, Stefano Ermon, and Chelsea Finn. Direct preference optimization: Your language model is secretly a reward model. In Alice Oh, Tristan Naumann, Amir Globerson, Kate Saenko, Moritz Hardt, and Sergey Levine (eds.), Advances in Neural Information Processing Systems 36: Annual Conference on Neural Information Processing Systems 2023, NeurIPS 2023, New Orleans, LA, USA, December 10 - 16, 2023 , 2023. John Schulman, Filip Wolski, Prafulla Dhariwal, Alec Radford, and Oleg Klimov. Proximal policy optimization algorithms. ArXiv preprint , 2017. Zhihong Shao, Peiyi Wang, Qihao Zhu, Runxin Xu, Junxiao Song, Xiao Bi, Haowei Zhang, Mingchuan Zhang, YK Li, Yang Wu, et al. Deepseekmath: Pushing the limits of mathemati-cal reasoning in open language models. ArXiv preprint , 2024. Chufan Shi, Yixuan Su, Cheng Yang, Yujiu Yang, and Deng Cai. Specialist or generalist? in-struction tuning for specific NLP tasks. In Houda Bouamor, Juan Pino, and Kalika Bali (eds.), 
+
+Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing , pp. 15336–15348, Singapore, 2023. Association for Computational Linguistics. Narges Simjour. Improved parameterized algorithms for the kemeny aggregation problem. In Inter-national Workshop on Parameterized and Exact Computation , pp. 312–323. Springer, 2009. 12 arXiv preprint Kefan Song, Amir Moeini, Peng Wang, Lei Gong, Rohan Chandra, Shangtong Zhang, and Yan-jun Qi. Reward is enough: Llms are in-context reinforcement learners. ArXiv preprint ,abs/2506.06303, 2025. Nisan Stiennon, Long Ouyang, Jeffrey Wu, Daniel M. Ziegler, Ryan Lowe, Chelsea Voss, Alec Radford, Dario Amodei, and Paul F. Christiano. Learning to summarize with human feedback. In Hugo Larochelle, Marc’Aurelio Ranzato, Raia Hadsell, Maria-Florina Balcan, and Hsuan-Tien Lin (eds.), Advances in Neural Information Processing Systems 33: Annual Conference on Neural Information Processing Systems 2020, NeurIPS 2020, December 6-12, 2020, virtual , 2020. Sijun Tan, Siyuan Zhuang, Kyle Montgomery, William Y Tang, Alejandro Cuadron, Chenguang Wang, Raluca Ada Popa, and Ion Stoica. Judgebench: A benchmark for evaluating llm-based judges. ArXiv preprint , 2024. Qwen Team et al. Qwen2 technical report. ArXiv preprint , abs/2407.10671, 2024. Binghai Wang, Runji Lin, Keming Lu, Le Yu, Zhenru Zhang, Fei Huang, Chujie Zheng, Kai Dang, Yang Fan, Xingzhang Ren, et al. Worldpm: Scaling human preference modeling. arXiv preprint arXiv:2505.10527 , 2025a. Binghai Wang, Yantao Liu, Yuxuan Liu, Tianyi Tang, Shenzhi Wang, Chang Gao, Chujie Zheng, Yichang Zhang, Le Yu, Shixuan Liu, et al. Outcome accuracy is not enough: Aligning the rea-soning process of reward models. In Proceedings of the 64th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pp. 41482–41508, 2026a. Chenglong Wang, Hang Zhou, Kaiyan Chang, Bei Li, Yongyu Mu, Tong Xiao, Tongran Liu, and Jingbo Zhu. Hybrid alignment training for large language models. ArXiv preprint , 2024a. Chenglong Wang, Hang Zhou, Yimin Hu, Yifu Huo, Bei Li, Tongran Liu, Tong Xiao, and Jingbo Zhu. ESRL: efficient sampling-based reinforcement learning for sequence generation. In Michael J. Wooldridge, Jennifer G. Dy, and Sriraam Natarajan (eds.), Thirty-Eighth AAAI Confer-ence on Artificial Intelligence, AAAI 2024, Thirty-Sixth Conference on Innovative Applications of Artificial Intelligence, IAAI 2024, Fourteenth Symposium on Educational Advances in Artificial Intelligence, EAAI 2014, February 20-27, 2024, Vancouver, Canada , pp. 19107–19115. AAAI Press, 2024b. Chenglong Wang, Yang Gan, Yifu Huo, Yongyu Mu, Qiaozhi He, Murun Yang, Bei Li, Tong Xiao, Chunliang Zhang, Tongran Liu, et al. Gram: A generative foundation reward model for reward generalization. ArXiv preprint , 2025b. Chenglong Wang, Yongyu Mu, Hang Zhou, Yifu Huo, Ziming Zhu, Jiali Zeng, Murun Yang, Bei Li, Xiaoyang Hao, Chunliang Zhang, et al. Gram-r 2: Self-training generative foundation reward models for reward reasoning. ArXiv preprint , 2025c. Chenglong Wang, Yang Gan, Hang Zhou, Chi Hu, Yongyu Mu, Kai Song, Murun Yang, Bei Li, Chunliang Zhang, Tongran Liu, et al. Mro: Enhancing reasoning in diffusion language models via multi-reward optimization. Advances in Neural Information Processing Systems , 38:29681– 29712, 2026b. Peiyi Wang, Lei Li, Liang Chen, Zefan Cai, Dawei Zhu, Binghuai Lin, Yunbo Cao, Lingpeng Kong, Qi Liu, Tianyu Liu, et al. Large language models are not fair evaluators. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) ,pp. 9440–9450, 2024c. Yibin Wang, Yuhang Zang, Hao Li, Cheng Jin, and Jiaqi Wang. Unified reward model for multi-modal understanding and generation. arXiv preprint arXiv:2503.05236 , 2025d. Yibin Wang, Yuhang Zang, Chunyu Wang, Qinglin Lu, Cheng Jin, Jiaqi Wang, et al. Unified mul-timodal chain-of-thought reward model through reinforcement fine-tuning. Advances in neural information processing systems , 38:159130–159157, 2026c. Zhilin Wang, Jiaqi Zeng, Olivier Delalleau, Hoo-Chang Shin, Felipe Soares, Alexander Bukharin, Ellie Evans, Yi Dong, and Oleksii Kuchaiev. Helpsteer3-preference: Open human-annotated preference data across diverse tasks and languages. ArXiv preprint , abs/2505.11475, 2025e. 13 arXiv preprint Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Brian Ichter, Fei Xia, Ed H. Chi, Quoc V. Le, and Denny Zhou. Chain-of-thought prompting elicits reasoning in large language models. In Sanmi Koyejo, S. Mohamed, A. Agarwal, Danielle Belgrave, K. Cho, and A. Oh (eds.), Advances in Neural Information Processing Systems 35: Annual Conference on Neural Information Processing Systems 2022, NeurIPS 2022, New Orleans, LA, USA, November 28 -December 9, 2022 , 2022. Tong Xiao and Jingbo Zhu. Foundations of large language models. ArXiv preprint , 2025. Haoran Xu, Amr Sharaf, Yunmo Chen, Weiting Tan, Lingfeng Shen, Benjamin Van Durme, Kenton Murray, and Young Jin Kim. Contrastive preference optimization: Pushing the boundaries of LLM performance in machine translation. In Forty-first International Conference on Machine Learning, ICML 2024, Vienna, Austria, July 21-27, 2024 . OpenReview.net, 2024. Haoran Yang, Yumeng Zhang, Jiaqi Xu, Hongyuan Lu, Pheng-Ann Heng, and Wai Lam. Unveiling the generalization power of fine-tuned large language models. In Kevin Duh, Helena Gomez, and Steven Bethard (eds.), Proceedings of the 2024 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies (Volume 1: Long Papers) , pp. 884–899, Mexico City, Mexico, 2024. Association for Computational Linguistics. Qiying Yu, Zheng Zhang, Ruofei Zhu, Yufeng Yuan, Xiaochen Zuo, Yu Yue, Weinan Dai, Tiantian Fan, Gaohong Liu, Lingjun Liu, et al. Dapo: An open-source llm reinforcement learning system at scale. ArXiv preprint , 2025. Zheng Yuan, Hongyi Yuan, Chuanqi Tan, Wei Wang, Songfang Huang, and Fei Huang. Rrhf: Rank responses to align language models with human feedback without tears. ArXiv preprint , 2023. Lunjun Zhang, Arian Hosseini, Hritik Bansal, Mehran Kazemi, Aviral Kumar, and Rishabh Agarwal. Generative verifiers: Reward modeling as next-token prediction. ArXiv preprint , 2024. Jian Zhao, Runze Liu, Kaiyan Zhang, Zhimu Zhou, Junqi Gao, Dong Li, Jiafei Lyu, Zhouyi Qian, Biqing Qi, Xiu Li, et al. Genprm: Scaling test-time compute of process reward models via gener-ative reasoning. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 40, pp. 34932–34940, 2026. Hang Zhou, Chenglong Wang, Yimin Hu, Tong Xiao, Chunliang Zhang, and Jingbo Zhu. Prior constraints-based reward model training for aligning large language models. In China National Conference on Chinese Computational Linguistics , pp. 555–570. Springer, 2024. 14 arXiv preprint 
+
+## A PROOFS FOR THEORETICAL RESULTS 
+
+In this section, we present the proofs of three theoretical results. The first result establishes the im-portance of margin awareness in reward construction for RL. The second result shows that Kemeny-rule-based aggregation can recover a globally consistent ranking that maximizes the weighted agree-ment with all pairwise preferences. The third result demonstrates the advantage of using a reference policy to generate anchor responses. 
+
+Property 1. The reward difference should reflect the relative quality gap between responses: 
+
+r(x, o i) − r(x, o j ) ∝ ∆qij , where ∆qij denotes the latent oracle preference margin between re-sponses oi and oj .
+
+Proof: For any two responses oi and oj sampled under the input x, the reward gap should reflect the underlying quality gap: 
+
+r(x, o i) − r(x, o j ) ∝ ∆qij , ∆qij ≜ q(x, o i) − q(x, o j ) (8) where q(x, o ) denotes the latent (oracle) preference quality, and ∆qij is the latent oracle preference margin. Assume there exists an oracle quality function q(x, o ) that characterizes the true preference intensity for response o given input x. The ideal RL objective is 
+
+Jq (θ) ≜ Ex∼D ,,o ∼πθ (·| x)
+
+q(x, o ) (9) By the policy gradient theorem, its gradient can be written as 
+
+∇θ Jq (θ) = Ex,o 
+
+h
+
+q(x, o )∇θ log πθ (o|x)
+
+i
+
+(10) In practice, GRPO-style RL algorithms typically optimize a surrogate objective using a group of sampled responses {o1, · · · , o m} for the same x, and define a normalized group-relative advantage: 
+
+A(r) 
+
+> i
+
+= ri − μr
+
+σr
+
+, ri ≜ r(x, o i), μr ≜ 1
+
+m
+
+> m
+
+X
+
+> k=1
+
+rk, σ2 
+
+> r
+
+≜ 1
+
+m
+
+> m
+
+X
+
+> k=1
+
+(rk − μr )2 (11) Ignoring clipping and other stabilizers for clarity, the corresponding RL update direction is 
+
+gr (θ) ≜ Ex
+
+" mX
+
+> i=1
+
+A(r) 
+
+> i
+
+∇θ log πθ (oi|x)
+
+#
+
+(12) Hence, the relative magnitudes of policy updates across sampled responses are governed by the normalized reward gaps A(r) 
+
+> i
+
+. This demonstrates that not only the ordering of rewards, but also the proper calibration of reward differences, is crucial for effective optimization. Furthermore, assume that for any fixed x, reward scores from reward models are an affine transfor-mation of oracle qualities: 
+
+r(x, o ) = bq (x, o ) + d, b > 0 (13) Then the advantage computed from r coincides with the advantage computed from q:
+
+A(r) 
+
+> i
+
+= A(q) 
+
+> i
+
+≜ qi − μq
+
+σq
+
+, qi ≜ q(x, o i), μq ≜ 1
+
+m
+
+> m
+
+X
+
+> k=1
+
+qk, σ2 
+
+> q
+
+≜ 1
+
+m
+
+> m
+
+X
+
+> k=1
+
+(qk − μq )2 (14) Under the affine assumption, 
+
+μr = 1
+
+m
+
+> m
+
+X
+
+> k=1
+
+(bq k + b) = bμ q + d (15) and 
+
+σ2 
+
+> r
+
+= 1
+
+m
+
+> m
+
+X
+
+> k=1
+
+ bq k + d − (bμ q + d)2 = 1
+
+m
+
+> m
+
+X
+
+> k=1
+
+(b(qk − μq )) 2 = b2σ2 
+
+> q
+
+(16) 15 arXiv preprint so σr = bσ q since b > 0. Therefore, 
+
+A(r) 
+
+> i
+
+= bq i + b − (bμ q + d)
+
+bσ q
+
+= qi − μq
+
+σq
+
+= A(q) 
+
+> i
+
+(17) Based on this equation, the RL update direction induced by r becomes 
+
+gr (θ) = Ex
+
+" mX
+
+> i=1
+
+A(q) 
+
+> i
+
+∇θ log πθ (oi|x)
+
+#
+
+(18) which is precisely the group-normalized counterpart of the oracle policy gradient. In particular, the 
+
+relative weighting assigned to different sampled responses is governed by ( qi − μq ), i.e. , the oracle quality margins within the sampled group. Hence, to maintain oracle-consistent update geometry, reward differences must scale proportionally with oracle differences: 
+
+ri − rj = b(qi − qj ) = b∆qij (19) This is exactly the desired margin-awareness property: 
+
+r(x, o i) − r(x, o j ) ∝ ∆qij (20) Building on the above proof, we further analyze how our SCR and AGR mechanisms satisfy the property of margin awareness. In SCR, reward scores are constructed from pairwise comparisons among sampled responses: 
+
+r(x, o i) = α X 
+
+> j̸=i
+
+1[oi ≻ oj ] (21) Thus, the reward difference between the two responses satisfies 
+
+ri − rj = α X
+
+> k
+
+ 1[oi ≻ ok] − 1[oj ≻ ok] (22) This difference equals the net number of wins of oi over the rest of the group relative to oj . Intu-itively, if oi is substantially better than oj , it will defeat more competitors and lose to fewer, yielding a larger reward gap. Conversely, if two responses are close in quality, their win counts will also be similar. In AGR, rewards are constructed via comparisons with a fixed set of anchor responses: 
+
+r(x, o i) = α
+
+> n
+
+X
+
+> k=1
+
+1[oi ≻ ak] (23) where anchors ak are generated from a reference policy. Here, the reward difference becomes 
+
+ri − rj = α
+
+> n
+
+X
+
+> k=1
+
+ 1[oi ≻ ak] − 1[oj ≻ ak] (24) which measures how much better oi performs than oj relative to the same quality benchmarks. If 
+
+oi consistently outperforms anchors that oj fails against, the reward gap increases accordingly. This mechanism effectively estimates the relative position of each response along a shared quality scale defined by the anchors. Thus, reward differences reflect how much higher one response ranks than another with respect to common reference points, providing a stable and scalable approximation of oracle margin differences. This completes the proof of this property. 
+
+Property 2. Given inconsistent pairwise preferences produced by a generative reward model, a Kemeny-rule-based aggregation can recover a globally consistent ranking that maximizes the weighted agreement with all pairwise preferences, where the weight of each preference is deter-mined by its support degree (e.g., voting count) from the model. 
+
+Proof: Let O = {o1, . . . , o m} be the response set. Suppose the generative reward model outputs (possibly inconsistent) pairwise preferences with nonnegative weights wij i̸=j , where wij represents 16 arXiv preprint the support for the preference oi ≻ oj (e.g. , the number of votes in favor of oi ≻ oj ). This defines a weighted directed graph G = ( V, E ) with V = O and directed edges i → j of weight wij .A globally consistent ranking is a total order π over O. Any total order π induces a transitive tournament orientation: we say π agrees with an edge i → j if i is ranked ahead of j under π
+
+(denoted i ≺π j or equivalently oi ≻π oj ). Define the weighted agreement of π with the pairwise preferences as 
+
+Agree( π) := X 
+
+> i≺πj
+
+wij (25) 
+
+i.e. , the total weight of directed preferences that are consistent with the total order π. Equivalently, define the weighted disagreement ( a.k.a , feedback weight) as 
+
+Disagree( π) := X 
+
+> i≺πj
+
+wji (26) which corresponds to the total weight of edges that point against the ordering induced by π. Note that for any unordered pair i, j , exactly one of i ≺π j or j ≺π i must hold. Hence, 
+
+Agree( π) + Disagree( π) = X
+
+> i<j
+
+ wij + wji 
+
+ =: C (27) where C is a constant independent of π. Therefore, 
+
+arg max  
+
+> π
+
+Agree( π) = arg min  
+
+> π
+
+Disagree( π) (28) This is precisely the Kemeny optimal aggregation objective in the weighted setting: find the total order π∗ that minimizes the total weight of pairwise disagreements (Simjour, 2009; Betzler et al., 2014). Finally, because π∗ is a total order, it is globally consistent by construction: if i ≺π∗ j and 
+
+j ≺π∗ k, then necessarily i ≺π∗ k. Thus, the Kemeny-rule solution π∗ yields a globally consistent ranking that maximizes weighted agreement with the pairwise preferences, with weights determined by support degrees ( e.g. , voting counts). This completes the proof of this property. 
+
+Property 3. Compared to selecting anchors from samples of the current policy πθ (·), using a refer-ence policy πref (·) to generate anchor responses decouples anchor quality from policy updates. This mitigates feedback loops between policy improvement and anchor quality, reducing distributional drift and yielding more stable reward signals during training. 
+
+Proof: In anchor-guided ranking (see Section 4.2), the reward for a sampled response oi ∼ πθ (·| x)
+
+is constructed as 
+
+rθ (x, o i) = α
+
+> n
+
+X
+
+> k=1
+
+1[oi ≻ ak, ], ak ∼ qθ (·| x) (29) where qθ denotes the anchor-generating distribution. Here, we consider two strategies for generating anchors: 1) On-policy anchors: qθ (·| x) = πθ (·| x) and 2) Reference anchors: qθ (·| x) = πref (·| x),independent of θ.Here, we call the gradient of the RL optimization objective w.r.t θ:
+
+∇θ J(θ) = Ex,o [rθ (x, o )∇θ log πθ (o|x)] 
+
+| {z }
+
+> policy improvement term
+
++ Ex,o [∇θ rθ (x, o )] 
+
+| {z }
+
+> baseline drift term
+
+(30) The second term is non-zero because anchors are also drawn from πθ :
+
+∇θ rθ (x, o ) = α
+
+> n
+
+X
+
+> k=1
+
+Eak ∼πθ
+
+1[o ≻ ak]∇θ log πθ (ak|x) (31) Therefore, each policy update simultaneously: 1) shifts probability mass toward better responses o,and 2) improves the anchor set used as the comparison baseline. As a result, the reward assigned to a 17 arXiv preprint Method w/ Thinking w/o Thinking                                                                                                                 
+
+> AE2 AH2 WiB MM RMATH AE2 AH2 WiB MM RMATH SFT ( w/ Qwen2.5-7B-Instruct )27.1 5.6 44.6 60.3 45.6 25.6 5.2 46.2 62.7 47.8 + DPO 29.6 6.2 48.4 58.4 42.4 28.7 7.6 47.8 60.4 45.6 + SimPO 30.4 7.0 50.3 56.7 45.8 29.1 7.8 48.9 58.2 46.2
+> RL Training via 3B-Scale Reward Models
+> + DRM 27.8 6.8 46.6 58.2 46.8 26.8 7.4 46.0 59.1 48.8 + GRM w/ PRC 30.9 7.2 48.3 56.4 48.8 28.1 7.2 47.8 60.4 48.0 +Removing Thinking 28.4 6.4 46.6 55.3 45.2 27.6 6.8 46.8 61.7 48.4 + GRM w/ RRC-SCR 33.2 7.8 51.2 58.4 48.0 34.8 7.6 48.6 62.2 49.8 +voting@8 35.6 8.4 52.8 60.5 50.0 35.7 8.2 49.2 64.7 48.6 + GRM w/ RRC-AGR 34.5 8.6 52.8 62.6 51.8 32.8 8.0 49.6 65.7 51.4 +voting@8 35.8 9.4 52.4 63.4 52.6 33.8 8.6 50.6 67.6 52.8
+
+Table 2: Performance of models fine-tuned from Qwen2.5-7B-Instruct model. All experiments are conducted using 3B-scale reward models. fixed response o may decrease even if its absolute quality does not, simply because anchors become stronger. Hence, the optimization target itself changes with θ, forming a moving-target objective: 
+
+θt ⇒ πθt ⇒ stronger anchors ⇒ shifted rewards ⇒ ∇ θ J(θt)changes (32) This violates the stationarity assumption implicitly required by stochastic gradient ascent and in-creases both gradient variance and training instability. When anchors are sampled from a fixed reference policy, 
+
+r(x, o ) = α
+
+> n
+
+X
+
+> k=1
+
+1[o ≻ ak], ak ∼ πref (33) which is independent of θ. Thus, 
+
+∇θ r(x, o ) = 0 (34) and the gradient reduces to 
+
+∇θ J(θ) = E [r(x, o )∇θ log πθ (o|x)] (35) which corresponds to optimizing a fixed reward landscape. In this case, policy updates only affect the sampling distribution of candidate responses, while the evaluation baseline remains stationary. Hence, the optimization objective does not drift across iterations, satisfying the standard assump-tions of stochastic optimization and yielding more stable training dynamics. This completes the proof of this property. 
+
+## B ADDITIONAL EXPERIMENTAL DETAILS AND RESULTS 
+
+In this section, we provide additional experimental details and present the experimental results of our RRC approach. B.1 EXPERIMENTAL DETAILS 
+
+Training Setups. For the experiments reported in Figure 1 and Table 1, we set the group sampling size to m = 8 and the number of anchor responses to n = 8 . We also evaluated other group and anchor sizes in Figure 3 to study the impact of these hyperparameters. For RRC, we set the scaling factor α to 0.1. Following Bhaskar et al. (2025), we additionally incorporated a format reward to encourage structured outputs in the reasoning-augmented setting. The final reward is computed as a combination of the ranking-based reward and the format reward: 
+
+r(o, x ) = rϕ(o, x ) + rformat (o) (36) Here, we define the format reward rformat (·) as a binary indicator: it equals 1 if the sampled response follows the required structure with explicit <think> and <answer> tags, and 0 otherwise. When 18 arXiv preprint 0.05 0.1 0.3 0.5 1.0 5.0 10.0           
+
+> 28 .030 .032 .034 .036 .038 .0
+> 36 .236 .435 .736 .035 .233 .232 .8
+> α
+> Accuracy (%)
+> (a) Ablation Study on α
+> AE2 (3B) AE2 (8B)
+> 30 32 34 36 38 40 42 44
+> 36 .438 .735 .836 .8
+> Accuracy (%) RRC-SCR RRC-SCR w/o CARA
+> MM R(3B) MM R(8B)
+> 38 42 46 50 54 58 62
+> 54 .455 .153 .153 .6
+> Accuracy (%) RRC-SCR RRC-SCR w/o CARA
+> (b) Ablation Study on Conflict-Aware Ranking Adjustment (CARA)
+
+Figure 4: Ablation Study 
+
+Appendix B: Additional Experimental Details and Results 
+
+In this section, we provide additional experimental details and present the experimental results of our RRC approach. 
+
+Experimental Details 
+
+Training Setups. For the experiments reported in Figure 1 and Table 1, we set the group sampling size to m = 8 and the number of anchor responses to n = 8 . We also evaluated other group and anchor sizes in Figure 3 to study the impact of these hyperparameters. For RRC, we set the scaling factor α to 0.1. Following Bhaskar, Ye, and Chen (2025), we additionally incorporated a format reward to encourage structured outputs in the reasoning-augmented setting. The final reward is computed as a combination of the ranking-based reward and the format reward: 
+
+r(o, x ) = rϕ(o, x ) + rformat (o) (36) Here, we define the format reward rformat (·) as a binary indicator: it equals 1 if the sampled response follows the required structure with explicit <think> and <answer> tags, and 0 otherwise. When querying the generative reward model, we account for the positional bias reported in Wang et al. (2024c) by randomly assigning responses to the “Response A” and “Response B” slots in each pairwise comparison. Additionally, during RL training, we saved a checkpoint every 100 steps. We then selected the best checkpoint based on performance on a validation set. The validation set was sampled from the training distribution and consists of 500 examples. For validation, we used GPT-4o to generate reference responses and evaluated model outputs using the AlpacaEval2 evaluation protocol to compute validation scores. The checkpoint with the highest validation score was selected as the final model. 
+
+Evaluation. For AlpacaEval2 and ArenaHardV2, we adopted GPT-4-1106-preview as the reference model to generate baseline responses paired with each evaluation prompt. AlpacaEval2 consists of 805 user prompts. Evaluation was conducted in a head-to-head setting, where model outputs were compared against the reference responses and judged by a generative evaluator, resulting in win rates ranging from 0% to 100%. We followed the length-controlled win-rate protocol recommended by Dubois, Liang, and Hashimoto (2024) to mitigate length bias. In our implementation, we replaced the default GPT-4 judge with GPT-4o . Notably, we further employed a stronger GPT-5 as the final evaluator to ensure robust and reliable assessment. ArenaHardV2 comprises 500 challenging real-world user queries, and we employed the same evaluation protocol as AlpacaEval2. For WildBench, which contains 1,024 user prompts with some multi-turn interactions, we followed the official evaluation protocol and used point-wise scoring instead of head-to-head comparison 2. The final scores are reported on a 0-100 scale. For the reasoning benchmarks, we used evalscope to conduct automatic evaluation 3.
+
+Ablation Study 
+
+We conduct a comprehensive ablation study to investigate the sensitivity of our method to the reward scaling factor α in SCR. Specifically, as shown in Figure 4(a), we vary α over a wide range from 0.05 to 10.0, and evaluate performance using SCR with 3B-scale reward models. The results indicate that the performance remains relatively stable when α lies in the range of 0.05 to 0.5, suggesting that our method is not highly sensitive to moderate changes in reward scaling. However, when α increases beyond 1.0, we observe a gradual performance degradation. This behavior can be attributed to the normalization mechanism in GRPO-style RL. Since advantages are normalized within each batch, moderate rescaling of reward values does not significantly 
+
+> 2https://github.com/allenai/WildBench/blob/main/evaluation/eval_template.score.v2.md
+> 3https://github.com/modelscope/evalscope
+
+Figure 4: Ablation Study querying the generative reward model, we account for the positional bias reported in Wang et al. (2024c) by randomly assigning responses to the “Response A” and “Response B” slots in each pairwise comparison. Additionally, during RL training, we saved a checkpoint every 100 steps. We then selected the best checkpoint based on performance on a validation set. The validation set was sampled from the training distribution and consists of 500 examples. For validation, we used GPT-4o to generate reference responses and evaluated model outputs using the AlpacaEval2 evaluation protocol to compute validation scores. The checkpoint with the highest validation score was selected as the final model. 
+
+Evaluation. For AlpacaEval2 and ArenaHardV2, we adopted GPT-4-1106-preview as the reference model to generate baseline responses paired with each evaluation prompt. AlpacaEval2 consists of 805 user prompts. Evaluation was conducted in a head-to-head setting, where model outputs were compared against the reference responses and judged by a generative evaluator, result-ing in win rates ranging from 0% to 100%. We followed the length-controlled win-rate protocol recommended by Dubois et al. (2024) to mitigate length bias. In our implementation, we replaced the default GPT-4 judge with GPT-4o . Notably, we further employed a stronger GPT-5 as the final evaluator to ensure robust and reliable assessment. ArenaHardV2 comprises 500 challenging real-world user queries, and we employed the same evaluation protocol as AlpacaEval2. For WildBench, which contains 1,024 user prompts with some multi-turn interactions, we followed the official eval-uation protocol and used point-wise scoring instead of head-to-head comparison 2. The final scores are reported on a 0-100 scale. For the reasoning benchmarks, we used evalscope to conduct automatic evaluation 3.B.2 ABLATION STUDY 
+
+We conduct a comprehensive ablation study to investigate the sensitivity of our method to the reward scaling factor α in SCR. Specifically, as shown in Figure 4(a), we vary α over a wide range from 0.05 to 10.0, and evaluate performance using SCR with 3B-scale reward models. The results indicate that the performance remains relatively stable when α lies in the range of 0.05 to 0.5, suggesting that our method is not highly sensitive to moderate changes in reward scaling. However, when α increases beyond 1.0, we observe a gradual performance degradation. This behavior can be attributed to the normalization mechanism in GRPO-style RL. Since advantages are normalized within each batch, moderate rescaling of reward values does not significantly affect the relative magnitudes of policy gradients. In contrast, overly large scaling factors may amplify noise and lead to unstable advantage normalization, which in turn degrades training stability and final performance. We further investigate the effectiveness of Conflict-Aware Ranking Adjustment (namely CARA) in SCR. As shown in Figure 4(b), removing CARA consistently leads to performance drops across different backbone scales and benchmarks. Specifically, on AE2, SCR with CARA outperforms the variant without CARA by 0.6% and 1.9% on the 3B and 8B backbones, respectively. Similarly, 
+
+> 2
+
+https://github.com/allenai/WildBench/blob/main/evaluation/eval_ template.score.v2.md 
+
+> 3
+
+https://github.com/modelscope/evalscope 
+
+19 arXiv preprint              
+
+> Dimension SCR AGR
+> Structure Fully Connected Bipartite Graph Preference Query O(m·log m)O(m·n)
+> Scalability Limited Better
+
+Table 3: Comparison between SCR and AGR in terms of comparison structure, preference query complexity, and scalability. on MM R, we observe improvements of 1.3% (3B) and 1.5% (8B) when CARA is enabled. These results confirm that CARA plays an important role in mitigating the adverse effects of conflicting pairwise preferences produced by generative reward models. B.3 RESULTS ON ADDITIONAL BACKBONE MODELS 
+
+To evaluate the generality of our approach across different policy backbones, we further conduct experiments on Qwen2.5-7B-Instruct. As shown in Table 2, we observe trends highly consistent with those on Qwen2.5-7B-Instruct. In particular, RRC-based methods, including both SCR and AGR variants, consistently outperform DPO, SimPO, and our RL baselines, demonstrating that the effectiveness of RRC is not tied to a specific backbone architecture or model scale. An interesting observation is that removing explicit <think> traces ( i.e. , w/o Thinking ) does not lead to noticeable performance degradation on certain benchmarks, especially on MM R and MATH. In some cases, the performance is even slightly improved. We hypothesize that this phenomenon is related to the data distribution used during SFT, where a large portion of reasoning-related samples are embedded within open-ended chat formats rather than strictly structured chain-of-thought annotations. Similar findings have also been reported in Bhaskar et al. (2025). 
+
+## C ADDITIONAL ANALYSES 
+
+C.1 BEHAVIORAL DIFFERENCES BETWEEN SCR AND AGR As summarized in Table 3, SCR and AGR mainly differ in their comparison structures and in the number of preference queries to the generative reward model. SCR performs pairwise comparisons among all sampled responses, which induces a fully connected tournament over the response set. In contrast, AGR compares each response only against a set of anchors, forming a bipartite graph between responses and anchors. This structural difference leads to substantially different computa-tional costs. We further compare the number of queries to the generative reward model required by the two approaches. SCR requires pairwise comparisons between all response pairs, resulting in 
+
+NSCR = m(m−1) 2 = O(m · log m) (37) while AGR only performs response–anchor comparisons, 
+
+NAGR = m · n = O(mn ) (38) The difference in query cost is therefore 
+
+NSCR − NAGR = m  m−12 − n (39) which is positive whenever n < m−12 , a typical setting in practice. Up to constant factors, this gap scales on the order of m(m − n) when n < m , highlighting the improved scalability of AGR under larger sampling budgets. We also provide the corresponding ranking algorithms in Algorithms 1 and 2. C.2 PERFORMANCE VS . T IME COST 
+
+We further analyze the computational overhead introduced by ranking-based rewards and study the trade-off between performance gains and training efficiency. 
+
+Efficiency Optimization. To reduce the practical overhead of generative reward models, we opti-mize reward computation from two aspects. First, we deploy generative reward models in parallel 20 arXiv preprint Method Training Time AlpacaEval2 Gain Discriminative RM 8.2h 33.2 -Baseline RL (GRM w/ PRC) 10.5h 35.8 -RRC-SCR 13.2h 38.7 +2.9 RRC-AGR 10.6h 39.4 +3.6 RRC-SCR + voting@8 15.2h 40.0 +4.2 RRC-AGR + voting@8 11.8h 41.3 +5.5 Table 4: Comparison of end-to-end training cost and performance on AlpacaEval2 (8B-scale models with Thinking). Improvements are computed over the baseline RL pipeline. Method AE2 WiB MMR MATH GRM w/ PRC + Majority Voting 32.8 52.1 52.8 45.2 GRM w/ PRC + Soft Aggregation 30.1 51.4 48.2 44.8 GRM w/ RRC-SCR 36.4 55.6 54.4 45.6 GRM w/ RRC-AGR 35.8 56.8 55.0 46.4 
+
+Table 5: Compute-matched comparison between PRC and RRC (3B-scale models with Thinking). All compared methods use the same number of GRM queries as RRC under the same sampling configuration. Note that discriminative reward models are not included because they do not support the same computation scaling mechanism based on repeated generative preference judgments. using vLLM , where 8 GPUs are used to host 8 model instances for concurrent preference evalua-tion. Second, we adopt asynchronous reward querying to overlap reward computation with policy optimization. With a sampling size of 8, the additional ranking computation in SCR takes approx-imately 0.5ms per batch, compared with 0.2ms for discriminative reward models under the same setting. This demonstrates that the overhead introduced by ranking operations remains small at the reward computation level. For AGR, we further improve efficiency by precomputing anchor responses. Specifically, anchor generation requires approximately 1 hour using 16 GPUs. After an-chor construction, AGR training takes around 9 hours, leading to an overall training cost comparable to the baseline RL pipeline. 
+
+Performance-Efficiency Analysis. Table 4 summarizes the end-to-end training cost and perfor-mance improvements under a fixed hardware budget. Compared with the baseline RL pipeline (GRM w/ PRC), SCR increases the training time from 10.5h to 13.2h, while improving AlpacaEval2 performance from 35.8% to 38.7%. When combined with voting@8, SCR further improves perfor-mance to 40.0% with a moderate increase in training cost. In contrast, AGR provides a more favor-able performance-efficiency trade-off by leveraging a small set of precomputed anchor responses. With nearly identical training time to the baseline RL pipeline (10.6h vs. 10.5h), AGR improves AlpacaEval2 from 35.8% to 39.4%. Moreover, AGR with voting@8 achieves the best performance of 41.3 with only a modest increase in training cost. These results demonstrate that ranking-based reward construction can effectively improve RL training with generative reward models while main-taining practical efficiency. 
+
+Compute-Matched Comparison. To investigate whether the improvements of RRC mainly come from additional reward model computation, we conduct a compute-matched comparison with a strengthened PRC baseline. Specifically, we replace majority voting in GRM w/ PRC with soft aggregation, where preference probabilities from multiple CoT-enabled GRM queries are averaged to construct continuous rewards. This variant uses a comparable number of GRM evaluations while providing a finer-grained reward signal. As shown in Table 5, soft aggregation does not consistently improve over standard majority voting and remains inferior to RRC across all evaluated benchmarks. For example, on AlpacaEval2, the soft aggregation can achieve 30.1%, compared with 36.4% from RRC-SCR and 35.8% from RRC-AGR. These results suggest that allocating additional inference computation alone is insufficient. The improvement mainly comes from how comparison signals are aggregated: RRC preserves global preference structures and relative margins, whereas score aggregation treats each comparison independently. 21 arXiv preprint Probability Range [0,0.1] [0.1,0.9] [0.9,1.0] Percentage (%) 42.3 11.7 46.0 Table 6: Distribution of preference token probabilities from a point-wise generative reward model trained on HelpSteer3. C.3 POINT -WISE GENERATIVE REWARD MODELS 
+
+In this subsection, we further investigate point-wise generative reward models, which directly op-timize scalar preference prediction. Specifically, given an input-response pair (x, y ), the model is trained to generate a preference label z indicating the quality of the response ( e.g. , 1, 2, and 3). The training objective is formulated as: 
+
+Lpoint = −E(x,y,z )∼D log πθ (z|x, y ) (40) During inference, we use the probability of the positive preference token as the scalar reward: 
+
+r(x, y ) = πθ (z+|x, y ) (41) where z+ denotes the token corresponding to a positive preference. Although point-wise generative reward models can directly produce scalar preference scores, we find that the resulting reward signals suffer from limited resolution. To analyze this issue, we train a point-wise generative reward model on the HelpSteer3 dataset and examine the distribution of the final preference label token probabilities under CoT-based genera-tion. As shown in Table 6, the predicted probabilities are highly concentrated near extreme values, with only a small fraction of samples falling into the middle range. This phenomenon indicates scalar compression, where the reward model tends to produce near-deterministic preference predic-tions and provides limited resolution for distinguishing responses with similar quality. We attribute this behavior to the fact that CoT generation often determines the final preference token, resulting in saturated probability distributions. In contrast, RRC constructs rewards from structured comparisons among responses, explicitly preserving relative ranking and margin information even when individ-ual preference probabilities become saturated. Therefore, the advantage of RRC does not simply come from producing finer-grained scalar rewards, but from better leveraging the comparative na-ture of generative reward models to provide more informative learning signals for RL. Importantly, the limitation is not caused by the use of token probabilities itself, but by using them as absolute rewards. Even when the underlying preference prediction is accurate, saturated probabilities discard relative differences among responses. RRC avoids this issue by aggregating multiple comparative judgments into structured rankings. 22 arXiv preprint Algorithm 1: Self-Competitive Ranking (SCR) with Majority Voting and CARA 
+
+Require: Prompt x; responses O = {o1, . . . , o m}; generative reward model GRM ; voting budget 
+
+V ; scaling factor α; flag use CARA 
+
+Ensure: Rewards {r(x, o i)}mi=1 and total order π
+
+1: Initialize wij ← 0 for all i̸ = j
+
+2: for each unordered pair {i, j } with i < j do 
+
+3: ci≻j ← 0, cj≻i ← 0
+
+4: for t = 1 to V do 
+
+5: Query GRM on (x, o i, o j ) and obtain preference 
+
+6: if oi ≻ oj then 
+
+7: ci≻j ← ci≻j + 1 
+
+8: else 
+
+9: cj≻i ← cj≻i + 1 
+
+10: end if 
+
+11: end for 
+
+12: if ci≻j ≥ cj≻i then 
+
+13: wij ← ci≻j , wji ← cj≻i
+
+14: else 
+
+15: wji ← cj≻i, wij ← ci≻j
+
+16: end if 
+
+17: end for 
+
+18: if use CARA = 1 then 
+
+19: Initialize partial order Ω with an empty set 
+
+20: while there exists an undecided pair (i, j ) do 
+
+21: Select (i, j ) with the largest |wij − wji |
+
+22: if wij ≥ wji then 
+
+23: Add relation i ≺ j into Ω
+
+24: else 
+
+25: Add relation j ≺ i into Ω
+
+26: end if 
+
+27: Enforce transitive closure and discard relations forming cycles 
+
+28: end while 
+
+29: Obtain total order π by topological sorting of Ω
+
+30: else 
+
+31: Sort responses by win counts P  
+
+> j̸=i
+
+1[wij > w ji ] to obtain π
+
+32: end if 
+
+33: for each oi ∈ O do 
+
+34: r(x, o i) ← α · |{ oj̸ = oi : i ≺π j}| 
+
+35: end for 
+
+36: return {r(x, o i)}mi=1 , π
+
+23 arXiv preprint Algorithm 2: Anchor-Guided Ranking (AGR) with Majority Voting 
+
+Require: Prompt x; responses O = {o1, . . . , o m}; anchors A = {a1, . . . , a n}; generative reward model GRM ; voting budget V ; scaling factor α
+
+Ensure: Rewards {r(x, o i)}mi=1 
+
+1: for each response oi ∈ O do 
+
+2: si ← 0
+
+3: for each anchor ak ∈ A do 
+
+4: ci≻k ← 0, ck≻i ← 0
+
+5: for t = 1 to V do 
+
+6: Query GRM on (x, o i, a k) and obtain preference 
+
+7: if oi ≻ ak then 
+
+8: ci≻k ← ci≻k + 1 
+
+9: else 
+
+10: ck≻i ← ck≻i + 1 
+
+11: end if 
+
+12: end for 
+
+13: if ci≻k ≥ ck≻i then 
+
+14: si ← si + 1 
+
+15: end if 
+
+16: end for 
+
+17: r(x, o i) ← α · si
+
+18: end for 
+
+19: Rank responses by descending r(x, o i)
+
+20: return {r(x, o i)}mi=1 
+
+24 arXiv preprint 
+
+Prompt 
+
+Write a rock song, with alternating rhymes [ABAB], about the following ideas below. Avoid common rhymes, jargons, expressions like ”neon lights”, ”shadows creep”, ”whispers”, ”air is thick”, ”bittersweet”, ”forevermore”, ”story to be told”, etc. \n—– \n Compassion is the ancient stone bridge, worn smooth by centuries of rain and footsteps, that stretches across the chasm of our own pain. Each stone in its foundation is a memory, a tear, a whispered prayer–each one a testament to the moments when we have stumbled, when we have felt the sharp edges of loss and longing cut into our hearts. And yet, it is this very bridge, this fragile yet enduring connection, that allows us to reach out to others, to understand the weight of their burdens, to offer a hand in the darkness. The bridge does not erase the chasm, but it makes it possible to cross, to find solace in the shared journey, to know that we are not alone in our suffering, and that, together, we can find our way to the other side. 
+
+Baseline (PRC) 
+
+<think >\nThe user wants a rock song with alternating rhymes (ABAB) about the concept of ”compassion” as described in the provided text. \n\nKey ideas to incorporate: \n1. **Compassion as a bridge:** Connecting people across pain. \n2. **The bridge is ancient, worn:** Smooth, centuries old. \n3. ....., showing we care \nA frag-ile, enduring span, that helps us find our way there \nThrough the chasm of our suffering, we cross, we cross, we share \n\n**Verse 2:** \n(Guitar: Adds texture, maybe a bridge riff) \nEach stone in its foundation tells a story of the fall \nOf hopes that shattered like thin ice, of prayers that echoed through the wall \nOf moments when the weight was crushing, the edges cut through all \nMemories etched into the surface, testifying to how we stood at all \n\n**Chorus:** \n(Reprise with energy) \nThis is the weight of the bridge, the weight that we bear \nConnecting the sharp edges of our hearts, showing we care \nA fragile, enduring span, that helps us find our way there \nThrough the chasm of our suffering, we cross, we cross, we share \n\n**Bridge:** \n(Different rhythm or guitar tone.... ”connection worn so smooth,” ”span,” ”cross.” \n * **Ancient, worn:** ”ancient, weath-ered path,” ”weathered,” ”smooth.” \n * **Stones are memories/tears/prayers:** ”each stone in its foundation tells a story,” ”memories etched into the surface,” ”tears that fell behind,” ”prayers that echoed.” \n * **Crossing the chasm:** ”connecting the sharp edges of our hearts,” ”find our way there,” ”helps us find our way,” ”cross.” \n * **It makes it possible, not erases:** ”helps us find our way,” ”it doesn’t mend the cracks,” ”it provides a hand,” ”to-gether, we make the journey,” ”until the dawn is won,” ”shared weight.” \n* **Imagery & Metaphor:** The song uses strong, evocative images like ”weariness,” ”light is hard to find,” ”weathered path,” ”sharp edges,” ”stones,” ”tears,” ”prayers,” ”chasm,” ”weight,” ”span,” ”journey,” ”dawn.” These help paint a vivid picture of the struggle and the connection. \n* **Rock Song Feel:** The lyrics are written to be sung with energy, especially in the cho-ruses and bridge sections. The language is strong and direct, fitting a rock music style. \n</answer >”
+
+Ours (SCR) 
+
+<think >\nThis prompt is not simply asking for a song about kindness or emotional support. \nIt establishes a **very specific philosophical structure**: \n\n* Compassion is not a feeling, but an **infrastructure**. \n* Pain is not removed, only **made traversable**. \n* The bridge is built from **accumulated suffering**, not ex-ternal rescue. \n* Relief comes from **shared movement**, not from victory over pain. \n\nSo the song must avoid portraying compassion as: \n\n* a cure, \n* a rescue, \n* or a triumphant transformation. \n\nInstead, it should frame compassion as **functional, imperfect, and hard-earned**. \n\nThat is why the song repeatedly affirms that: \n\n* the canyon remains, \n* the weight remains, \n* the damage remains, \n\nbut movement be-comes possible. \n\nLines like: \n\n¿ *”This bridge won’t seal the drop below” \n¿ *”That canyon stays, it always will” \n\ndirectly answer the prompt’s insistence that suffering is not erased by connection. \nThis preserves the realism of the metaphor instead of turning it into emotional wish-fulfillment. \n\n— \n\n## Pain as Construction Material ### ..... Verse 1 \n\nA canyon cuts the ground in two, \nWe hide the breaks we cannot mend, \nThe pull of loss keeps dragging through, \nLike debts we never get to end. \n\n### Verse 2 \n\nAn aging span of bat-tered stone, \nSet down by breath and sleepless nights, \nEach block a wound we faced alone, \nEach seam still bound by failed goodbyes. \n\n### Verse 3 \n\nA bent-back vow, a scraped-out plea, \nA risk we took, a truth we bent, \nThey settle in that masonry, \nWhere every hurt learns what it meant. \n\n### Verse 4 \n\nThe edges bite, they mark the skin, \nThey map the cost of standing fast, \nYet every cut we carried in, \nBecomes a path across the past. \n\n### Verse 5 \n\nThis bridge won’t seal the drop below, \nWon’t lift the weight we always keep, \nBut gives our shaking feet a row, \nOf solid ground across the deep. \n\n### Verse 6 \n\nYou cross with me, I cross with you, \nNo debts to trade, no flags to raise, \nJust hands that know what hands go through, \nAnd choose to walk the same hard days. \n\n### Verse 7 \n\nThe load runs light when borne in stride, \nThe fall feels less like final ground, \nWe trade the need to run and hide, \nFor steps that make a steadier sound. \n\n### Verse 8\n\nPast all the breaks we couldn’t close, \nPast every word we left unsaid, \nWe reach not peace, but still we know... </answer >
+
+Table 7: Case study from the AlpacaEval2 benchmark. Our model produces a more structured and concept-consistent rock song that better aligns with the prompt’s philosophical constraints and narrative progression, whereas the baseline tends to rely on surface-level metaphors and generic expressions. 25 arXiv preprint 
+
+Prompt 
+
+create a simple website with a black background that isn’t scrollable. There should be a video in the background for the hero and in the center is should say in large bold white text Explore Zeroh. Under the text have a button saying Join Waitlist this button should be faded out and should have a transparent background with a white outline. The text in the button should be white. Once hovering over the button is transitions to a full white button with black text over it. 
+
+Baseline (PRC) 
+
+<think >\nThe user wants a simple website with a fixed, full-screen background video that doesn’t require scrolling. The content should be centered and include: \n1. Large, bold, white text saying ”Explore Zeroh”. \n2. A ”Join Waitlist” button below the text. \n * The button should be faded out initially. \n * It should have a transparent background. \n * It should have a white outline. \n * The text on the button should be white. \n * On hover, the button should transition to a full white background. \n * The text on the button should transition to black. \n * The hover state should be smooth. \n\nPlan: \n1. **HTML Structure:** Create a basic HTML5 structure with a 
+
+<!DOCTYPE html > declaration, <html >, <head > for meta tags and styles, and <body >.\n2. **CSS for Lay-out & Overflow:** Use CSS to make the body overflow hidden. Add position: fixed; top: 0; left: 0; width: 100%; height: 100%; to the body to make it full-screen. \n3. **CSS for Background Video:** Use a <video > element in the <body > for the background. Add position: absolute; top: 0; left: 0; width: 100%; height: 100%; to the video. Add object-fit: cover; to ensure the video fills the screen and maintains aspect ratio by covering the entire area. Add z-index: -1; so the content sits on top. The video source ( <source >) should be included within the <video >
+
+tag. Use a sample video URL if none is provided. \n4. **CSS for Content:** Create a container for the exploratory text and the button. Use position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); to center it both horizontally and vertically. Add some basic styling for padding and potentially a background color (initially transparent) if needed for stacking, although z-index and position are the primary stackers here. \n5. **CSS for Header Text:** \n * Select the header text (.header-text). \n * Set font-size to a large value (e.g., 50px). You should see the black background, the centered video, the large ”Explore Zeroh” text, and the faded-out ”Join Waitlist” button. Hovering over the button should make it fully white with black text. \n\nThis setup provides a simple, fixed, non-scrollable layout with the requested visual effects and centering. </answer >”
+
+Ours (AGR) 
+
+<think >1. Make the page non-scrollable (‘overflow: hidden‘) and full-screen. \n2. Put a full-bleed **background video** behind everything (‘position: fixed; object-fit: cover‘). \..... \n\n“‘html \n<!doctype html >\n<html lang=”en” >\n <head >\n <meta charset=”UTF-8” / >\n <meta name=”viewport” content=”width=device-width, initial-scale=1.0” / >\n <title >Explore Zeroh </title >\n <style >\n :root \n –bg: #000; \n –white: #fff; \n–black: #000; \n \n\n /* Prevent scrolling + full-screen layout */ \n html, body \n width: 100%; \n height: 100%; \n margin: 0; \n overflow: hidden; /* not scrollable */ \n background: var(–bg); \n font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; \n \n\n /* Background video */ \n .bg-video 
+
+\n position: fixed; \n inset: 0; \n width: 100%; \n height: 100%; \n object-fit: cover; \n z-index: 0; \n back-ground: var(–bg); \n \n\n /* Optional dark overlay to keep text readable */ \n .overlay \n position: fixed; \ninset: 0; \n z-index: 1; \n background: rgba(0, 0, 0, 0.45); \n \n\n /* Centered hero content */ \n .hero \n posi-tion: relative; \n z-index: 2; \n width: 100%; \n height: 100%; \n display: flex; \n align-items: center; \n justify-content: center; \n text-align: center; \n padding: 24px; \n box-sizing: border-box; \n \n\n .hero-inner \n dis-play: flex; \n flex-direction: column; \n gap: 18px; \n align-items: center; \n \n\n h1 \n margin: 0; \n color: var(–white); \n font-weight: 800; \n letter-spacing: 0.5px; \n line-height: 1.05; \n font-size: clamp(42px, 6vw, 86px); \n text-shadow: 0 10px 30px rgba(0,0,0,0.35); \n \n\n /* Faded-out outlined button */ \n .btn \n appear-ance: none; \n border: 2px solid rgba(255, 255, 255, 0.9); \n background: transparent; \n color: var(–white); \nfont-weight: 700; \n font-size: 16px; \n padding: 12px 22px; \n border-radius: 999px; \n cursor: pointer; \n\n /* ”faded out” look */ \n opacity: 0.65; \n\n /* smooth hover transition */ \n transition: background-color 220ms ease, color 220ms ease, opacity 220ms ease, transform 220ms ease; \n will-change: background-color, color, opacity, transform; \n \n\n .btn:hover \n background: var(–white); \n color: var(–black); \n opacity: 1; \n trans-form: translateY(-1px); \n \n\n .btn:active \n transform: translateY(0px); \n \n\n .btn:focus-visible \n outline: 3px solid rgba(255,255,255,0.45); \n outline-offset: 4px; \n opacity: 1; \n \n\n /* Respect reduced motion prefer-ences */ \n @media (prefers-reduced-motion: reduce) \n .btn transition: none; \n \n </style >\n </head >\n\n
+
+<body >\n <!– Replace src with your own video file URL/path – >\n <video class=”bg-video” autoplay muted loop playsinline >\n .... </answer >
+
+Table 8: Case study from the ArenaHardV2 benchmark. We use GPT-5 as an automatic judge to evaluate the correctness of the generated code. Compared with the baseline, the AGR-trained model produces code with fewer functional and stylistic errors, and more faithfully satisfies the prompt’s layout and interaction constraints. 26

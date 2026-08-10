@@ -1,0 +1,379 @@
+Title: EndoVLM: An Endoscopy Vision-Language Pre-training Model via Anatomy-Guided Sparsity and Progressive Alignment
+
+URL Source: https://arxiv.org/pdf/2608.04472
+
+Published Time: Thu, 06 Aug 2026 00:39:46 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# EndoVLM: An Endoscopy Vision-Language Pre-training Model via Anatomy-Guided Sparsity and Progressive Alignment 
+
+Zhenyu Yi ∗,1,3, Jianwei Xu ∗† 1,4, Yue Hu 2,5, Zhongwei Qiu 1,4, Sijing Li 6, Liang Huang 2,5, Bin Lv †2,5, Ling Zhang 1,4, Yingda Xia 1,41DAMO Academy, Alibaba Group 2Department of Gastroenterology, The First Affiliated Hospital of Zhejiang Chinese Medical University 3Shanghai Jiao Tong University 4Hupan Lab 5Key Laboratory of Digestive Pathophysiology of Zhejiang Province, The First Affiliated Hospital of Zhejiang Chinese Medical University 6Zhejiang University 
+
+> ∗
+
+Equal contribution , †Corresponding author 
+
+The development of foundation models (FMs) is crucial for advancing endoscopic image analysis. However, existing endoscopy FMs mainly rely on self-supervised learning from uni-modal images or videos, overlooking the rich semantic knowledge contained in clinical reports. Furthermore, effectively leveraging these records is hindered by a fundamental modality gap: structured anatomical descriptions are not naturally mapped to specific frames within the high-redundancy, uncurated visual streams. In this paper, we present EndoVLM, a novel vision-language FM pre-trained on over 348K endoscopic examinations, each pairing a clinical report with its corresponding image collection. An Anatomy-Guided Sparse Pooling mechanism utilizes textual descriptions as queries to drive sparse attention, efficiently aggregating semantically salient frames into anatomy-specific visual representations across redundant image-sets. Next, a Progressive Semantic-Aware Alignment strategy models clinical taxonomy (anatomy and pathological status) via structured soft targets, bridging the gap from global patient-level matching to fine-grained localized alignment. Finally, a Semantic-Concentrated Masked Autoencoder is applied exclusively to these semantic-rich frames, integrating low-level visual precision with robust high-level semantic representation. Extensive experiments across various downstream tasks demonstrate that EndoVLM outperforms existing foundation models and remains competitive with task-specific methods. Remarkably, EndoVLM also exhibits robust zero-shot generalization capabilities, highlighting its potential for broader clinical application.  
+
+> Code:
+
+https://github.com/Scatteredrain/EndoVLM 
+
+## 1 Introduction 
+
+Recent advances in foundation models (FMs) have catalyzed a paradigm shift in the development of medical image analysis (Bommasani et al., 2021). Through self-supervised learning (SSL) on massive unlabeled datasets (He et al., 2022; Oquab et al., 2023), FMs learn highly transferable representations for downstream tasks (Xu et al., 2021; Hu et al., 2024, 2025; Polat et al., 2023), driving breakthroughs across various medical domains, including CT (Tang et al., 2022), X-ray (Tiu et al., 2022), and histopathology (Wang et al., 2024). Furthermore, since clinical workflows naturally pair images with detailed diagnostic reports, this multimodal synergy has inspired vision-language FMs—such as BiomedCLIP (Zhang et al., 2023), LLaVA-Med (Li et al., 2023), fVLM (Shui et al., 2025), and TumorChain (Li et al., 2026). By aligning visual features with rich textual insights, these models build more interpretable and clinically grounded AI systems. However, existing endoscopy-specific FMs (Wang et al., 2023, 2025b; Tian et al., 2025; Jong et al., 2025) remain predominantly visual self-supervised models, overlooking the rich clinical insights embedded in textual reports, which not only describe anatomical landmarks and pathological findings but also provide procedural context. Meanwhile, general vision-language pre-training models (VLMs) such as CLIP (Radford et al., 2021; Wang et al., 2022) typically rely on a one-to-one alignment between individual samples (e.g., a single image, short arXiv:2608.04472v1 [cs.CV] 5 Aug 2026 video clip, or standardized 3D medical data such as CT) and their textual descriptions. In contrast, routine gastrointestinal (GI) endoscopy produces a single comprehensive report for dozens of unannotated images or lengthy videos—which we formulate as an image-set . Without explicit temporal or spatial annotations, it is exceptionally difficult to align a specific frame or a local region with a particular sentence or abnormal finding within the comprehensive report (Miech et al., 2020). For example, a gastroscopy report covers eight 
+
+regions ( esophagus, cardia, fundus, body, antrum, angularis, pylorus, duodenum ), while a colonoscopy assesses  
+
+> nine
+
+segments ( ileum, ileocecal region, ascending colon, hepatic flexure, transverse colon, splenic flexure, descending colon, sigmoid colon, rectum ). During examination, clinicians capture multiple images of each region from various angles and document morphology, mucosal features, and any pathological findings. The lack of per-frame labels makes it nearly impossible to identify the anatomical location or mucosal features in individual images, impeding precise image- or pixel-level cross-modal alignment. Addressing this bottleneck requires novel strategies that bridge structured clinical narratives with large-scale, unstructured visual corpora. In this work, we present EndoVLM, a novel vision-language foundation model pre-trained on a massive cohort of 348K endoscopic cases. To bridge the gap between unordered image-sets and structured reports, we introduce three core components. First, an Anatomy-Guided Sparse Pooling (AGSP) mechanism employs query-driven sparse attention to distill semantically salient frames from redundant visual streams. Subsequently, we propose a Progressive Semantic-Aware Alignment (PSAA) strategy. By modeling clinical classifications—encompassing both anatomical structures and pathological states—through soft targets, PSAA facilitates a robust transition from coarse patient-level matching to fine-grained localized alignment. Finally, a Semantic-Concentrated Masked Autoencoder (SC-MAE) is applied strictly to these filtered frames, unifying low-level geometric precision with high-level clinical semantics. Extensive experiments across diverse downstream tasks—including risk stratification, polyp segmentation, anatomy recognition, and video disease diagnosis—demonstrate that EndoVLM outperforms state-of-the-art foundation models and remains competitive with task-specific segmentation baselines using a minimal segmentation head. Remarkably, EndoVLM also exhibits robust zero-shot generalization capabilities, underscoring its immense potential as a highly adaptable backbone for scalable clinical deployment. 
+
+## 2 Method 
+
+We propose EndoVLM, a vision-language foundation model tailored for GI endoscopy. As shown in Fig. 1, to address the asymmetry between high-redundancy, unordered image-sets and raw clinical reports, our approach begins with a data construction pipeline, and followed by three core components: AGSP to distill semantically salient frames via anatomical queries; PSAA for hierarchical semantic alignment; and SC-MAE for robust visual representation learning. 
+
+2.1 Preliminaries and Data Construction 
+
+Given a dataset D = {(Vi, Ti)}Ni=1 of N examinations, each contains an unordered image-set Vi = {Ii,k }Ki
+
+> k=1
+
+and a raw report Ti. Standard global alignment paradigms (e.g., CLIP (Radford et al., 2021)) are suboptimal in this context due to the “many-to-many” semantic mismatch between visually redundant frames and information-dense textual findings. To bridge this semantic gap, we use Qwen3 (Yang et al., 2025) with a fixed clinical schema to parse Ti into Mi semantic triplets Si = {(si,j , a i,j , h i,j )}Mi
+
+> j=1
+
+. Here, si,j represents a fine-grained textual proposition of a distinct morphological finding; ai,j is its anatomical label (mapped to the aforementioned 17 GI regions); and hi,j ∈ { 0, 1} indicates the pathological status (normal or abnormal). Detailed prompts, field definitions, and parsing examples are provided in our code repository. For feature extraction, a vision encoder EV maps frames Ii,k to local normalized embeddings Fvi = {vi,k ∈
+
+Rd}Ki 
+
+> k=1
+
+and a global average-pooled vector ¯vi. Concurrently, a text encoder ET encodes the full report Ti
+
+and propositions si,j into a global normalized embedding ¯ti and a set of fine-grained normalized embeddings 
+
+Hti = {ti,j ∈ Rd}Mi
+
+> j=1
+
+, respectively. The final representation for the i-th examination is formulated as the tuple: 
+
+(Fvi , ¯vi, ¯ti, {ti,j }, {ai,j }, {hi,j }).𝐸 ! (#)𝐸 " (#)
+
+…
+
+GAP 
+
+> “Examination revealed a patent esophagus with smooth, soft mucosa, a clear vascular pattern, and normal peristalsis. The cardia demonstrated normal opening and closing functions, featuring a distinct Z-line and smooth mucosa. Within the stomach, the fundus exhibited a mixed red and white mucosal appearance along with a clear and scanty mucus lake…”
+
+Fine-grained Textual Proposition 𝒮 !
+
+Esophagus: Patent, with smooth and soft mucosa, clear vascular pattern, and normal peristalsis. Cardia: Z-line is distinct, mucosa is smooth, and opening/closing is normal. Fundus: Mucosa shows a mixed red and white appearance; mucus lake is clear and scanty. 
+
+> …
+
+…
+
+Query Value 
+
+…
+
+…
+
+> D! (#)
+
+1 2 3 4 5
+
+Anatomy-Guided Sparse Pooling (AGSP) 
+
+×
+
+…
+
+1 2 3 4 51 2 3 4 5
+
+Progressive Semantic-Aware Alignment (PSAA) 
+
+…
+
+Semantic-Concentrated MAE (SC-MAE) Key 
+
+Reconstruction Targets 
+
+…
+
+1) Cross-patient Global Alignment 
+
+𝐳 𝐢,𝐣 , … 𝐯 %𝐢 
+
+𝐭 𝐢,𝐣 , … 𝐭̅ 𝐢 
+
+𝐯 𝐢,𝐤 , … 
+
+The Semantic-rich Subset 𝒱 # !
+
+Raw Clinical Report 𝒯 !
+
+Selected Indexes for MAE: 
+
+ℐ!∗ = {1, 2, 3, 5, … } 
+
+> Extracted  ℐ!∗
+> & Masked
+
+2) Cross-anatomy Fine-grained Alignment 
+
+1 2
+
+𝐭̅ 𝐢  
+
+> : Text Embedding : Visual Embedding : Attention Score
+
+/
+
+𝐯 %𝐢 
+
+𝐭 𝐮 
+
+𝐳 𝐮 
+
+a. Same anatomy; Both normal b. Same anatomy; Different Status c. Different anatomy   
+
+> Cos ( ,)
+
+10
+
+…… 𝐲 𝐮 𝐩 $%&' / 𝐩 $'&% 
+
+ℒfg 
+
+ℒglobal    
+
+> : Categorical Anatomical Label : Pathological Status Label Soft Target Construction w/ and :𝑎 !ℎ!
+
+Image Sequence 𝒱 !Figure 1 Overview of EndoVLM. We align unordered images with reports via: AGSP for report-guided salient frame distillation and visual feature pooling, PSAA for hierarchical alignment, and SC-MAE for geometric regularization. 
+
+2.2 Anatomy-Guided Sparse Pooling (AGSP) 
+
+Endoscopic image-sets exhibit high redundancy (e.g., repetitive normal mucosa) that dilutes sparse abnormal signals. We propose AGSP, which uses fine-grained text embeddings as queries to selectively aggregate relevant visual evidence. For each sentence embedding ti,j , we compute dot-product relevance rj,k = t⊤
+
+i,j vi,k with all frames in Vi.Instead of standard cross attention, we use sparse attention by selecting top-K similar frames Ii,j . The anatomy-specific visual representation zi,j is derived via re-normalized attention over Ii,j :
+
+zi,j = X
+
+k∈I i,j 
+
+erj,k /τ a
+
+P
+
+m∈I i,j erj,m /τ a
+
+vi,k , (1) where τa = 0 .07 is the temperature and K = 3 . A small K preserves a compact set of salient frames for each anatomical query while suppressing redundant normal views. This aligns the visual modality with the anatomy described in ti,j while filtering noise. 
+
+2.3 Progressive Semantic-Aware Alignment (PSAA) 
+
+To capture both holistic context and fine-grained mucosal and pathological nuances, we employ a progressive alignment strategy. 
+
+Stage 1: Cross-Patient Global Alignment. We first enforce consistency between the patient-level image-set representation ¯vi and the global report embedding ¯ti using the symmetric InfoNCE (Oord et al., 2018) loss across a batch of size B:
+
+Lglobal = − 12B
+
+> B
+
+X
+
+> i=1
+
+log e⟨¯vi,¯ti⟩/τ 
+
+PBj=1 e⟨¯vi,¯tj ⟩/τ + log e⟨¯ti,¯vi⟩/τ 
+
+PBj=1 e⟨¯ti,¯vj ⟩/τ 
+
+!
+
+, (2) where ⟨· , ·⟩ is cosine similarity and τ is a learnable temperature. 
+
+Stage 2: Cross-Anatomy Fine-Grained Alignment. Global alignment alone is insufficient for distinguishing subtle mucosa attributes. Inspired by recent dense semantic alignment formulations (Shui et al., 2025; Wang et al., 2025a), we perform fine-grained contrastive learning on a set of semantic units U = {(zu, tu)}Mu=1 , aggregating all M valid local visual-text pairs (zi,j , ti,j ) in the mini-batch. We first compute the softmax-normalized image-to-text and text-to-image similarity distributions, denoted as 
+
+pv2t  
+
+> u
+
+and pt2v  
+
+> u
+
+, respectively. For any pair of units (u, k ) within U, the k-th element of these distributions is defined as: 
+
+pv2t  
+
+> u,k
+
+= exp( ⟨zu, tk⟩/τ )
+
+PMm=1 exp( ⟨zu, tm⟩/τ ) , pt2v  
+
+> u,k
+
+= exp( ⟨tu, zk⟩/τ )
+
+PMm=1 exp( ⟨tu, zm⟩/τ ) . (3) To seamlessly progress from global cross-patient matching to localized alignment of anatomy and pathological status, we construct a taxonomy-aware soft target distribution yu = [ yu, 1, . . . , y u,M ]⊤ ∈ RM . Let au and hu
+
+be the categorical anatomical and pathological status labels of the u-th unit, respectively. The normalized target yu,k is computed as: 
+
+yu,k = ˆyu,k 
+
+PMm=1 ˆyu,m 
+
+, with ˆyu,k =
+
+
+
+1, if au = ak and hu = hk = 0; 
+
+⟨tu, tk⟩, if au = ak and (hu = 1 or hk = 1); 0, otherwise. (4) By avoiding repulsion among identical healthy anatomies and adaptively scaling abnormal alignments via textual similarity, this formulation drives the model to autonomously disentangle anatomical and pathological semantics. The textual similarity term provides a semantic relational prior within each anatomical group, allowing related abnormal findings to share softer supervision. The fine-grained alignment loss is defined as follows, where CE denotes cross-entropy. 
+
+Lfg = 12M
+
+> M
+
+X
+
+> u=1
+
+ CE (yu, pv2tu ) + CE (yu, pt2vu ) . (5) 
+
+2.4 Semantic-Concentrated Masked Autoencoder (SC-MAE) 
+
+To efficiently capture low-level textures, SC-MAE applies the MAE paradigm (He et al., 2022) exclusively to the semantic-rich subset ˜Vi = {Ii,k ∈ V i | k ∈ I ∗ 
+
+> i
+
+}, where I∗ 
+
+> i
+
+= S 
+
+> j
+
+Ii,j denotes the unified index set aggregated from all anatomy-specific frames retrieved by AGSP. It masks 75% of patches in ˜Vi, and reconstruct pixels via a decoder DV , yielding an MSE loss LMAE . The overall training objective is as follows, where λ1, λ 2 are balancing weights. 
+
+L = Lglobal + λ1Lfg + λ2LMAE . (6) 
+
+## 3 Experiments and Results 
+
+Pre-training dataset. We retrospectively collected over 400K endoscopic examinations from two medical centers 1, each consisting of a clinical report and its corresponding image package. By leveraging Qwen3 (Yang et al., 2025) to analyze report content, we filtered out ineligible cases—including post-operative exams, incomplete procedures (defined as gastroscopy reports missing any of the 8 standard anatomical regions, or  
+
+> 1The study was conducted in accordance with the Declaration of Helsinki and approved by the institutional review board of the lead medical center (No. 2024-KLS-489-02). Table 1
+
+Performance comparison. We report F1 (%) for PolypDiag, macro AUC/F1 (%) for LIMUC, Dice (%) for polyp segmentation (CVC-12k, Kvasir (Kva), ClinicDB (Clinic), Endoscene (Endo), ColonDB, ETIS). †: pre-trained with our dataset. ’–’: not reported and no public code or weights. The best and second-best results are in bold and underlined.         
+
+> Model Polyp Diag LIMUC CVC -12k Seen Unseen Kva Clinic Endo Colon ETIS
+
+General FMs 
+
+MAE (He et al., 2022) 91.1 93.4/72.7 83.6 88.4 88.5 84.0 75.5 74.7 CLIP (Radford et al., 2021) 90.0 92.0/69.2 80.0 88.3 90.0 85.4 75.8 71.6 DINOv2 (Oquab et al., 2023) 93.3 93.8/73.6 83.8 90.7 91.4 88.6 79.8 77.8 DINOv3 (Siméoni et al., 2025) 93.9 93.9/73.7 84.5 91.0 91.1 89.1 81.6 77.7 BiomedCLIP (Zhang et al., 2023) 90.2 92.6/72.0 81.5 88.0 87.8 82.8 72.7 66.1 MAE † (He et al., 2022) 93.7 93.1/73.6 84.2 88.4 88.5 83.9 75.5 74.7 CLIP † (Radford et al., 2021) 90.1 85.2/60.2 66.2 60.1 70.6 28.8 32.8 25.6 DINOv3 † (Siméoni et al., 2025) 94.8 94.0/74.0 85.8 91.4 92.2 89.5 81.6 80.1 
+
+Endo SSL 
+
+EndoFM (Wang et al., 2023) 90.7 93.0/72.9 73.9 87.7 87.1 83.2 71.2 63.5 EndoFM-LV (Wang et al., 2025b) 96.3 83.3/57.4 83.2 62.2 67.7 42.5 35.0 29.8 EndoMamba (Tian et al., 2025) 95.0 92.1/70.1 85.4 87.5 87.8 86.2 69.4 60.2 EndoDINO (Dermyer et al., 2025) – 93.7/70.6 – – – – – –GastroNet-5M (Jong et al., 2025) – 95.5 /– – – – – – –
+
+Task specific model (Segmentation) 
+
+Polyp-PVT (Dong et al., 2021) – –/– – 91.7 93.7 90.0 80.8 78.7 VM-UNet (Ruan et al., 2024) – –/– – 91.3 92.6 88.6 79.8 76.1 PolyMamba (Fu et al., 2025) – –/– – 91.9 94.0 90.4 81.5 82.9 EndoVLM 97.3 94.5/ 74.4 86.4 91.9 93.1 90.8 82.8 82.0 
+
+colonoscopy reports missing any of the 9 intestinal landmarks), and other non-conforming studies. The final curated dataset contains 348K examinations, comprising more than 18.6M endoscopic images.  
+
+> Downstream task setup.
+
+To evaluate the versatility and robustness of EndoVLM, we conducted experiments across various tasks: (i) PolypDiag for video polyp diagnosis (Tian et al., 2022). Following EndoFM-LV (Wang et al., 2025b), we sampled 16 frames per video. Frame-level features extracted by our image-based backbone were aggregated via mean pooling to form a video-level representation, which was then classified using a linear head. (ii) CVC-12k for video polyp segmentation (Bernal et al., 2015) and (iii) Kvasir-SEG (Jha et al., 2019), ClinicDB (Bernal et al., 2015), ColonDB (Tajbakhsh et al., 2015), ETIS (Silva et al., 2014), 
+
+EndoScene (Vázquez et al., 2017) for polyp segmentation generalization assessment . A linear segmentation head is implemented by reshaping the backbone’s patch tokens into spatial feature maps (B, D, H/P, W/P ),followed by a single convolutional layer and bilinear interpolation for final dense prediction . We adopt the same data splits and evaluation protocol as EndoFM-LV (Wang et al., 2025b) on CVC-12k, and strictly follow the training and testing setup of Polyp-PVT (Dong et al., 2021) for generalization assessment. For this Polyp-PVT generalization setup, “seen” and “unseen” denote whether a public segmentation dataset is used during downstream fine-tuning, while all downstream datasets are disjoint from the private pre-training corpus. (iv) LIMUC for ulcerative colitis severity grading (Polat et al., 2023). We append a linear classification head to the EndoVLM, and follow the same experimental settings as GastroNet5M (Jong et al., 2025). (v) Zero-Shot Transfer. We assess the model’s generalizability via zero-shot anatomical recognition on Hyper-Kvasir (Borgli et al., 2020) (covering upper & lower GI tracts) and video disease diagnosis on PolypDiag (Tian et al., 2022), directly leveraging the pre-aligned visual-semantic space without task-specific fine-tuning.  
+
+> Implementation details.
+
+The vision encoder and language encoder are instantiated as ViT-B/16 (Dosovitskiy et al., 2020) and PubMedBERT (Gu et al., 2021), respectively. All input images are resized to 224 × 224 for pre-training. The entire framework is trained for 100 epochs on NVIDIA A800 GPUs with a total batch size of 96. We optimize the network using the AdamW optimizer with a base learning rate of 1.5e-4 and a weight decay of 0.05. The loss weights λ1 and λ2 are empirically set to 1. Upper-GI Anatomy Recognition Lower-GI Anatomy Recognition Video Polyp Detection 
+
+> Pylorus (AUC, %)
+
+EndoVLM BiomedCLIP CLIP CLIP ! 
+
+> Stomach (AUC, %) Z-line (AUC, %) Cecum (AUC, %) Ileum (AUC, %) Rectum (AUC, %) Polyp (F1, %) Polyp (AUC, %) Figure 2
+
+Zero-shot performance comparison.  
+
+> Comparison experiment.
+
+We compare our method against recent SOTA methods, including general visual and vision-language FMs (DINOv2/v3 (Oquab et al., 2023; Siméoni et al., 2025), MAE (He et al., 2022), CLIP (Rad-ford et al., 2021), BiomedCLIP (Zhang et al., 2023)), endoscopy-specific visual SSL models (EndoFM (Wang et al., 2023), EndoFM-LV (Wang et al., 2025b), EndoMamba (Tian et al., 2025), EndoDINO (Dermyer et al., 2025), GastroNet-5M (Jong et al., 2025)), and several task-specific models (Dong et al., 2021; Fu et al., 2025; Ruan et al., 2024) for polyp segmentation. We also pre-train the general FMs from scratch on our dataset. Our approach surpasses all FMs, trailing only GastroNet-5M on LIMUC. Notably, (1) On video tasks (PolypDiag/CVC-12k), our model exceeds video-specific FMs (Wang et al., 2023, 2025b; Tian et al., 2025) using a simple image-level mean-pooling aggregation, bypassing complex temporal modeling. (2) For dense prediction tasks (polyp segmentation), we achieve competitive or superior performance using only a single convolutional layer with bilinear interpolation, without the need for complex decoders present in task-specific models (Dong et al., 2021; Ruan et al., 2024; Fu et al., 2025). This confirms that our pre-training yields high-quality dense features. Superior results on unseen ColonDB and ETIS datasets further validate our model’s robust generalization.  
+
+> Zero-shot evaluation.
+
+We evaluate zero-shot performance on three clinical classification tasks using the prompt: 
+
+"This is an image of {cls}." As shown in Fig. 2, EndoVLM significantly outperforms general (CLIP) and medical-specific (CLIP †, BiomedCLIP) FMs. It achieves near-perfect transferability ( ∼ 100% AUC) in Upper-GI anatomy recognition and surpasses BiomedCLIP by 18% AUC in the challenging video disease diagnosis task. These results validate that our taxonomy-aware alignment yields robust, highly transferable representations without task-specific fine-tuning. The lower ileum result reflects a category-specific limitation, as ileum descriptions are often procedural and less uniform in colonoscopy reports.  
+
+> Ablation study.
+
+Ablation results in Table 2 validate the efficacy of our proposed components. Global alignment (Lglo ) alone–mimicking standard CLIP paradigm–yields poor performance (85.2% AUC and 66.2% Dice), as coarse patient-level matching struggles to capture localized lesion semantics. Integrating fine-grained Table 2 Ablation study of different loss components. Lglo : Global Alignment; Lfg : Fine-Grained Alignment; LMAE :Masked Autoencoder.   
+
+> Components LIMUC CVC-12k
+
+Lglo Lfg LMAE AUC Dice 
+
+✓ 85.2 66.2 
+
+✓ ✓ 94.1 85.6 
+
+✓ 93.1 84.2 
+
+✓ ✓ ✓ 94.5 86.4 
+
+alignment ( Lfg ) triggers a significant leap, boosting AUC by 8.9% and Dice by 19.4%. which highlights the critical role of our taxonomy-aware soft targets in aligning detailed anatomical and pathological features. Finally, SC-MAE ( LMAE ) further refines representations to achieve the best performance (94.5% AUC and 86.4% Dice), demonstrating that pixel-level reconstruction provides complementary geometric regularization to semantic alignment. 
+
+Qualitative analysis and interpretability. To validate the interpretability of our AGSP module, we visualize the attention scores between the sentence embeddings ti,j and image embeddings vi,k . As shown in Fig. 3, the attention matrix exhibits highly localized and target-specific activations. EndoVLM accurately retrieves the most representative frames for eight distinct upper-GI regions (e.g., Esophagus, Duodenum) from a redundant set of over 80 images. Esophagus Image Body Image Pylorus Image 
+
+> Text Image
+
+abcdefgh
+
+> a -> 'Esophagus: Patent, with smooth mucosa and normal peristalsis. Linear mucosal defects and ulcers noted at the distal esophagus.’ b -> 'Cardia: Z-line is clear, mucosa is smooth, and opening/closing function is normal.’ c -> 'Fundus: Mucosa shows a mixed red-and-white appearance; yellow mucus lake present in small amount.’ d -> 'Body: Mucosa is smooth with a red-and-white appearance, no ulceration or bleeding observed; peristalsis is normal.' e -> 'Angulus: Arch is intact; mucosa appears predominantly white with scattered erosions.’ f -> 'Antrum: Mucosa is congested and edematous, with a predominantly white, red-and-white appearance and scattered erosions.’ g -> 'Pylorus: Round in shape, opens and closes normally, with smooth mucosa.’ h -> 'Duodenum: Normal morphology with healthy mucosal coloration; the descending duodenum is patent with no abnormalities.'
+
+Anatomical Descriptions Attention Scores Top-retrieved Images 
+
+> Angulus Image Duodenum Image Cardia Image Fundus Image Antrum Image
+
+Figure 3 Visualization of AGSP attention scores . The heatmap illustrates similarities between unordered image embeddings and anatomical text embeddings, where a-h denote specific anatomical descriptions in a gastroscopy report. Highlights identify the top-retrieved images for each specific anatomy. 
+
+## 4 Conclusion 
+
+We present EndoVLM, the first GI VLM pre-trained on a large-scale dataset of unordered GI endoscopy image-sets and clinical reports. To bridge the profound semantic gap between redundant visual frames and structured narratives, we propose a unified framework that seamlessly integrates semantics-driven salient frame distillation, progressive cross-modal alignment, and geometric reconstruction. Pre-trained on a massive cohort of 348K cases, EndoVLM demonstrates exceptional adaptability and robust zero-shot generalization. It significantly outperforms existing uni-modal foundation models and complex task-specific architectures across diverse downstream tasks, providing a highly scalable foundation for next-generation AI-assisted endoscopy. 
+
+## Acknowledgments 
+
+This study was supported by “Pioneer” and “Leading Goose” R&D Program of Zhejiang (2023C03050). 
+
+## References 
+
+Jorge Bernal, F Javier Sánchez, Gloria Fernández-Esparrach, Debora Gil, Cristina Rodríguez, and Fernando Vilariño. Wm-dova maps for accurate polyp highlighting in colonoscopy: Validation vs. saliency maps from physicians. 
+
+Computerized medical imaging and graphics , 43:99–111, 2015. Rishi Bommasani, Drew A Hudson, Ehsan Adeli, Russ Altman, Simran Arora, Sydney von Arx, Michael S Bernstein, Jeannette Bohg, Antoine Bosselut, Emma Brunskill, et al. On the opportunities and risks of foundation models. 
+
+arXiv preprint arXiv:2108.07258 , 2021. Hanna Borgli, Vajira Thambawita, Pia H Smedsrud, et al. Hyperkvasir, a comprehensive multi-class image and video dataset for gastrointestinal endoscopy. Scientific data , 7(1):283, 2020. Patrick Dermyer, Angad Kalra, and Matt Schwartz. Endodino: A foundation model for gi endoscopy. arXiv preprint arXiv:2501.05488 , 2025. Bo Dong, Wenhai Wang, Deng-Ping Fan, Jinpeng Li, Huazhu Fu, and Ling Shao. Polyp-pvt: Polyp segmentation with pyramid vision transformers. arXiv preprint arXiv:2108.06932 , 2021. Alexey Dosovitskiy, Lucas Beyer, Alexander Kolesnikov, et al. An image is worth 16x16 words: Transformers for image recognition at scale. arXiv preprint arXiv:2010.11929 , 2020. Renyu Fu, Shurui Hu, Xiao Zheng, Chang Tang, and Xinwang Liu. Polymamba: Spatial-prior guided mamba for polyp segmentation with high-frequency enhancement. In MICCAI , pages 455–465. Springer, 2025. Yu Gu, Robert Tinn, Hao Cheng, et al. Domain-specific language model pretraining for biomedical natural language processing. ACM Transactions on Computing for Healthcare , 3(1):1–23, 2021. Kaiming He, Xinlei Chen, Saining Xie, Yanghao Li, Piotr Dollár, and Ross Girshick. Masked autoencoders are scalable vision learners. In CVPR , pages 16000–16009, 2022. Qiang Hu, Zhenyu Yi, Ying Zhou, Fang Peng, Mei Liu, Qiang Li, and Zhiwei Wang. Sali: Short-term alignment and long-term interaction network for colonoscopy video polyp segmentation. In International Conference on Medical Image Computing and Computer-Assisted Intervention , pages 531–541. Springer, 2024. Qiang Hu, Zhenyu Yi, Ying Zhou, Fan Huang, Mei Liu, Qiang Li, and Zhiwei Wang. Monobox: Tightness-free box-supervised polyp segmentation using monotonicity constraint. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 39, pages 3572–3580, 2025. Debesh Jha, Pia H Smedsrud, Michael A Riegler, Pål Halvorsen, Thomas De Lange, Dag Johansen, and Håvard D Johansen. Kvasir-seg: A segmented polyp dataset. In International conference on multimedia modeling , pages 451–462. Springer, 2019. Martijn R Jong, Tim GW Boers, Kiki N Fockens, et al. Gastronet-5m: A multicenter dataset for developing foundation models in gastrointestinal endoscopy. Gastroenterology , 2025. Chunyuan Li, Cliff Wong, Sheng Zhang, Naoto Usuyama, Haotian Liu, Jianwei Yang, Tristan Naumann, Hoifung Poon, and Jianfeng Gao. Llava-med: Training a large language-and-vision assistant for biomedicine in one day. NeurIPS ,36:28541–28564, 2023. Sijing Li, Zhongwei Qiu, Jiang Liu, Wenqiao Zhang, Tianwei Lin, Yihan Xie, Jianxiang An, Boxiang Yun, Chenglin Yang, Jun Xiao, et al. Tumorchain: Interleaved multimodal chain-of-thought reasoning for traceable clinical tumor analysis. In International Conference on Learning Representations , volume 2026, pages 119790–119819, 2026. Antoine Miech, Jean-Baptiste Alayrac, Lucas Smaira, Ivan Laptev, Josef Sivic, and Andrew Zisserman. End-to-end learning of visual representations from uncurated instructional videos. In CVPR , pages 9879–9889, 2020. Aaron van den Oord, Yazhe Li, and Oriol Vinyals. Representation learning with contrastive predictive coding. arXiv preprint arXiv:1807.03748 , 2018. Maxime Oquab, Timothée Darcet, Théo Moutakanni, et al. Dinov2: Learning robust visual features without supervision. 
+
+arXiv preprint arXiv:2304.07193 , 2023. Gorkem Polat, Haluk Tarik Kani, Ilkay Ergenc, Yesim Ozen Alahdab, Alptekin Temizel, and Ozlen Atug. Improving the computer-aided estimation of ulcerative colitis severity according to mayo endoscopic score by using regression-based deep learning. Inflammatory Bowel Diseases , 29(9):1431–1439, 2023. Alec Radford, Jong Wook Kim, Chris Hallacy, et al. Learning transferable visual models from natural language supervision. In ICML , pages 8748–8763. PmLR, 2021. Jiacheng Ruan, Jincheng Li, and Suncheng Xiang. Vm-unet: Vision mamba unet for medical image segmentation. 
+
+ACM Transactions on Multimedia Computing, Communications and Applications , 2024. Zhongyi Shui, Jianpeng Zhang, Weiwei Cao, Sinuo Wang, Ruizhe Guo, Le Lu, Lin Yang, Xianghua Ye, Tingbo Liang, Qi Zhang, et al. Large-scale and fine-grained vision-language pre-training for enhanced ct image understanding. 
+
+arXiv preprint arXiv:2501.14548 , 2025. Juan Silva, Aymeric Histace, Olivier Romain, Xavier Dray, and Bertrand Granado. Toward embedded detection of polyps in wce images for early diagnosis of colorectal cancer. International journal of computer assisted radiology and surgery , 9(2):283–293, 2014. Oriane Siméoni, Huy V Vo, Maximilian Seitzer, Federico Baldassarre, Maxime Oquab, Cijo Jose, Vasil Khalidov, Marc Szafraniec, Seungeun Yi, Michaël Ramamonjisoa, et al. Dinov3. arXiv preprint arXiv:2508.10104 , 2025. Nima Tajbakhsh, Suryakanth R Gurudu, and Jianming Liang. Automated polyp detection in colonoscopy videos using shape and context information. IEEE transactions on medical imaging , 35(2):630–644, 2015. Yucheng Tang, Dong Yang, Wenqi Li, Holger R Roth, Bennett Landman, Daguang Xu, Vishwesh Nath, and Ali Hatamizadeh. Self-supervised pre-training of swin transformers for 3d medical image analysis. In CVPR , pages 20730–20740, 2022. Qingyao Tian, Huai Liao, Xinyan Huang, Bingyu Yang, Dongdong Lei, Sebastien Ourselin, and Hongbin Liu. Endomamba: an efficient foundation model for endoscopic videos via hierarchical pre-training. In MICCAI , pages 224–234. Springer, 2025. Yu Tian, Guansong Pang, Fengbei Liu, Yuyuan Liu, Chong Wang, Yuanhong Chen, Johan Verjans, and Gustavo Carneiro. Contrastive transformer-based multiple instance learning for weakly supervised polyp frame detection. In 
+
+MICCAI , pages 88–98. Springer, 2022. Ekin Tiu et al. Expert-level detection of pathologies from unannotated chest x-ray images via self-supervised learning. 
+
+Nature Biomedical Engineering , 6(12):1399–1406, 2022. David Vázquez, Jorge Bernal, F Javier Sánchez, Gloria Fernández-Esparrach, Antonio M López, Adriana Romero, Michal Drozdzal, and Aaron Courville. A benchmark for endoluminal scene segmentation of colonoscopy images. 
+
+Journal of healthcare engineering , 2017(1):4037190, 2017. Rongsheng Wang, Fenghe Tang, Qingsong Yao, Rui Yan, Xu Zhang, Zhen Huang, Haoran Lai, Zhiyang He, Xiaodong Tao, Zihang Jiang, et al. Simcrop: Radiograph representation learning with similarity-driven cross-granularity pre-training. In MICCAI , pages 563–573. Springer, 2025a. Xiyue Wang, Junhan Zhao, Eliana Marostica, Wei Yuan, Jietian Jin, Jiayu Zhang, Ruijiang Li, Hongping Tang, Kanran Wang, Yu Li, et al. A pathology foundation model for cancer diagnosis and prognosis prediction. Nature ,634(8035):970–978, 2024. Zhao Wang, Chang Liu, Shaoting Zhang, and Qi Dou. Foundation model for endoscopy video analysis via large-scale self-supervised pre-train. In MICCAI , pages 101–111. Springer, 2023. Zhao Wang, Chang Liu, Lingting Zhu, Tongtong Wang, Shaoting Zhang, and Qi Dou. Improving foundation model for endoscopy video analysis via representation learning on long sequences. IEEE Journal of Biomedical and Health Informatics , 2025b. Zifeng Wang, Zhenbang Wu, Dinesh Agarwal, and Jimeng Sun. Medclip: Contrastive learning from unpaired medical images and text. In EMNLP , pages 3876–3887, 2022. Jianwei Xu, Ran Zhao, Yizhou Yu, Qingwei Zhang, Xianzhang Bian, Jun Wang, Zhizheng Ge, and Dahong Qian. Real-time automatic polyp detection in colonoscopy using feature enhancement module and spatiotemporal similarity correlation unit. Biomedical Signal Processing and Control , 66:102503, 2021. An Yang, Anfeng Li, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chang Gao, Chengen Huang, Chenxu Lv, et al. Qwen3 technical report. arXiv preprint arXiv:2505.09388 , 2025. Sheng Zhang, Yanbo Xu, Naoto Usuyama, Hanwen Xu, Jaspreet Bagga, Robert Tinn, Sam Preston, Rajesh Rao, Mu Wei, Naveen Valluri, et al. Biomedclip: a multimodal biomedical foundation model pretrained from fifteen million scientific image-text pairs. arXiv preprint arXiv:2303.00915 , 2023.
