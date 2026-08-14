@@ -9,17 +9,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-08-13</span>
+      <span class="dpr-home-dashboard-kicker">2026-08-14</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 24 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 26 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>24</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>26</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>0</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-08-13 21:23:50 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-08-14 21:12:59 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -30,8 +30,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日精读24篇，最值关注卵巢癌复发预测与大模型后训练两大方向。</p>
-<p>前者基于臀大肌MRI子区域</p>
+<p>今日精读26篇推荐论文，聚焦医疗多视图X光报告生成与胶囊内镜视频报告的可解释AI系统。最值得关注的是自适应门控Mamba架构在多视图影像中的效果，以及生成式AI在视频报告中的可解释性突破。建议后续优先验证这两个模型在真实临床数据上的泛化能力。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -40,10 +39,10 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">24 篇</strong>
+    <strong class="dpr-home-dashboard-count">26 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="A clinical-radiomics model based on MRI sub-regions of gluteus maximus for recurrence prediction in high-grade serous ovarian cancer">A clinical-radiomics model based on MRI sub-regions of gluteus maximus for recurrence prediction in high-grade serous ovarian cancer</span></li><li><span class="dpr-home-dashboard-paper-title" title="A Survey on Post-Training of Multimodal Large Language Models">A Survey on Post-Training of Multimodal Large Language Models</span></li><li><span class="dpr-home-dashboard-paper-title" title="CLEAR-WSI: Towards Foundation Model Empowered Diagnosis Aligned Whole Slide Image Retrieval">CLEAR-WSI: Towards Foundation Model Empowered Diagnosis Aligned Whole Slide Image Retrieval</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Adaptive Gated Mamba for Multi-View Chest X-Ray Report Generation">Adaptive Gated Mamba for Multi-View Chest X-Ray Report Generation</span></li><li><span class="dpr-home-dashboard-paper-title" title="An explainable generative AI system for video-to-report generation in capsule endoscopy">An explainable generative AI system for video-to-report generation in capsule endoscopy</span></li><li><span class="dpr-home-dashboard-paper-title" title="AutoVLAK-An Automated Pipeline for Vision-Language Knowledge Base Curation from Open-Access Medical Literature">AutoVLAK-An Automated Pipeline for Vision-Language Knowledge Base Curation from Open-Access Medical Literature</span></li></ul>
   </div>
 
 </section>
