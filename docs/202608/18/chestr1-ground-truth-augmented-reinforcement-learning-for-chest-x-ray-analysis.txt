@@ -1,0 +1,191 @@
+Title: ChestR1: Ground-Truth Augmented Reinforcement Learning for Chest X-Ray Analysis
+
+URL Source: https://ieeexplore.ieee.org/abstract/document/11630479/
+
+Published Time: Tue, 18 Aug 2026 08:41:32 GMT
+
+Markdown Content:
+*    Download References 
+*   [Request Permissions](https://ieeexplore.ieee.org/abstract/document/ "Request permission for reuse.")
+*   [Save to](https://ieeexplore.ieee.org/abstract/document/)
+*   [Alerts](https://ieeexplore.ieee.org/abstract/document/)
+
+## Abstract:
+
+Reinforcement Learning (RL) offers a promising pathway for aligning Multimodal Large Language Models (MLLMs) with the strict precision requirements of chest X-ray (CXR) a...[Show More](https://ieeexplore.ieee.org/abstract/document/)
+
+## Metadata
+
+## Abstract:
+
+Reinforcement Learning (RL) offers a promising pathway for aligning Multimodal Large Language Models (MLLMs) with the strict precision requirements of chest X-ray (CXR) analysis. However, even with supervised initialization, the complexity of CXR interpretation creates a sparse reward manifold, often leading to exploration stagnation and training instability. To address these challenges, we propose ChestR1, a sample-efficient RL framework grounded in Group Relative Policy Optimization (GRPO). We introduce a novel Ground-Truth Augmented sampling strategy to guide exploration, coupled with an Entropy-Aware Policy Modulation mechanism to prevent distribution collapse. Furthermore, a Dynamic Failure-Aware SFT mechanism tightly couples supervision with RL, specifically injecting guidance for hard instances where exploration fails. Validated on our curated multi-task dataset, ChestR1 achieves competitive performance with lower training consumption and a smaller model size compared to state-of-the-art baselines.
+
+**Date of Conference:** 13-17 September 2026
+
+**Date Added to IEEE _Xplore_:** 13 August 2026
+
+**ISBN Information:**
+
+## ISSN Information:
+
+**Conference Location:** Tampere, Finland
+
+* * *
+
+SECTION 1.
+
+## INTRODUCTION
+
+Chest X-ray (CXR) interpretation is essential for diagnosing thoracic diseases, yet the global shortage of radiologists causes serious bottlenecks [1]. While Medical Vision-Language Models (Med-VLMs) like CheXagent [2] have shown promise, most still rely on Supervised Fine-Tuning (SFT). This data-centric approach has limits: SFT models tend to remain static mimics, meaning they simply copy training patterns and cannot learn to correct their own mistakes without huge amounts of new labeled data.
+
+Reinforcement Learning (RL) has emerged as a way to overcome these limits. Methods like Group Relative Policy Optimization (GRPO) [3] allow models to improve reasoning through trial-and-error, showing great success in math tasks. However, applying this to medical reporting is difficult. Unlike math problems with fixed answers, medical diagnosis requires generating complex, open-ended reports with clinical precision. Recent studies suggest that RL alone often fails on hard samples where the model lacks initial capability, leading to inefficient learning [4]. This creates a dual challenge: (1) Sampling Inefficiency, where exploration of correct reasoning paths fails on hard cases; and (2) Training Instability, where the model drifts from its original distribution and generates repetitive text to hack the reward [5], [6].
+
+To address these issues, we propose ChestR1, which synergizes Ground-Truth Augmented GRPO, Entropy-Aware Policy Modulation, and Dynamic Failure-Aware SFT to achieve stable and efficient RL alignment. The main contributions of this work are summarized as follows:
+
+*   We propose ChestR1, a sample-efficient RL framework that resolves exploration sparsity and training instability in medical VLMs by synergizing Ground-Truth Augmentation with Entropy-Aware Policy Modulation.
+
+*   We introduce a Dynamic Failure-Aware SFT mechanism that tightly couples supervision with reinforcement learning, selectively injecting ground-truth gradients to facilitate learning on hard instances where exploration stagnates.
+
+*   We construct a unified multi-task dataset of 510k examples to serve as the comprehensive foundation for both supervised initialization and reinforcement learning alignment. Extensive evaluations on public benchmarks show that our 3B-parameter model achieves competitive performance.
+
+SECTION 2.
+
+## RELATED WORKS
+
+**Medical Vision-Language Models**. SFT dominates current Med-VLMs. Early adapters like LLaVA-Med [7] have evolved into specialized systems—including CheXagent, MAIRA-2, RadVLM, and M4CXR [2,8–10]—that scale to millions of image-text pairs. Despite their scale, these models remain strictly upper-bounded by annotation quality.
+
+**RL in VLMs**. RL aligns general LLMs. GRPO [3] improves efficiency by eliminating value networks. In the medical domain, methods like DAPO [5] and MedGround [11] apply RL to VQA but struggle with the open-ended exploration required for full report generation, often failing to escape local optima.
+
+[![Image 1: Fig. 1: - The ChestRl Framework Overview. (a) illustrates the optimization challenges: the top section shows training instability (length explosion), while the bottom section highlights reward sparsity. (b) details the comprehensive ChestR1 pipeline, where ground truth is injected into reinforcement learning to guide exploration and initialize different loss based on the reward of the output. ](https://ieeexplore.ieee.org/mediastore/IEEE/content/media/11629556/11629860/11630479/cai1-p6-cai-small.gif)](https://ieeexplore.ieee.org/mediastore/IEEE/content/media/11629556/11629860/11630479/cai1-p6-cai-large.gif)
+
+**Fig. 1:**
+
+**The ChestRl Framework Overview**. (a) illustrates the optimization challenges: the top section shows training instability (length explosion), while the bottom section highlights reward sparsity. (b) details the comprehensive ChestR1 pipeline, where ground truth is injected into reinforcement learning to guide exploration and initialize different loss based on the reward of the output.
+
+**Mixed-Policy Reinforcement Learning**. Recent works challenge the separated SFT-then-RL paradigm. Hybrid strategies like SRFT [6] and ReLIFT [12] demonstrate that interleaving off-policy supervision with on-policy exploration prevents catastrophic forgetting and aids learning on hard samples where pure RL stagnates [4]. However, these methods are suboptimal for medical interpretation tasks and may cause training collapse.
+
+**Uncertainty in Medical VLMs**. Recent works tackle uncertainty during inference to enhance reliability. U-CAR [13] quantifies generation confidence for adaptive retrieval, while uMedGround [14] predicts grounding uncertainty for variance-aware visual cues. In contrast, ChestR1 exploits uncertainty as a dynamic gradient gate during the training phase.
+
+SECTION 3.
+
+## METHODOLOGY
+
+The ChestR1 framework aligns Medical Vision-Language Models (Med-VLMs) with clinical reality through a two-phase approach: (1) **Reasoning-Oriented SFT**, which initializes the policy with structured reasoning capabilities; and (2) **ChestR1 Reinforcement Learning**, a novel framework designed to solve the exploration-stability dilemma in open-ended medical generation.
+
+### 3.1. Phase I: Reasoning-Oriented SFT
+
+We initialize our original policy model _π θ_ using Qwen2.5-VL-3B [15]. To better connect visual patterns with medical meaning, we structure the data differently for each task. For localization, we build a step-by-step Chain-of-Thought (CoT) sequence: starting with _Basic Features_, moving to _Visual Manifestation_, and finally _Coordinates_. This helps the model infer locations based on anatomical logic instead of just memorizing numbers. For report generation, following the M4CXR approach [10], we use a multi-turn dialogue format. The first turn lists the symptoms, which serves as a factual basis for the second turn to generate the final report. This structured start ensures the model learns the underlying logic of radiology before we apply RL.
+
+### 3.2. Phase II: The ChestR1 RL Framework
+
+We adopt Group Relative Policy Optimization (GRPO) [3] as base method. GRPO eliminates the need for a separate value network, reducing memory overhead—a critical factor for Med-VLMs. For an input _q_, a group of outputs {o i}G i=1 is sampled from the old policy π θ o l d. We calculate the advantages _Â i_ by simply centering the rewards within the group A^i=R i−1 G∑G j=1 R j. The objective is: 
+L R L(θ)=1 G∑i=1 G 1|O i|∑t=1|o i|min(r i t A^i,clip(r i t,1−ε,1+ε)A^i)(1)
+
+View Source![Image 2: Right-click on figure for MathML and additional features.](https://ieeexplore.ieee.org/assets/img/icon.support.gif) where r i t(θ)=π θ(o i,t|o i,<t)/π θ o l d(o i,t|o i,<t) is the importance sampling ratio.
+
+#### 3.2.1. Ground-Truth Augmented Exploration
+
+Valid reasoning paths form a sparse manifold. Consequently, random sampling often produces useless text, leading to zero rewards ([Fig. 1a](https://ieeexplore.ieee.org/abstract/document/)) and training failure. To fix this, we use **Ground-Truth (GT) Augmentation** by adding the ground truth answer _o gt_ to the sampling group G. Crucially, instead of giving the ground truth a fixed high score, we calculate its reward dynamically based on the group’s performance: 
+R(o g t)=min(μ G+β σ G+δ,R max)(2)
+
+View Source![Image 3: Right-click on figure for MathML and additional features.](https://ieeexplore.ieee.org/assets/img/icon.support.gif) where _β_ (set to 1.5) controls the relative superiority, and _δ_ (set to 0.1) is a strictly positive margin. This margin _δ_ is critical: it guarantees that _o gt_ maintains a positive advantage even if the group variance collapses (σ G≈0), continuously guiding the policy out of local optima.
+
+**Table 1:** Comprehensive Performance Comparison. Comparison of clinical accuracy (CheXbert/RadGraph) and generation quality vs. model size. Note that ChestR1 achieves competitive performance with significantly fewer parameters (3B) compared to larger foundation models (7B+). Bold highlights best, underline denotes second best.
+
+[![Image 4: Table 1:- Comprehensive Performance Comparison. Comparison of clinical accuracy (CheXbert/RadGraph) and generation quality vs. model size. Note that ChestR1 achieves competitive performance with significantly fewer parameters (3B) compared to larger foundation models (7B+). Bold highlights best, underline denotes second best. ](https://ieeexplore.ieee.org/mediastore/IEEE/content/media/11629556/11629860/11630479/cai.t1-p6-cai-small.gif)](https://ieeexplore.ieee.org/mediastore/IEEE/content/media/11629556/11629860/11630479/cai.t1-p6-cai-large.gif)
+
+#### 3.2.2. Entropy-Aware Policy Modulation
+
+However, naively maximizing the likelihood of the off-policy _o gt_ conflicts with RL’s on-policy nature, forcing the model to mimic exact phrasings even when confident in valid alternatives. To resolve this, we propose Entropy-Aware Policy Modulation: the policy should only accept external guidance when it lacks internal conviction. We strictly limit optimization to high-uncertainty regions using a binary mask ℳ _t_ that activates only for the top-_k_% entropy tokens: 
+M t={1 0 if H(o g t,t)∈Top K E n t r o p y otherwise(3)
+
+View Source![Image 5: Right-click on figure for MathML and additional features.](https://ieeexplore.ieee.org/assets/img/icon.support.gif)
+
+The optimization objective for the ground-truth path thus becomes: 
+L G T(θ)=1|o g t|∑t=1|o g t|M t⋅L G R P O(o g t,t)(4)
+
+View Source![Image 6: Right-click on figure for MathML and additional features.](https://ieeexplore.ieee.org/assets/img/icon.support.gif)
+
+By setting the weight to 0 for confident tokens, this mechanism effectively "freezes" the policy where the distribution is stable, focusing the gradient updates exclusively on "hard" segments where the model exhibits high uncertainty.
+
+#### 3.2.3. Dynamic Failure-Aware SFT
+
+In scenarios of Exploration Stagnation, the policy often fails to generate valid reasoning paths. If we persist with RL optimization in these cases, the generated trajectories {_o i_} receive uniformly low rewards, resulting in negative advantages that effectively suppress the current policy without providing a constructive direction. To prevent this destructive penalization, we introduce a Dynamic Failure-Aware SFT mechanism. We define a dynamic threshold _τ fail_. When the mean group reward of the batch R¯G<τ f a i l, indicating a failure to explore valid solutions, we bypass the RL objective and directly activate a supervised loss on the ground-truth: 
+L S F T(o g t)=−1|o g t|∑t=1|o g t|log π θ(o g t,t|o g t,<t,q)(5)
+
+View Source![Image 7: Right-click on figure for MathML and additional features.](https://ieeexplore.ieee.org/assets/img/icon.support.gif) the final loss is: 
+L C h e s t R 1={L S F T L G T+L R L if R¯G<τ f a i l otherwise(6)
+
+View Source![Image 8: Right-click on figure for MathML and additional features.](https://ieeexplore.ieee.org/assets/img/icon.support.gif)
+
+This mechanism ensures that when self-exploration yields no useful signal, the model explicitly learns from the expert demonstration via standard likelihood maximization, rather than being penalized for its inability to solve hard instances.
+
+SECTION 4.
+
+## EXPERIMENTS
+
+### 4.1. Experimental Setup
+
+**Dataset and Implementation**. We constructed a unified multi-task dataset of 510k examples curated from MIMIC-CXR, VinDR, MS-CXR, PadChest-GR, Chexpert and Chest Imagenome. We preprocessed the reasoning traces using collected medical knowledge and leveraged the powerful large multimodal language model to generate the reasoning traces. Experiments were conducted on 8×NVIDIA H20 GPUs using the Qwen2.5-VL-3B-Instruct backbone, training for 8 hours for 2 epochs during SFT and 4 hours in RL. For RL, we used a group size _G_ = 8, batch size _B_ = 8, learning rate 1e-5, with KL coefficient set to 0.
+
+[![Image 9: Fig. 2: - Training Stability Comparison. Reward and Entropy curves across Off-Policy RL, On-Policy RL, and ChestR1. Our method achieves higher sustained rewards while maintaining stable entropy, unlike baselines which exhibit collapse or stagnation. ](https://ieeexplore.ieee.org/mediastore/IEEE/content/media/11629556/11629860/11630479/cai2-p6-cai-small.gif)](https://ieeexplore.ieee.org/mediastore/IEEE/content/media/11629556/11629860/11630479/cai2-p6-cai-large.gif)
+
+**Fig. 2:**
+
+**Training Stability Comparison**. Reward and Entropy curves across Off-Policy RL, On-Policy RL, and ChestR1. Our method achieves higher sustained rewards while maintaining stable entropy, unlike baselines which exhibit collapse or stagnation.
+
+**Critical Hyperparameters**. The failure-aware threshold _τ fail_ was set to 0.1. For Entropy-Aware Modulation, we focused updates on the top _k_ = 20% of high-uncertainty tokens. To ensure robust convergence, we employed a two-stage schedule: the off-policy components were active for the first 250 steps, after which the model reverted to pure On-Policy RL for the remainder of training.
+
+**Reward Configuration**. We tailored task-specific reward functions to ensure balanced multi-task optimization. For localization, we compute the mean Average Precision (mAP) on predicted bounding boxes after applying Non-Maximum Suppression (NMS). For report generation, we design a composite reward to synergize clinical accuracy with linguistic fluency. We employ CheXbert [16] to extract labels for 14 standard pathologies and compute the F1 score (_R clin_), alongside the ROUGE-L score (_R lang_) for textual coherence. The final reward is formulated as _R report =_ 0.5 • _R clin_ + 0.5 • _R lang_.
+
+### 4.2. Comparison with State-of-the-Art Methods
+
+[Table 1](https://ieeexplore.ieee.org/abstract/document/) presents a comprehensive evaluation of ChestR1 against state-of-the-art baselines.
+
+**Report Generation**. ChestR1 establishes a new state-of-the-art on RadGraph F1 (27.5), significantly outperforming both the SFT baseline (24.7) and large-scale models like MAIRA-1 (24.3). In terms of linguistic quality, our model achieves a competitive BLEU-4 score (12.7), comparable to DAPO (12.8) and surpassing GRPO (10.9), demonstrating strong syntactic coherence. While metrics focusing on unigram overlap (e.g., BLEU-1) are competitive but not top-ranked, the dominance in semantic metrics (RadGraph) and higher-order n-grams (BLEU-4) highlights the model’s generation quality.
+
+**Localization**. As shown in [Table 2](https://ieeexplore.ieee.org/abstract/document/), ChestR1 demonstrates consistent performance gains superiority across grounding tasks. It surpasses the SFT baseline in both Disease mAP (0.563 vs 0.453) and Anatomical mAP (0.748 vs 0.694). Compared to RadVLM, which requires resource-intensive 128-GPU pre-training, ChestR1 achieves competitive precision using only 8 GPUs.
+
+[![Image 10: Fig. 3: - Qualitative Result Demonstration. A case study showcasing the model’s reasoning (Thinking) and final report generation. The model correctly identifies "small right apical pneumothorax," demonstrating alignment between visual features and clinical text. ](https://ieeexplore.ieee.org/mediastore/IEEE/content/media/11629556/11629860/11630479/cai3-p6-cai-small.gif)](https://ieeexplore.ieee.org/mediastore/IEEE/content/media/11629556/11629860/11630479/cai3-p6-cai-large.gif)
+
+**Fig. 3:**
+
+**Qualitative Result Demonstration**. A case study showcasing the model’s reasoning (Thinking) and final report generation. The model correctly identifies "small right apical pneumothorax," demonstrating alignment between visual features and clinical text.
+
+### 4.3. Experimental Phenomenon Analysis
+
+**NLG Metric Divergence**. ChestR1 achieves SOTA BLEU-4 (12.7) but lower BLEU-1. This divergence stems from our CoT-based generation: the high BLEU-4 reflects superior syntactic coherence, while the lower BLEU-1 results from the CoT’s strict logical structure differing lexically from diverse ground-truth styles. Crucially, the top-tier RadGraph score confirms that this stylistic shift preserves clinical accuracy without incurring factual hallucinations.
+
+**Rare Pathology Representation**. While dominating common diseases (mF1-5), ChestR1’s 14-class performance (mF1-14) trails 7B baselines slightly. This reflects the 3B vs. 7B capacity gap: RL effectively amplifies capabilities on well-represented classes, but the smaller parameter space limits the fine-grained modeling of long-tail distributions compared to larger foundation models.
+
+**Table 2:** Localization Performance. We report mAP and mIOU across three grounding tasks. The Average column indicates the mean performance across all available tasks. † citations from original papers.
+
+[![Image 11: Table 2:- Localization Performance. We report mAP and mIOU across three grounding tasks. The Average column indicates the mean performance across all available tasks. † citations from original papers. ](https://ieeexplore.ieee.org/mediastore/IEEE/content/media/11629556/11629860/11630479/cai.t2-p6-cai-small.gif)](https://ieeexplore.ieee.org/mediastore/IEEE/content/media/11629556/11629860/11630479/cai.t2-p6-cai-large.gif)
+
+[![Image 12: Fig. 4: - Entropy Dynamics. The synchronous decline of Ground-Truth (GT) and All-token entropy confirms that our modulation strategy effectively aligns the GT distribution with the model’s policy without distribution collapse. ](https://ieeexplore.ieee.org/mediastore/IEEE/content/media/11629556/11629860/11630479/cai4-p6-cai-small.gif)](https://ieeexplore.ieee.org/mediastore/IEEE/content/media/11629556/11629860/11630479/cai4-p6-cai-large.gif)
+
+**Fig. 4:**
+
+**Entropy Dynamics**. The synchronous decline of Ground-Truth (GT) and All-token entropy confirms that our modulation strategy effectively aligns the GT distribution with the model’s policy without distribution collapse.
+
+**SFT-RL Complementarity**. The Failure-Aware SFT branch is critical for stability: RL amplifies capabilities on common pathologies (mF1-5), while SFT provides a safety net for rare classes where exploration is sparse.
+
+**Localization Dynamics**. We observe a synergistic trade-off: Off-Policy GT Augmentation boosts Recall (mAP) by ensuring object discovery, while On-Policy RL refines Precision (mIOU). ChestR1 harmonizes these to maximize overall grounding performance, though phrase grounding remains limited by inherent data scarcity.
+
+**Computational Complexity**. ChestR1 requires only 8 H20 GPUs with 12 total training hours (8h SFT + 4h RL), substantially less than RadVLM (128 GPUs) and MAIRA-2 (32 GPUs). By leveraging GRPO to eliminate the value network, we substantially reduce per-step memory requirements compared to PPO-based alternatives.
+
+### 4.4. Ablation
+
+[Table 3](https://ieeexplore.ieee.org/abstract/document/) validates the necessity of both Off-policy components and entropy modulation. Crucially, we observe a task-dependent sensitivity: Off-policy components like Fail-SFT and GT-Aug provide marginal gains for Report Generation but are critical for Localization. This suggests that while the model possesses strong linguistic priors for reporting (making it easier to optimize via On-Policy RL), the grounding task is inherently more challenging and less convergent.
+
+Regarding the impact of entropy modulation, [Figure 4](https://ieeexplore.ieee.org/abstract/document/) illustrates that following modulation, the entropy dynamics of GT tokens and on-policy tokens changes in a similar manner, confirm the effectiveness of the entropy modulation ease the shift between the two distributions.
+
+**Table 3:** Component Analysis. Impact of modules on clinical accuracy (CheXbert Macro-F1) and localization (mAP). GT-Aug: Ground-Truth Augmented Sampling. Entropy: Entropy-Aware Modulation. Fail-SFT: Dynamic Failure-Aware SFT.
+
+[![Image 13: Table 3:- Component Analysis. Impact of modules on clinical accuracy (CheXbert Macro-F1) and localization (mAP). GT-Aug: Ground-Truth Augmented Sampling. Entropy: Entropy-Aware Modulation. Fail-SFT: Dynamic Failure-Aware SFT. ](https://ieeexplore.ieee.org/mediastore/IEEE/content/media/11629556/11629860/11630479/cai.t3-p6-cai-small.gif)](https://ieeexplore.ieee.org/mediastore/IEEE/content/media/11629556/11629860/11630479/cai.t3-p6-cai-large.gif)
+
+SECTION 5.
+
+## CONCLUSION
+
+We introduce ChestR1, a sample-efficient RL framework that resolves exploration sparsity in medical VLMs via Ground-Truth Augmented GRPO, Entropy-Aware Modulation, and Failure-Aware SFT. Experiments confirm that our 3B model outperforms SOTA RL methods and rivals 7B+ baselines in both clinical accuracy and anatomical grounding. ChestR1 demonstrates that targeted algorithmic alignment can effectively bridge resource gaps, establishing a scalable paradigm for high-precision automated diagnosis on consumer-grade hardware. While our entropy-based modulation effectively guides training, translating it into standardized confidence scores for inference remains an open challenge. Integrating training-time uncertainty exploitation with inference-time quantification is a promising future direction.

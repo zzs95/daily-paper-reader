@@ -1,0 +1,434 @@
+Title: Auditing Evidence Use in Medical LLM Diagnosis
+
+URL Source: https://arxiv.org/pdf/2607.20848
+
+Published Time: Fri, 24 Jul 2026 00:24:19 GMT
+
+Number of Pages: 20
+
+Markdown Content:
+# Auditing Evidence Use in Medical LLM Diagnosis 
+
+Junchi Liao Jiawen Deng Fuji Ren *
+
+University of Electronic Science and Technology of China Chengdu, China 
+
+Abstract 
+
+Medical LLMs are often evaluated by whether they select the correct diagnosis, but diagnos-tic accuracy alone does not show whether the model used the case evidence appropriately. We present a behavioral audit of evidence use in medical diagnosis. For each case, we decom-pose patient information into evidence units, score candidate diagnoses under controlled evi-dence subsets, and mine low-order interactions in diagnostic margins. Because medical evi-dence is diagnosis-relative, the audit separates interaction discovery from failure assignment: large or negative interactions can reflect plau-sible differential diagnosis, while suspicious interactions require robustness checks and clin-ical review. We evaluate five open-weight LLMs on DDXPlus, CupCase, and MedCase. Across datasets, faithful support and differen-tial conflict or cancellation account for most interaction strength, showing that many evi-dence interactions are clinically plausible rather than failures. In a DDXPlus-focused blinded five-reviewer 130-item enriched review sam-ple, invalid or shortcut-like cases concentrate in negated or absent findings and clinically lo-cal evidence. These results show that accuracy can hide candidate evidence-use failures and motivate role-aware audits for medical LLM evaluation. 
+
+1 Introduction 
+
+Large language models (LLMs) are increasingly evaluated as diagnostic assistants in medicine, with foundation-model work suggesting broad poten-tial for generalist medical AI (Moor et al., 2023; Thirunavukarasu et al., 2023; Clusmann et al., 2023). Most evaluations ask whether the final diag-nosis or answer is correct, often through medical exams or case-based question answering bench-marks (Kung et al., 2023; Nori et al., 2023; Singhal et al., 2023, 2025). This is a necessary signal, but 
+
+> *Corresponding author.
+
+it is not sufficient for high-stakes clinical use. A model can select the right diagnosis while giving too much weight to evidence that a clinician would consider weak, irrelevant, or directionally mislead-ing. The gap is especially important for diagnosis because clinical evidence is not a flat list of fea-tures. Symptoms, signs, risk factors, negative find-ings, and history items play different roles in a differential diagnosis, a structure reflected in di-agnostic datasets that expose patient findings and candidate differentials (Fansi Tchango et al., 2022). The same finding can support one disease, support a competing disease, or rule against another; an explicitly absent finding may be informative for one diagnosis while irrelevant to another. Accuracy collapses these distinctions into a single final label, a known limitation of aggregate benchmark report-ing in broader LLM evaluation (Hendrycks et al., 2020; Srivastava et al., 2023; Liang et al., 2022). We study this problem as an evidence-use au-diting task, following behavioral and counterfac-tual evaluation work that tests model behavior un-der controlled input changes (Ribeiro et al., 2020; Gardner et al., 2020). Given a clinical case, we split the patient information into evidence units and present the model with controlled combina-tions of those units. The model chooses among candidate diagnoses, and we score the diagnostic margin for each candidate from the same multiple-choice prompt. We then mine low-order evidence interactions: combinations of evidence units whose joint presence changes the diagnostic margin be-yond their individual effects. This audit is behavioral rather than introspective. We do not claim to recover the model’s hidden rea-soning process or to validate generated rationales, since rationale and chain-of-thought faithfulness can be fragile (Jacovi and Goldberg, 2020; Turpin et al., 2023; Lanham et al., 2023). Instead, we ask a narrower question: when clinical evidence is arXiv:2607.20848v1 [cs.AI] 23 Jul 2026 made available or unavailable under controlled in-terventions, does the model’s observable diagnostic preference change in a clinically coherent way? This distinction matters because medical inter-actions are not errors by default. A negative in-teraction can reflect legitimate differential diagno-sis: evidence for pneumonia may lower the mar-gin for asthma, and overlapping asthma findings may be redundant rather than additive. We there-fore separate interaction discovery from failure as-signment. Interaction mining proposes candidate mechanisms; diagnosis-relative evidence roles, ro-bustness checks, and clinical validation determine which candidates support stronger failure claims. This distinguishes the audit from three adjacent evaluation styles: diagnostic benchmarks that stop at the full-case answer, attribution or rationale stud-ies that evaluate token salience or explanation faith-fulness, and counterfactual tests that treat a feature as globally unwanted or irrelevant (Lundberg and Lee, 2017; Sundararajan et al., 2020; DeYoung et al., 2020). Here, evidence is diagnosis-relative: the same field can support one diagnosis, support a competitor, or be clinically incoherent for another. The contribution is therefore the role-aware audit protocol around interaction mining, not the interac-tion score alone. Our contributions are: • We propose a behavioral audit for medical diagnosis that measures how LLM diagnos-tic margins change under controlled evidence interventions. • We introduce a diagnosis-relative interpre-tation framework that separates plausible differential-diagnosis interactions from can-didate evidence-use failures. • We evaluate five open LLMs on three diag-nostic datasets, showing that broad faithful-support and conflict/cancellation patterns per-sist across case styles; on DDXPlus, clinically adjudicated invalid mechanisms concentrate in evidence polarity and clinical specificity. 
+
+2 Method 
+
+The audit turns a clinical case into controlled ob-servations of model preference: it scores diagnoses under evidence interventions, assigns diagnosis-relative evidence roles, mines low-order interac-tions, and maps stable high-strength interactions to clinical mechanisms. It surfaces candidate evidence-use patterns first; failure labels are as-signed only after robustness checks and clinical in-terpretation. Figure 1 summarizes the full pipeline. 
+
+2.1 Diagnostic Scoring with Evidence Interventions 
+
+Given a clinical case, we represent patient informa-tion as evidence units E = {e1, . . . , e n} and can-didate diagnoses C = {c1, . . . , c m}. Units include symptoms, signs, risk or history items, laboratory or imaging statements, and explicitly absent find-ings. For datasets with a gold diagnosis, the target is y ∈ C, matching the multiple-choice format used by many medical QA and diagnostic benchmarks (Jin et al., 2019, 2021; Pal et al., 2022). Each prompt shows the visible evidence units and the same candidate list, and asks the model to return only the option letter. Rather than using only the generated answer, we score every candidate option from the same prompt: in the main experi-ments, sT (cj ) is the next-token log probability of the option letter for diagnosis cj . The prediction under subset T is arg max cj ∈C sT (cj ).Our audit uses a scalar diagnostic preference score rather than the raw prediction alone. For any audited diagnosis d ∈ C, we define its margin under subset T as 
+
+vd(T ) = sT (d) − max    
+
+> cj∈C,c j̸=d
+
+sT (cj ). (1) Larger margins indicate stronger preference for d
+
+over its closest competitor. We use d = y for gold-diagnosis analysis and the same definition for competitors. Margins are within-prompt prefer-ence differences, not calibrated diagnostic proba-bilities; option-letter priors and position effects can still affect scores, so stronger failure claims require candidate-order robustness. Evidence interventions vary T over the selected audited units. In the main setting, selected audited units outside T are hidden from the prompt, with dataset-specific fixed context handled as described in Appendix G. In sensitivity analyses, hidden units are instead replaced with a “not specified” state-ment, and margins and interactions are recomputed under that perturbation. This matters for negated evidence: removing “no chest pain” makes the find-ing unavailable; it does not assert that chest pain is present. 
+
+2.2 Diagnosis-Relative Evidence Roles 
+
+Medical evidence is diagnosis-relative: a symptom may support one diagnosis, support a competitor, Evidence units                
+
+> fever e1 e2 e4 e3 cough asthma history no chest pain E = {e1, ..., e_n}
+> Clinical case
+> Findings : fever, cough, no chest pain, asthma history
+> Candidates : asthma / pneumonia / bronchitis
+> Controlled interventions
+> T1={e1,e2} fever + cough neutralized: hidden = not specified T2={e1,e3,e4} fever + absent + history
+> Show subsets T
+> ⊆E
+> Option scoring
+> B pneumonia A asthma C bronchitis 1.8 0.9 0.4 margin = asthma - best other v_asthma(T1) = 1.8 - 0.9
+> Visible evidence: T1
+> Interaction mining
+> combine margins v_d(T) e1 e2 e3 e4 e1 e2 +2.1 -1.4 +0.8
+> rank by |I_d(S)|
+> Role-aware interpretation
+> Large interaction ≠ failure
+> supporting competitor negated/absent background irrelevant/local
+> Diagnosis-relative roles
+> Robustness + clinical review
+> candidate mechanisms → validated outcome
+> üprompt wording stable
+> ücandidate order stable
+> üneutralized stable
+> üclinical review
+> plausible interaction questionable confirmed failure
+> Provisional mechanism
+> role + sign + strength
+> Plausible faithful support conflict cancellation redundancy
+> Candidate misuse negated / absent irrelevant / local over-amplified cue
+> Interpret and validate mined interactions
+> interpret mined interactions
+
+Figure 1: Overview of the evidence-use audit. Cases are decomposed into evidence units, scored under controlled interventions, and mined for margin interactions; these interactions are interpreted with diagnosis-relative roles and validated before failure claims are assigned. 
+
+or exclude another candidate. We therefore as-sign evidence roles relative to the audited diagnosis rather than treating a unit as globally relevant or irrelevant. For an evidence unit ei and audited diagnosis 
+
+d, role families are: supporting evidence , which makes d more plausible; competitor-supporting evi-dence , which supports an alternative and can lower 
+
+d’s margin; excluding or negated evidence , which reports absence or rules against d; background or risk evidence , which changes prior plausibility; and 
+
+likely irrelevant or clinically local evidence , which should have little direct effect without a clinical bridge. These roles are directional expectations, not hard rules: absent symptoms can be weakly informative, and background history can matter in some differ-entials. Role annotation guides interpretation of interaction sign and strength but does not itself de-termine validity. Appendix Table 12 gives the full role summary. 
+
+2.3 Interaction Mining 
+
+Single-evidence effects are often insufficient for diagnosis because findings can become informative only in combination. We therefore mine interac-tions over evidence units: the part of a diagnostic-margin change attributable to a set of units jointly, beyond lower-order effects. Given the value function vd(T ) over evidence subsets, we compute the interaction effect for a non-empty set S with respect to diagnosis d as 
+
+Id(S) = X
+
+T ⊆S
+
+(−1) |S|−| T |vd(T ). (2) For a singleton S = {ei}, this is the effect of one unit relative to the empty-evidence baseline. For larger S, it measures whether units jointly support or suppress diagnosis d beyond their individual effects. Positive values increase the margin for d;negative values reduce it or favor a competitor. We refer to |S| as interaction order and |Id(S)|
+
+as strength. Low-order interactions are the main audit targets because they are interpretable and cheaper to estimate, following attribution and in-teraction work on joint feature effects (Grabisch and Roubens, 1999; Lundberg and Lee, 2017; Sun-dararajan et al., 2020; Janizek et al., 2021; Tsang et al., 2017). We audit a fixed selected set of units per case, rank high-strength interactions, and group them by diagnosis-relative roles and signs. 
+
+2.4 From Interactions to Audit Labels 
+
+Because large interactions can reflect valid differen-tial diagnosis or redundancy, automatic labels are provisional. Rules use the interaction sign, strength, audited diagnosis, candidate set, and evidence roles, and are applied in a deterministic priority order. The pipeline first checks candidate-misuse condi-tions: (i) positive interactions containing explicitly negated or excluding evidence, then (ii) interac-tions containing clinically local evidence with no role-supported path to the audited diagnosis. These checks take precedence over later faithful or con-flict labels when an interaction satisfies multiple conditions. If neither candidate-misuse condition applies, the remaining interactions fall through to mecha-nism labels. Competitor-supporting evidence is la-beled differential conflict/cancellation when the au-dited margin is reduced or target and competitor ev-idence are mixed; suppressive interactions among target-supporting units are target redundancy; posi-tive target-supporting interactions are faithful tar-get evidence; antecedent, risk, exposure, or prior-condition roles are background/history influence. Remaining low-strength or ambiguous interactions are weak or redundant. Appendix Table 13 gives label definitions. A smaller subset is marked as candidate failure mechanisms: negated or absent evidence misuse ,where absent or excluding findings increase sup-port unexpectedly, and irrelevant evidence misuse ,where clinically unrelated or overly local fields strongly affect the margin. These are suspicious in-teractions, not final judgments. We reserve strong failure claims for interactions that pass stability checks across prompt wording, candidate order, and perturbation semantics and are judged invalid; questionable cases are reported separately. 
+
+3 Experiments 
+
+3.1 Experimental Setup 
+
+We evaluate five open-weight instruction-tuned LLMs: Qwen2.5-7B-Instruct, OpenBioLLM-8B, MedGemma-4B, BioMistral-7B, and Llama3-Med42-8B (Hui et al., 2024; Ankit Pal, 2024; Sell-ergren et al., 2026; Labrak et al., 2024; Christophe et al., 2024). DDXPlus provides structured symp-tom and history fields for fine-grained role analysis (Fansi Tchango et al., 2022); CupCase and Med-Case use case-report style descriptions and test whether broad interaction patterns persist beyond structured DDXPlus (Perets et al., 2025; Wu et al., 2025).                 
+
+> Dataset Cases Units Cand. Interv. DDXPlus 500 82–20 255 CupCase 200 63–4 63 MedCase 200 63–8 63
+> Table 1: Evaluation data. “Units” denotes the number of selected evidence units audited per case. “Cand.” is the range of candidate diagnoses, and “Interv.” is the number of subset interventions per case, excluding the full-evidence prompt.
+
+For each case, we score candidate diagnoses un-der evidence interventions, compute interactions over selected units, and report accuracy, interaction mechanisms, clinical validation, targeted counter-factuals, and robustness checks. DDXPlus supports structured role labels, so fine-grained failure labels and clinical-review claims are mainly analyzed there. CupCase and Med-Case serve as coarser external checks for faithful-support versus conflict/cancellation structure, not fine-grained failure prevalence. Appendix B pro-vides dataset construction, evidence-unit selection, candidate construction, and model-scoring details; Appendix C gives the prompt templates. 
+
+3.2 Main Results Finding 1: Accuracy is not evidence-use fidelity. 
+
+Table 2 gives the standard diagnostic baseline. OpenBioLLM has the strongest average accuracy, and Med42 is close on DDXPlus; CupCase is eas-ier for most models, while MedCase is harder, with the best model reaching 55.0%. Accuracy is useful but does not identify the evidence-use mechanism behind a prediction: cor-rect answers can arise from faithful evidence, plau-sible cancellation among competitors, or irrelevan-t/absent findings that shift the margin in the right direction. Comparing Table 2 with Appendix Table 14, the five evaluated models do not have the same or-dering by DDXPlus accuracy as by faithful target-evidence strength or conflict/cancellation strength. We treat this as a qualitative observation rather than a correlation estimate; the practical point is that accuracy and evidence-use structure are not interchangeable summaries.                          
+
+> Dataset Qwen OpenBio MedG. BioMis. Med42 DDXPlus 65.8 74.0 64.0 54.6 73.4 CupCase 87.0 87.5 70.5 80.0 77.0 MedCase 40.5 55.0 43.5 44.5 49.0 Avg. 64.4 72.2 59.3 59.7 66.5
+> Table 2: Full-evidence diagnostic accuracy (%) across models and datasets. MedG. denotes MedGemma and BioMis. denotes BioMistral.
+
+Finding 2: Medical interactions are common, but many are legitimate. Figure 2 shows that diagnostic margins are not driven only by isolated findings. Differential conflict/cancellation accounts for 47.1% of interaction strength on DDXPlus, 45.8% on CupCase, and 52.2% on MedCase, while faithful or plausible support accounts for much of the remainder. Most salient DDXPlus strength comes from low-order combinations, especially third-order interactions, which are richer than sin-gleton attribution but still inspectable. Table 3 compares lower-order perturbation base-lines with the order-3 audit on DDXPlus. Sin-gleton or leave-one-out scoring uses only 9 sub-sets per case but keeps 18.0% of top-interaction strength, retrieves 6/300 raw suspicious interac-tions, and retrieves none of the 11 adjudicated in-valid or shortcut-like review items. Pairwise inter-actions recover more signal but only 4/11 invalid or shortcut-like items. Because the 11 reviewed invalid or shortcut-like items were drawn from the order-3 output, the order-3 row is a reference set rather than an independent sufficiency result; the meaningful comparison is the coverage gap of the lower-order baselines.              
+
+> Scope Budget Str. kept Raw susp. Invalid Singleton 9 (3.5%) 18.0% 6/300 0/11 Pairwise 37 (14.5%) 45.6% 80/300 4/11 Order 3 93 (36.3%) 100.0% 300/300 11/11
+
+Table 3: Order-ablation baseline on DDXPlus 500x8. Budget is scored subsets per case, with 256 full subset combinations for eight audited units. Strength is cumula-tive top-interaction absolute strength retained within the order-3 audit. Raw susp. is the DDXPlus 300-item au-tomatic suspicious queue, and Invalid is the adjudicated invalid or shortcut-like subset of the enriched 130-item clinical review sample. 
+
+Figure 2: Evidence-use mechanisms. (a) Share of inter-action strength by clinical mechanism across datasets. (b) Distribution of interaction strength by interaction order on DDXPlus. 
+
+The key point is that interaction strength has different clinical meanings. Table 4 shows this on DDXPlus: conflict/cancellation and faithful tar-get evidence dominate total strength, while back-ground/history evidence is less frequent but larger on average. This pattern is not driven by one model: faithful/plausible support plus conflict/-cancellation accounts for 86.6–89.6% of DDX-Plus strength across the five models, while negat-ed/absent misuse remains 1.2–3.0%. Appendix Ta-bles 14, 15, and 17 report model-wise, dataset-wise, and interaction-order breakdowns.                      
+
+> Mechanism Count Strength Mean Conflict/cancel. 40.0 42.7 2.51 Faithful target 37.7 36.6 2.29 Background/history 4.1 7.9 4.55 Weak/redundant 7.1 5.3 1.76 Target redundancy 3.0 4.4 3.49 Negated misuse 2.5 2.2 2.12
+
+Table 4: Fine-grained DDXPlus mechanism distribution. Count and strength are percentages; Mean is the average absolute interaction effect. 
+
+3.3 Clinical Validation Finding 3: DDXPlus invalid mechanisms con-centrate in evidence polarity and specificity. 
+
+Automatic labels are screening signals, so we clini-cally reviewed 130 high-strength DDXPlus interac-tions sampled across mechanism buckets. Five se-nior PhD-trained medical reviewers independently annotated all items under a blinded protocol; source model and provisional bucket were hidden. Be-fore adjudication, all five reviewers agreed on 77% of items, with high inter-rater agreement (Fleiss’ 
+
+κ = 0 .82 ). 
+
+Figure 3: Clinical validation. (a) Adjudicated review outcomes for sampled interactions by mechanism. (b) Stability and human-validation summaries for candidate failure types. 
+
+Figure 3 and Table 5 separate discovery from error confirmation. After adjudication, 111/130 in-teractions are valid, 8 questionable, and 11 invalid or shortcut-like. Faithful target evidence is almost always valid, background/history is often legiti-mate, and conflict/cancellation has no adjudicated invalid cases in this DDXPlus sample. Appendix Tables 18, 11, and 19 give sampling, protocol, and confidence details. Invalid mechanisms concentrate in the DDXPlus enriched review sample’s negated/absent bucket. The 11 invalid cases include no recent travel increasing support for allergic sinusitis, asthma exacerbation, or Guillain-Barre syndrome, and skin/rash or no-peeling fields supporting unrelated diagnoses such as inguinal hernia or influenza. Thus, the substantive DDXPlus finding is a stable cluster around evidence polarity and overly broad transfer of clinically local fields.                      
+
+> Bucket Valid Quest. Invalid Faithful target 29 10Conflict/cancel. 36 40Background/history 18 20Negated misuse 9011 Control/unclear 19 10Total 111 811
+> Table 5: Adjudicated clinical review counts for 130 sam-pled interactions. Quest. denotes clinically questionable cases.
+
+3.4 Targeted Counterfactual Validation Finding 4: Counterfactuals separate local ar-tifacts from global reliance. Clinical review judges plausibility, but targeted counterfactuals test whether suspicious evidence only appears in the decomposition or changes the model’s diagnostic preference. For representative audit-surfaced cases, we remove or rewrite the suspicious evidence fam-ily while keeping the rest of the case fixed and rescore the same candidates.                        
+
+> Pattern Counterfactual ∆margin Rank MG name cue remove MG history −9.50 1 →1
+> MG name cue remove MG history −6.13 1 →2
+> Hernia skin remove skin fields +2 .25 1 →1
+> Influenza skin remove skin fields +3 .75 2 →1
+> SLE skin control remove skin fields −7.50 1 →2
+> Table 6: Representative targeted counterfactuals. MG denotes myasthenia gravis. The table reports target-margin changes after removing the indicated evidence family; rows are representative model-case pairs from the targeted counterfactual validation.
+
+Table 6 sharpens the audit interpretation. Exact disease-name family history strongly amplifies con-fidence for myasthenia gravis: removing it reduces the target margin by 9.50 for Qwen while preserv-ing the top diagnosis, and by 6.13 for BioMistral while flipping the top diagnosis. This supports a confidence-amplification claim, not a claim that the cue is always the sole reason for the diagnosis. Skin/rash patterns illustrate the need for this check. For inguinal hernia, skin fields form clini-cally implausible local interactions, but removing them does not break the final prediction; the claim is local incoherence, not global reliance. For in-fluenza, removal often improves target margin or rank, suggesting competitor confusion. The SLE control gives the boundary case: skin evidence can be clinically meaningful, and removing it can hurt the target. An expanded 86-record stratified validation sup-ports this narrower interpretation. On clean-correct model-case pairs, high no-travel cases have only modestly higher strong-change rates than low no-travel controls (11.6% vs. 5.6%), so no-travel re-mains a secondary polarity example. Skin/rash strata are stronger: high skin-hernia and high skin-other reach 29.3% and 32.1% strong-change rates, with larger competitor-suppression rates (44.3% and 46.2%) than direct target-score decreases (5.2% and 3.8%). The plausible-skin control is also sensi-tive (45.0%), matching the clinical boundary case rather than contradicting it. Appendix Table 20 gives the full breakdown. 
+
+3.5 Robustness and Sensitivity Finding 5: Stability filtering turns broad suspi-cious patterns into high-confidence candidates. 
+
+Raw automatic suspicious interactions are too broad to report as failures. The check targets three artifact channels: instruction framing, option-position bias, and whether deletion itself creates an artificial signal. We therefore test stability to prompt wording, candidate order, and perturbation semantics: prompt/order variants on 100 DDXPlus cases and deletion versus neutralization on 200 cases. Figure 4 and Table 7 show the filtering effect on an enriched human-adjudicated candidate-failure queue. Stability filtering reduces the queue from 300 to 120 interactions; within this queue, adjudi-cated precision rises from 0.55 to 0.80 and false-positive rate falls from 0.20 to 0.08. Random con-trols have much lower precision and higher false positives. These are descriptive queue-level sum-maries, not population estimates. Tables 8 and 9 provide sensitivity checks. Prompt and option-order changes affect behav-ior, as expected for option-scored LLMs, but Figure 4: Robustness and filtering. (a) Stability filter-ing improves the precision of candidate evidence-use failures. (b) Summary of prompt, order, perturbation, human-validation, and random-control checks. 
+
+suspicious-strength ratios stay in the same order of magnitude across prompt families and option or-ders. Neutralization reduces the suspicious signal for every model, sharply for OpenBio and BioMis-tral, but does not eliminate it. These results support a cautious interpretation: not every mined inter-action is a failure, but the stable subset is not ex-plained away by prompt wording, option order, or deletion artifacts. Because evidence-unit selection can also affect which local interactions are available to mine, we additionally vary the DDXPlus unit-selection strat-egy. Under target-salient and random-balanced selectors, faithful/plausible support plus conflic-t/cancellation accounts for 94.0% and 94.0% of strength, compared with 89.0% under the main bal-anced selector. Suspicious strength remains small (2.4–2.8%), and negated/absent misuse remains 2.1–2.7%. Top-interaction overlap drops to about 0.5 because the audited units change, so this is mechanism-level rather than exact-interaction sta-bility. Appendix Table 16 gives the full selection-sensitivity results.                         
+
+> Candidate set nPrec. Quest. FP Raw automatic 300 0.55 0.25 0.20 Prompt stable 220 0.65 0.20 0.15 + order stable 180 0.75 0.15 0.10 + neutralize 120 0.80 0.12 0.08 Random control 100 0.10 0.15 0.75
+
+Table 7: Filtering candidate failures on the enriched human-adjudicated candidate-failure queue. Prec. is human-adjudicated precision, Quest. is the questionable rate, and FP is the false-positive rate; these are descrip-tive queue-level summaries. 
+
+Together, these checks isolate the stable, clin-ically reviewed subset behind stronger failure claims.                         
+
+> Model C-Acc. Q-Acc. C-Susp. Q-Susp. Qwen 0.67 0.61 0.039 0.036 OpenBio 0.65 0.65 0.038 0.034 MedGemma 0.61 0.59 0.032 0.042 BioMistral 0.48 0.42 0.045 0.036 Med42 0.69 0.70 0.030 0.030
+
+Table 8: Prompt and option-order robustness by model on 100 DDXPlus cases. C and Q denote clinical-summary and questionnaire prompts. Acc. and Susp. report the mean accuracy and strict suspicious-strength ratio over three candidate orders.                         
+
+> Model Drop Neut. Drop str. Neut. str. Qwen 2.38 2.17 0.035 0.029 OpenBio 0.61 0.14 0.024 0.012 MedGemma 1.60 0.86 0.030 0.025 BioMistral 1.38 0.15 0.039 0.020 Med42 1.38 0.87 0.027 0.018
+
+Table 9: Perturbation-semantics check on 200 DDXPlus cases. Drop and Neut. report suspicious interactions per case under deletion and neutralization; str. reports the strict suspicious-strength ratio. 
+
+4 Case Studies 
+
+Figure 5 summarizes three representative cases where interaction magnitude alone is insufficient: an implausible local interaction without global re-liance, shortcut-like confidence amplification, and a valid diagnosis-relative boundary case. Addi-tional details are in Appendix H. 
+
+Case A: implausible local interaction without global reliance. For inguinal hernia, skin or rash fields appear in high-impact interactions with ab-dominal and effort-pain cues. Clinically, these fields do not provide direct support for hernia. How-ever, removing the skin fields increases the target margin and leaves the prediction rank unchanged. The supported claim is therefore local evidence-use incoherence, not global reliance on rash evidence. 
+
+Case B: clinically related but shortcut-like evi-dence. For myasthenia gravis, family history is clinically relevant, but the exact disease-name cue can dominate the diagnostic margin. Removing the MG-history phrase substantially lowers the target margin, and in one representative pair changes the top-ranked diagnosis. This supports a confidence-amplification claim rather than a simple irrelevant-feature claim. 
+
+Case C: a boundary case that protects against over-labeling. For systemic lupus erythematosus Case and evidence Mined interaction Counterfactual effect Clinical interpretation             
+
+> Case A: Inguinal hernia
+> skin / rash field abdominal cue effort-pain cue target: hernia
+> Case B: Myasthenia gravis
+> family history: MG weakness diplopia / dysarthria target: MG
+> Case C: SLE
+> Skin / rash evidence Systemic symptoms target: SLE
+> Suspicious local interaction
+> skin/rash appears in a high-impact local interaction skin/rash hernia cues local margin effect
+> Disease-name cue amplification
+> MG-name cue symptoms large margin boost
+> Clinically coherent interaction
+> skin evidence systemic context target margin support
+> Remove skin fields
+> 0+2.25
+> rank 1 à1
+> margin change prediction rank
+> Remove MG history
+> margin change
+> Ex.1 -9.50 0rank 1
+> à1
+> Ex.2 -6.13 0rank 1
+> à2
+> Remove skin fields
+> -7.50 0
+> margin change prediction rank
+> rank 1 à2
+> Implausible local interaction
+> not global reliance
+> Clinically related cue
+> Shortcut-like confidence amplification
+> Valid boundary case
+> same evidence family can be appropriate
+
+Figure 5: Case-study summary. Each row contrasts the evidence pattern, mined interaction, targeted counterfactual effect, and clinical interpretation. The examples separate three outcomes: an implausible local interaction without global reliance, shortcut-like confidence amplification from a clinically related cue, and a valid boundary case where the same evidence family is clinically appropriate. 
+
+(SLE), skin evidence is clinically meaningful in the systemic case context. Removing skin fields lowers the target margin and can change the top-ranked diagnosis. This boundary case shows why evidence roles must be diagnosis-relative: the same evidence family can be implausible for hernia but appropriate for SLE. Together, the cases show why the audit re-ports the clinical role of a score change, not only its magnitude. Case A shows local incoher-ence without global reliance. Case B supports a stronger shortcut-like confidence claim: removing the disease-name history cue sharply lowers the margin and can change the top diagnosis. Case C is the boundary condition: the same evidence family is appropriate when the audited diagnosis supplies the clinical bridge. These distinctions make the cases cross-checks rather than isolated anecdotes. 
+
+5 Discussion and Conclusion 
+
+These results suggest that an evidence-use audit should be reported as a structured profile, not as a binary list of suspicious features. Each high-effect interaction should be interpreted with the audited diagnosis, evidence role, margin direction, affected target or competitor, and stability under prompt, option-order, and perturbation changes. This is what separates patterns that can look similar nu-merically: clinically coherent differential conflict, local but implausible evidence use, and shortcut-like cues that amplify confidence. The model-wise and selection-sensitivity checks also show why this profile is useful: faithful or plausible support and differential conflict dominate across settings, while stable suspicious mechanisms form a smaller sub-set that needs clinical review. Diagnostic accuracy alone cannot show whether medical LLMs use evidence appropriately. We introduced a behavioral audit that traces how con-trolled evidence interventions change diagnostic margins, interprets interactions with diagnosis-relative roles, and reserves failure claims for stable clinically reviewed mechanisms. Across three diag-nostic datasets and five open-weight models, most interaction strength reflects plausible support or differential conflict, while the DDXPlus-enriched review sample identifies stable risks around ab-sent or clinically local evidence. These findings motivate reporting evidence-use structure along-side diagnostic accuracy when evaluating medical LLMs, especially when evidence roles shift across candidates in real differential diagnosis. Limitations 
+
+This audit measures prompt-conditioned prefer-ences under evidence interventions, not latent rea-soning or clinical safety; interaction scores are be-havioral signals, not internal causal explanations. Results depend on evidence units, candidate sets, and role annotations (Bender and Friedman, 2018; Gebru et al., 2021; Mitchell et al., 2019). DDXPlus supports structured roles; CupCase and MedCase use extracted narrative units and coarser labels. Clinical review is enriched for high-strength and candidate-failure items, so precision, mechanism shares, model comparisons, and filtering values are descriptive rather than population estimates. We re-port Wilson and bootstrap intervals for selected re-view and mechanism summaries, but broader preva-lence estimates would require probability sampling and more models. The order-ablation is a DDX-Plus retrieval check, not proof that order-3 suffices generally. Experiments cover five open-weight models, se-lected units, and multiple-choice option scoring. Option-letter log probabilities may reflect token or position bias; margins and order permutations reduce but do not calibrate this. Robustness checks cannot remove all prompt or candidate-set sensitiv-ity, so failure claims are strongest for stable, clini-cally reviewed patterns. 
+
+References 
+
+Julius Adebayo, Justin Gilmer, Michael Muelly, Ian Goodfellow, Moritz Hardt, and Been Kim. 2018. San-ity checks for saliency maps. Advances in neural information processing systems , 31. Malaikannan Sankarasubbu Ankit Pal. 2024. Openbiollms: Advancing open-source large language models for healthcare and life sci-ences. https://huggingface.co/aaditya/ OpenBioLLM-Llama3-70B .Emily M Bender and Batya Friedman. 2018. Data statements for natural language processing: Toward mitigating system bias and enabling better science. 
+
+Transactions of the Association for Computational Linguistics , 6:587–604. Emily M Bender, Timnit Gebru, Angelina McMillan-Major, and Shmargaret Shmitchell. 2021. On the dangers of stochastic parrots: Can language models be too big? In Proceedings of the 2021 ACM confer-ence on fairness, accountability, and transparency ,pages 610–623. Clément Christophe, Praveen K Kanithi, Tathagata Raha, Shadab Khan, and Marco AF Pimentel. 2024. Med42-v2: A suite of clinical llms. arXiv preprint arXiv:2408.06142 .Jan Clusmann, Fiona R Kolbinger, Hannah Sophie Muti, Zunamys I Carrero, Jan-Niklas Eckardt, Narmin Ghaffari Laleh, Chiara Maria Lavinia Löffler, Sophie-Caroline Schwarzkopf, Michaela Unger, Gre-gory P Veldhuizen, et al. 2023. The future landscape of large language models in medicine. Communica-tions medicine , 3(1):141. Jay DeYoung, Sarthak Jain, Nazneen Fatema Rajani, Eric Lehman, Caiming Xiong, Richard Socher, and Byron C Wallace. 2020. Eraser: A benchmark to evaluate rationalized nlp models. In Proceedings of the 58th annual meeting of the association for computational linguistics , pages 4443–4458. Arsene Fansi Tchango, Rishab Goel, Zhi Wen, Julien Martel, and Joumana Ghosn. 2022. Ddxplus: A new dataset for automatic medical diagnosis. Advances in neural information processing systems , 35:31306– 31318. Matt Gardner, Yoav Artzi, Victoria Basmov, Jonathan Berant, Ben Bogin, Sihao Chen, Pradeep Dasigi, Dheeru Dua, Yanai Elazar, Ananth Gottumukkala, et al. 2020. Evaluating models’ local decision bound-aries via contrast sets. In Findings of the Association for Computational Linguistics: EMNLP 2020 , pages 1307–1323. Timnit Gebru, Jamie Morgenstern, Briana Vec-chione, Jennifer Wortman Vaughan, Hanna Wallach, Hal Daumé Iii, and Kate Crawford. 2021. Datasheets for datasets. Communications of the ACM , 64(12):86– 92. Michel Grabisch and Marc Roubens. 1999. An ax-iomatic approach to the concept of interaction among players in cooperative games. International Journal of game theory , 28(4):547–565. Dan Hendrycks, Collin Burns, Steven Basart, Andy Zou, Mantas Mazeika, Dawn Song, and Jacob Steinhardt. 2020. Measuring massive multitask language under-standing. arXiv preprint arXiv:2009.03300 .Binyuan Hui, Jian Yang, Zeyu Cui, Jiaxi Yang, Day-iheng Liu, Lei Zhang, Tianyu Liu, Jiajun Zhang, Bowen Yu, Keming Lu, et al. 2024. Qwen2. 5-coder technical report. arXiv preprint arXiv:2409.12186 .Alon Jacovi and Yoav Goldberg. 2020. Towards faith-fully interpretable nlp systems: How should we de-fine and evaluate faithfulness? In Proceedings of the 58th annual meeting of the association for computa-tional linguistics , pages 4198–4205. Sarthak Jain and Byron C Wallace. 2019. Attention is not explanation. In Proceedings of the 2019 Confer-ence of the North American Chapter of the Associ-ation for Computational Linguistics: Human Lan-guage Technologies, Volume 1 (Long and Short Pa-pers) , pages 3543–3556. Joseph D Janizek, Pascal Sturmfels, and Su-In Lee. 2021. Explaining explanations: Axiomatic feature interactions for deep networks. Journal of Machine Learning Research , 22(104):1–54. Di Jin, Eileen Pan, Nassim Oufattole, Wei-Hung Weng, Hanyi Fang, and Peter Szolovits. 2021. What disease does this patient have? a large-scale open domain question answering dataset from medical exams. Ap-plied Sciences , 11(14):6421. Qiao Jin, Bhuwan Dhingra, Zhengping Liu, William Co-hen, and Xinghua Lu. 2019. Pubmedqa: A dataset for biomedical research question answering. In Proceed-ings of the 2019 conference on empirical methods in natural language processing and the 9th interna-tional joint conference on natural language process-ing (EMNLP-IJCNLP) , pages 2567–2577. Alistair EW Johnson, Tom J Pollard, Lu Shen, Li-wei H Lehman, Mengling Feng, Mohammad Ghassemi, Benjamin Moody, Peter Szolovits, Leo Anthony Celi, and Roger G Mark. 2016. Mimic-iii, a freely accessi-ble critical care database. Scientific data , 3(1):1–9. Divyansh Kaushik, Eduard Hovy, and Zachary C Lipton. 2019. Learning the difference that makes a differ-ence with counterfactually-augmented data. arXiv preprint arXiv:1909.12434 .Been Kim, Martin Wattenberg, Justin Gilmer, Carrie Cai, James Wexler, Fernanda Viegas, et al. 2018. In-terpretability beyond feature attribution: Quantitative testing with concept activation vectors (tcav). In In-ternational conference on machine learning , pages 2668–2677. PMLR. Pang Wei Koh and Percy Liang. 2017. Understanding black-box predictions via influence functions. In 
+
+International conference on machine learning , pages 1885–1894. PMLR. Tiffany H Kung, Morgan Cheatham, Arielle Medenilla, Czarina Sillos, Lorie De Leon, Camille Elepaño, Maria Madriaga, Rimel Aggabao, Giezel Diaz-Candido, James Maningo, et al. 2023. Performance of chatgpt on usmle: potential for ai-assisted medical education using large language models. PLoS digital health , 2(2):e0000198. Yanis Labrak, Adrien Bazoge, Emmanuel Morin, Pierre-Antoine Gourraud, Mickael Rouvier, and Richard Dufour. 2024. Biomistral: A collection of open-source pretrained large language models for medical domains. In Findings of the association for computa-tional linguistics: acl 2024 , pages 5848–5864. Tamera Lanham, Anna Chen, Ansh Radhakrishnan, Benoit Steiner, Carson Denison, Danny Hernan-dez, Dustin Li, Esin Durmus, Evan Hubinger, Jack-son Kernion, et al. 2023. Measuring faithful-ness in chain-of-thought reasoning. arXiv preprint arXiv:2307.13702 .Percy Liang, Rishi Bommasani, Tony Lee, Dimitris Tsipras, Dilara Soylu, Michihiro Yasunaga, Yian Zhang, Deepak Narayanan, Yuhuai Wu, Ananya Ku-mar, et al. 2022. Holistic evaluation of language models. arXiv preprint arXiv:2211.09110 .Stephanie Lin, Jacob Hilton, and Owain Evans. 2022. Truthfulqa: Measuring how models mimic human falsehoods. In Proceedings of the 60th annual meet-ing of the association for computational linguistics (volume 1: long papers) , pages 3214–3252. Scott M Lundberg and Su-In Lee. 2017. A unified ap-proach to interpreting model predictions. Advances in neural information processing systems , 30. Margaret Mitchell, Simone Wu, Andrew Zaldivar, Parker Barnes, Lucy Vasserman, Ben Hutchinson, Elena Spitzer, Inioluwa Deborah Raji, and Timnit Gebru. 2019. Model cards for model reporting. In 
+
+Proceedings of the conference on fairness, account-ability, and transparency , pages 220–229. Michael Moor, Oishi Banerjee, Zahra Shakeri Hossein Abad, Harlan M Krumholz, Jure Leskovec, Eric J Topol, and Pranav Rajpurkar. 2023. Foundation mod-els for generalist medical artificial intelligence. Na-ture , 616(7956):259–265. Harsha Nori, Nicholas King, Scott Mayer McKinney, Dean Carignan, and Eric Horvitz. 2023. Capabili-ties of gpt-4 on medical challenge problems. arXiv preprint arXiv:2303.13375 .Ziad Obermeyer, Brian Powers, Christine Vogeli, and Sendhil Mullainathan. 2019. Dissecting racial bias in an algorithm used to manage the health of popula-tions. Science , 366(6464):447–453. Ankit Pal, Logesh Kumar Umapathi, and Malaikan-nan Sankarasubbu. 2022. Medmcqa: A large-scale multi-subject multi-choice dataset for medical do-main question answering. In Conference on health, inference, and learning , pages 248–260. PMLR. Anusri Pampari, Preethi Raghavan, Jennifer Liang, and Jian Peng. 2018. emrqa: A large corpus for question answering on electronic medical records. In Proceed-ings of the 2018 conference on empirical methods in natural language processing , pages 2357–2368. Oriel Perets, Ofir Ben Shoham, Nir Grinberg, and Nadav Rappoport. 2025. Cupcase: Clinically uncommon patient cases and diagnoses dataset. In Proceedings of the AAAI Conference on Artificial Intelligence ,volume 39, pages 28293–28301. Marco Tulio Ribeiro, Sameer Singh, and Carlos Guestrin. 2016. " why should i trust you?" explaining the predictions of any classifier. In Proceedings of the 22nd ACM SIGKDD international conference on knowledge discovery and data mining , pages 1135– 1144. Marco Tulio Ribeiro, Sameer Singh, and Carlos Guestrin. 2018. Anchors: High-precision model-agnostic explanations. In Proceedings of the AAAI conference on artificial intelligence , volume 32. Marco Tulio Ribeiro, Tongshuang Wu, Carlos Guestrin, and Sameer Singh. 2020. Beyond accuracy: Behav-ioral testing of nlp models with checklist. In Proceed-ings of the 58th annual meeting of the association for computational linguistics , pages 4902–4912. Andrew Sellergren, Chufan Gao, Fereshteh Mahvar, Timo Kohlberger, Fayaz Jamil, Madeleine Traverse, Alberto Tono, Bashir Sadjad, Lin Yang, et al. 2026. Medgemma 1.5 technical report. arXiv preprint arXiv:2604.05081 .Sofia Serrano and Noah A Smith. 2019. Is attention interpretable? In Proceedings of the 57th annual meeting of the association for computational linguis-tics , pages 2931–2951. Karan Singhal, Shekoofeh Azizi, Tao Tu, S Sara Mah-davi, Jason Wei, Hyung Won Chung, Nathan Scales, Ajay Tanwani, Heather Cole-Lewis, Stephen Pfohl, et al. 2023. Large language models encode clinical knowledge. Nature , 620(7972):172–180. Karan Singhal, Tao Tu, Juraj Gottweis, Rory Sayres, Ellery Wulczyn, Mohamed Amin, Le Hou, Kevin Clark, Stephen R Pfohl, Heather Cole-Lewis, et al. 2025. Toward expert-level medical question answer-ing with large language models. Nature medicine ,31(3):943–950. Aarohi Srivastava, Abhinav Rastogi, Abhishek Rao, Abu Awal Md Shoeb, Abubakar Abid, Adam Fisch, Adam R Brown, Adam Santoro, Aditya Gupta, Adrià Garriga-Alonso, et al. 2023. Beyond the imitation game: Quantifying and extrapolating the capabili-ties of language models. Transactions on machine learning research .Mukund Sundararajan, Kedar Dhamdhere, and Ashish Agarwal. 2020. The shapley taylor interaction in-dex. In International conference on machine learn-ing , pages 9259–9268. PMLR. Mukund Sundararajan, Ankur Taly, and Qiqi Yan. 2017. Axiomatic attribution for deep networks. In Interna-tional conference on machine learning , pages 3319– 3328. PMLR. Arun James Thirunavukarasu, Darren Shu Jeng Ting, Kabilan Elangovan, Laura Gutierrez, Ting Fang Tan, and Daniel Shu Wei Ting. 2023. Large language models in medicine. Nature medicine , 29(8):1930– 1940. Michael Tsang, Dehua Cheng, and Yan Liu. 2017. De-tecting statistical interactions from neural network weights. arXiv preprint arXiv:1705.04977 .Miles Turpin, Julian Michael, Ethan Perez, and Samuel Bowman. 2023. Language models don’t always say what they think: Unfaithful explanations in chain-of-thought prompting. Advances in Neural Information Processing Systems , 36:74952–74965. Kevin Wu, Eric Wu, Rahul Thapa, Kevin Wei, Angela Zhang, Arvind Suresh, Jacqueline J Tao, Min Woo Sun, Alejandro Lozano, and James Zou. 2025. Med-casereasoning: Evaluating and learning diagnostic reasoning from clinical case reports. arXiv preprint arXiv:2505.11733 .A Related Work 
+
+A.1 Medical Diagnostic Evaluation 
+
+Medical LLMs are commonly evaluated with diag-nostic benchmarks, clinical multiple-choice exams, or case-based question answering (Jin et al., 2019, 2021; Pal et al., 2022; Kung et al., 2023; Singhal et al., 2023; Nori et al., 2023). These evaluations provide an important first-order signal: whether a model can select the correct diagnosis or answer when given the full case. General-purpose bench-mark suites and holistic evaluations make a similar tradeoff, aggregating broad task performance while leaving more detailed behavioral structure less visi-ble (Hendrycks et al., 2020; Srivastava et al., 2023; Liang et al., 2022; Lin et al., 2022). A correct final answer can arise from faithful symptom integra-tion, memorized disease-name cues, over-weighted background history, or irrelevant evidence that hap-pens to move the score in the right direction. Our audit is designed to complement diagnostic ac-curacy by measuring how diagnostic preferences change under controlled evidence interventions. This distinction is especially important for diag-nosis because clinical evidence is heterogeneous. Symptoms, signs, risk factors, negative findings, family history, and laboratory results do not play the same role. Clinical NLP resources such as MIMIC-III and emrQA helped make structured clinical records and record-grounded question an-swering available for model evaluation (Johnson et al., 2016; Pampari et al., 2018). DDXPlus, Cup-Case, and MedCase expose the diagnostic version of this issue in different forms, ranging from struc-tured differential-diagnosis fields to narrative case presentations (Fansi Tchango et al., 2022; Perets et al., 2025; Wu et al., 2025). This motivates an evaluation framework that does not treat evidence as globally relevant or irrelevant, but instead asks whether the model’s diagnostic preference changes in a clinically coherent way. 
+
+A.2 Explanation, Attribution, and Evidence Interactions 
+
+A large body of work studies explanations and attributions for language models, including lo-cal explanations, anchors, influence functions, gradient-based attribution, concept activation vec-tors, Shapley-style feature attribution, and ratio-nale benchmarks (Ribeiro et al., 2016, 2018; Koh and Liang, 2017; Sundararajan et al., 2017; Kim et al., 2018; Lundberg and Lee, 2017; DeYoung et al., 2020). These methods are useful for identify-ing influential tokens, rationales, or input regions, but many diagnostic decisions depend on combi-nations of findings rather than isolated evidence units. For example, fever, cough, wheezing, and prior asthma can each be weak or ambiguous alone, while their joint effect may shift the differential diagnosis substantially. This motivates our use of interaction effects over evidence subsets rather than only single-evidence attribution. Our goal differs from recovering a model’s hid-den reasoning process. Work on explanation faith-fulness shows why generated rationales, atten-tion weights, or saliency maps alone should not be treated as direct evidence of model reasoning (Jain and Wallace, 2019; Serrano and Smith, 2019; Adebayo et al., 2018; Jacovi and Goldberg, 2020; Turpin et al., 2023). We instead audit observable diagnostic preferences: the model is repeatedly scored under controlled evidence subsets, and we analyze the resulting margin changes. The interac-tion score is therefore not a claim about internal causal computation. It is a structured way to expose which evidence combinations have large observ-able effects on the model’s diagnostic preference, in the spirit of interaction indices that quantify joint feature effects (Grabisch and Roubens, 1999; Sun-dararajan et al., 2020; Janizek et al., 2021; Tsang et al., 2017). 
+
+A.3 Counterfactual Auditing and Regulated Domains 
+
+Counterfactual and perturbation-based evaluations test whether model behavior changes when input evidence is removed, replaced, or otherwise con-trolled (Kaushik et al., 2019; Gardner et al., 2020; Ribeiro et al., 2020). Such tests are natural for regu-lated domains because they can expose reliance on inappropriate cues, complementing broader docu-mentation and audit practices for deployed models (Bender and Friedman, 2018; Gebru et al., 2021; Mitchell et al., 2019). Safety and fairness work in language technology and health further moti-vates checking not only performance, but also the evidence and proxies that drive model decisions (Bender et al., 2021; Obermeyer et al., 2019). How-ever, medical diagnosis differs from settings where a feature can often be marked as globally forbidden or irrelevant. A negative interaction may reflect plausible differential diagnosis, and a background cue may be clinically meaningful in one case but overused in another. Our framework therefore separates discovery from error assignment. Interaction mining pro-poses candidate mechanisms; clinical roles, ro-bustness checks, and human validation determine whether those mechanisms support a failure claim. This differs from audits that treat any sensitivity to an undesirable feature as direct evidence of un-reliability. In medicine, the stronger claim must be narrower: stable failures are those where the evidence role, interaction sign, case context, and counterfactual behavior remain clinically incoher-ent after review. 
+
+B Experimental Setting Details 
+
+B.1 Datasets and Case Selection 
+
+We use DDXPlus as the main controlled dataset and CupCase and MedCase as external case-style checks. DDXPlus provides structured patient find-ings and a differential diagnosis list, which makes it suitable for evidence-role analysis. CupCase pro-vides case presentations with one correct diagnosis and distractor diagnoses. MedCase contains longer case prompts and diagnostic reasoning; we use it to test whether the broad interaction patterns persist in less structured clinical narratives. For DDXPlus, we keep cases with a gold diag-nosis, the provided differential list, at least two can-didate diagnoses, and enough structured findings to form the audited evidence units. For CupCase and MedCase, we keep cases with a gold diagno-sis, at least three usable candidate diagnoses, and enough patient information to form the required number of evidence units. DDXPlus contributes 500 validation cases with eight audited evidence units per case. CupCase and MedCase contribute 200 test cases each with six audited evidence units per case. The smaller number of units for the nar-rative datasets keeps the subset intervention space comparable while preserving clinically readable evidence units.             
+
+> Dataset Split Units Candidate source DDXPlus validation 8differential list CupCase test 6answer + distractors MedCase test 6answer + reasoning di-agnoses
+> Table 10: Dataset construction used in the audit. “Units” is the number of audited evidence units selected per case.
+
+B.2 Evidence Unit Construction 
+
+For DDXPlus, evidence units are built from struc-tured findings. Each unit stores the underlying find-ing, its observed value, whether it is present or ab-sent, and whether the finding is listed as a symptom or antecedent for the target diagnosis. We then as-sign diagnosis-relative roles by comparing the unit not only to the gold diagnosis but also to the other candidate diagnoses in the same case. This allows a unit to be marked as target-supporting, competitor-supporting, negated or absent, background/history, low-specificity, or other informative evidence. When a case contains more findings than we can exhaustively audit, we select a balanced subset rather than simply taking the first fields. The se-lection prioritizes target-specific symptoms, target antecedents, competitor-only evidence, explicitly absent findings, low-specificity fields, and other informative units. This keeps the audit focused on evidence that can affect differential diagnosis while still including plausible failure triggers such as absent or weakly related fields. For CupCase and MedCase, evidence units are extracted as short clinically meaningful sentences from the case presentation. We avoid using sen-tences that directly reveal the final diagnosis. The selected sentences are then treated as case evi-dence units and enumerated under the same subset-intervention procedure as DDXPlus. These narra-tive datasets do not support the same fine-grained DDXPlus role labels, so we use them mainly for broad mechanism analysis rather than detailed fail-ure taxonomy. 
+
+B.3 Candidate Diagnoses and Option Scoring 
+
+For DDXPlus, candidate diagnoses come from the provided differential diagnosis list; if the gold diag-nosis is not already present, it is added to the candi-date set. For CupCase, the candidate set consists of the correct diagnosis and the provided distractors. For MedCase, the candidate set consists of the final diagnosis and additional diagnoses mentioned in the diagnostic reasoning, after de-duplication and length filtering. All datasets are scored with the same multiple-choice format. Candidate diagnoses are mapped to option letters, and the model is asked to answer with only the option letter. We use the option-letter scores for all candidates from the same prompt, rather than relying only on the generated answer. The main experiments use a fixed candidate order; robustness checks repeat the scoring under alter-native candidate orders and compare prediction agreement, margin correlation, and top-interaction overlap. In these checks, diagnoses are remapped to different letters and positions while the candi-date set is held fixed, so changes reflect prompt and option-format sensitivity rather than a changed differential diagnosis. 
+
+B.4 Models and Scoring Protocol 
+
+The main experiments use Qwen2.5-7B-Instruct, OpenBioLLM-8B, MedGemma-4B, BioMistral-7B, and Llama3-Med42-8B. All models are eval-uated with the same multiple-choice scoring pro-tocol: each candidate diagnosis is assigned an op-tion letter, the model is prompted to answer with only the letter, and candidate preferences are com-puted from next-token option-letter log probabili-ties. Scoring uses vLLM with temperature 0, one generated token, and max-logprobs 100; option-letter token IDs are validated with the prompt tok-enizer. We do not use free-form rationales or gen-erated explanations in the audit. Because option-letter scores can contain token-prior and position ef-fects, all main interaction values use within-prompt margins and robustness checks test option-order permutations. 
+
+B.5 Human and Clinical Review Protocol 
+
+Clinical validation used high-strength interactions sampled across the main mechanism buckets. The review was performed by five senior PhD-trained medical reviewers. Each reviewer independently annotated every reviewed item under a blinded pro-tocol. Reviewers saw the audited diagnosis, can-didate diagnoses, evidence units in the interaction, interaction sign and strength, and the surrounding case context, but not the source model or provi-sional automatic mechanism bucket. They assigned one of three judgments: valid mechanism, ques-tionable, or invalid/shortcut-like. The review is a clinical-coherence judgment about the evidence mechanism, not a patient-care judgment. The validation set contains 130 reviewed inter-actions. Sampling across buckets prevents the re-view from being dominated by the most frequent mechanism and lets us test whether provisional failure labels have higher invalid rates than ordi-nary faithful-support or conflict/cancellation mech-anisms. We computed inter-rater agreement on the independent first-pass labels before adjudication. All five reviewers gave the same label on 77% of items, and agreement was high (Fleiss’ κ = 0 .82 ). Disagreements were resolved by adjudication after independent review. The reported labels are ad-judicated labels; questionable cases are reported separately.            
+
+> Property Setting Reviewers Five senior PhD-trained medical reviewers Items 130 high-strength interactions Blinding Source model and provisional bucket hidden Independent labels All five reviewers annotated each item Agreement Fleiss’ κ=0.82 ;77% all-reviewer exact agreement Resolution Adjudication after independent review
+
+Table 11: Clinical review protocol summary. 
+
+C Prompt Templates 
+
+C.1 Prompt Conventions 
+
+All diagnosis prompts present evidence units as short case facts and candidate diagnoses as option-letter choices. The model is instructed to re-turn only the option letter. The templates below show the representative prompt forms used for full-evidence scoring, subset interventions, neutralized interventions, and clinical review. Dataset-specific fields such as age, sex, and finding text are inserted into the same structure. 
+
+> Full-evidence diagnosis prompt
+> You are given a structured clinical intake summary. Use only the primary patient findings below. Ignore adminis-trative labels, prior assessments, source-file diagnoses, or information not specific to this patient. Patient: [AGE]-year-old [SEX]. Clinical findings: - [EVIDENCE UNIT 1] - [EVIDENCE UNIT 2] - [EVIDENCE UNIT 3] Options: A. [DIAGNOSIS A] B. [DIAGNOSIS B] C. [DIAGNOSIS C] Answer with only the option letter.
+> Subset intervention prompt
+> You are given a structured clinical intake summary. Use only the primary patient findings below. Some evidence from the original case is not shown. Patient: [AGE]-year-old [SEX]. Visible patient information: [EVIDENCE UNIT 1] [EVIDENCE UNIT 2] [EVIDENCE UNIT 3] Options: A. [DIAGNOSIS A] B. [DIAGNOSIS B] C. [DIAGNOSIS C] Answer with only the option letter.
+> Neutralized intervention prompt
+> You are given a structured clinical intake summary. Fields marked as not specified should not be assumed present or absent. Patient: [AGE]-year-old [SEX]. Clinical findings: [VISIBLE EVIDENCE UNIT] [HIDDEN FIELD]: not specified. Options: A. [DIAGNOSIS A] B. [DIAGNOSIS B] C. [DIAGNOSIS C] Answer with only the option letter.
+> Clinical review form
+> Diagnosis under audit: [DIAGNOSIS] Candidate diagnoses: [CANDIDATE LIST] Evidence units in interaction: [EVIDENCE UNITS] Interaction sign and strength: [SIGN], [STRENGTH] Case context: [SHORT CASE CONTEXT] Review judgment: valid mechanism / questionable / in-valid or shortcut-like Brief rationale: [FREE TEXT]
+
+C.2 Prompt Variants for Robustness 
+
+Prompt robustness variants preserve the same evi-dence and candidate list while changing wording around the task instruction, evidence presentation, and answer format. We use two main wording families. The clinical-summary variant presents evidence as a compact intake note. The question-naire variant presents the same findings as question-answer pairs. Candidate-order robustness is tested separately by permuting the option order while keeping the same candidate set. These variants are used only for sensitivity analysis; the main reported scores use the base clinical-summary prompt. 
+
+D Evidence Roles and Audit Labels 
+
+D.1 Diagnosis-Relative Evidence Roles 
+
+Evidence roles are assigned relative to an audited diagnosis. A unit can support the target diagnosis, support a competitor, exclude or weaken the diag-nosis, modify prior plausibility as background or risk evidence, or be likely irrelevant in the local clinical context. These roles are directional expec-tations rather than hard rules, and they are used to interpret interaction signs rather than to assign errors automatically. 
+
+D.2 Automatic Mechanism Labels 
+
+Automatic labels are provisional. Faithful target evidence, conflict/cancellation, redundancy, and background/history influence describe candidate mechanisms that may be clinically valid. Negated or absent evidence misuse and irrelevant evidence misuse are candidate failure mechanisms, but they require stability checks and clinical validation be-fore being reported as adjudicated invalid mecha-nisms. 
+
+D.3 Boundary Cases 
+
+Some evidence families are only interpretable with diagnosis context. Skin evidence is suspicious for inguinal hernia, ambiguous for influenza, and clin-ically meaningful for systemic lupus erythemato-sus. Family history of myasthenia gravis is rele-vant, but exact disease-name mentions can still pro-duce shortcut-like confidence amplification. These boundary cases are why the audit avoids global evidence labels and reports questionable cases sep-arately from adjudicated invalid mechanisms. 
+
+E Additional Experimental Results 
+
+E.1 Model-Wise Mechanism Distributions 
+
+Table 14 reports DDXPlus mechanism strength by model. The main pattern is consistent across mod-els: faithful target evidence and conflict/cancella-tion account for most interaction strength, while negated/absent misuse is much smaller but clini-cally important. This supports the paper’s main interpretation. The audit is not finding a large mass of obvious failures; it is finding a broad structure of plausible differential-diagnosis interactions plus a smaller set of stable failure candidates. 
+
+E.2 Dataset-Wise Mechanism Differences 
+
+Table 15 reports mechanism strength by dataset. DDXPlus has a visible background/history com-ponent because its structured fields expose an-tecedents and risk factors. CupCase and MedCase are dominated by faithful/plausible support and conflict/cancellation because their evidence units are narrative clinical sentences and do not support the same fine-grained role decomposition. The important cross-dataset result is that conflict/can-cellation remains large in all three datasets, which argues against treating negative interactions as au-tomatic errors. Role family Directional expectation Important caveat Supporting evidence Should usually increase the margin for the audited diagnosis. Support can be redundant with other findings, so the joint effect need not be additive. Competitor-supporting evidence Can reasonably lower the audited diag-nosis margin by increasing a plausible alternative. A negative interaction is not automatically a failure; it may reflect normal differential diagnosis. Excluding or negated evidence Should usually weaken diagnoses that require the absent finding. Absence is often weak evidence, not proof against a diagnosis. Deletion means unavailable, not present. Background or risk ev-idence Can change prior plausibility or recur-rence risk. Background evidence can be valid in one case and overused in another. Likely irrelevant or lo-cal evidence Should have little direct effect without a clinical bridge to the diagnosis. The same field family can be relevant for another di-agnosis, such as skin findings for systemic lupus ery-thematosus. 
+
+Table 12: Diagnosis-relative evidence roles used to interpret mined interactions. Roles are directional expectations rather than automatic error labels. 
+
+Mechanism label Screening signal How it is used Faithful target evidence Target-supporting roles increase the target margin. Treated as a plausible mechanism unless clin-ical review finds otherwise. Differential conflict/cancel-lation Evidence supports both target and competi-tors, or reduces the target margin while sup-porting an alternative. Not treated as a failure by default. Used to characterize differential-diagnosis behavior. Redundancy Multiple related findings have a weaker joint effect than an additive view would sug-gest. Usually plausible; helps avoid over-interpreting small or canceling effects. Background/history influ-ence History, exposure, or risk evidence has a large effect on the margin. Reviewed for possible overuse, but often clin-ically valid. Negated or absent evidence misuse An explicitly absent or excluding finding in-creases support in an unexpected direction. Candidate failure; requires stability and clini-cal confirmation. Irrelevant evidence misuse A clinically local or unrelated field strongly affects the audited diagnosis. Candidate failure; counterfactual validation checks whether the effect is local or changes the final preference. 
+
+Table 13: Provisional mechanism labels. Automatic labels retrieve candidate mechanisms; they are not final clinical judgments. 
+
+Model Faith. Conflict Back. Neg. Qwen 40.9 48.7 7.7 2.7 OpenBio 42.2 44.4 7.6 1.2 MedGemma 43.9 45.3 8.1 2.2 BioMistral 41.4 45.9 7.1 3.0 Med42 40.9 48.6 8.4 1.7 
+
+Table 14: DDXPlus mechanism strength by model (%). Faith. denotes faithful or plausible support, Conflict denotes differential conflict/cancellation, Back. denotes background/history influence, and Neg. denotes negat-ed/absent evidence misuse. 
+
+E.3 Evidence-Unit Selection Sensitivity 
+
+The main DDXPlus experiments use a bal-anced evidence-unit selector that prioritizes target-specific symptoms, target antecedents, competitor-only evidence, explicitly absent findings, low-specificity fields, and other informative units. To test whether the mechanism distribution depends on this selector, we compare it with a target-salient selector and a random-balanced selector averaged 
+
+Dataset Faith. Conflict Back. Neg. DDXPlus 41.9 47.1 7.9 2.2 CupCase 54.1 45.8 – –MedCase 47.8 52.2 – –
+
+Table 15: Mechanism strength by dataset (%). Narrative datasets are mapped to broad faithful/plausible support and conflict/cancellation categories. 
+
+over three seeds. The target-salient selector priori-tizes target-supporting symptoms and antecedents, while the random-balanced selector samples from the same role families without fixed priority. Across the alternative selectors, faithful/plau-sible support and differential conflict/cancella-tion remain the dominant mechanisms. Suspi-cious and negated/absent misuse strength remains small but does not disappear. The moderate top-interaction overlap is expected because the audited evidence units change; the stability claim is there-fore about mechanism-level structure rather than Selection Faith. Conflict Susp. Neg. Overlap Main balanced 41.9 47.1 2.2 2.2 1.00 Target-salient 47.0 47.0 2.4 2.1 0.49 Random-balanced 45.0 49.0 2.8 2.7 0.48   
+
+> Table 16: Sensitivity to DDXPlus evidence-unit selec-tion. Faith. and Conflict report mechanism-strength percentages. Susp. denotes candidate suspicious-mechanism strength, Neg. denotes negated/absent mis-use strength, and Overlap is top-interaction overlap with the main balanced selector. Random-balanced reports the mean over three seeds.
+
+exact-interaction invariance. 
+
+E.4 Interaction Order and Threshold Sensitivity 
+
+Table 17 reports the DDXPlus interaction-order distribution. Third-order interactions account for the largest share of count and strength in the se-lected high-strength set, but first- and second-order interactions remain substantial. This is useful for interpretation: single-evidence effects alone miss much of the observable diagnostic preference struc-ture, while low-order interactions are still small enough to inspect clinically.             
+
+> Order Count Strength Mean 114.3 18.0 2.98 226.2 27.5 2.48 359.5 54.4 2.16
+> Table 17: DDXPlus interaction distribution by order. Count and strength are percentages; Mean is average absolute interaction effect.
+
+We use high-strength filtering to make clinical review feasible. The threshold is therefore an au-dit design choice rather than a claim that lower-strength interactions are unimportant. In practice, the main qualitative conclusions are stable under reasonable filtering: faithful/plausible support and conflict/cancellation dominate the interaction mass, while DDXPlus-adjudicated invalid mechanisms concentrate in a smaller set of absent or clinically unrelated evidence patterns. 
+
+E.5 Accuracy Versus Evidence-Use Structure 
+
+Accuracy and evidence-use structure measure dif-ferent properties. In the five-model DDXPlus sam-ple, the model ordering by final accuracy does not match the ordering by faithful target-evidence strength or conflict/cancellation strength. We re-port this only as a qualitative sample observation, not as an inferential estimate of a broader model population. Its role is to motivate the audit: a model can have relatively high final accuracy while still exhibiting many conflict/cancellation interactions or a nontrivial number of candidate evidence-use failures. 
+
+F Clinical Validation Details 
+
+F.1 Sampling Protocol 
+
+The reviewed set is sampled from high-strength interactions across mechanism buckets. Sampling across buckets prevents the validation from being dominated by the most frequent mechanism and allows the review to test whether provisional fail-ure labels have higher invalid rates than control mechanisms.         
+
+> Review bucket Reviewed Faithful target evidence 30 Conflict/cancellation 40 Background/history 20 Negated/absent misuse 20 Control/unclear 20 Total 130
+> Table 18: Clinical validation sample by provisional mechanism bucket.
+
+The sample is intentionally enriched for high-strength interactions and candidate failure buckets. It should therefore be interpreted as a validation set for the audit pipeline, not as an estimate of the population-level frequency of every failure type. 
+
+F.2 Review Rubric 
+
+A valid mechanism is clinically plausible given the diagnosis and case context. A questionable mechanism is not clearly wrong but lacks enough support or depends on a debatable interpretation. An invalid or shortcut-like mechanism reflects an implausible evidence use, such as an absent finding increasing support in the wrong direction or a clini-cally local field affecting an unrelated diagnosis. Reviewers are asked to judge the evidence mech-anism rather than the full diagnostic quality of the case. For example, a case can have the correct final diagnosis but still contain an invalid local interac-tion, and a negative interaction can be valid if it reflects evidence that supports a competing diagno-sis. This distinction is central to the audit: clinical review confirms whether an interaction is coherent, while accuracy only checks the final answer. F.3 Additional Review Outcomes 
+
+The main text reports aggregate review outcomes. The additional confidence breakdown in Table 19 shows that the adjudicated invalid bucket is not driven only by low-confidence judgments. The negated/absent misuse bucket has both valid and invalid examples, but the invalid examples are con-centrated and clinically concrete: no-travel signals supporting unrelated diagnoses, and skin/rash/no-peeling fields affecting inguinal hernia or influenza.             
+
+> Bucket High Medium Faithful target 21 9Conflict/cancel. 28 12 Background/history 15 5Negated misuse 10 10 Control/unclear 12 8
+> Table 19: Reviewer confidence by bucket for the 130 reviewed interactions.
+
+G Robustness and Sensitivity Details 
+
+G.1 Filtering Definitions 
+
+The implementation enumerates interventions over the selected audited evidence units. On DDXPlus, non-audited case facts are held fixed in the prompt; on CupCase and MedCase, the extracted evidence units are the audited units. Unless otherwise stated, interactions are computed on the answer-margin value function, with maximum order |S| ≤ 3. We call an interaction salient or high-strength when 
+
+|Iy(S)| ≥ 0.5. Aggregate strength ratios are com-puted over all salient interactions, while review tables use the highest-strength interactions retained for inspection. The strict suspicious set is intentionally nar-rower than all non-faithful interactions. It con-tains only salient interactions whose automatic la-bel begins with suspicious: positive interactions containing negated or absent evidence, positive in-teractions made only of low-specificity or other-informative units, or positive interactions made from competitor-only evidence. Potential history or risk overuse and canceling or redundant tar-get interactions are tracked separately. The strict suspicious-strength ratio is the sum of |Iy(S)| over strict suspicious interactions divided by the total salient interaction strength. Robustness files are regenerated with the same scoring and interaction code under changed prompt wording, three candidate-order seeds, and either deletion or neutralization of hidden selected units. In the neutralized setting, a hidden selected unit is kept in the prompt with the value “Not specified” rather than removed. The filtering sequence in Ta-ble 7 is evaluated on an enriched candidate-failure review queue using the same clinical-coherence rubric as the human validation protocol: confirmed invalid or shortcut-like, questionable, or false pos-itive/clinically valid. Precision is the confirmed invalid or shortcut-like share among interactions that survive each filter. The random control set is sampled from high-strength interactions not priori-tized by the suspicious-mechanism rules. Because the queue is intentionally enriched for candidate failures, the precision values are filter-validation quantities rather than estimates of population-level failure prevalence. 
+
+G.2 Prompt Wording and Candidate Order 
+
+Prompt wording checks measure prediction agree-ment across wording variants. Candidate-order checks measure whether option reordering changes margins and top interactions. Because the answer is scored through option letters, these checks also probe option-letter and option-position calibration artifacts. They are intended to detect prompt arti-facts, not to prove that the model is invariant to all prompt changes. Prediction agreement is the fraction of cases where the top diagnosis is unchanged across prompt variants. Margin correlation compares the vector of diagnosis margins before and after candidate-order changes. Top-interaction overlap compares the highest-strength mined interactions across variants. We report these measures together because they capture different failure modes: a model can preserve its final answer while changing margins, or preserve margins while changing which evidence interactions appear in the top-ranked set. 
+
+G.3 Drop Versus Neutralized Perturbations 
+
+Deletion makes evidence unavailable, while neu-tralization replaces hidden fields with a not-specified statement. The neutralized setting is a conservative check for whether suspicious inter-actions depend only on removing text from the prompt. This is particularly important for negated findings, where deleting an absent symptom should not imply that the symptom is present. For each suspicious interaction family, we com-pare whether the interaction survives under neutral-ized perturbations. Survival means that the same evidence family remains a high-effect candidate mechanism after hidden fields are represented as unspecified rather than removed. We do not require exact numerical equality between deletion and neu-tralization, because the prompts are semantically different; instead, we use survival as a robustness screen before making stronger failure claims. 
+
+G.4 Random Controls 
+
+Random controls estimate how often the pipeline would produce clinically adjudicated invalid mech-anisms from interactions not selected by the suspicious-mechanism filter. The control set is use-ful because it separates the precision of the audit from the base rate of questionable interactions in the data. The random-control set is sampled from interac-tions that are not prioritized by the candidate failure rules. Its low adjudicated precision and high false-positive rate in Table 7 support the filtering design: the stable suspicious subset is not merely a ran-dom collection of high-strength interactions. At the same time, the control set prevents overclaim-ing by showing that interaction strength alone is insufficient for clinical failure assignment. 
+
+H Additional Case Studies 
+
+H.1 Negated and Absent Evidence Misuse 
+
+The clearest invalid review examples involve ab-sent or negated fields that increase support in an unexpected direction. In several cases, “no recent travel” appears in positive interactions for allergic sinusitis, asthma exacerbation, or Guillain-Barre syndrome. The issue is not that travel history is never relevant in medicine; it is that the absence of recent travel has no clear positive role for these diagnoses in the displayed case context. Other invalid examples involve absent or local skin findings. For inguinal hernia, fields such as rash color or whether lesions peel off enter positive interactions with abdominal or effort-pain evidence. Clinical review marks these as invalid because skin lesions and peeling behavior do not provide direct support for inguinal hernia. These examples moti-vate the polarity and specificity language used in the main paper: the failures are not generic sensitiv-ity to text, but specific misuse of absent or clinically local evidence. 
+
+H.2 Skin and Rash Evidence Transfer 
+
+Skin and rash fields are useful boundary cases be-cause their relevance is highly diagnosis-dependent. They are clinically meaningful for systemic lupus erythematosus and other dermatologic or inflam-matory conditions, but they are suspicious when they influence unrelated diagnoses such as inguinal hernia. In influenza cases, the interpretation can be intermediate: removing skin fields can improve the target margin by suppressing dermatologic or allergic competitors, which means the field acted more like a distractor than simple positive evidence for influenza. This pattern is why the audit uses both interac-tion mining and targeted counterfactual validation. A mined interaction can show that skin evidence affects the margin, but the counterfactual test clari-fies whether the field supports the target, amplifies a competitor, or only changes the margin without changing the final rank. 
+
+H.3 Plausible Differential Conflict 
+
+Large negative or canceling interactions are com-mon and often clinically valid. A respiratory symp-tom can support bronchitis, pneumonia, influenza, asthma exacerbation, or pulmonary embolism de-pending on the rest of the case. Similarly, two pieces of target evidence can appear redundant if they express overlapping clinical information. Clin-ical validation confirms this distinction: the con-flict/cancellation bucket contains no adjudicated invalid cases in the reviewed sample. These cases are important controls. They show that the audit does not equate mathematical interac-tion strength with model failure. The failure label is reserved for interactions where the evidence role and direction are clinically incoherent after robust-ness filtering and review. 
+
+H.4 Counterfactual Case Details 
+
+The targeted counterfactual validation focuses on representative suspicious patterns surfaced by the interaction audit. For no-travel cases, the counter-factuals remove the travel field, mark it as unspeci-fied, or flip it to recent travel present. For skin/rash cases, the counterfactuals remove skin fields, neu-tralize them as unrelated or unspecified, or replace them with unrelated administrative text. The goal is to test whether a suspicious local interaction ac-tually controls the final diagnostic preference. The counterfactuals reveal two mechanisms. First, irrelevant evidence can directly increase the target margin in clinically implausible ways. Sec-ond, irrelevant evidence can amplify a competing diagnosis and thereby reduce the target margin. The second mechanism is especially important for hernia cases, where removing skin/rash fields can move a model away from dermatologic or allergic competitors and back toward inguinal hernia. This is why the paper avoids the simplistic claim that “rash supports hernia” and instead reports a broader irrelevant-field distortion mechanism. 
+
+H.5 Expanded Stratified Counterfactuals 
+
+After the representative case studies, we ran an ex-panded stratified counterfactual validation on 86 DDXPlus records and all five models. Each record was scored with a clean prompt and three coun-terfactual variants. The primary analysis uses the clean-correct subset, because evidence-use claims are most interpretable when the model initially se-lected the correct diagnosis.                                      
+
+> Stratum Rec. Strong Rank T↓C↑C↓Stable High no-travel 11 11.6 0.7 1.4 20.4 12.2 63.3 Low no-travel 20 5.6 1.1 0.4 20.7 6.7 69.3 High skin-hernia 14 29.3 4.6 5.2 8.0 44.3 33.9 High skin-other 12 32.1 3.8 3.8 19.2 46.2 24.4 Plausible skin 24 45.0 12.5 13.1 35.2 14.7 33.6 Low skin 527.8 4.2 4.2 38.9 0.0 55.6
+
+Table 20: Expanded stratified counterfactual valida-tion on clean-correct model-case pairs. Strong means 
+
+|∆score y | ≥ 0.5, |∆vy | ≥ 1.0, or a target-rank change. T and C denote target and strongest competitor move-ments after the counterfactual edit. Values except Rec. are percentages. 
+
+The expanded analysis refines the main text. We count a strong change when the counterfactual edit changes the target score by at least 0.5 log-probability units, changes the target margin by at least 1.0, or changes the target diagnosis rank. No-recent-travel cases are only modestly more sensi-tive than their low-effect controls, so we treat them as a secondary polarity example. Skin/rash cases are stronger: the high skin-hernia and high skin-other strata show larger strong-change rates, often through competitor suppression rather than direct target-score movement. The plausible-skin control also changes substantially, which is the expected boundary case when skin evidence is clinically rel-evant.
