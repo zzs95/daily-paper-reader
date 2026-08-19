@@ -1,0 +1,981 @@
+Title: JustLLMGRPO: Radiographic Control for Chest X-Ray Generation
+
+URL Source: https://arxiv.org/pdf/2608.08046
+
+Published Time: Tue, 11 Aug 2026 00:43:01 GMT
+
+Number of Pages: 27
+
+Markdown Content:
+## JustLLMGRPO: Radiographic Control for Chest X-Ray Generation 
+
+Pengxiang Cai, Xiaohan Li, Anglin Liu, Qingyuan Zeng, Zexun Li, Jintai Chen †
+
+The Hong Kong University of Science and Technology (Guangzhou) jintaiCHEN@hkust-gz.edu.cn 
+
+Abstract 
+
+Text-conditioned chest X-ray generation aims to synthesize realistic radiographs that faithfully depict specified findings. Existing work has primarily improved quality by updating image generators, implicitly treating prompts as fixed after CXR-domain adaptation. We show that this generator-centric view leaves a substantial optimization dimension underex-plored. With a CXR-adapted Sana generator frozen, one-pass reformulation by an unmodified LLM reduces RadDINO-FID from 54.225 to 27.572. Prompt analysis shows that the LLM suppresses temporal comparisons, uncertainty, and other non-renderable report content while emphasizing visible radio-graphic findings. However, unconstrained reformulation re-duces BioViL-T alignment with source prompts from 0.695 to 0.609. We therefore introduce JustLLMGRPO, which ap-plies standard Group Relative Policy Optimization (GRPO) only to the LLM prompt policy while keeping Sana frozen. Group-relative radiology-aware image feedback retains vi-sual focus while preserving source-prompt alignment. On CheXGenBench, JustLLMGRPO reduces RadDINO-FID to 26.780, a 50.6% improvement over direct prompting, while maintaining alignment (0.696 versus 0.695). It also achieves state-of-the-art distribution coverage and downstream clas-sification utility. These results show that substantial perfor-mance can remain latent in how radiographic information is expressed to an adapted generator. Code is publicly available at https://github.com/pxcai/JustLLMGRPO. 
+
+1 Introduction 
+
+Text-conditioned chest X-ray (CXR) generation aims to syn-thesize realistic radiographs that faithfully depict specified findings. Existing work has predominantly improved the gen-erator through domain adaptation, specialized conditioning, and clinically informed reinforcement learning (Weber et al. 2023; Bluethgen et al. 2025; Lee et al. 2024a,b; Han et al. 2024; Morís et al. 2024; Shentu and Al Moubayed 2024; Black et al. 2024; Fan et al. 2023; Prabhudesai et al. 2024). These approaches have strengthened radiograph realism and clinical control, establishing generator-side adaptation as the dominant route to further performance gains. Across this trajectory, prompts are generally treated as fixed once a generator has been adapted to the CXR do-main. Subsequent improvements are sought by changing its 
+
+> †
+
+Corresponding author. (a) Prompt refocusing             
+
+> Source laterality: patient left
+> Source LLaVA-Rad prompt - abridged
+> …loculated pleural fluid along the lateral aspect of the LEFT hemithorax, now small to moderate ……left mid-lung wedge-shaped opacity …
+> JustLLMGRPO prompt - abridged
+> LEFT lateral small to moderate loculated pleural effusion; left mid-lung wedge opacity; …
+> JustLLMGRPO prompt-side rewrite
+> Same left-sided request More compact visual wording
+> (b) Direct source prompting
+> Generated CXR
+> (c) JustLLMGRPO
+> Generated CXR
+> Patient R Patient L Patient R Patient L
+> Laterality mismatch
+> Opposite-side dominant response
+> Closer to source laterality
+> Patient-left-dominant response
+
+Figure 1: Prompt optimization refocuses a frozen CXR generator. With Sana frozen, the source prompt produces an incorrect CXR with right-dominant effusion, whereas the JustLLMGRPO prompt restores the requested laterality. architecture, parameters, or learned conditioning represen-tations. This practice implicitly assumes that the remaining bottleneck lies within the generator. Yet the conditioning text determines which findings reach the renderer and how they are expressed. Whether an adapted generator can improve without further parameter updates therefore remains under-explored. This question is especially important because CXR prompts are commonly derived from radiology reports. Re-ports are clinical communication documents rather than lit-eral image descriptions. They mix current findings with prior comparisons, uncertainty, examination context, and longitu-dinal discourse. A single CXR, however, depicts one static visual state, so much of this information cannot be rendered directly. When used as prompts, non-renderable content can dilute the signal from visible findings. This mismatch sug-gests that an LLM could translate report-derived prompts into image-realizable conditions without changing the generator. Prior prompt-optimization studies show that language models can adapt prompts for frozen text-to-image gener-ators through rewriting, expansion, or iterative visual cor-rection. These methods mainly enrich short generic descrip-tions. They do not address the inverse problem considered here: removing non-renderable report discourse while pre-serving the radiographic findings specified by the source prompt. We test this possibility with a CXR-adapted Sana gener-arXiv:2608.08046v1 [cs.AI] 8 Aug 2026 Figure 2: Lexical shift induced by LLM rewriting. Word clouds show the 18 words with the largest decreases and increases in the proportion of prompts containing them after rewriting. Word size reflects the magnitude of change. ator that remains frozen throughout. Direct source prompt-ing yields a RadDINO-FID of 54.225. Reformulating each prompt once with an unmodified Qwen3-4B reduces it by 49.2% to 27.572 without updating either model. This result exposes a substantial optimization space outside the image generator. We next examine the language change associated with this gain. Figure 2 shows that temporal and report-oriented words become less frequent, whereas image-description terms be-come more prominent. Across 4,352 paired prompts, Figure 3 further shows that LLM reformulation shortens prompts, in-creases visual-term density, and suppresses temporal com-parisons, uncertainty, and report framing. The resulting prompts concentrate on findings that can appear in a single radiograph. However, unconstrained reformulation reduces BioViL-T alignment with source prompts from 0.695 to 0.609, revealing a trade-off between visual focus and source-prompt alignment. To address this trade-off, we introduce JustLLMGRPO. A Qwen3-4B prompt policy samples candidate prompts, frozen Sana renders them under matched seeds, and radiology-aware image feedback supplies relative rewards. Standard Group Relative Policy Optimization (GRPO) updates only the prompt policy. Figure 1 illustrates the trained pol-icy, which restores the requested laterality under the same frozen generator. On CheXGenBench, JustLLMGRPO re-duces RadDINO-FID to 26.780 while maintaining alignment with source prompts (0.696 versus 0.695). It also achieves state-of-the-art distribution coverage and downstream classi-fication utility. These results show that target-domain adap-tation does not exhaust the optimization space and estab-lish prompt-policy optimization as a distinct axis for text-conditioned CXR generation. Our contributions are: 
+
+• We identify an underexplored optimization dimension: LLM reformulation nearly halves RadDINO-FID for a frozen, CXR-adapted generator. 
+
+• Prompt analyses connect this gain to visually focused conditioning and reveal the alignment loss caused by un-constrained reformulation. 
+
+• We introduce JustLLMGRPO, which applies GRPO only 0 50 100        
+
+> Sana tokens
+> Report LLM LLM+GRPO
+> 59.7 35.9 36.1
+> aConditioning length
+> Visual Nonvisual 010 20 30 40 50
+> Matches / 100 words
+> 29.1 4.4 50.3 0.8 49.7 0.9
+> bVisual-condition density
+> Temporal Uncertain Framing Visual 020 40 60 80 100
+> Prompts (%)
+> cReport-language prevalence
+> seen unchanged stable likely
+> cardiac x-ray fields absent
+> 020 40 60
+> Prompts (%)
+> dSelected lexical shifts
+> Report LLM LLM+GRPO
+
+Figure 3: Behavioral evidence of visually focused prompt-ing. Across 4,352 paired prompts, LLM rewriting shortens prompts (a), increases visual-term density (b), reduces tem-poral, uncertain, and report-framing language while preserv-ing explicit findings (c), and favors image-description vocab-ulary (d). Gray, blue, and purple denote source prompting, instruction-only rewriting, and JustLLMGRPO, respectively. to the prompt policy and achieves state-of-the-art fidelity, coverage, and downstream utility while keeping Sana frozen. 
+
+2 Related Work 
+
+Chest X-ray generation. Text-conditioned CXR genera-tion has advanced primarily through generator design and domain adaptation. Cheff targets high-resolution synthesis, ViewXGen adds view-specific conditioning, and RoentGen adapts a general vision–language diffusion model to radio-graphs (Xu et al. 2024). LLM-CXR unifies CXR under-standing and generation, while RadEdit constructs counter-factual abnormalities through image editing (Pérez-García et al. 2025a). CXRL further applies reinforcement learning to update the generator and its conditioning representations. CheXGenBench evaluates these systems across fidelity, alignment, coverage, privacy, and utility using radiology-aware representations (Bannur et al. 2023; Pérez-García et al. 2025b). Despite their different architectures and objectives, these approaches primarily treat the generator as the unit of adaptation. We use the CXR-adapted Sana checkpoint and CheXGenBench protocol but optimize its input prompts in-stead. 
+
+Automatic prompt optimization. Promptist, Beautiful-Prompt, OPT2I, and VisualPrompter optimize generic prompts through rewriting, expansion, or visual correc-tion (Hao et al. 2023; Cao et al. 2023; Mañas et al. 2024; Wu et al. 2026b; Deng et al. 2022; Zhou et al. 2022). Our setting instead requires selective compression of detailed report-derived prompts. (a) ：Focus: Radiographic Prompt Planning 
+
+> Rewrite instruction
+> concise visual description
+> preserve clinical meaning
+> introduce no new findings
+> …
+> K=5 candidate prompts
+> (b) ：Rendering with Frozen Sana
+> Source-prompt control
+> Candidate renders
+
+×5
+
+> (c) ：Align: Relative Radiology-Aware GRPO
+> Paired scoring
+> Fixed reward scorers Relative reward
+> Group-relative GRPO
+
+# …
+
+> Group-relative advantage
+> Rewards (per group)
+> Clipped GRPO + reverse KL
+> image only
+
+1 234      
+
+> •Increasing loculated left pleural effusion, now small to moderate.
+> •Left midlung opacity unchanged;
+> •left basilar opacity may reflect atelectasis.
+> •Bilateral nodules; no pneumothorax.
+> (
+> Free-text conditioning input )
+> Temporal / uncertain / report-framing language
+> ⬇
+> Visual-condition terms ⬆
+> Prompt-language analysis
+> (Observed after rewriting)
+
+Figure 4: JustLLMGRPO overview. The prompt policy samples candidate prompts, and frozen Sana produces matched-seed candidate and source renderings. A radiology-aware relative reward scores each candidate, and GRPO updates only the LLM prompt planner. The optimized prompt conditions Sana at inference. 
+
+GRPO for prompt policies. GRPO estimates advantages within sampled groups without a separate critic (Shao et al. 2024; Guo et al. 2025). RePrompt applies GRPO to prompt rewriting for a fixed general-purpose image generator, enrich-ing short prompts with absolute visual rewards (Wu et al. 2026a). JustLLMGRPO differs in both the prompt regime and the learning signal. It reformulates report-derived CXR prompts and evaluates each candidate against a matched source rendering generated with the same seed. This rela-tive radiology-aware feedback updates only the LLM prompt policy while the CXR generator remains frozen. 
+
+3 Method 
+
+Figure 4 presents an overview of JustLLMGRPO. During each rollout, the prompt policy samples a group of visually focused candidate prompts for each source prompt. Frozen Sana renders each candidate and a matched-seed source ren-dering. A radiology-aware relative reward measures improve-ment over the matched source rendering, and GRPO updates only the LLM prompt planner. 
+
+LLM Prompt Policy 
+
+Let c denote a source LLaVA-Rad prompt, y its CheXpert la-bels (Irvin et al. 2019), and Gϕ the frozen Sana renderer (Xie et al. 2024). Direct source prompting produces Gϕ(c). We parameterize the prompt policy with Qwen3-4B (Yang et al. 2025). Given c, the LLM prompt planner samples a comple-tion containing a reasoning trace and a final candidate prompt 
+
+p. For compactness, πθ (p | c) denotes the induced distribu-tion over parsed candidate prompts. The instruction requests a concise image description that preserves the source mean-ing, introduces no new findings, and returns one final prompt inside an <optimized_prompt> block. Missing or mal-formed completions receive zero reward. Section 4 provides the complete message template. We initialize πθ from the unmodified Qwen3-4B model. Applying the same instruction without policy optimization defines the LLM rewriting baseline and isolates instruction-guided reformulation. In JustLLMGRPO, candidate prompts are sampled on-policy during each rollout, and only the prompt policy is updated from image-derived rewards. 
+
+Matched-Seed Relative Image Reward 
+
+For each source prompt, the policy samples K = 5 candidate prompts p1, . . . , p K . To control stochastic variation in ren-dering, all candidates and the source-prompt control share a deterministic seed zc, derived from the global seed and stable sample metadata: 
+
+Ik = Gϕ(pk; zc), I0,k = Gϕ(c; zc). (1) Thus, all candidates for a source prompt are compared against the same matched-seed source rendering. Each generated image receives a BioViL-T alignment score b(I, c ), a CheX-pert label-consistency score ℓ(I, y ), and a RadDINO fidelity score d(I). We define the radiology-aware image score as 
+
+Q(I, c, y ) = 0 .45 b(I, c ) + 0 .10 ℓ(I, y ) + 0 .45 d(I). (2) BioViL-T is computed against the source prompt rather than the candidate prompt. The RadDINO term combines global feature-density agreement, local reference similar-ity, and a nearest-neighbor memorization penalty. We de-fine the relative improvement of candidate k as ∆k =Fidelity Alignment PRDC Utility Model FID-RD ↓ KID-RD ↓ BioViL-T ↑ Prec. ↑ Recall ↑ Density ↑ Coverage ↑ Macro AUC ↑                                                                                                
+
+> SD V1-4 125.186 0.172 0.357 0.488 0.301 0.236 0.217 0.684 SD V1-5 118.932 0.147 0.326 0.536 0.473 0.242 0.256 0.703 SD V2 194.724 0.376 0.311 0.480 0.086 0.166 0.057 0.654 SD V2-1 186.530 0.413 0.197 0.530 0.049 0.180 0.038 0.644 RadEdit 69.695 0.033 0.677 0.397 0.544 0.150 0.285 0.709 PixArt-Σ60.154 0.023 0.697 0.666 0.522 0.506 0.506 0.711 Sana 54.225 0.016 0.695 0.674 0.614 0.520 0.548 0.730 SD V3.5 Med. 91.302 0.103 0.044 0.632 0.205 0.401 0.244 0.544 Lumina 2.0 101.198 0.110 0.121 0.574 0.014 0.256 0.170 0.533 FLUX.1-Dev 122.400 0.144 0.036 0.420 0.008 0.125 0.326 0.456 LLM-CXR 71.243 0.061 0.319 0.782 0.041 0.671 0.459 0.676
+> JustLLMGRPO 26.780 0.014 0.696 0.735 0.498 0.569 0.588 0.746
+
+Table 1: Global fidelity, distribution coverage, and downstream utility following CheXGenBench. BioViL-T alignment is evaluated against the source prompt. CheXGenBench provides the baseline values. Bold and underline denote first- and second-ranked point estimates at the displayed precision, not statistical significance. 
+
+Q(Ik, c, y ) − Q(I0,k , c, y ) and map it to 
+
+Rk =
+
+
+
+1 + ∆ k, ∆k > 0,
+
+0.1, −0.03 ≤ ∆k ≤ 0,
+
+0, ∆k < −0.03 .
+
+(3) This transformation separates improvements, near-ties, and clear regressions before group-wise reward normalization. 
+
+GRPO for Prompt Optimization 
+
+Let ρ denote the reward transformation in Equation 3. For a candidate prompt p, its matched-seed improvement over direct source prompting is 
+
+∆Qϕ(p, c, y ) = Q(Gϕ(p; zc), c, y )
+
+− Q(Gϕ(c; zc), c, y ). (4) The prompt policy maximizes 
+
+max  
+
+> θ
+
+E(c,y )∼D , p ∼πθ (·| c) [ρ(∆ Qϕ(p, c, y ))] , ϕ fixed .
+
+(5) Because Gϕ is frozen, the renderer is treated as a black-box environment. The image-derived reward updates πθ only through the sampled response tokens. For each source prompt, we obtain group-normalized ad-vantages by standardizing the five candidate rewards: 
+
+Ak = Rk − ¯R
+
+std( R1, . . . , R K ) + ϵ . (6) For token wk,t , let rk,t = exp(log πθ − log πold ) denote the importance ratio between the current and old policies. We optimize the clipped GRPO surrogate with clip ratio 0.2 and KL regularization against the reference policy: 
+
+Lprompt = − Ek,t [min ( rk,t Ak,
+
+clip( rk,t , 0.8, 1.2) Ak)] + β bDKL , (7) where β = 10 −3 and bDKL estimates DKL (πθ ∥πref ). The frozen reference policy πref is initialized from the same Qwen3-4B checkpoint. Source-prompt tokens are masked. All generated tokens, including the reasoning trace and final prompt, receive the sequence-level advantage. The loss is averaged over valid response tokens. Neither the reward nor the policy objective contains a prompt-length term. 
+
+Training and Inference 
+
+We update all parameters of Qwen3-4B-Thinking-2507 while keeping Sana frozen. Training and inference use the same message template. During training, the policy samples five completions per source prompt; at inference, it generates one completion and extracts the optimized prompt. A fully valid rollout batch contains 64 source prompts and performs 320 candidate and 320 matched source executions across 384 unique prompt–seed conditions: 320 candidate conditions and 64 source controls. Malformed completions receive zero reward and reduce the number of rendered candidate–source pairs. We perform one policy-update epoch and one opti-mizer step per rollout. The optimized prompt conditions the same frozen Sana renderer at inference. 
+
+4 Experiments 
+
+Experimental Setup 
+
+Data and evaluation protocol. We follow the MIMIC-CXR split and LLaVA-Rad annotations released with CheX-GenBench (Johnson et al. 2019; Dutt et al. 2026; Zam-brano Chaves et al. 2025). The training set contains 237,388 samples, and the evaluation set contains 5,034 samples cor-responding to 4,352 unique source prompts. 
+
+Models and optimization. The image generator is the CheXGenBench Sana checkpoint, adapted to CXR synthe-sis for 20 epochs and then frozen. We generate 512 × 512 
+
+images with 20 denoising steps and guidance scale 4.5. We train the Qwen3-4B prompt policy with AdamW at a learn-ing rate of 10 −6 and a maximum completion length of 2,048 tokens. Each rollout performs one policy-update epoch and one optimizer step, using temperature 1, top-p = 1 , and no top-k truncation. Two GPUs host the tensor-parallel policy, Training images Atel. Card. Cons. Edema EC Frac. LL LO NF PE PO PN PT SD Avg. Real 0.750 0.760 0.720 0.850 0.610 0.580 0.630 0.700 0.840 0.840 0.740 0.670 0.710 0.830 0.731 SD V1-4 0.700 0.700 0.670 0.810 0.560 0.570 0.630 0.670 0.800 0.770 0.650 0.600 0.650 0.800 0.684 SD V1-5 0.720 0.720 0.690 0.810 0.600 0.530 0.660 0.670 0.820 0.790 0.680 0.620 0.700 0.830 0.703 SD V2 0.660 0.690 0.660 0.780 0.610 0.530 0.550 0.630 0.750 0.760 0.500 0.610 0.640 0.780 0.654 SD V2-1 0.630 0.670 0.650 0.710 0.550 0.590 0.620 0.620 0.750 0.740 0.570 0.560 0.610 0.750 0.644 RadEdit 0.730 0.730 0.720 0.840 0.610 0.560 0.600 0.690 0.810 0.820 0.720 0.660 0.660 0.770 0.709 PixArt-Σ 0.740 0.730 0.700 0.840 0.610 0.580 0.610 0.690 0.830 0.810 0.680 0.630 0.700 0.800 0.711 Sana 0.740 0.760 0.720 0.850 0.610 0.620 0.630 0.700 0.830 0.840 0.730 0.640 0.720 0.830 0.730 SD V3.5 0.550 0.550 0.560 0.550 0.470 0.470 0.470 0.530 0.600 0.540 0.580 0.490 0.550 0.710 0.544 Lumina 2.0 0.460 0.480 0.520 0.510 0.460 0.570 0.530 0.520 0.590 0.550 0.570 0.490 0.500 0.710 0.533 FLUX.1-Dev 0.410 0.410 0.440 0.400 0.440 0.520 0.480 0.420 0.400 0.380 0.500 0.480 0.440 0.670 0.456 LLM-CXR 0.700 0.690 0.700 0.810 0.610 0.570 0.540 0.650 0.800 0.770 0.660 0.610 0.630 0.730 0.676                
+
+> JustLLMGRPO 0.750 0.760 0.740 0.860 0.650 0.630 0.680 0.700 0.840 0.840 0.730 0.680 0.740 0.850 0.746
+
+Table 2: Per-condition downstream classification AUC after training ResNet-50 on 20,000 synthetic CXRs and evaluating on held-out real CXRs. JustLLMGRPO is evaluated on the development set; CheXGenBench provides the baselines and real-data reference. Bold and underline denote first- and second-ranked synthetic point estimates at the displayed precision, with ties retained; they do not indicate significance. and three workers perform generation and reward evalua-tion. Sana and all reward models remain frozen throughout optimization. 
+
+Baselines and metrics. We compare against the eleven CheXGenBench generators: four Stable Diffusion variants, RadEdit, PixArt-Σ, Sana, SD3.5 Medium, Lumina 2.0, FLUX.1-Dev, and LLM-CXR. CheXGenBench provides the baseline and real-data values. The Sana baseline conditions the same frozen generator directly on source prompts. Met-rics include RadDINO-based FID and KID, BioViL-T align-ment with source prompts, PRDC, conditional RadDINO-FID, and downstream classification AUC. All evaluations use the metric implementations released with CheXGenBench. 
+
+Benchmark Results 
+
+Global CheXGenBench results. On this development evaluation, Table 1 shows that JustLLMGRPO achieves state-of-the-art performance among the compared CheXGen-Bench systems, with the best point estimates for RadDINO-FID (26.780), KID-RD (0.014), PRDC coverage (0.588), and macro AUC (0.746). It also ranks second in BioViL-T alignment, precision, and density. Relative to direct Sana prompting, RadDINO-FID decreases by 50.6% while align-ment with source prompts remains comparable (0.696 ver-sus 0.695). PRDC recall decreases from 0.614 to 0.498, so the improvement is not uniform across distributional met-rics; aggregate BioViL-T alignment also does not establish finding-level correctness. 
+
+Downstream utility. Following CheXGenBench, we train a ResNet-50 on each 20,000-image synthetic dataset and test it on held-out real CXRs. JustLLMGRPO is best or tied among synthetic generators for all fourteen conditions at two-decimal precision (Table 2). Its macro AUC is 0.746, compared with 0.730 for Sana and 0.731 for the real-data ref-erence. The synthetic images therefore support downstream pathology classification, although these point estimates do not establish superiority over real-data training. 
+
+Condition-level fidelity. Global RadDINO-FID can ob-scure pathology-specific behavior. Table 3 therefore re-ports conditional RadDINO-FID for fourteen CheXpert cat-egories. JustLLMGRPO achieves the best score for Car-diomegaly, Consolidation, Enlarged Cardiomediastinum, No Finding, and Pneumonia, and ranks second for five addi-tional categories. It falls outside the top two for Fracture, Lung Lesion, Pleural Other, and Pneumothorax. Compared with direct Sana, it improves five categories and worsens nine; competitive rankings therefore do not imply uniform improvement. 
+
+Prompt Reformulation and GRPO 
+
+Table 4 compares source prompting, instruction-only refor-mulation, and GRPO under the same frozen Sana gener-ator. Instruction-only rewriting reduces RadDINO-FID by 49.2%, from 54.225 to 27.572, but decreases BioViL-T align-ment with source prompts by 0.086. GRPO further reduces RadDINO-FID by 2.9% and restores aggregate alignment to 0.696. Thus, most fidelity improvement is already present after rewriting, while policy optimization recovers the asso-ciated alignment loss without updating Sana. 
+
+Prompt-Language Analysis 
+
+To characterize the language change associated with the large instruction-only fidelity gain, we compare 4,352 unique LLaVA-Rad source prompts, deterministic rewrites from the unmodified Qwen3-4B planner, and prompts from the GRPO-trained policy. The instruction-only baseline uses the same message template with greedy decoding, and token counts are computed with Sana’s Gemma tokenizer. The rewrite instruction permits compression, but neither the re-ward nor the policy objective contains a prompt-length term. Mean length decreases from 59.7 source-prompt tokens to 35.9 after instruction-only rewriting and remains 36.1 after GRPO (Figure 3a). The fraction of prompts longer than 64 to-kens falls from 35.9% to 3.0% and 3.3%, respectively. Com-pression is systematic: 98.5% of instruction-only prompts Model Atel. Card. Cons. Edema EC Frac. LL LO NF PE PO PN PT SD SD V1-4 134.11 131.04 184.30 144.84 217.75 238.78 225.99 129.38 106.34 128.16 255.84 163.82 212.48 135.10 SD V1-5 125.67 124.75 181.25 139.94 213.94 243.17 123.13 255.64 167.81 193.75 243.17 101.08 119.91 123.64 SD V2 188.72 193.91 241.24 214.40 214.40 253.91 268.28 280.11 193.99 299.48 223.43 250.96 183.34 193.99 SD V2-1 179.20 181.79 228.43 193.62 242.65 263.01 260.15 185.00 192.30 178.84 287.27 213.26 242.60 176.99 RadEdit 63.38 62.79 136.59 76.94 155.97 197.58 184.11 61.90 67.88 60.60 215.92 114.66 151.34 53.10 PixArt-Σ 59.27 60.39 133.96 73.93 155.53 179.44 174.63 56.83 48.74 59.05 210.90 108.42 150.55 51.61 Sana 51.03 54.68 127.46 67.84 147.00 172.32 163.14 49.23 44.60 49.80 199.45 99.52 141.99 46.51                                                                       
+
+> SD V3.5 Med. 94.94 94.84 149.05 111.94 168.48 184.75 173.37 86.72 89.60 91.92 203.62 124.07 163.27 86.99 Lumina 2.0 109.39 111.11 162.36 131.18 182.35 191.83 182.22 99.53 95.66 105.25 213.50 134.58 165.09 102.78 FLUX.1-Dev 137.10 133.60 176.76 152.91 191.48 191.02 194.97 133.37 100.58 137.66 221.23 156.59 190.93 127.03 LLM-CXR 71.57 71.37 136.65 83.18 148.28 168.50 163.22 66.93 64.62 67.83 200.84 108.04 147.52 67.54
+> JustLLMGRPO 52.42 54.14 126.88 68.48 145.65 176.32 164.66 50.75 43.70 51.94 204.80 99.26 142.82 46.93
+
+Table 3: Conditional RadDINO-FID ( ↓) across fourteen potentially overlapping CheXpert categories. JustLLMGRPO is evalu-ated on the development set. Bold and underline denote first- and second-ranked point estimates at the displayed precision, not significance. EC: Enlarged Cardiomediastinum; LL: Lung Lesion; LO: Lung Opacity; NF: No Finding; PE: Pleural Effusion; PO: Pleural Other; PN: Pneumonia; PT: Pneumothorax; SD: Support Devices. 
+
+System Planner GRPO FID-RD ↓ Align. ↑
+
+LLaVA-Rad – No 54.225 0.695 LLM rewriting Qwen3-4B No 27.572 0.609 
+
+JustLLMGRPO Qwen3-4B Yes 26.780 0.696 
+
+Table 4: Effect of instruction-guided prompt reformulation and subsequent GRPO under the same frozen Sana generator. Alignment is evaluated against the source prompt. Bold and underline denote first- and second-ranked point estimates; they do not indicate significance. and 96.4% of JustLLMGRPO prompts are shorter than their source prompts. No prompt exceeds Sana’s 300-token limit; the observed shift therefore does not arise from hard trunca-tion. Compression is accompanied by a change in prompt com-position. We define a visual-conditioning lexicon compris-ing visible findings, anatomy, spatial expressions, devices, and negations, and a non-visual-discourse lexicon compris-ing temporal comparisons, uncertainty, and report framing. Visual-conditioning term density increases from 29.1 to 50.3 and 49.7 terms per 100 words across source prompting, instruction-only rewriting, and JustLLMGRPO, while non-visual-discourse term density decreases from 4.4 to 0.8 and 0.9 (Figure 3b). The category analysis identifies which expressions are re-duced. The prevalence of temporal or comparison language falls from 50.6% to 12.6% and 12.9%; uncertainty falls from 26.7% to 1.7% and 2.0%; and report framing falls from 32.3% to 6.0% and 6.3%. Conversely, the fraction of prompts containing at least one explicit visual-finding term increases from 90.9% to 96.2% and 95.9% (Figure 3c). This statis-tic measures the prevalence of visual language, not whether every finding in the source prompt is preserved. Figure 2 shows the corresponding lexical reorganiza-tion. Temporal and report-oriented words such as seen , un-changed , stable , and likely become less prevalent. Anatomi-cal phrasing shifts from forms such as heart , lungs , and car-diomediastinal toward cardiac , lung , and mediastinal , while image-description terms such as x-ray , fields , normal , and 
+
+absent become more frequent. The word clouds summarize changes in usage and do not by themselves establish that clinical concepts were deleted or introduced. Across both the quantitative panels and lexical summary, instruction-only and GRPO-optimized prompts remain sim-ilar. Most observed compression and lexical change is there-fore already present under instruction-only rewriting. GRPO neither shortens prompts further nor increases measured visual-conditioning term density, yet BioViL-T alignment with source prompts rises from 0.609 to 0.696. This result suggests that the benefit of policy optimization may depend on finer changes in which findings and qualifiers are ex-pressed or realized in the generated image, which are not captured by prompt length or the fixed lexicons. 
+
+Qualitative Analysis 
+
+Figure 5 presents three representative cases. Each row starts from the same source prompt: SD3.5, Sana, and FLUX.1-Dev use it directly, whereas JustLLMGRPO uses its optimized rewrite. The panel illustrates the capability of the final system rather than the incremental effect of GRPO; the supplement provides 98 source-prompt-matched cases. Across the three cases, JustLLMGRPO most clearly re-alizes the requested radiographic pattern: bilateral perihi-lar opacities consistent with pulmonary edema, a moderate-to-large right pleural effusion with associated re-expansion opacity, and a focal left lower-lobe retrocardiac opacity sug-gesting pneumonia. The displayed baselines either weaken the abnormality, alter its distribution, or produce conspic-uous artifacts. In all three examples, the optimized rewrite retains the principal finding, laterality, and relevant negative constraints from the source prompt. 
+
+Prompt-Policy versus Generator Optimization 
+
+To examine the optimization locus, we compare with a direct Sana-GRPO control that updates rank-16 Sana LoRA mod-ules for 950–1,000 outer steps using 144 image samples per optimization prompt. It uses the same reward components Prompt SD3.5 Sana FLUX.1-Dev Ours    
+
+> Bilateral
+> perihilar opacities ...
+> pulmonary edema
+> ... no PTX.
+> Moderate-large
+> right pleural effusion ...
+> rightward shift re-expansion pulmonary edema .
+> New opacity in
+> left lower lobe retrocardiac ...
+> pneumonia
+> no effusion or PTX.
+
+Figure 5: Representative qualitative comparisons under matched source prompts. Each row starts from the same LLaVA-Rad source prompt; cyan italics mark the requested findings. JustLLMGRPO more clearly depicts bilateral peri-hilar opacities, a right pleural effusion, and a left retrocardiac pneumonia opacity than the displayed baselines.                         
+
+> System Update FID-RD ↓Align. ↑Recall ↑Cov. ↑
+> LLaVA-Rad –54.225 0.695 0.614 0.548 Sana-GRPO Sana LoRA 59.145 0.816 0.080 0.384
+> JustLLMGRPO Qwen3-4B 26.780 0.696 0.498 0.588
+
+Table 5: Prompt-policy and direct-generator optimization us-ing the same reward components and weights but different objectives, computational budgets, and trainable parameter-izations. Sana-GRPO uses the composite reward. Alignment is BioViL-T against the source prompt. Bold and underline denote ranked point estimates, not significance. and weights, but an absolute objective, different computa-tional budget, and different trainable parameterization. Ta-ble 5 is therefore descriptive rather than a compute-matched ablation. Direct Sana-GRPO raises BioViL-T alignment to 0.816, but RadDINO-FID rises to 59.145 and PRDC recall and coverage fall to 0.080 and 0.384. JustLLMGRPO instead obtains 26.780, 0.498, and 0.588, respectively. In this con-trol, higher reward-model alignment therefore coincides with lower fidelity and distributional coverage, without establish-ing a general advantage over compute-matched generator optimization. 
+
+Further Analysis 
+
+Preservation of source information. An automatic audit finds 90.3% laterality preservation and 97.8% preservation of negative-label polarity. Together with the recovery of source-prompt alignment from 0.609 to 0.696, these results indicate that JustLLMGRPO preserves generation-critical constraints while focusing the frozen generator on renderable findings (Table C.1). The audit is sensitive to surface-form changes and does not measure clinical correctness. 
+
+Reward sensitivity and extended qualitative evidence. 
+
+The direct Sana-GRPO sweep likewise shows that BioViL-T and composite rewards raise alignment to 0.827 and 0.816 while recall remains 0.104 and 0.080 and coverage 0.413 and 0.384 (Table C.2). Section D provides 98 source-prompt-matched cases across all fourteen categories. Together, these analyses separate fidelity, preservation of source informa-tion, and distributional coverage. Sections A and B provide additional prompt-policy and data details. 
+
+Prompt Template 
+
+Training and inference share this Qwen chat template. The source prompt is inserted at {original_prompt} .
+
+Shared Qwen prompt System message 
+
+You are an expert prompt optimizer for chest X-ray diffusion models. 
+
+User message 
+
+Source diffusion prompt: 
+
+{original_prompt} 
+
+Rewrite the source prompt into a chest X-ray prompt that is better suited for diffusion generation. 
+
+Guidelines: 
+
+- Preserve the source meaning. - Feel free to rewrite, compress, and reorder the wording to make it better suited for chest X-ray generation. - Do not add new clinical facts that are not already present in the source. You can reason in <think></think>. After </think>, put the final result in 
+
+exactly one 
+
+<optimized_prompt></optimized_prompt> block. 
+
+Do not output any other text. 
+
+5 Conclusion 
+
+This work identifies prompt formulation as an underexplored source of performance in text-conditioned CXR generation. With a CXR-adapted Sana generator frozen, instruction-guided LLM reformulation nearly halves RadDINO-FID, showing that domain adaptation leaves substantial optimiza-tion space. Prompt analyses link this gain to visible radio-graphic findings and reveal alignment loss under uncon-strained reformulation. Building on this finding, JustLLMGRPO uses standard GRPO and group-relative radiology-aware image feedback to optimize only the prompt policy. On CheXGenBench, it reduces RadDINO-FID from 54.225 to 26.780, main-tains source-prompt alignment, and achieves state-of-the-art distribution coverage and downstream classification utility. These results establish prompt-policy optimization as a dis-tinct axis, showing that prompt expression can determine a substantial part of the achievable quality. References 
+
+Bannur, S.; Hyland, S.; Liu, Q.; et al. 2023. Learning To Exploit Temporal Structure for Biomedical Vision-Language Processing. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 15016–15027. Black, K.; Janner, M.; Du, Y.; Kostrikov, I.; and Levine, S. 2024. Training Diffusion Models with Reinforcement Learn-ing. International Conference on Learning Representations ,2024: 4965–4987. Bluethgen, C.; Chambon, P.; Delbrouck, J.-B.; van der Sluijs, R.; Połacin, M.; Zambrano Chaves, J. M.; Abraham, T. M.; Purohit, S.; Langlotz, C. P.; and Chaudhari, A. S. 2025. A Vision–Language Foundation Model for the Generation of Realistic Chest X-Ray Images. Nature Biomedical Engineer-ing , 9(4): 494–506. Cao, T.; Wang, C.; Liu, B.; Wu, Z.; Zhu, J.; and Huang, J. 2023. BeautifulPrompt: Towards Automatic Prompt Engi-neering for Text-to-Image Synthesis. In Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing: Industry Track , 1–11. Deng, M.; Wang, J.; Hsieh, C.-P.; et al. 2022. RLPrompt: Op-timizing Discrete Text Prompts with Reinforcement Learn-ing. In Proceedings of the 2022 Conference on Empirical Methods in Natural Language Processing , 3369–3391. Dutt, R.; Sanchez, P.; Yao, Y.; McDonagh, S.; Tsaftaris, S. A.; and Hospedales, T. 2026. CheXGenBench: A Unified Bench-mark For Fidelity, Privacy and Utility of Synthetic Chest Radiographs. Transactions on Machine Learning Research .Fan, Y.; Watkins, O.; Du, Y.; Liu, H.; Ryu, M.; Boutilier, C.; Abbeel, P.; Ghavamzadeh, M.; Lee, K.; and Lee, K. 2023. DPOK: Reinforcement Learning for Fine-Tuning Text-to-Image Diffusion Models. In Advances in Neural Information Processing Systems , volume 36, 79858–79885. Guo, D.; Yang, D.; Zhang, H.; et al. 2025. DeepSeek-R1 Incentivizes Reasoning in LLMs through Reinforcement Learning. Nature , 645(8081): 633–638. Han, W.; Kim, C.; Ju, D.; Shim, Y.; and Hwang, S. J. 2024. Advancing Text-Driven Chest X-Ray Generation with Policy-Based Reinforcement Learning. In Medical Im-age Computing and Computer Assisted Intervention – MIC-CAI 2024: 27th International Conference, Marrakesh, Mo-rocco, October 6–10, 2024, Proceedings, Part III , 56–66. Hao, Y.; Chi, Z.; Dong, L.; and Wei, F. 2023. Optimiz-ing Prompts for Text-to-Image Generation. In Advances in Neural Information Processing Systems , volume 36, 66923– 66939. Irvin, J.; Rajpurkar, P.; Ko, M.; et al. 2019. CheXpert: A Large Chest Radiograph Dataset with Uncertainty Labels and Expert Comparison. Proceedings of the AAAI Conference on Artificial Intelligence , 33(01): 590–597. Johnson, A. E. W.; Pollard, T. J.; Berkowitz, S. J.; Green-baum, N. R.; Lungren, M. P.; Deng, C.-y.; Mark, R. G.; and Horng, S. 2019. MIMIC-CXR, a de-Identified Publicly Available Database of Chest Radiographs with Free-Text Re-ports. Scientific Data , 6(1): 317. Lee, H.; Lee, D. Y.; Kim, W.; Kim, J.-H.; Kim, T.; Kim, J.; Sunwoo, L.; and Choi, E. 2024a. Vision-Language Genera-tive Model for View-Specific Chest X-Ray Generation. arXiv preprint arXiv:2302.12172 .Lee, S.; Kim, W. J.; Chang, J.; and Ye, J. C. 2024b. LLM-CXR: Instruction-Finetuned LLM for CXR Image Un-derstanding and Generation. International Conference on Learning Representations , 2024: 29745–29765. Mañas, O.; Astolfi, P.; Hall, M.; Ross, C.; Urbanek, J.; Williams, A.; Agrawal, A.; Romero-Soriano, A.; and Drozdzal, M. 2024. Improving Text-to-Image Consis-tency via Automatic Prompt Optimization. arXiv preprint arXiv:2403.17804 .Morís, D. I.; de Moura, J.; Novo, J.; and Ortega, M. 2024. Adapted Generative Latent Diffusion Models for Accurate Pathological Analysis in Chest X-Ray Images. Medical & Biological Engineering & Computing , 62(7): 2189–2212. Pérez-García, F.; Bond-Taylor, S.; Sanchez, P. P.; et al. 2025a. RadEdit: Stress-Testing Biomedical Vision Models via Dif-fusion Image Editing. In Computer Vision – ECCV 2024 ,358–376. Pérez-García, F.; Sharma, H.; Bond-Taylor, S.; et al. 2025b. Exploring Scalable Medical Image Encoders beyond Text Supervision. Nature Machine Intelligence , 7(1): 119–130. Prabhudesai, M.; Goyal, A.; Pathak, D.; and Fragkiadaki, K. 2024. Aligning Text-to-Image Diffusion Models with Reward Backpropagation. arXiv preprint arXiv:2310.03739 .Shao, Z.; Wang, P.; Zhu, Q.; et al. 2024. DeepSeekMath: Pushing the Limits of Mathematical Reasoning in Open Lan-guage Models. arXiv preprint arXiv:2402.03300 .Shentu, J.; and Al Moubayed, N. 2024. CXR-IRGen: An Integrated Vision and Language Model for the Generation of Clinically Accurate Chest X-Ray Image-Report Pairs. In 
+
+Proceedings of the IEEE/CVF Winter Conference on Appli-cations of Computer Vision , 5212–5221. Weber, T.; Ingrisch, M.; Bischl, B.; and Rügamer, D. 2023. Cascaded Latent Diffusion Models for High-Resolution Chest X-Ray Synthesis. In Advances in Knowledge Dis-covery and Data Mining , 180–191. Wu, M.; Wang, L.; Zhao, P.; et al. 2026a. RePrompt: Reasoning-Augmented Reprompting for Text-to-Image Gen-eration via Reinforcement Learning. International Confer-ence on Learning Representations , 2026: 14030–14057. Wu, S.; Sun, M.; Wang, W.; Wang, Y.; and Liu, J. 2026b. Vi-sualPrompter: Semantic-Aware Prompt Optimization with Visual Feedback for Text-to-Image Synthesis. International Conference on Learning Representations , 2026: 30578– 30600. Xie, E.; Chen, J.; Chen, J.; et al. 2024. SANA: Efficient High-Resolution Image Synthesis with Linear Diffusion Trans-formers. arXiv preprint arXiv:2410.10629 .Xu, Y.; Sun, L.; Peng, W.; Jia, S.; Morrison, K.; Perer, A.; Zandifar, A.; Visweswaran, S.; Eslami, M.; and Batmanghe-lich, K. 2024. MedSyn: Text-Guided Anatomy-Aware Syn-thesis of High-Fidelity 3-D CT Images. IEEE Transactions on Medical Imaging , 43(10): 3648–3660. Yang, A.; Li, A.; Yang, B.; et al. 2025. Qwen3 Technical Report. arXiv preprint arXiv:2505.09388 .Zambrano Chaves, J. M.; Huang, S.-C.; Xu, Y.; et al. 2025. A Clinically Accessible Small Multimodal Radiology Model and Evaluation Metric for Chest X-Ray Findings. Nature Communications , 16(1): 3108. Zhou, Y.; Muresanu, A. I.; Han, Z.; Paster, K.; Pitis, S.; Chan, H.; and Ba, J. 2022. Large Language Models Are Human-Level Prompt Engineers. In The Eleventh Interna-tional Conference on Learning Representations .Appendix 
+
+Overview 
+
+This appendix provides reproducibility details and additional analyses. Section A documents prompt construction, infer-ence, and optimization details for the prompt policy. Sec-tion B specifies the matched-seed reward and data protocol. Section C reports an automatic source-prompt preservation audit and the complete direct Sana reward sweep. Section D presents 98 matched qualitative comparisons across all 14 CheXpert categories. 
+
+A Prompt Policy Configuration and Inference 
+
+A.1 Prompt Construction and Inference 
+
+Shared message template. Training and inference use the same Qwen chat template, with the source prompt provided as the user input. CheXpert labels, generated images, and reward values are excluded from the policy input and are introduced only after sampling to score the generated images. 
+
+Training-time output handling. During training, the prompt-policy output is parsed to extract the candidate prompt. Empty or invalid outputs receive zero reward and are not rendered. Valid candidate prompts are normalized and limited to 1,200 characters before being passed to Sana. The parser first removes generation-control tokens and joins nonempty lines, then searches for a sin-gle closing </think> marker followed by a nonempty 
+
+<optimized_prompt> block. Whitespace is normalized without changing the lexical content of the candidate. Com-pletions that contain multiple candidate blocks, an empty block, or no closing reasoning marker are treated as mal-formed. This conservative rule prevents partial reasoning traces or formatting artifacts from entering the image genera-tor. The same parser is used during validation and benchmark inference, so the reported fallback behavior is not specific to training. 
+
+Benchmark inference. At benchmark inference, the op-timized prompt policy greedily generates one candidate prompt for each unique source prompt. The candidate prompt conditions Sana. If no valid candidate is produced, the system falls back to the source prompt. Each unique source prompt is rewritten once, and the resulting candidate prompt is reused for all evaluation samples associated with that source prompt. Inference therefore has two deterministic stages: prompt rewriting and image rendering. The rewrite stage is dedu-plicated by the source prompt string, whereas the rendering stage preserves the evaluation-row identifier when deriving the seed. This distinction avoids repeatedly sampling the language policy for duplicate rows while retaining row-level reproducibility for the generated images. In the released im-plementation, greedy decoding is used for benchmark infer-ence; stochastic decoding is reserved for on-policy training rollouts. 
+
+A.2 Optimization Configuration 
+
+Table A.1 summarizes the configuration of the Qwen3-4B-Thinking-2507 prompt policy. The trainable policy is initial-ized from the pretrained model, and all Qwen parameters are updated. A frozen copy of the initial model serves as the reference policy for KL regularization. Sana and all reward models remain frozen throughout optimization. 
+
+B Matched-Seed Reward and Data Protocol 
+
+B.1 Deterministic Matched-Seed Comparison 
+
+For each candidate prompt, frozen Sana renders a candi-date image and a source-prompt control from the same ini-tial noise. A deterministic seed derived from the source prompt and evaluation-sample identifier is shared by each pair. This matched-seed design holds stochastic initialization fixed when measuring the effect of prompt reformulation. The five candidates sampled for each source prompt share the same source-control rendering, avoiding redundant con-trol generation. Candidates that do not yield a valid prompt are omitted. 
+
+B.2 Radiology-Aware Relative Reward 
+
+For an image I, source prompt c, and CheXpert labels y,the radiology-aware score combines BioViL-T alignment, CheXpert label consistency, and RadDINO fidelity with weights 0.45 , 0.10 , and 0.45 , respectively. BioViL-T is com-puted against the source prompt rather than the candidate prompt. In the label-consistency term, positive labels con-tribute the predicted probability, negative labels contribute one minus that probability, and uncertain labels are ignored. The RadDINO component combines global feature-density agreement, local top-k reference similarity, and a nearest-neighbor memorization penalty with internal weights 
+
+0.60 , 0.30 , and 0.10 . Candidate improvement is computed relative to the matched source rendering and mapped to the piecewise reward in Equation 3. The five rewards within each source-prompt group are standardized to obtain group-relative advantages. Neither the reward nor the policy objec-tive includes a prompt-length term. The relative construction is important for interpreting the reward. A candidate is not rewarded simply for obtaining a high absolute image score; it is rewarded for improving on the source-prompt control generated with the same initial noise. This reduces sensitivity to prompt-independent variation in the frozen renderer and makes the learning signal specific to the language intervention. The source-prompt alignment term is computed against the original source prompt for both candidate and control images. Consequently, the policy is encouraged to remove report discourse that is difficult to render while retaining findings that remain supported by the source condition. The three reward components serve complementary roles. BioViL-T supplies a continuous image–text similarity sig-nal, the label term protects explicit positive and negative CheXpert findings, and RadDINO favors the radiographic feature distribution used by the benchmark. The label term is intentionally low-weight: it acts as a safeguard against po-larity errors but does not dominate the image-level fidelity Table A.1: Prompt-policy optimization and rendering configuration.                        
+
+> Setting Value Prompt policy Qwen3-4B-Thinking-2507; full-parameter optimization Source prompts per rollout batch 64 Candidate prompts per source prompt 5Optimizer AdamW, learning rate 10 −6
+> GRPO update One update epoch and one optimizer step per rollout batch GRPO objective Clip ratio 0.2; KL coefficient 10 −3against the frozen reference policy Maximum input/output lengths 768 input tokens; 2,048 output tokens Rollout decoding Temperature 1.0; top-p= 1 .0; no top-ktruncation Inference decoding Greedy decoding; maximum 2,048 new tokens Sana renderer CXR-adapted Sana model fine-tuned for 20 epochs and then frozen Image generation 512 ×512 ; 20 denoising steps; guidance scale 4.5
+> Compute allocation Two GPUs for tensor-parallel policy rollout and optimization; three workers for Sana rendering and reward evaluation
+
+signal. The memorization penalty is applied only within the RadDINO component and is not a textual similarity con-straint. 
+
+B.3 Training and Evaluation Data 
+
+Table B.1 summarizes the data used for prompt-policy training, model selection, and evaluation. The pathology-balanced validation subset supports category-aware model selection, while the complete evaluation pool supports the benchmark and prompt-language analyses. The training pool contains 237,388 rows from the CheX-GenBench MIMIC-CXR split. For model selection, the val-idation subset contains 560 rows balanced across the 14 CheXpert categories, while the final evaluation pool con-tains 5,034 rows and 4,352 unique source prompts. Prompt-language statistics are computed on the unique-prompt view of this pool, whereas image metrics are computed on eval-uation rows. The downstream utility experiment uses a sep-arate 20,000-image synthetic training subset and held-out real CXRs, following the CheXGenBench protocol. These different sample counts should not be interpreted as inde-pendent test sets: they support distinct diagnostics of prompt behavior, image quality, and utility. 
+
+Row construction and required fields. Each prompt-policy row contains the source LLaVA-Rad prompt, a stable row identifier, and the 14 CheXpert labels used by the image reward. Optional view and orientation metadata are retained for diagnostics but are not inserted into the policy message unless already expressed in the source prompt. Rows with empty source prompts are excluded during conversion to the training parquet. The CheXpert payload distinguishes pos-itive, negative, and uncertain labels; uncertain entries are ignored by the label-consistency reward rather than being converted to either polarity. 
+
+Separation of policy input and reward metadata. Only the source prompt is visible to the LLM prompt policy. La-bels, image paths, real images, reference embeddings, and reward values remain in the rollout metadata and are ac-cessed after a completion has been parsed. This separation prevents the policy from copying structured labels or re-ward diagnostics into the generated prompt. It also preserves the intended deployment setting, in which inference requires only a source prompt and does not assume access to a paired real image or CheXpert annotation. 
+
+Duplicate prompts and evaluation units. The evaluation CSV contains repeated source prompts associated with dif-ferent rows. The language policy rewrites each of the 4,352 unique source prompts once, after which the parsed candidate is joined back to all 5,034 evaluation rows. Image generation and scoring remain row-level because the deterministic seed also uses the row identifier. Thus, duplicate text does not trigger redundant language-model inference, but duplicate rows do not collapse into a single generated image. Prompt statistics use the unique-prompt table to avoid over-weighting duplicates, whereas FID, alignment, PRDC, and downstream analyses follow the benchmark row structure. 
+
+Length handling and deterministic conversion. CSV rows are converted in a stable order without shuffling. Chat-formatted inputs are limited to 768 tokens, with overlong examples filtered rather than truncated. Rollouts allow 2,048 output tokens, but the parser retains only the normalized 
+
+<optimized_prompt> content, capped at 1,200 charac-ters before rendering. The global seed is 42, and rendering seeds are derived from the source prompt and row identifier, reproducing prompt groups and matched candidate–control comparisons. 
+
+Reference assets. The frozen CheXpert classifier and RadDINO reference cache are constructed from the desig-nated real-CXR training subset and are not updated dur-ing prompt-policy optimization. The RadDINO cache stores normalized reference features used for global density and local-neighbor comparisons. The downstream ResNet-50 is trained separately on synthetic images and is not part of the GRPO reward. These assets serve different purposes and are kept disjoint in the implementation: reward models provide the online learning signal, while the downstream classifier evaluates the utility of a completed synthetic dataset. Reward scoring remains fixed throughout optimization. Table B.1: Training, model-selection, and evaluation protocol.        
+
+> Component Protocol Prompt-policy training set 237,388 LLaVA-Rad rows from the CheXGenBench MIMIC-CXR training split Validation subset 560 pathology-balanced rows, 40 per CheXpert category Evaluation set 5,034 rows containing 4,352 unique source prompts Prompt-language analysis The same 4,352 unique prompts, compared across source prompting, instruction-only rewriting, and JustLLMGRPO Downstream utility ResNet-50 trained on 20,000 synthetic CXRs and evaluated on held-out real CXRs following CheXGenBench Statistical scope Prompt-policy results from one training run
+
+C Further Analysis 
+
+C.1 Preservation of Generation-Critical Source Information 
+
+We apply a conservative automatic audit to all 5,034 rewrit-ten evaluation rows. Rule-based extractors compare condi-tion polarity, laterality, view, device, and anatomical terms between source and candidate prompts. A CheXbert-based comparison provides a complementary label-level diagnos-tic. Table C.1 reports the aggregate preservation rates. Despite substantial prompt reformulation, JustLLMGRPO preserves negative-label polarity in 97.8% of cases and later-ality in 90.3%. These attributes are generation-critical con-straints because they determine whether a finding should appear and where it should be rendered. Together with the recovery of source-prompt BioViL-T alignment from 0.609 under instruction-only rewriting to 0.696 after GRPO, these results show that visual focusing and source alignment are not inherently conflicting. By retaining source-grounded vi-sual constraints while suppressing non-renderable report lan-guage, the optimized prompt provides a more actionable con-dition that enables frozen Sana to better reflect the source prompt. Positive findings, devices, and anatomical regions have surface-form preservation rates of 60.0%, 74.1%, and 61.2%, respectively. These values reflect the policy’s compression of report-style expressions into shorter radiographic descrip-tions. The conservative extractor records exact listed terms, so synonym substitution and lexical consolidation appear as surface-form changes even when the visual concept remains represented. Together with the high preservation of polarity and laterality, the pattern shows that the policy prioritizes constraints that directly determine the requested image con-tent. The audit and image metrics provide complementary views of this transformation. The text audit tracks which source attributes remain explicit after rewriting, while BioViL-T and RadDINO evaluate how the rewritten con-dition affects the rendered image. Their joint pattern sup-ports selective visual focusing: the policy preserves decisive source-grounded constraints, removes temporal and report-framing language, and expresses the remaining findings in a form that frozen Sana can use more effectively. This in-terpretation is consistent with the simultaneous recovery of source-prompt alignment and improvement in fidelity and coverage. Table C.1: Automatic source-prompt preservation diagnos-tics over 5,034 rewritten evaluation rows. Positive-label preservation excludes the aggregate No Finding label.        
+
+> Diagnostic Rate (%) Source-mentioned condition polarity preserved 64.1 Positive CheXpert label preserved in the candidate prompt 60.0 Negative CheXpert label not flipped to positive 97.8 Laterality terms preserved 90.3 Device terms preserved 74.1 Anatomical-region terms preserved 61.2 View terms preserved 60.6 Exact CheXbert label match between source and candidate prompts 29.9
+
+C.2 Complete Direct Sana Reward Sweep 
+
+Table C.2 provides the complete comparison between prompt-policy and direct-generator optimization. Each di-rect Sana-GRPO baseline updates rank-16 Sana LoRA mod-ules for 950–1,000 optimization iterations and evaluates 144 generated images per optimization prompt. The sweep places generator-side and prompt-side optimization in the same met-ric space, making it possible to compare how different reward choices affect alignment, fidelity, recall, coverage, and down-stream utility. General-purpose preference rewards yield FID-RD values from 80.508 to 138.462, while BioViL-T and composite re-wards raise alignment to 0.827 and 0.816. JustLLMGRPO achieves an FID-RD of 26.780, recall of 0.498, coverage of 0.588, and source-prompt alignment of 0.696. The sweep shows that applying radiographic alignment, label consis-tency, and feature-distribution feedback to the prompt policy produces the strongest joint fidelity, coverage, and down-stream utility in the table. The gain is associated with learning how to express radiographic content for the frozen generator. 
+
+D Additional Qualitative Comparisons 
+
+We report 98 matched comparisons, with seven cases for each of the 14 CheXpert categories. Each row contains an abridged source prompt, the paired real MIMIC-CXR image, five baseline generations conditioned on the source prompt, and the JustLLMGRPO output from frozen Sana. Teal text marks category-relevant terms, and purple frames identify JustLLMGRPO. Rows are matched by source prompt across Table C.2: Direct Sana-GRPO reward sweep and frozen-Sana prompt-policy baselines. FID-RD is RadDINO-FID; Recall and Cov. are PRDC recall and coverage; AUC is downstream macro AUC; Align. is source-prompt BioViL-T similarity. Dashes indicate unavailable evaluations.                                                                            
+
+> System Updated module Reward FID-RD ↓Align. ↑Recall ↑Cov. ↑AUC ↑
+> Source prompting None None 54.225 0.695 0.614 0.548 0.730 Direct Sana-GRPO Sana LoRA PickScore 111.748 0.560 0.001 0.098 0.633 Direct Sana-GRPO Sana LoRA CLIPScore 117.754 0.531 0.001 0.100 0.657 Direct Sana-GRPO Sana LoRA HPSv2 138.462 0.476 0.001 0.040 0.622 Direct Sana-GRPO Sana LoRA ImageReward 80.508 0.557 0.009 0.168 0.670 Direct Sana-GRPO Sana LoRA BioViL-T 50.196 0.827 0.104 0.413 0.728 Direct Sana-GRPO Sana LoRA Composite 59.145 0.816 0.080 0.384 0.710 LLM rewriting (no GRPO) None None 27.572 0.609 –––
+> JustLLMGRPO Qwen3-4B Composite 26.780 0.696 0.498 0.588 0.746
+
+all displayed systems, making polarity, laterality, and finding prominence directly comparable. The gallery is drawn from completed evaluation outputs using an automatic ranking based on category response, source-prompt alignment, image realism, quality checks, and margins over the displayed baselines. Every page follows the same order: source prompt, real CXR, SD1.5, PixArt-Σ,SD3.5, Sana, FLUX.1-Dev, and JustLLMGRPO. Prompts, seeds, model order, and generated images remain fixed, pre-serving a direct comparison of conditioning strategies. Across pleural, parenchymal, cardiomediastinal, focal-lesion, fracture, normal-examination, and support-device categories, JustLLMGRPO strengthens category-relevant vi-sual evidence while retaining source-specified polarity and laterality. The gallery complements the aggregate results by showing that the learned prompt policy improves the con-ditioning signal across heterogeneous radiographic targets while the Sana generator and sampling configuration remain unchanged. 
+
+Prompt-to-image mechanism. The matched layout makes the effect of prompt reformulation visible at the image level. The source-prompt columns show how several generators re-spond to the original report-derived condition, while the final column isolates the effect of replacing that condition with the JustLLMGRPO rewrite under frozen Sana. Because the gen-erator weights, sampling configuration, and stored outputs are fixed, changes in the prominence, location, and extent of a requested finding can be traced to the optimized lan-guage condition. This visual evidence complements the lex-ical analysis in the main paper: shorter prompts with denser radiographic terminology provide a more direct interface be-tween clinical text and the frozen renderer. 
+
+Coverage of radiographic attributes. The 14 category pages jointly cover positive and negative findings, unilateral and bilateral abnormalities, focal and diffuse patterns, global cardiomediastinal morphology, and device-related structure. Pleural effusion and pneumothorax emphasize polarity and laterality; edema, consolidation, pneumonia, atelectasis, and lung opacity emphasize spatial distribution; cardiomegaly and enlarged cardiomediastinum emphasize global silhou-ette; and fracture, lung lesion, and support devices empha-size localized structure. The No Finding page provides the complementary normal-examination setting. Together, these comparisons show that the prompt policy operates across dif-ferent levels of radiographic granularity rather than relying on a category-specific phrasing template. 
+
+Matched comparison protocol. Within each row, the source prompt and displayed outputs remain aligned across systems, so the same requested radiographic content is in-spected throughout the panel. Category highlighting identi-fies the words that define the principal visual target, while the fixed column order supports rapid comparison of finding presence, location, extent, and overall image structure. The real CXR supplies anatomical context, and the generated columns show how each conditioning strategy translates the same source information into an image. 
+
+Relation to aggregate results. The gallery provides an image-level view of the trends summarized by RadDINO-FID, BioViL-T alignment, PRDC coverage, and downstream utility. Improved fidelity appears as more coherent radio-graphic structure, maintained alignment appears as reten-tion of the requested finding, and broader coverage appears through diverse realizations across categories and anatom-ical presentations. The qualitative pages therefore connect the aggregate gains to visible prompt-conditioned behavior and show how optimized radiographic wording supports the frozen generator across the complete benchmark taxonomy. 
+
+Consistent visual encoding. The same typography, cate-gory highlighting, image scale, and column labels are used on every page. Teal source terms identify the requested ra-diographic evidence, and the purple frame provides an im-mediate visual anchor for the optimized-prompt result. This shared encoding supports rapid cross-category inspection without changing the interpretation of individual columns. It also makes the appendix a direct extension of the quantitative analysis: readers can move from a benchmark metric to the corresponding category pages and inspect how the learned conditioning policy expresses that radiographic target. Source prompt Real CXR SD1.5 PixArt-Σ SD3.5 Sana FLUX.1-Dev JustLLMGRPO 
+
+Case 1 
+
+Pleural effusion and pleural thickening are constant. 
+
+Case 2 
+
+Mild left pleural thickening is longstanding. 
+
+Case 3 
+
+Lateral pleural thickening with calcifications. 
+
+Case 4 
+
+The minimal amount of 
+
+right pleural thickening and the right pleural effusion as well as the 
+
+right lateral rib defect are unchanged. 
+
+Case 5 
+
+The patient has pleural thickening, old rib fractures, and elevation of the left 
+
+hemidiaphragm. 
+
+Case 6 
+
+Stable bilateral apical 
+
+pleural thickening. 
+
+Case 7 
+
+Circumferential left 
+
+pleural thickening and effusion is demonstrated in the left hemithorax, consistent with known pleural metastatic ... 
+
+Pleural Other Seven matched prompts Figure D.1: Matched qualitative comparisons for Pleural Other . In each row, the baselines use the source prompt directly, whereas JustLLMGRPO uses the corresponding optimized prompt. Purple frames denote JustLLMGRPO. Source prompt Real CXR SD1.5 PixArt-Σ SD3.5 Sana FLUX.1-Dev JustLLMGRPO 
+
+Case 1 
+
+Suspected nondisplaced 
+
+fractures involving the 
+
+left sixth and seventh ribs without displacement. 
+
+Case 2 
+
+Evidence of old healed rib fractures on the 
+
+left. 
+
+Case 3 
+
+Previously seen left rib 
+
+fractures are again noted, and the cardiac and mediastinal contours are normal. 
+
+Case 4 
+
+Skeletal structures are somewhat demineralized and on the right side, there is an apparent old rib fracture of the ninth rib posteriorly ... 
+
+Case 5 
+
+Left rib fractures, 
+
+multiple, are noted. 
+
+Case 6 
+
+There is a fracture 
+
+deformity of the left 
+
+posterior eighth rib. No definite acute fractures 
+
+are identified. 
+
+Case 7 
+
+The right seventh and eighth posterior ribs appear fractured. 
+
+Fracture Seven matched prompts Figure D.2: Matched qualitative comparisons for Fracture . In each row, the baselines use the source prompt directly, whereas JustLLMGRPO uses the corresponding optimized prompt. Purple frames denote JustLLMGRPO. Source prompt Real CXR SD1.5 PixArt-Σ SD3.5 Sana FLUX.1-Dev JustLLMGRPO 
+
+Case 1 
+
+There is no change in the size or appearance of the large right upper 
+
+lobe mass. 
+
+Case 2 
+
+There are widespread 
+
+nodular opacities of varying size with associated bronchial wall thickening bilaterally. 
+
+Case 3 
+
+Hazy opacity overlying the left upper lung is compatible with left upper lobe mass and 
+
+upper lobe collapse. 
+
+Case 4 
+
+There is an ill-defined 
+
+left perihilar mass. 
+
+Case 5 
+
+Large right pleural effusion is inseparable from known anterior chest wall mass. 
+
+Case 6 
+
+The right upper lobe 
+
+nodule is again seen. 
+
+Case 7 
+
+Multifocal nodular 
+
+opacities can be seen. 
+
+Lung Lesion Seven matched prompts Figure D.3: Matched qualitative comparisons for Lung Lesion . In each row, the baselines use the source prompt directly, whereas JustLLMGRPO uses the corresponding optimized prompt. Purple frames denote JustLLMGRPO. Source prompt Real CXR SD1.5 PixArt-Σ SD3.5 Sana FLUX.1-Dev JustLLMGRPO 
+
+Case 1 
+
+Widening of right mediastinal contour is consistent with neoesophagus related to recent esophagectomy procedure. 
+
+Case 2 
+
+The upper mediastinum is 
+
+widened slightly due to tortuous vessels. 
+
+Case 3 
+
+Stable widening of 
+
+cardiomediastinal 
+
+contours accompanied by pulmonary vascular congestion and mild-to-moderate ... 
+
+Case 4 
+
+Postoperative widening of the cardiomediastinal 
+
+silhouette is stable. 
+
+Case 5 
+
+Widening of the superior 
+
+mediastinal contour corresponds to abnormal soft tissue density surrounding the proximal/mid esophagus. 
+
+Case 6 
+
+The superior mediastinum 
+
+is mildly prominent. 
+
+Case 7 
+
+Overall cardiac and 
+
+mediastinal contours are stably enlarged. 
+
+Enlarged Cardiomediastinum Seven matched prompts Figure D.4: Matched qualitative comparisons for Enlarged Cardiomediastinum . In each row, the baselines use the source prompt directly, whereas JustLLMGRPO uses the corresponding optimized prompt. Purple frames denote JustLLMGRPO. Source prompt Real CXR SD1.5 PixArt-Σ SD3.5 Sana FLUX.1-Dev JustLLMGRPO 
+
+Case 1 
+
+Tiny right apical pneumothorax. 
+
+Case 2 
+
+A moderate right pneumothorax with apical 
+
+and basilar components has slightly decreased in size. 
+
+Case 3 
+
+There is a small basal pneumothorax, which is seen on the lateral film only, with no evidence of tension. 
+
+Case 4 
+
+A trace left apical pneumothorax persists. 
+
+Case 5 
+
+There is little change in the degree of left apical pneumothorax and subcutaneous emphysema along the left lateral chest wall extending ... 
+
+Case 6 
+
+There is a small right pneumothorax. 
+
+Case 7 
+
+Again noted is a small 
+
+left apical pneumothorax. 
+
+Pneumothorax Seven matched prompts Figure D.5: Matched qualitative comparisons for Pneumothorax . In each row, the baselines use the source prompt directly, whereas JustLLMGRPO uses the corresponding optimized prompt. Purple frames denote JustLLMGRPO. Source prompt Real CXR SD1.5 PixArt-Σ SD3.5 Sana FLUX.1-Dev JustLLMGRPO 
+
+Case 1 
+
+Continued blunting of the 
+
+right costophrenic angle with right basilar opacification that could well represent merely atelectasis, though ... 
+
+Case 2 
+
+Diffuse consolidation in the left lung has slightly improved, while heterogeneous opacities in the right lung have worsened. 
+
+Case 3 
+
+Moderately severe 
+
+bibasilar consolidation 
+
+is improving on the 
+
+right, less dramatically on the left. 
+
+Case 4 
+
+Residual consolidation at the lung bases, particularly the right, 
+
+raises concern for developing pneumonia, but this is difficult ... 
+
+Case 5 
+
+Moderate pulmonary edema has worsened, and coalescent edema probably explains slight increase in 
+
+consolidation in the ... 
+
+Case 6 
+
+Bibasal, left more than 
+
+right consolidations are present. 
+
+Case 7 
+
+Bilateral pleural effusions, bibasal consolidations and pulmonary edema are observed. 
+
+Consolidation Seven matched prompts Figure D.6: Matched qualitative comparisons for Consolidation . In each row, the baselines use the source prompt directly, whereas JustLLMGRPO uses the corresponding optimized prompt. Purple frames denote JustLLMGRPO. Source prompt Real CXR SD1.5 PixArt-Σ SD3.5 Sana FLUX.1-Dev JustLLMGRPO 
+
+Case 1 
+
+There is a new opacity in the left lower lobe, in the retrocardiac region, suggesting pneumonia. 
+
+Case 2 
+
+In the right infrahilar region, there is an opacity which may represent pneumonia. 
+
+Case 3 
+
+Extensive peribronchial opacification, right 
+
+lung, probably 
+
+pneumonia. 
+
+Case 4 
+
+Superimposed right lower 
+
+lobe pneumonia cannot be entirely excluded. 
+
+Case 5 
+
+Small region of likely 
+
+pneumonia in the right upper lobe is unchanged. 
+
+Case 6 
+
+There is a right 
+
+juxtrahilar rounded 3.5 cm opacity, which may represent pneumonia or possibly a mass. 
+
+Case 7 
+
+Heterogeneous opacification throughout both lungs suggests widespread pneumonia, 
+
+possibly cavitary. 
+
+Pneumonia Seven matched prompts Figure D.7: Matched qualitative comparisons for Pneumonia . In each row, the baselines use the source prompt directly, whereas JustLLMGRPO uses the corresponding optimized prompt. Purple frames denote JustLLMGRPO. Source prompt Real CXR SD1.5 PixArt-Σ SD3.5 Sana FLUX.1-Dev JustLLMGRPO 
+
+Case 1 
+
+Cardiomegaly is accompanied by pulmonary vascular congestion and mild edema. 
+
+Case 2 
+
+Mild pulmonary edema and a triangular opacity in the right midlung. 
+
+Case 3 
+
+There has been interval worsening of moderate pulmonary edema, which is also accentuated by low lung volumes. 
+
+Case 4 
+
+Moderate pulmonary edema 
+
+and mild air in the left 
+
+lung. 
+
+Case 5 
+
+There are again seen 
+
+bilateral pleural effusions and a left retrocardiac opacity as well as some mild pulmonary edema. 
+
+Case 6 
+
+Mild pulmonary edema. 
+
+Case 7 
+
+There is mild pulmonary 
+
+edema in the setting of moderate-severe cardiomegaly. 
+
+Edema Seven matched prompts Figure D.8: Matched qualitative comparisons for Edema . In each row, the baselines use the source prompt directly, whereas JustLLMGRPO uses the corresponding optimized prompt. Purple frames denote JustLLMGRPO. Source prompt Real CXR SD1.5 PixArt-Σ SD3.5 Sana FLUX.1-Dev JustLLMGRPO 
+
+Case 1 
+
+Moderate cardiomegaly is present. 
+
+Case 2 
+
+Cardiomegaly is severe. 
+
+Case 3 
+
+Cardiomegaly is substantial. 
+
+Case 4 
+
+Moderate cardiomegaly and elongated tortuous aorta. 
+
+Case 5 
+
+Moderate cardiomegaly 
+
+with left ventricular predominance is noted. 
+
+Case 6 
+
+Severe cardiomegaly and pulmonary vascular congestion persist. 
+
+Case 7 
+
+New moderate right 
+
+pleural effusion, small 
+
+left pleural effusion, increased severe 
+
+cardiomegaly, and mild pulmonary edema. 
+
+Cardiomegaly Seven matched prompts Figure D.9: Matched qualitative comparisons for Cardiomegaly . In each row, the baselines use the source prompt directly, whereas JustLLMGRPO uses the corresponding optimized prompt. Purple frames denote JustLLMGRPO. Source prompt Real CXR SD1.5 PixArt-Σ SD3.5 Sana FLUX.1-Dev JustLLMGRPO 
+
+Case 1 
+
+There has been interval appearance of bilateral 
+
+pleural effusions and associated bibasilar atelectasis. 
+
+Case 2 
+
+There is increased pulmonary vascular engorgement and 
+
+bibasilar atelectasis. 
+
+Case 3 
+
+Areas of atelectasis are seen in the mid and 
+
+lower left lung zones. 
+
+Case 4 
+
+2 views of the chest demonstrate a large left 
+
+pleural effusion with underlying atelectasis. 
+
+Case 5 
+
+There are bibasilar atelectatic changes. 
+
+Case 6 
+
+Bibasilar atelectasis 
+
+have increased. 
+
+Case 7 
+
+Left basal atelectasis 
+
+has slightly increased. 
+
+Atelectasis Seven matched prompts Figure D.10: Matched qualitative comparisons for Atelectasis . In each row, the baselines use the source prompt directly, whereas JustLLMGRPO uses the corresponding optimized prompt. Purple frames denote JustLLMGRPO. Source prompt Real CXR SD1.5 PixArt-Σ SD3.5 Sana FLUX.1-Dev JustLLMGRPO 
+
+Case 1 
+
+The left lung apex shows greater opacity medially than the right. 
+
+Case 2 
+
+Interval improvement in extent of widespread alveolar opacities, 
+
+likely due to improving pulmonary edema. 
+
+Case 3 
+
+Increased bilateral 
+
+perihilar opacities 
+
+concerning for pulmonary edema superimposed on chronic lung disease. 
+
+Case 4 
+
+There are increased 
+
+bilateral lung opacities 
+
+most pronounced at the 
+
+bilateral lung bases. 
+
+Case 5 
+
+Hazy opacification at the bases suggests layering pleural effusions with atelectatic changes. 
+
+Case 6 
+
+Hazy opacity projecting over the left hemi thorax may be due to a layering pleural effusion with overlying atelectasis. 
+
+Case 7 
+
+The right upper lobe 
+
+opacity is no longer present which likely represents resolved 
+
+right upper lobe atelectasis. 
+
+Lung Opacity Seven matched prompts Figure D.11: Matched qualitative comparisons for Lung Opacity . In each row, the baselines use the source prompt directly, whereas JustLLMGRPO uses the corresponding optimized prompt. Purple frames denote JustLLMGRPO. Source prompt Real CXR SD1.5 PixArt-Σ SD3.5 Sana FLUX.1-Dev JustLLMGRPO 
+
+Case 1 
+
+Interval increase in size of the right-sided pleural effusion. 
+
+Interval increase in size of the left-sided pleural effusion. 
+
+Case 2 
+
+There has been interval removal of a large volume of right pleural 
+
+effusion with subsequent re-expansion of the 
+
+right lung and ... 
+
+Case 3 
+
+Small right pleural 
+
+effusion is demonstrated. 
+
+Case 4 
+
+Large right pleural 
+
+effusion is conspicuous. 
+
+Case 5 
+
+There are persistent 
+
+bilateral pleural 
+
+effusions, right greater than left. 
+
+Case 6 
+
+Cardiomegaly, bilateral 
+
+layering pleural 
+
+effusions are slightly worsened. 
+
+Case 7 
+
+Small bilateral pleural 
+
+effusions are present. 
+
+Pleural Effusion Seven matched prompts Figure D.12: Matched qualitative comparisons for Pleural Effusion . In each row, the baselines use the source prompt directly, whereas JustLLMGRPO uses the corresponding optimized prompt. Purple frames denote JustLLMGRPO. Source prompt Real CXR SD1.5 PixArt-Σ SD3.5 Sana FLUX.1-Dev JustLLMGRPO 
+
+Case 1 
+
+The lungs are well expanded and clear. 
+
+Cardiomediastinal silhouette is 
+
+unremarkable. There is 
+
+no pneumothorax or ... 
+
+Case 2 
+
+Normal size of the cardiac silhouette. 
+
+Normal hilar and mediastinal contours. No 
+
+pneumonia, no pulmonary edema, no pleural ... 
+
+Case 3 
+
+The lungs are well expanded and clear. 
+
+There is no focal consolidation, effusion, or pneumothorax. Cardiac and mediastinal contours ... 
+
+Case 4 
+
+Given slightly low lung volumes, the lungs are 
+
+clear of confluent consolidation or effusion. Cardiomediastinal ... 
+
+Case 5 
+
+Normal lung volumes. 
+
+Normal size of the cardiac silhouette. 
+
+Normal hilar and mediastinal contours. No 
+
+pleural effusions. 
+
+Case 6 
+
+No focal consolidation, pleural effusion, pneumothorax, or pulmonary edema is evident on this view. 
+
+Case 7 
+
+Lungs are clear. There is 
+
+no focal consolidation, effusion, or pneumothorax. The cardiomediastinal silhouette is normal. 
+
+No Finding Seven matched prompts Figure D.13: Matched qualitative comparisons for No Finding . In each row, the baselines use the source prompt directly, whereas JustLLMGRPO uses the corresponding optimized prompt. Purple frames denote JustLLMGRPO. Source prompt Real CXR SD1.5 PixArt-Σ SD3.5 Sana FLUX.1-Dev JustLLMGRPO 
+
+Case 1 
+
+An enteric tube traverses below the diaphragm coiled within the stomach, coursing inferiorly out of view, with tip seen in the ... 
+
+Case 2 
+
+Left-sided PICC line 
+
+remains in unchanged position. 
+
+Case 3 
+
+Right PICC ends in the low SVC in appropriate position. 
+
+Case 4 
+
+The lower parts of the nasogastric tube are now visible. 
+
+Case 5 
+
+Right-sided PICC line 
+
+with distal tip projecting over the low SVC. 
+
+Case 6 
+
+The ET tube sits 1 cm above the carina. An endogastric tube courses inferiorly and out of the field of view. 
+
+Case 7 
+
+An endotracheal tube has been repositioned, with tip now terminating in the proximal right main bronchus. 
+
+Support Devices Seven matched prompts Figure D.14: Matched qualitative comparisons for Support Devices . In each row, the baselines use the source prompt directly, whereas JustLLMGRPO uses the corresponding optimized prompt. Purple frames denote JustLLMGRPO.
