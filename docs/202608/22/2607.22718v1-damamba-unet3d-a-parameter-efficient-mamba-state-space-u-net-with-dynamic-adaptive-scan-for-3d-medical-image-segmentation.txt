@@ -1,0 +1,180 @@
+Title: DAMamba-UNet3D: A Parameter-Efficient Mamba State Space U-Net with Dynamic Adaptive Scan for 3D Medical Image Segmentation
+
+URL Source: https://arxiv.org/pdf/2607.22718v1
+
+Published Time: Tue, 28 Jul 2026 00:06:30 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# DAMamba-UNet3D: A Parameter-Efficient Mamba State Space U-Net with Dynamic Adaptive Scan for 3D Medical Image Segmentation 
+
+Mohammad Arafat Hussain, Ellen Grant, Yangming Ou 
+
+Boston Children’s Hospital, Harvard Medical School 
+
+mohammad.hussain@childrens.harvard.edu 
+
+Abstract. We propose parameter-efficient SSM-based U-Net architec-tures for 3D medical image segmentation. Convolutional U-Nets afford 
+
+O(n) local mixing per layer but lack explicit global context; transform-ers provide global reasoning at O(n2) cost in sequence length n. State-space models (SSMs), such as Mamba, offer O(n) global propagation per block. Yet, existing medical SSM segmenters rely on fixed scan patterns and large parameter budgets. Dynamic Adaptive Scan (DAS), which learns data-dependent reordering before selective scan, has not been applied to medical imaging or extended to 3D volumes. We pro-pose DAMamba-UNet3D , a hybrid encoder–decoder that integrates tri-plane 3D-DAS blocks at encoder stages E2–E4 while retaining convo-lutions elsewhere ( ∼5.3 M parameters). On BraTS 2020 five-fold cross-validation, DAMamba-UNet3D achieves mean Dice 0.815 ± 0.013 (full-volume per-case evaluation) at ∼13 × lower parameter cost than Seg-Mamba ( 0.824 ± 0.014 , ∼70 M). At comparable scale, DAMamba-L 
+
+(∼70 M), a wide DAS-native variant with encoder-only DAMamba and a convolutional bottleneck, reaches 0.829 ± 0.012 , surpassing retrained SegMamba by 0.5 pt. Component ablations show that encoder-only DAS placement is critical as bottleneck and decoder SSM blocks lower Dice. Together, the results suggest that learned tri-plane DAS in a hybrid U-Net is competitive with, and under our large-scale design may im-prove upon, SegMamba’s fixed Tri-orientated Mamba (ToM) scanning on BraTS 2020. Code: https://github.com/marafathussain/DAMamba-UNet3D. 
+
+Keywords: Dynamic adaptive scan · Efficient deep learning · 3D seg-mentation · State space models · Mamba · U-Net 
+
+## 1 Introduction 
+
+Three-dimensional (3D) volumetric segmentation requires both precise local bound-ary delineation and coherent global spatial context [1], under tight compute and parameter budgets. For a volume with n voxels (or tokens), convolutional, trans-former, and state-space architectures trade accuracy against complexity differ-ently: Convolutional U-Nets [2] are parameter-efficient with O(n) compute per arXiv:2607.22718v1 [cs.CV] 21 Jul 2026 2 Hussain et al. 
+
+layer for local mixing, but each layer aggregates information only within a lim-ited receptive field; global 3D context requires depth scaling rather than explicit long-range mixing in one pass. Vision transformers [3,4] provide global context via self-attention at O(n2) memory and compute. For example, a 128 3 patch con-tains n ≈ 2.1 M tokens, prohibitive for naive global attention on a single clinical GPU. State-space models (SSMs) , especially Mamba [5], propagate information along a 1D sequence in O(n) time and memory per block, offering global context without quadratic attention maps. SegMamba [6] is the state-of-the-art representative of this third family for dense 3D segmentation. It embeds Mamba blocks in a U-shaped 3D network with Tri-orientated Mamba (ToM) modules that serialize features along three anatomical directions at O(n) cost per scan. At ∼70 M parameters, however, SegMamba’s scan trajectories are fixed by design; the model achieves long-range context through capacity and multi-orientation flattening rather than content-adaptive reordering. Recently, DAMamba [7] introduced Dynamic Adaptive Scan (DAS) for 2D natural-image recognition. DAS is learnable, input-dependent spatial reordering via deformable resampling before selective scan. To our knowledge, DAS has not been used in medical imaging, nor extended beyond 2D. We address both gaps with DAMamba-UNet3D, the first DAS-based architecture for medical image segmentation, with a tri-plane formulation that lifts DAS to 3D volumes. Our contributions are: 1. First DAS application to medical segmenta-tion. We transfer DAS from 2D natural-image classification to dense 3D medical segmentation for the first time, embedding it in a hybrid U-Net. 2. 2D-to-3D DAS extension. We lift the 2D DAS operator to volumes via tri-plane adap-tive scanning (axial, coronal, sagittal) fused before volumetric selective scan, as an alternative to hand-designed multi-orientation flattening. 3. Parameter-efficient DAMamba-UNet3D. Convolutions in the stem, bottleneck, and de-coder for local detail; tri-plane DAS–SSM blocks only at encoder stages (about 5.3 M parameters, ∼13 × fewer than SegMamba). 4. Two-scale validation on BraTS 2020. The compact model reaches near-parity with retrained Seg-Mamba ( 0.815 vs. 0.824 mean Dice); DAMamba-L ( ∼70 M), with stacked en-coder DAMamba and a convolutional bottleneck, surpasses SegMamba ( 0.829 
+
+vs. 0.824 ), suggesting that learned DAS in an encoder-only hybrid design can outperform fixed ToM under identical training and evaluation protocol. 
+
+## 2 Methodology 
+
+2.1 Data and Preprocessing 
+
+We use the BraTS 2020 training set [8] as our evaluation benchmark consisting of 369 subjects, four modalities (T1, T1ce, T2, FLAIR), and labels for ET, TC, and WT. Necrosis (label 4) is remapped to 3. Each modality is z-scored over nonzero brain voxels. Training. Random 128 3 patches are sampled each itera-tion. Augmentation. We used random flips, intensity shift/scale ( ±0.1), and Gaussian noise ( σ=0 .01 ). Cross-validation. We used five subject-level folds. Parameter-Efficient DAMamba-UNet3D 3
+
+2.2 State-Space Model and Selective Scan 
+
+A state-space model (SSM) maps an input x(t) to an output y(t) via a latent state h(t) ∈ Rdstate :
+
+h′(t) = A h (t) + B x (t), y(t) = C h (t), (1) with A ∈ Rdstate ×dstate , B ∈ Rdstate ×1, and C ∈ R1×dstate . Discretizing with step size ∆ yields 
+
+ht = ¯A h t−1 + ¯B x t, yt = C h t, (2) where ¯A = e∆A and ¯B = ( ∆A )−1(e∆A − I) ∆B .In our network, X ∈ RC×D×H×W denotes a 3D feature map at a U-Net stage (batch dimension omitted). After DAS reordering (Sec. 2.3), its N = D · H · W
+
+voxels form a 1D sequence; voxel t supplies the token xt fed to Eq. (2), and ht
+
+stores context accumulated along that scan path. 
+
+Selective scan (Mamba). Classical SSMs keep A, B, C, and ∆ fixed. Mamba [5] instead predicts input-dependent ∆t, Bt, and Ct from each xt, gating what is carried forward. Applied to the voxel sequence above, this yields long-range mixing in O(N ) time per block. We use dstate =16 , the standard setting in Mamba [5] and DAMamba [7]. 
+
+2.3 Dynamic Adaptive Scan and Tri-Plane DAMamba Block 
+
+Each DAMamba block (Fig. 1) combines Dynamic Adaptive Scan (DAS) [7] with the selective scan of Sec. 2.2. We adopt the 2D DAS operator from [7] and extend it to volumes via tri-plane scanning (step 2 below); our contribution is this medical-first use and 3D formulation, not a redesign of the core DAS mechanism. 
+
+Dynamic Adaptive Scan (DAS). Unlike fixed scans (row-major, zigzag, or multi-orientation flattening in prior Mamba segmenters), DAS learns data-dependent sampling [7]. An offset prediction network (OPN) predicts 2D offsets 
+
+∆p ∈ RH×W ×2 from the feature map. Predicted positions p′[h, w ] = p[h, w ] + 
+
+∆p [h, w ] determine sampling locations; features are gathered via bilinear inter-polation ϕ:
+
+X′[h, w ] = ϕ(p′[h, w ], X ), ϕ(a, X ) = X
+
+> rx,r y
+
+g(ax, r x) g(ay , r y ) X[ry , r x, :] , (3) where a = ( ax, a y ) is the sampling position (e.g. p′[h, w ]), X is the input feature map, (rx, r y ) index the four nearest grid neighbors, and g(·, ·) is the 1D linear interpolation weight. The resampled features X′ define an input-adaptive scan order before SSM processing, allowing the model to emphasize informative re-gions (e.g., tumor boundaries). For 3D features X ∈ RB×C×D×H×W , each block proceeds as follows: 1. Pointwise expansion (channel factor 2), depthwise 43 convolution, and SiLU activation. 4 Hussain et al.           
+
+> Fig. 1. DAMamba-UNet3D block diagram with stage-wise feature dimensions (D×H×W×C; example shown for 128 3training patches). Blue: convolutional blocks (E1, decoder); orange: encoder stages E2–E4, each convolutional block followed by a tri-plane DAMamba block.
+
+2. Tri-plane DAS. The 2D DAS operator is applied on axial ( H×W ), coronal (D×W ), and sagittal ( D×H) planes and averaged: 
+
+DAS 3D (X) = 13
+
+ DAS ax + DAS cor + DAS sag 
+
+. (4) 3. Selective scan. The reordered map is processed as in Sec. 2.2. 4. Normalization, projection, and a residual connection. The block thus adds global context at O(N ) cost without attention maps that scale as N 2.
+
+2.4 DAMamba-UNet3D Architecture 
+
+DAMamba-UNet3D is a 4-level 3D U-Net with base width C=16 (channels 
+
+C, 2C, 4C, 8C, 16 C at encoder stages). The stem (E1), bottleneck, and entire decoder are convolutional. At each encoder stage E2–E4, a convolutional block (two 33 convolutions) extracts local features, followed by one tri-plane DAMamba block (conv → DAS → selective scan; Sec. 2.3) for global context. Fig. 1 summa-rizes the encoder–decoder layout and feature dimensions in D×H×W ×C format for 128 3 training patches (four input modalities, four output channels). 
+
+DAMamba-L (large-scale variant). To evaluate DAS at SegMamba-scale capacity, we train DAMamba-L ( ∼70 M), a wide DAS-native U-Net with SegMamba-aligned stage widths, two stacked DAMamba blocks per encoder stage (E2–E4), and a convolutional bottleneck (no SSM at the bottleneck), mir-roring the encoder-only placement validated on the compact model (Sec. 3.1). 
+
+2.5 Loss and Training 
+
+We train our DAMamba-UNet3D with the modulated combo loss as [9,10]: 
+
+L = ( LCE + δ) · (Lmod Dice + δ), δ=0 .1, γ =2 , (5) Parameter-Efficient DAMamba-UNet3D 5
+
+Table 1. Full-volume 5-fold cross-validation on BraTS 2020 (DAMamba-UNet3D: DAS at E2–E4, ∼5.3 M parameters). Per-case Dice as per the BraTS-official convention.                                                            
+
+> Fold Mean ET TC WT HD95 ET HD95 TC HD95 WT
+> 00.824 0.740 0.829 0.903 30.0 6.8 4.6 10.835 0.733 0.859 0.912 20.8 4.7 4.9 20.801 0.718 0.806 0.879 34.9 12.3 6.8 30.814 0.717 0.823 0.903 36.3 6.9 6.3 40.800 0.699 0.814 0.888 36.5 11.6 6.8
+> Mean ±Std 0.815 ±0.013 0.721 ±0.014 0.826 ±0.018 0.897 ±0.012 31.7 8.4 5.9
+
+where modulation weights w(c) 
+
+> i
+
+= |p(c) 
+
+> i
+
+− y(c) 
+
+> i
+
+|γ focus learning on hard voxels and boundaries. Optimization. We used AdamW optimizer, learning rate of 
+
+5×10 −5, cosine decay of 10 −6, weight decay of 10 −4, and gradient clipping at 1.0, 50 epochs. 
+
+2.6 Evaluation Protocol 
+
+All results in this paper use the same full-volume evaluation pipeline. For each fold’s best training checkpoint, we reconstruct the complete BraTS volume with sliding-window inference (patch 128 3, overlap 0.5, Gaussian blending). We then compute per-case Dice and HD95 (mm) for ET, TC, and WT under the BraTS-official empty-region convention (both empty → excluded; empty target with non-empty prediction → Dice = 0 ). Reported mean Dice averages ET, TC, and WT per case, then aggregates across cases and folds. This protocol avoids optimistic estimates from slice batches or cropped validation regions. 
+
+## 3 Results 
+
+All experiments in this paper are evaluated on BraTS 2020 (Sec. 2.1). Segmen-tation performance by DAMamba-UNet3D ( ∼5.3 M), SegMamba [6] ( ∼70 M), and DAMamba-L ( ∼70 M) are evaluated under identical splits, augmentation, loss, optimizer, scheduler, and epoch budget. SegMamba is the fixed-scan ToM reference. In ablation studies, we vary block placement, loss, or scan order on the full-volume pipeline. Table 1 summarizes five-fold full-volume performance of DAMamba-UNet3D. Mean Dice is 0.815 ±0.013 , with strong WT ( 0.897 ±0.012 ) and TC ( 0.826 ±0.018 )scores. ET remains hardest ( 0.721 ± 0.014 ) due to small lesion volume. Surface distances are favorable for WT and TC (mean HD95 5.9 mm and 8.4 mm). Table 2 compares segmentation performance by the DAMamba-UNet3D, Seg-Mamba, and DAMamba-L. DAMamba-UNet3D delivers near-parity at ∼5.3 M(0.815 ± 0.013 vs. SegMamba 0.824 ± 0.014 ). DAMamba-L surpasses SegMamba at large scale ( 0.829 ±0.012 vs. 0.824 ±0.014 ; +0.5 pt mean Dice), with the largest gain on TC ( 0.842 vs. 0.827 ). Because DAMamba-L differs from SegMamba in U-Net depth, block stacking, and bottleneck design as well as scan type, we at-tribute this improvement to the full encoder-only DAS-native hybrid rather than 6 Hussain et al. 
+
+Table 2. Accuracy–parameter comparison on BraTS 2020 (full-volume per-case Dice; identical protocol). DAMamba-L uses encoder-only DAMamba (E2–E4) and a convo-lutional bottleneck.                                             
+
+> Method Params Mean ET TC WT DAMamba-L ∼70M 0.829 ±0.012 0.745 ±0.013 0.842 ±0.014 0.901 ±0.013 SegMamba [6] (retrained) ∼70M 0.824 ±0.014 0.744 ±0.009 0.827 ±0.023 0.901 ±0.015
+> DAMamba-UNet3D 5.3M 0.815 ±0.013 0.721 ±0.014 0.826 ±0.018 0.897 ±0.012
+
+Table 3. Component ablations (full-volume per-case Dice, 5-fold mean ± std; all rows use modulated combo loss unless noted). 
+
+Configuration Mean Dice 
+
+Baseline 3D U-Net (no DAMamba) 0.808 ± 0.012 E2–E4 + bottleneck DAS 0.807 ± 0.012 Full DAMamba (+ decoder blocks) 0.805 ± 0.012 Loss: cross-entropy only † 0.798 ± 0.014 Loss: CE + Dice, unmodulated † 0.806 ± 0.012 
+
+DAMamba-UNet3D (E2–E4, modulated combo) 0.815 ± 0.013 
+
+> †
+
+Loss ablations use E2–E4 
+
+to scan protocol alone; nevertheless, the result indicates that learned tri-plane DAS can exceed fixed ToM under matched training and full-volume evaluation on BraTS 2020. The compact ∼0.009 gap of DAMamba-UNet3D reflects lower parameter count and shallower encoder stacking, not a fundamental limit of adaptive scanning. 
+
+3.1 Component Ablations 
+
+All ablations use five folds, 50 epochs, and the full-volume evaluator (Sec. 2.6). Table 3 reports mean Dice across folds. Our model places DAMamba only at E2–E4 (0.815), outperforming the E2–E4 + bottleneck variant (0.807) and the convolution-only baseline (0.808). Decoder DAMamba further lowers Dice to 0.805. Loss ablations on the bottleneck architecture confirm that the modulated combo loss clearly outperforms CE-only (0.798). 
+
+3.2 Scan-Pattern Ablations 
+
+To compare scan orders, we report fixed raster, snake, cross, and tri-orientated (SegMamba-style) flattening under an auxiliary E2–E4 layout (Table 4). The fair learned-DAS baseline is our final model (E2–E4 only, Table 1): removing bot-tleneck DAMamba raises learned DAS from 0.807 to 0.815 (+0.8 pt), exceeding the best fixed order in the auxiliary study (tri-orientated, 0.808) by 0.7 pt. Parameter-Efficient DAMamba-UNet3D 7                      
+
+> Table 4. Scan-pattern ablations (full-volume per-case Dice, 5-fold mean ±std). Final model uses learned DAS at E2–E4 only (Table 1); fixed orders use auxiliary E2–E4 + bottleneck layout.
+> Scan order / placement Mean Dice
+> Fixed orders (E2–E4): Raster 0.805 ±0.013 Snake 0.807 ±0.011 Cross 0.806 ±0.012 Tri-orientated 0.808 ±0.010 Learned DAS (E2–E4 + bottleneck) 0.807 ±0.012
+> Learned DAS (E2–E4; final model) 0.815 ±0.013
+
+3.3 Qualitative Results 
+
+Figure 2 shows qualitative segmentation results on validation data. We display four randomly selected subjects (one per row), each at three axial depths that contain tumor. Each row shows: (a) input T1ce, (b) ground truth (red: necro-sis/NCR, green: edema/ED, pink: enhancing tumor/ET), (c) prediction, and (d) difference map (errors only: red=FP, blue=FN). All four subjects demonstrate good segmentation performance, with the model capturing tumor boundaries across varying depths. 
+
+## 4 Discussion 
+
+Two-scale results. Table 2 supports a dual narrative. DAMamba-UNet3D (∼5.3 M; 0.815 mean Dice) targets parameter-efficient deployment at ∼13 × lower capacity than SegMamba with near-parity. DAMamba-L ( ∼70 M; 0.829 ) sur-passes retrained SegMamba ( 0.824 ) on the same BraTS 2020 protocol, with the clearest improvement on TC (+1.5 pt). 
+
+Encoder-only placement. Component ablations on the compact model show that DAMamba at the bottleneck or decoder lowers Dice (Table 3). DAMamba-L adopts the same encoder-only, convolutional-bottleneck design at SegMamba scale ( 0.829 mean Dice). Placement therefore matters as much as scan type. 
+
+Learned DAS vs. fixed ToM. Scan ablations on the compact model show learned DAS ahead of fixed orders when encoder placement is matched (Table 4). At SegMamba scale, the full DAS-native hybrid exceeds fixed ToM SegMamba. We do not isolate scan protocol from architecture in a single swap experiment, so we state the inference cautiously: on BraTS 2020, learned tri-plane DAS in our hybrid U-Net appears competitive with and may improve upon fixed ToM under identical training and full-volume evaluation. 
+
+Limitations. All experiments use BraTS 2020 only. Despite DAS enabling per-formance in parity with fewer parameter counts than its fixed-scan-based coun-terpart, multi-dataset validation and statistical testing are needed before general claims about DAS versus ToM. 8 Hussain et al.  
+
+> Fig. 2. Qualitative full-volume predictions on BraTS 2020 validation subjects.
+
+Broader impact. Regardless of the BraTS scores above, extending DAS to tri-plane 3D volumes and applying it to medical segmentation for the first time is a substantive contribution in its own right. It offers a learnable alternative to fixed scan trajectories that can be reused in other volumetric tasks without redesigning the core operator. In addition, it opens a way to reduce parameter space multi-folds without losing performance significantly. 
+
+## 5 Conclusion 
+
+We presented DAMamba-UNet3D, the first 3D medical extension of Dynamic Adaptive Scan in a parameter-efficient hybrid U-Net (encoder-only DAMamba at E2–E4, ∼5.3 M). On BraTS 2020 it achieves near-parity with retrained Seg-Mamba at ∼13 × lower capacity ( 0.815 ± 0.013 vs. 0.824 ± 0.014 ). At large scale, DAMamba-L with encoder-only DAS and a convolutional bottleneck surpasses SegMamba ( 0.829 ± 0.012 vs. 0.824 ± 0.014 ), with component ablations confirm-ing that encoder-only placement is essential. The combined evidence suggests that learned tri-plane DAS in a hybrid U-Net is a strong alternative to fixed ToM scanning for 3D brain tumor segmentation. We will publish our code upon acceptance of this paper. Parameter-Efficient DAMamba-UNet3D 9
+
+## References 
+
+1. Isensee, F., Jaeger, P.F., Kohl, S.A., Petersen, J., Maier-Hein, K.H.: nnu-net: a self-configuring method for deep learning-based biomedical image segmentation. Nature methods 18 (2) (2021) 203–211 2. Ronneberger, O., Fischer, P., Brox, T.: U-net: Convolutional networks for biomedi-cal image segmentation. In: International Conference on Medical image computing and computer-assisted intervention, Springer (2015) 234–241 3. Wang, W., Chen, C., Ding, M., Yu, H., Zha, S., Li, J.: Transbts: Multimodal brain tumor segmentation using transformer. In: International Conference on Medical Image Computing and Computer-Assisted Intervention, Springer (2021) 109–119 4. Cao, H., Wang, Y., Chen, J., Jiang, D., Zhang, X., Tian, Q., Wang, M.: Swin-unet: Unet-like pure transformer for medical image segmentation. In: European conference on computer vision, Springer (2022) 205–218 5. Gu, A., Dao, T.: Mamba: Linear-time sequence modeling with selective state spaces. arXiv preprint arXiv:2312.00752 (2023) 6. Xing, Z., Ye, T., Yang, Y., Liu, G., Zhu, L.: Segmamba: Long-range sequential modeling mamba for 3d medical image segmentation. In: International Confer-ence on Medical Image Computing and Computer-Assisted Intervention, Springer (2024) 7. Zhou, Y., Zhang, Y., et al.: Damamba: Vision state space model with dynamic adaptive scan. arXiv preprint arXiv:2502.12627 (2025) 8. Mehta, R., Filos, A., Baid, U., Sako, C., McKinley, R., Rebsamen, M., Dätwyler, K., Meier, R., Radojewski, P., Murugesan, G.K., et al.: Qu-brats: Miccai brats 2020 challenge on quantifying uncertainty in brain tumor segmentation-analysis of ranking scores and benchmarking results. The journal of machine learning for biomedical imaging 2022 (2022) https–www 9. Taghanaki, S.A., Zheng, Y., Zhou, S.K., Georgescu, B., Sharma, P., Xu, D., Co-maniciu, D., Hamarneh, G.: Combo loss: Handling input and output imbalance in multi-organ segmentation. Computerized Medical Imaging and Graphics 75 (2019) 24–33 10. Hosseini, S.M.: Pixel-wise modulated dice loss for medical image segmentation. arXiv preprint arXiv:2506.15744 (2025)
