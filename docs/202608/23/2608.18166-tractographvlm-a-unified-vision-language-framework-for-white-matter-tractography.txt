@@ -1,0 +1,480 @@
+Title: TractoGraphVLM: A Unified Vision-Language Framework for White Matter Tractography
+
+URL Source: https://arxiv.org/pdf/2608.18166
+
+Published Time: Thu, 20 Aug 2026 00:03:56 GMT
+
+Number of Pages: 27
+
+Markdown Content:
+# TractoGraphVLM: A Unified Vision-Language Framework for White Matter Tractography 
+
+Gurucharan Marthi Krishna Kumar 1 , Janine Dale Mendola 2 , and Amir Shmuel 3 
+
+> 1
+
+Montreal Neurological Institute, McGill University, Montreal, Canada 
+
+gurucharan.marthikrishnakumar@mail.mcgill.ca  
+
+> 2
+
+Department of Ophthalmology, McGill University, Montreal, Canada 
+
+janine.mendola@mcgill.ca  
+
+> 3
+
+McConnell Brain Imaging Centre, Montreal Neurological Institute, Departments of Neurology, Neurosurgery, Physiology and Biomedical Eng., McGill University, Montreal, QC, Canada 
+
+amir.shmuel@mcgill.ca 
+
+Abstract. Vision language models have transformed two dimensional medical imaging, yet extending them to three dimensional white mat-ter tractography remains challenging due to the complex topology of continuous fiber bundles. We introduce TractoGraphVLM , a unified framework for four tasks: white matter bundle classification, text to tract retrieval, anatomical captioning, and visual question answering. It is built on a shared GPS graph architecture, training procedure, and read-out design. Fiber bundles are represented as streamline graphs whose nodes encode 3D position and tangent orientation. A General, Powerful, Scal-able (GPS) graph transformer produces bundle embeddings aligned with a frozen BiomedBERT text encoder via contrastive learning, while a BioGPT decoder with visual prefix tokens generates captions and an-swers. A single model, with one shared encoder and decoder, is trained jointly across all four tasks and evaluated from one checkpoint. Trained on 1,113 HCP Young Adult subjects, TractoGraphVLM achieves 
+
+91 .8% white matter bundle classification accuracy, 84 .7% retrieval R@1, BLEU-4=20.1, ROUGE-L=66.8, and 66 .4% VQA accuracy on a held out test set. The same checkpoints transfer zero-shot to 725 HCP Aging subjects with a modest drop on the discriminative tasks and a larger but still coherent one on the generative tasks, indicating robustness to age and acquisition shift. Language supervision also yields richer rep-resentations than label-only training, recovering anatomical structure such as hemisphere and fiber family that is carried by the captions but never supplied as an explicit classification label. Swapping only the visual encoder, we find that graphs preserving fiber orientation outperform volu-metric baselines, with GPS giving the best overall balance. Our generative metrics measure consistency with a structured knowledge base rather than independent clinical text; even so, TractoGraphVLM shows that classifying, retrieving, describing, and answering questions about a white matter bundle can be served by a single jointly trained model that learns transferable neuroanatomy from language alone. Our code-base, including all training and evaluation pipelines, is publicly available arXiv:2608.18166v1 [eess.IV] 16 Aug 2026 2 G. Marthi Krishna Kumar et al. at https://github.com/AS-Lab/Marthi-et-al-2026-TractoGraphVLM-Unified-Vision-Language-White-Matter-Tractography  
+
+> Keywords: White matter tractography · Vision-language models · Graph transformers · Multi-task learning
+
+## 1 Introduction 
+
+White matter tractography reconstructs brain connectivity non-invasively from diffusion MRI [3, 23] and is increasingly investigated for applications in clinical neuroscience. Fiber bundle abnormalities are implicated in multiple sclerosis, stroke, and neurodegenerative diseases [9], while tractography increasingly informs pre-surgical planning [14]. Despite its importance, tractography analysis remains a purely structural pipeline: complex 3D bundles are typically interpreted through manual visual inspection, a process that does not scale to large population cohorts. Recent advances in vision-language models (VLMs) have transformed two-dimensional medical imaging by coupling visual understanding with natural-language explanation [2,32,54]. Extending this paradigm to tractography, however, faces a unique challenge: a fiber bundle is not a simple image but a collection of thousands of continuous streamlines whose fine directional structure is poorly cap-tured by voxel grids. This raises the core question of this work: how should white matter fiber bundles be represented for effective vision-language understanding? 
+
+Two main representation paradigms exist. Volumetric approaches rasterize streamlines into occupancy grids for 3D CNNs [20,45] or Vision Transformers [11, 21]. While convenient for reusing image-based architectures, they discard sub-millimetre directional detail. Graph-based approaches model streamlines as graphs with nodes carrying 3D position and orientation [24, 48], preserving continuous topology. No prior work has systematically compared these paradigms inside a unified multi-task VLM framework, and we close this gap with a controlled comparison in which only the visual backbone varies. Our central finding is that the choice of encoding, more than task-specific heads, determines how effectively a bundle can be named, described, and queried in natural language. 
+
+Related work. Deep-learning methods for tractography have largely remained single-task. TractCloud [53] uses point-cloud encoding for whole-brain segmenta-tion; FINTA [26] and FIESTA-AE [12] apply autoencoders for streamline filtering; PointNet-style models [38,39] support bundle classification [18]. Even where these methods address more than one objective, they stay within a discriminative output space of labels, masks, or reconstructions, and none align bundle geometry with a shared text embedding. All produce categorical outputs and lack the ability to generate text, retrieve bundles via natural-language queries, or answer open-ended questions. Meanwhile, general medical VLMs [27,51,56,57] operate on 2D image-text pairs and have not been extended to 3D streamline data. The two lines of work are thus complementary but disjoint: language-capable models do not handle streamlines, and streamline-capable models do not handle language. TractoGraphVLM 3
+
+TractoGraphVLM bridges them by bringing a multi-task vision-language interface to a topology-preserving graph representation of tractography. 
+
+Contributions. 
+
+1. Unified tractography VLM. TractoGraphVLM is a single model with a shared encoder and decoder that jointly performs bundle classification, text-to-tract retrieval, anatomical captioning, and visual question answering (VQA). 2. Representation study. Through controlled comparisons that substitute the visual encoder while keeping the rest of the framework fixed, we find the General, Powerful, Scalable (GPS) graph transformer to be the most effective overall backbone in our comparison, particularly on generative tasks, while remaining competitive on discriminative metrics. 3. Value of multi-task language supervision. Linear probing shows that VLM training produces consistently richer representations than supervised classification, recovering anatomical structure (hemisphere and broad fiber family) more accurately; although this structure is never supplied as an explicit classification label, it is present in the caption text the VLM is trained on. 4. Cross-dataset generalization. HCP Young Adult-trained checkpoints trans-fer zero-shot to the HCP Aging cohort across all four tasks, indicating robust-ness to age and acquisition shift rather than dependence on a single acquisition protocol. 
+
+## 2 Methods 
+
+TractoGraphVLM is a unified vision-language framework for white matter tractography with two main stages. First, each fiber bundle is converted into a geometric graph whose nodes encode 3D position and local orientation (Figure 1). Second, a graph encoder produces a visual embedding from these graphs that is aligned with text via contrastive learning, while a decoder generates anatomical descriptions and answers visual questions (Figure 2). The model is trained jointly in a single run: one shared GPS encoder and one BioGPT decoder are optimised across all four tasks under a combined objective, following a two-stage curriculum detailed in Section 2.4. At evaluation, a single checkpoint serves every task, with each read-out head predicting from the same shared embedding. 
+
+2.1 Datasets HCP Young Adult (HCP-YA). We use multi-shell diffusion MRI from 
+
+1,113 subjects [47] ( b = 1000 , 2000 , 3000 s /mm 2, 90 directions per shell, 1.25 mm 
+
+isotropic resolution). Whole-brain tractograms are generated with iFOD2 [44] under anatomically constrained tractography [43] and segmented into the 78 bun-dles of the HCP-842 atlas [5, 55] using RecoBundles [15]. Subjects are partitioned 4 G. Marthi Krishna Kumar et al. 
+
+70 /15 /15% into training, validation, and test sets with no subject overlap. All model development uses only this cohort. 
+
+HCP Aging. We evaluate zero-shot generalization on 725 subjects from the HCP Aging cohort [4], acquired at 1.5 mm isotropic resolution under a different protocol. The identical processing pipeline (iFOD2 + anatomically constrained tractography + RecoBundles segmentation) is applied, yielding the same 78 
+
+bundles and graph representation. HCP Aging is never seen during training. 
+
+Anatomical knowledge base. We compile a structured knowledge base for all 78 bundles from standard neuroanatomical references [6, 42, 49] and clin-ical/topographical reviews [14, 40]. Each entry includes trajectory, endpoints, functional roles, lateralisation, length range, and clinical associations (representa-tive entries in the supplementary material, Sec. S2). 
+
+2.2 Streamline-to-Graph Construction 
+
+Each bundle is converted into a graph G = ( V, E ) as shown in Figure 1. Streamlines are resampled to a fixed P = 32 equidistant nodes (ablated in Section 4.1), producing a uniform node set independent of bundle length.     
+
+> Fig. 1: Streamline-to-graph construction. A fiber bundle (exemplified by the arcuate fasciculus) is transformed by sampling P=32 equidistant nodes per streamline. Each node carries a 6-D feature vector of 3D position and unit tangent orientation. See Section 2.2 for details.
+
+Each node is represented by a 6-dimensional feature vector xi = [ pi; ti],concatenating spatial position with the local unit tangent (computed via central finite differences). Tangent vectors are critical for disambiguating bundles with locally similar geometry (Section 4.2). Edges connect consecutive nodes along each streamline, capturing the sequential trajectory of individual fibers, and spatially proximate nodes across streamlines, capturing the coherence of the bundle as a whole. Laplacian positional encodings [13] are added to supply global structural context that local connectivity alone cannot express. Full graph construction details appear in the supplementary material, Sec. S4. TractoGraphVLM 5
+
+2.3 Text Generation and Language Supervision 
+
+Manually annotated tractography-language pairs are impractical at scale. We therefore generate supervision programmatically from geometric features ϕ(T )
+
+and the curated knowledge base. Because the templates are populated from knowledge-base fields keyed on bundle identity, a bundle’s caption, query, and answer content is largely determined by its label. We therefore treat the generative metrics as internal-consistency measures and compare against a classifier-plus-lookup control (Sec. S3) that exploits this determinacy. 
+
+Stage 1: Feature-grounded template instantiation. For each bundle T we extract four geometric descriptors: streamline count N , spatial extent E (bounding-box diagonal), normalized density ρ = N/E 3, and complexity class κ ∈ {simple ,
+
+moderate , complex } (details in the supplementary material, Sec. S1). These are injected into structured templates to produce 15 caption variants and 5 VQA pairs per sample via stochastic grammar and synonym augmentation. All factual content is strictly constrained by the knowledge base. 
+
+Stage 2: LLM paraphrasing. Template outputs are stylistically repetitive. Fol-lowing practices established in large-scale vision–language dataset construc-tion [7, 28, 30, 46], we apply a Claude rewriting pass that diversifies surface form while preserving the anatomical claims and qualitative descriptors exactly (paraphrasing procedure detailed in the supplementary material, Sec. S1). This yields up to 45 caption candidates per bundle, filtered to 15 by a ROUGE-L diversity criterion [29]. Unlike general-purpose captioners such as BLIP-2 [28] or InstructBLIP [10], which generate descriptions directly from pixels, our LLM rewrites strings whose factual content is already fixed by the template slots and knowledge-base lookups. This limits the LLM’s freedom to introduce anatomical claims outside the source references, which is a known failure mode of uncon-strained medical VQA systems [2, 8]. It does not, by itself, verify those source references. 
+
+VQA and retrieval. VQA pairs span five tiers of reasoning complexity (identifica-tion → clinical function), following the hierarchical design of PathVQA [22] and VQA-RAD [25] (templates in the supplementary material, Sec. S1). Retrieval queries range from simple identity strings to compositional queries combining anatomy, function, and geometry, motivated by compositional retrieval bench-marks [1, 34]. 
+
+2.4 Model Architecture 
+
+TractoGraphVLM consists of three components: a visual graph encoder fv , a frozen text encoder ft (BiomedBERT-base) [16], and an autoregressive decoder g
+
+(BioGPT) [33]. The default visual encoder is the GPS graph transformer [41], which maps each bundle graph to a 256-dimensional embedding. For the encoder comparison (Section 3.2), we substitute alternative graph, point-cloud, and 6 G. Marthi Krishna Kumar et al. 
+
+Fig. 2: TractoGraphVLM framework. Whole-brain tractograms are segmented into bundles (RecoBundles) and encoded as streamline graphs, which a GPS encoder maps to a visual embedding v (left). A symmetric InfoNCE loss LNCE (v, t) aligns v
+
+with a frozen BiomedBERT text embedding t; the captions, queries, and questions come from templates grounded in a neuroanatomical knowledge base (bottom). Four read-outs share this embedding (right): classification by nearest prototype, retrieval by ranking bundles against a query, and captioning and VQA by feeding v to a BioGPT decoder as visual prefix tokens. 
+
+volumetric backbones (listed in the supplementary material, Sec. S4.3) while keeping the remainder of the framework fixed. To let the decoder generate text from a bundle, we project its embedding into eight “visual prefix” tokens and prepend them to the BioGPT input, so the decoder is conditioned on the same embedding the contrastive loss aligns with text. This sharing is deliberate: the contrastive term pulls matching bundle and text embeddings together while the generative term forces the shared embedding to retain enough detail to reconstruct a full description, so a single encoder learns a representation that is at once discriminative and descriptive. Classification TractoGraphVLM 7
+
+and retrieval contribute only the contrastive term; captioning and VQA add the generative term. Full architectural details and parameter counts are provided in the supplementary material, Sec. S4. All four read-out heads consume the same visual embedding produced by the single shared GPS encoder; extending the framework to a new task reuses this encoder and requires only an additional read-out head in the joint objective. 
+
+Training. We optimize with AdamW [31] (peak LR 3×10 −4, weight decay 
+
+10 −2, batch size 128). The total loss is 
+
+L = LCLIP + α LLM + β Lproto , (1) where LCLIP is symmetric InfoNCE [35] (temperature τ ablated in Section 4.3), 
+
+LLM is autoregressive cross-entropy on captions and VQA targets ( α = 0 .5), and 
+
+Lproto is the prototype cross-entropy term used for classification ( β = 1 ). The generative and prototype terms are activated only in the second training stage; in the first stage α = β = 0 . Training uses a two-stage curriculum: 250 epochs of contrastive alignment across all tasks, then 250 epochs of joint fine-tuning that activates the generative and prototype terms, with retrieval contributing the contrastive term throughout. Experiments run on NVIDIA H100 80 GB GPUs in fp32 (AMP optional). Each configuration is run with five random seeds; metrics report mean ± standard deviation. At evaluation, a single jointly trained checkpoint is used for all four tasks. Significance is assessed via Wilcoxon signed-rank test ( p < 0.05 , marked †). 
+
+## 3 Results 
+
+We report all headline results on the held-out HCP-YA test set, reserving the validation set strictly for the ablations in Section 4 to ensure no design decisions are tuned on the final test data. Because our reference texts are programmatically generated from a fixed knowledge base, BLEU-4 [37] and ROUGE-L [29] primarily serve as relative comparisons between models rather than absolute measures of clinical prose quality. VQA is evaluated via exact string match to canonical answers. 
+
+3.1 Performance of the Proposed Framework 
+
+We report TractoGraphVLM ’s performance using a single GPS encoder trained jointly across all four tasks, with one checkpoint serving every read-out (classification by nearest prototype, retrieval by ranking bundles against the encoded query, and captioning and VQA by decoding from the visual prefix tokens of Section 2.4). Table 1 reports the result across all four tasks, all served by the single jointly trained model. On the held-out HCP-YA test set, the model performs reasonably across both discriminative and generative tasks, a combination a purely supervised classifier does not provide by design. Figure 3 shows qualitative examples of how the Table 1 numbers translate to individual bundles. 8 G. Marthi Krishna Kumar et al. 
+
+Table 1: Performance of the proposed framework (GPS encoder) on the HCP-YA test set. All columns are produced by one jointly trained model evaluated from a single checkpoint. Mean ± standard deviation over five random seeds. 
+
+Classification Retrieval Captioning VQA Acc (%) F1 (%) R@1 (%) R@5 (%) BLEU-4 ROUGE-L Acc (%) 
+
+91 .8±1.4 90 .9±1.3 84 .7±2.8 93 .2±2.4 20 .1±2.3 66 .8±2.9 66 .4±3.0
+
+3.2 Encoder Comparison: Graph versus Volumetric Representations 
+
+We now isolate the contribution of the visual encoder, comparing GPS against other graph encoders (GCN, GAT, GraphSAGE, GIN) and non-graph baselines (CNN3D, ViT, and a feature MLP) while keeping the multi-task VLM framework and training data fixed. 
+
+Table 2: Systematic encoder evaluation on the HCP-YA test set. Only the visual backbone differs; all other components are identical. † marks metrics on which GPS obtains the highest score at p < 0.05 (one-sided Wilcoxon signed-rank test, paired by random seed, uncorrected). Mean ± standard deviation over five seeds. Classification Retrieval Captioning VQA Encoder Acc (%) F1 (%) R@1 (%) R@5 (%) BLEU-4 ROUGE-L Acc (%) 
+
+Non-graph baselines 
+
+CNN3D [20] 79 .4±2.7 79 .1±2.8 58 .7±3.5 80 .3±2.7 7.9±2.8 16 .1±3.3 21 .8±3.3
+
+ViT [21] 80 .6±2.5 80 .3±2.6 49 .5±3.6 79 .8±2.8 6.9±2.6 15 .2±3.2 20 .7±3.4
+
+MLP 77 .8±2.9 77 .2±3.0 51 .4±3.7 74 .1±2.9 6.5±2.8 13 .8±3.1 18 .9±3.2
+
+Graph 
+
+GCN [24] 85 .7±2.1 85 .4±2.2 74 .9±3.0 80 .2±2.7 16 .8±2.6 61 .5±3.0 38 .2±3.2
+
+GAT [48] 90 .8±2.0 90 .5±2.1 75 .3±3.0 83 .5±2.8 18 .1±2.5 61 .4±3.2 52 .9±3.2
+
+GraphSAGE [19] 89 .4±1.6 89 .1±1.7 80 .2±2.7 88 .3±2.4 18 .1±2.5 62 .8±2.9 56 .9±3.0
+
+GIN [52] 90 .2±1.3 89 .9±1.4 83 .6±2.6 87 .1±2.2 17 .9±2.3 60 .7±2.9 59 .3±2.8
+
+GPS [41] 91 .8±1.4 90 .9±1.3 84 .7±2.8 93 .2±2.4 20 .1†±2.3 66 .8†±2.9 66 .4†±3.0
+
+As seen in Table 2, graph-based encoders outperform non-graph baselines across all tasks in our comparison. GPS obtains the highest score in every metric, with its clearest margins on captioning (BLEU-4 and ROUGE-L) and VQA accuracy, and remains competitive on discriminative tasks (classification and retrieval), where several graph encoders are near-saturation. This pattern is consistent with the idea that preserving the continuous topology and directional information of fiber bundles helps vision-language understanding in tractography. TractoGraphVLM 9      
+
+> Fig. 3: Qualitative outputs of TractoGraphVLM across all four tasks (GPS encoder, HCP-YA test set). Top left : Bundle classification identifies the left inferior longitudinal fasciculus at 97.8% confidence. Top right : Text-to-tract retrieval returns the correct left ILF (cosine similarity 0.91) for a compositional query, with semantically related bundles following. Bottom left : Anatomical captioning produces a description consistent with the knowledge base, correctly noting commissural type and connectivity.
+> Bottom right : VQA correctly answers a connectivity question at 98.5% confidence. Instance-level BLEU-4 / ROUGE-L values differ from corpus-level averages in Table 1.
+
+3.3 Comparison of TractoGraphVLM with Existing Tractography Methods 
+
+Here we compare TractoGraphVLM against several representative tractography-specific and general point-cloud architectures. To ensure a fair comparison, we replace the visual encoder in our VLM pipeline with the encoders from TractCloud, FINTA, FIESTA-AE, PointNet, PointNet++, PCT, Point-MAE, and DGCNN, while keeping the rest of the framework and training data identical (Table 3). These experiments isolate representational quality rather than reproduce the original pipelines of the compared methods. While classification and retrieval are largely saturated across the stronger methods, TractoGraphVLM with the GPS encoder shows a trend toward better performance on the generative tasks, obtaining the highest captioning and VQA scores in our comparison. This is consistent with the GPS encoder learning a more text-aligned representation than the other tractography-specific and 10 G. Marthi Krishna Kumar et al. 
+
+Table 3: Comparison with existing tractography methods on the HCP-YA test set. All methods use the identical VLM framework; only the encoder differs. † marks metrics on which TractoGraphVLM obtains the highest score at p < 0.05 
+
+(one-sided Wilcoxon signed-rank test, paired by random seed, uncorrected). Mean ±
+
+standard deviation over five seeds. Classification Retrieval Captioning VQA Encoder Acc (%) F1 (%) R@1 (%) R@5 (%) BLEU-4 ROUGE-L Acc (%) TractCloud [53] 91 .3±1.4 91 .0±1.5 84 .2±2.7 87 .4±2.3 8.7±2.6 20 .8±3.2 44 .8±3.2
+
+FINTA [26] 87 .5±2.1 87 .1±2.2 71 .4±3.0 79 .8±2.6 17 .1±2.7 55 .9±3.1 57 .2±3.2
+
+FIESTA-AE [12] 89 .7±1.7 89 .4±1.8 62 .1±3.2 80 .4±2.5 15 .9±2.8 54 .7±3.4 56 .5±3.1
+
+PointNet [38] 91 .0±1.3 90 .7±1.4 82 .8±2.5 86 .2±2.1 17 .6±2.4 59 .4±2.8 55 .8±2.9
+
+PointNet++ [39] 91 .5±1.2 91 .2±1.3 83 .9±2.4 87 .1±2.2 18 .2±2.3 61 .3±2.7 58 .7±2.8
+
+PCT [17] 90 .6±1.4 90 .3±1.5 81 .5±2.6 86 .4±2.3 17 .3±2.4 60 .2±2.8 57 .6±2.9
+
+Point-MAE [36] 90 .8±1.3 90 .5±1.4 82 .7±2.5 86 .8±2.1 17 .8±2.2 60 .5±2.6 58 .1±2.7
+
+DGCNN [50] 91 .1±1.1 91 .3±1.3 85 .5±2.2 92 .8±1.8 18 .9±2.4 63 .5±2.8 61 .7±2.6
+
+Proposed Framework 91 .8±1.4 90 .9±1.3 84 .7±2.8 93 .2±2.4 20 .1†±2.3 66 .8†±2.9 66 .4†±3.0
+
+point-cloud encoders under an identical pipeline, though we treat the generative metrics as indicative given their dependence on the template pipeline (Sec. S3). 
+
+3.4 Cross-Dataset Generalisation 
+
+To probe how well TractoGraphVLM transfers, we evaluate zero-shot transfer from HCP-YA (the training distribution) to HCP Aging, applying the trained model with no fine-tuning or adaptation (Table 4). Because HCP Aging differs in age, spatial resolution, and acquisition protocol all at once, it is a fairly demanding test of whether the model has captured generalizable neuroanatomy rather than dataset-specific acquisition cues. 
+
+Table 4: Cross-dataset zero-shot transfer (GPS encoder, HCP-YA → HCP Aging, no adaptation). Mean ± standard deviation over five seeds. Evaluation set Cls. Acc (%) Cls. F1 (%) R@1 (%) VQA Acc (%) Cap. BLEU-4 Cap. ROUGE-L HCP-YA (in-distribution) 91 .8±1.4 90 .9±1.3 84 .7±2.8 66 .4±3.0 20 .1±2.3 66 .8±2.9            
+
+> HCP Aging (zero-shot) 84 .3±2.384 .0±2.471 .8±2.750 .2±3.512 .9±2.957 .1±3.2
+> ∆−7.5−6.9−12 .9−16 .2−7.2−9.7
+
+The model shows reasonable cross-dataset transfer on the discriminative tasks, still assigning the correct bundle label more than 84% of the time and ranking the right bundle first for over 71% of text queries, despite the differences in age distribution and acquisition protocol. This suggests that TractoGraphVLM ’s representations of bundle shape and trajectory are relatively stable under the shift. As expected, the generative tasks degrade more, particularly VQA, which leans more heavily on the language decoder. Even so, the relatively modest drop in ROUGE-L indicates that the generated captions remain structurally coherent TractoGraphVLM 11 
+
+and anatomically on-topic in the new domain, still naming plausible trajectories, endpoints, and lateralisation. Retrieval falls between the two, reflecting its dependence on both embed-ding quality and text alignment. The larger VQA drop is concentrated in the compositional reasoning tiers, most sharply connectivity and morphology (the two largest per-tier drops), with the clinical tier closer to the overall average, while simpler identification and localisation questions ("which bundle is this?", "which hemisphere?") hold up well because they read out the more transferable discriminative features (see the per-tier analysis in Table S12). The decoder, trained on HCP-YA-specific text, is thus more sensitive to the shift than the core anatomical representation. 
+
+## 4 Ablation Studies 
+
+In this section, we ablate four design choices on the validation set: the node-sampling density of the streamline graph (Section 4.1), the composition of the node feature itself (Section 4.2), the contrastive temperature (Section 4.3), and language versus label supervision for shaping the frozen representation (Section 4.4). 
+
+4.1 Graph Construction: Node Sampling Density 
+
+In the first ablation, we ask how finely each streamline must be sampled. This choice of node count P (Section 2.2) sets a direct trade-off: too few nodes may discard the bundle’s shape, while too many inflate graph size and training cost for little gain. To find where this trade-off settles, we sweep P ∈ { 8, 16 , 32 , 64 }
+
+with the GPS encoder, holding all else fixed (Table 5). 
+
+Table 5: Node sampling density ablation (TractoGraphVLM , HCP-YA vali-dation set). Bold marks the selected configuration. † indicates statistically significant difference from P = 32 (p < 0.05 , Wilcoxon signed-rank test). 
+
+Configuration Cls. Acc (%) R@1 (%) BLEU-4 VQA Acc (%) Training (h) 
+
+P = 8 87 .2±1.6† 78 .9±2.8† 17 .0±2.5† 64 .8±2.8† 2.8±0.1
+
+P = 16 90 .1±1.4† 82 .2±2.4† 19 .4±2.3† 67 .1±2.7† 3.5±0.2
+
+P = 32 93 .1±1.2 86 .2±2.5 21 .2±2.1 71 .3±2.4 4.2±0.2
+
+P = 64 93 .3±1.3 86 .5±2.4 21 .4±2.0 71 .5±2.3 7.8±0.4
+
+From Table 5, performance improves substantially as node sampling density increases from P = 8 to P = 32 . However, further doubling the density to P = 64 
+
+yields only negligible gains while nearly doubling training time. The difference between P = 32 and P = 64 is not statistically significant across any metric (p > 0.05 , Wilcoxon signed-rank test). This suggests that bundle identity is 12 G. Marthi Krishna Kumar et al. 
+
+encoded primarily in the coarse-to-medium scale geometry, and P = 32 offers the best trade-off between performance and computational efficiency. 
+
+4.2 Node Features: Position and Orientation 
+
+Next, we look inside the node feature itself. Recall that each node carries a 6-dimensional vector: its 3D position and its 3D tangent orientation (Section 2.2). The density ablation (Section 4.1) hinted that what matters is bundle shape rather than sampling resolution, so here we ask which part of the node feature carries that shape. Keeping positions fixed, we compare position alone against position plus orientation within TractoGraphVLM (Table 6).                
+
+> Table 6: Node feature ablation (TractoGraphVLM , HCP-YA validation set). Node position alone versus position augmented with the local tangent orientation. †:significant difference from position-only ( p < 0.05 , Wilcoxon signed-rank). Mean ±s.d. over five seeds. Features Cls. Acc (%) R@1 (%) BLEU-4 ROUGE-L Position only 81 .6±1.971 .6±2.716 .7±2.464 .1±2.7
+> Position+orientation 93 .1†±1.286 .2†±2.521 .2†±2.168 .5†±2.7
+
+From Table 6, adding orientation produces a clear gain on every task. Position alone leaves the model unable to tell apart bundles that share space but run in different directions, such as the superior longitudinal fasciculus crossing the corona radiata, where only the local direction distinguishes the two tracts. Considered alongside the density ablation (Section 4.1), performance is governed by the shape and orientation of the bundle rather than the spatial resolution at which it is sampled. Graphs encode orientation directly at each node, whereas voxel grids must infer it from occupancy, explaining the consistent advantage of graph encoders. 
+
+4.3 Contrastive Temperature 
+
+In this ablation, we study how the contrastive temperature τ shapes the learned embedding, and whether a single value can serve all four tasks. The temperature controls how sharply the contrastive loss separates embeddings: a low τ pushes matching bundle–text pairs into tight, well-separated clusters, while a high τ
+
+yields a smoother space in which neighbouring bundles stay closer together. Because we want one temperature that works whether the embedding is read out discriminatively (classification, retrieval) or fed to the decoder (captioning, VQA), this single knob must trade off between these uses, so we sweep τ from a sharp to a smooth setting and measure the effect on all four tasks (Table 7). From Table 7, τ = 0 .07 is the most balanced operating point. It achieves the best retrieval (R@1) and VQA accuracy, ties for the best classification accuracy TractoGraphVLM 13                         
+
+> Table 7: Contrastive temperature ablation (TractoGraphVLM , HCP-YA validation set). τ= 0 .07 attains the best or statistically equivalent score on all four tasks. † indicates statistically significant difference from τ= 0 .07 (p < 0.05 , Wilcoxon signed-rank test). Bold marks the selected configuration. Mean ±S.D. over five seeds.
+> Discriminative Generative
+> τCls. Acc (%) R@1 (%) BLEU-4 VQA Acc (%)
+> 0.04 93 .1±1.782 .1±2.8†20 .6±2.268 .1±2.5†
+> 0.07 93 .1±1.286 .2±2.521 .2±2.171 .3±2.4
+> 0.12 90 .8±1.6†83 .7±2.521 .2±2.668 .5±2.7†
+
+and BLEU-4, and is not significantly outperformed on any task. The sharper temperature τ = 0 .04 matches classification but significantly degrades retrieval and VQA, while the smoother τ = 0 .12 significantly lowers classification accuracy and VQA (despite tying on BLEU-4). We therefore adopt the single shared value 
+
+τ = 0 .07 for all four tasks. 
+
+4.4 Probing Frozen Representations: Multi-Task VLM versus Supervised Classifier 
+
+In this final ablation, we ask whether our multi-task VLM learns a richer repre-sentation than a standard supervised classifier. We train the encoder in two ways on the same data, once as the full TractoGraphVLM framework (the VLM )and once as a standard 78-way bundle classifier (the Classifier ), then freeze each encoder and evaluate its learned representation with linear probes. The probes predict three bundle attributes: identity (one of the 78 atlas bundles), hemisphere 
+
+(left, right, or midline), and broad fiber family (association, commissural, or projection). Only identity is used as an explicit classification label; hemisphere and family are not, although both appear in the caption text the VLM is trained on. Strong probe performance on hemisphere and family therefore indicates that the VLM’s language supervision transfers this structure into the frozen representation more effectively than label-only training does. The VLM outperforms the supervised classifier on all three probes (Table 8). The largest gains fall on the two attributes the classifier never sees as labels: broad fiber family ( 94 .1% vs. 90 .8% , +3 .3) and hemisphere ( 99 .4% vs. 96 .3% ,
+
++3 .1). Bundle identity, on which both models are trained, improves more modestly (94 .2% vs. 91 .8% , +2 .4). That the clearest gains are on family and hemisphere, where the captions contain information absent from the classification label, indicates that the VLM’s captions carry anatomical detail that plain labels do not, and that the encoder stores it in a form a simple linear probe can readily recover. 14 G. Marthi Krishna Kumar et al.                                
+
+> Table 8: Multi-task VLM versus supervised classifier, measured by training a small probe on the frozen TractoGraphVLM features. VLM is our full framework; Classifier is standard 78-way classification training. Hemisphere and family are never used as explicit classification targets, though they appear in the caption text used to train the VLM. † denotes a significant improvement ( p < 0.05 ); mean ±S.D. over five seeds. The 94 .2% here is a probe result on frozen features; the 91 .8% in Table 1 is the full framework’s end-to-end accuracy.
+> Bundle Identity (%) Hemisphere (%) Family (%)
+> VLM Clf. ∆VLM Clf. ∆VLM Clf. ∆
+> 94 .2±0.6†91 .8±0.9+2 .499 .4±0.2†96 .3±1.8+3 .194 .1±0.5†90 .8±2.6+3 .3
+
+## 5 Discussion and Conclusion 
+
+TractoGraphVLM shows that white matter tractography can be treated not only as a geometry problem but as a vision-language one. Representing each bundle as a graph of positions and orientations, aligning it with biomedical text, and decoding from the shared embedding lets a single jointly trained model name, retrieve, caption, and answer questions about a bundle. Trained once on HCP-YA, it transfers to the older, differently acquired HCP Aging cohort with no adaptation, indicating that the learned representations capture anatomy that generalizes rather than features peculiar to one dataset. Two findings shape this result. First, how a bundle is represented matters more than how densely it is sampled. Keeping each fiber position and orientation consistently outperforms volumetric baselines across all four tasks, with the largest gains on generative tasks. Once orientation is included, sampling density has little effect. Second, language supervision is at least as informative as label supervision, and can be slightly more informative when captions include structure. Probing frozen features shows strong recovery of bundle identity, hemisphere, and broad fiber family, even though hemisphere and family are never supplied as explicit classification labels and appear only in the caption text. These findings come from a fixed evaluation protocol with clear limitations. Because captions and references follow the same template and paraphrasing pipeline, and because their content is determined by bundle identity through the knowledge base, BLEU-4 and ROUGE-L reflect consistency with that pipeline rather than clinical prose. The classifier-plus-lookup control (Sec. S3) bounds how much of this could be explained by identity classification alone: the unified model exceeds even the oracle-label lookup baseline on captioning and VQA, indicating that its generative performance is not simply attributable to classification followed by rigid template retrieval. These metrics remain useful for ranking encoders within this setup but are not absolute clinical quality measures. In contrast, tasks with fixed ground truth answers, such as VQA exact match and linear probes, are less sensitive to phrasing because they require correct facts rather than matching text. TractoGraphVLM 15 
+
+TractoGraphVLM is therefore best read as a framework and feasibility study rather than a finished clinical tool. Its limits point to two next steps: first, validating the generated descriptions against text written independently by anatomists, which is the only way to turn these relative metrics into a claim about clinical quality; second, folding bundle segmentation into the model to remove its reliance on an external tool and extend it to pathological cases. Even so, by unifying four tasks under one design and showing that graph geometry and language supervision reinforce each other, TractoGraphVLM turns a purely geometric pipeline into one whose outputs can be named, described, and queried: a step toward structured tractography reporting and large-scale connectome analysis. 
+
+Acknowledgements This work was supported by a Doctoral Research Award from the Fonds de recherche du Québec (FRQ), doi.org/10.69777/372358, to G. Marthi Krishna Kumar, and by a Natural Sciences and Engineering Research Council of Canada (NSERC) grant RGPIN-2025-07131 to A. Shmuel. This research was also funded by the Vision Sciences Research Network, doi.org/10.69777/337774. 
+
+## References 
+
+1. Baldrati, A., Agnolucci, L., Bertini, M., Del Bimbo, A.: Zero-shot composed image retrieval with textual inversion. In: Proceedings of the IEEE/CVF international conference on computer vision. pp. 15338–15347 (2023) 2. Bannur, S., Hyland, S., Liu, Q., Perez-Garcia, F., Ilse, M., Castro, D.C., Boecking, B., Sharma, H., Bouzid, K., Thieme, A., et al.: Learning to exploit temporal structure for biomedical vision-language processing. In: Proceedings of the IEEE/CVF conference on computer vision and pattern recognition. pp. 15016–15027 (2023) 3. Basser, P.J., Mattiello, J., LeBihan, D.: Mr diffusion tensor spectroscopy and imaging. Biophysical journal 66 (1), 259–267 (1994) 4. Bookheimer, S.Y., Salat, D.H., Terpstra, M., Ances, B.M., Barch, D.M., Buckner, R.L., Burgess, G.C., Curtiss, S.W., Diaz-Santos, M., Elam, J.S., et al.: The lifespan human connectome project in aging: an overview. Neuroimage 185 , 335–348 (2019) 5. Bullock, D.N., Hayday, E.A., Grier, M.D., Tang, W., Pestilli, F., Heilbronner, S.R.: A taxonomy of the brain’s white matter: twenty-one major tracts for the 21st century. Cerebral Cortex 32 (20), 4524–4548 (2022) 6. Catani, M., De Schotten, M.T.: Atlas of human brain connections. American Chemical Society (2012) 7. Chen, L., Li, J., Dong, X., Zhang, P., He, C., Wang, J., Zhao, F., Lin, D.: Sharegpt4v: Improving large multi-modal models with better captions. In: European Conference on Computer Vision. pp. 370–387. Springer (2024) 8. Chen, Z., Varma, M., Xu, J., Paschali, M., Van Veen, D., Johnston, A., Youssef, A., Blankemeier, L., Bluethgen, C., Altmayer, S., et al.: A vision-language foun-dation model to enhance efficiency of chest x-ray interpretation. arXiv preprint arXiv:2401.12208 (2024) 9. Ciccarelli, O., Catani, M., Johansen-Berg, H., Clark, C., Thompson, A.: Diffusion-based tractography in neurological disorders: concepts, applications, and future developments. The Lancet Neurology 7(8), 715–727 (2008) 16 G. Marthi Krishna Kumar et al. 10. Dai, W., Li, J., Li, D., Tiong, A., Zhao, J., Wang, W., Li, B., Fung, P.N., Hoi, S.: Instructblip: Towards general-purpose vision-language models with instruction tuning. Advances in neural information processing systems 36 , 49250–49267 (2023) 11. Dosovitskiy, A., Beyer, L., Kolesnikov, A., Weissenborn, D., Zhai, X., Unterthiner, T., Dehghani, M., Minderer, M., Heigold, G., Gelly, S., et al.: An image is worth 16x16 words: Transformers for image recognition at scale. arXiv preprint arXiv:2010.11929 (2020) 12. Dumais, F., Legarreta, J.H., Lemaire, C., Poulin, P., Rheault, F., Petit, L., Barakovic, M., Magon, S., Descoteaux, M., Jodoin, P.M., et al.: Fiesta: Autoencoders for accurate fiber segmentation in tractography. NeuroImage 279 , 120288 (2023) 13. Dwivedi, V.P., Joshi, C.K., Luu, A.T., Laurent, T., Bengio, Y., Bresson, X.: Bench-marking graph neural networks. Journal of Machine Learning Research 24 (43), 1–48 (2023) 14. Essayed, W.I., Zhang, F., Unadkat, P., Cosgrove, G.R., Golby, A.J., O’Donnell, L.J.: White matter tractography for neurosurgical planning: A topography-based review of the current state of the art. NeuroImage: Clinical 15 , 659–672 (2017) 15. Garyfallidis, E., Côté, M.A., Rheault, F., Sidhu, J., Hau, J., Petit, L., Fortin, D., Cunanne, S., Descoteaux, M.: Recognition of white matter bundles using local and global streamline-based registration and clustering. NeuroImage 170 , 283–295 (2018) 16. Gu, Y., Tinn, R., Cheng, H., Lucas, M., Usuyama, N., Liu, X., Naumann, T., Gao, J., Poon, H.: Domain-specific language model pretraining for biomedical natural language processing. ACM Transactions on Computing for Healthcare (HEALTH) 
+
+3(1), 1–23 (2021) 17. Guo, M.H., Cai, J.X., Liu, Z.N., Mu, T.J., Martin, R.R., Hu, S.M.: Pct: Point cloud transformer. Computational visual media 7(2), 187–199 (2021) 18. Gupta, V., Thomopoulos, S.I., Rashid, F.M., Thompson, P.M.: Fibernet: An en-semble deep learning framework for clustering white matter fibers. In: International Conference on Medical Image Computing and Computer-Assisted Intervention. pp. 548–555. Springer (2017) 19. Hamilton, W., Ying, Z., Leskovec, J.: Inductive representation learning on large graphs. Advances in neural information processing systems 30 (2017) 20. Hara, K., Kataoka, H., Satoh, Y.: Can spatiotemporal 3d cnns retrace the history of 2d cnns and imagenet? In: Proceedings of the IEEE conference on Computer Vision and Pattern Recognition. pp. 6546–6555 (2018) 21. Hatamizadeh, A., Tang, Y., Nath, V., Yang, D., Myronenko, A., Landman, B., Roth, H.R., Xu, D.: Unetr: Transformers for 3d medical image segmentation. In: Proceedings of the IEEE/CVF winter conference on applications of computer vision. pp. 574–584 (2022) 22. He, X., Zhang, Y., Mou, L., Xing, E., Xie, P.: Pathvqa: 30000+ questions for medical visual question answering. arXiv preprint arXiv:2003.10286 (2020) 23. Jeurissen, B., Descoteaux, M., Mori, S., Leemans, A.: Diffusion mri fiber tractogra-phy of the brain. NMR in Biomedicine 32 (4), e3785 (2019) 24. Kipf, T.N., Welling, M.: Semi-supervised classification with graph convolutional networks. arXiv preprint arXiv:1609.02907 (2016) 25. Lau, J.J., Gayen, S., Ben Abacha, A., Demner-Fushman, D.: A dataset of clinically generated visual questions and answers about radiology images. Scientific data 5(1), 180251 (2018) 26. Legarreta, J.H., Petit, L., Rheault, F., Theaud, G., Lemaire, C., Descoteaux, M., Jodoin, P.M.: Filtering in tractography using autoencoders (finta). Medical Image Analysis 72 , 102126 (2021) TractoGraphVLM 17 27. Li, C., Wong, C., Zhang, S., Usuyama, N., Liu, H., Yang, J., Naumann, T., Poon, H., Gao, J.: Llava-med: Training a large language-and-vision assistant for biomedicine in one day. Advances in Neural Information Processing Systems 36 , 28541–28564 (2023) 28. Li, J., Li, D., Savarese, S., Hoi, S.: Blip-2: Bootstrapping language-image pre-training with frozen image encoders and large language models. In: International conference on machine learning. pp. 19730–19742. PMLR (2023) 29. Lin, C.Y.: Rouge: A package for automatic evaluation of summaries. In: Text summarization branches out. pp. 74–81 (2004) 30. Liu, H., Li, C., Wu, Q., Lee, Y.J.: Visual instruction tuning. Advances in neural information processing systems 36 , 34892–34916 (2023) 31. Loshchilov, I., Hutter, F.: Decoupled weight decay regularization. arXiv preprint arXiv:1711.05101 (2017) 32. Lu, M.Y., Chen, B., Williamson, D.F., Chen, R.J., Liang, I., Ding, T., Jaume, G., Odintsov, I., Le, L.P., Gerber, G., et al.: A visual-language foundation model for computational pathology. Nature medicine 30 (3), 863–874 (2024) 33. Luo, R., Sun, L., Xia, Y., Qin, T., Zhang, S., Poon, H., Liu, T.Y.: Biogpt: generative pre-trained transformer for biomedical text generation and mining. Briefings in bioinformatics 23 (6), bbac409 (2022) 34. Ma, Z., Hong, J., Gul, M.O., Gandhi, M., Gao, I., Krishna, R.: Crepe: Can vision-language foundation models reason compositionally? In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition. pp. 10910–10921 (2023) 35. Oord, A.v.d., Li, Y., Vinyals, O.: Representation learning with contrastive predictive coding. arXiv preprint arXiv:1807.03748 (2018) 36. Pang, Y., Tay, E.H.F., Yuan, L., Chen, Z.: Masked autoencoders for 3d point cloud self-supervised learning. World Scientific Annual Review of Artificial Intelligence 1,2440001 (2023) 37. Papineni, K., Roukos, S., Ward, T., Zhu, W.J.: Bleu: a method for automatic evaluation of machine translation. In: Proceedings of the 40th annual meeting of the Association for Computational Linguistics. pp. 311–318 (2002) 38. Qi, C.R., Su, H., Mo, K., Guibas, L.J.: Pointnet: Deep learning on point sets for 3d classification and segmentation. In: Proceedings of the IEEE conference on computer vision and pattern recognition. pp. 652–660 (2017) 39. Qi, C.R., Yi, L., Su, H., Guibas, L.J.: Pointnet++: Deep hierarchical feature learning on point sets in a metric space. Advances in neural information processing systems 
+
+30 (2017) 40. Radwan, A.M., Sunaert, S., Schilling, K., Descoteaux, M., Landman, B.A., Vanden-bulcke, M., Theys, T., Dupont, P., Emsell, L.: An atlas of white matter anatomy, its variability, and reproducibility based on constrained spherical deconvolution of diffusion mri. NeuroImage 254 , 119029 (2022) 41. Rampášek, L., Galkin, M., Dwivedi, V.P., Luu, A.T., Wolf, G., Beaini, D.: Recipe for a general, powerful, scalable graph transformer. Advances in Neural Information Processing Systems 35 , 14501–14515 (2022) 42. Schmahmann, J.D., Smith, E.E., Eichler, F.S., Filley, C.M.: Cerebral white matter: neuroanatomy, clinical neurology, and neurobehavioral correlates. Annals of the New York Academy of Sciences 1142 (1), 266–309 (2008) 43. Smith, R.E., Tournier, J.D., Calamante, F., Connelly, A.: Anatomically-constrained tractography: improved diffusion mri streamlines tractography through effective use of anatomical information. Neuroimage 62 (3), 1924–1938 (2012) 18 G. Marthi Krishna Kumar et al. 44. Tournier, J.D., Calamante, F., Connelly, A., et al.: Improved probabilistic stream-lines tractography by 2nd order integration over fibre orientation distributions. In: Proceedings of the international society for magnetic resonance in medicine. vol. 1670. Stockholm (2010) 45. Tran, D., Bourdev, L., Fergus, R., Torresani, L., Paluri, M.: Learning spatiotemporal features with 3d convolutional networks. In: Proceedings of the IEEE international conference on computer vision. pp. 4489–4497 (2015) 46. Tu, T., Azizi, S., Driess, D., Schaekermann, M., Amin, M., Chang, P.C., Carroll, A., Lau, C., Tanno, R., Ktena, I., et al.: Towards generalist biomedical ai. Nejm Ai 
+
+1(3), AIoa2300138 (2024) 47. Van Essen, D.C., Smith, S.M., Barch, D.M., Behrens, T.E., Yacoub, E., Ugurbil, K., Consortium, W.M.H., et al.: The wu-minn human connectome project: an overview. Neuroimage 80 , 62–79 (2013) 48. Veličković, P., Cucurull, G., Casanova, A., Romero, A., Lio, P., Bengio, Y.: Graph attention networks. arXiv preprint arXiv:1710.10903 (2017) 49. Wakana, S., Caprihan, A., Panzenboeck, M.M., Fallon, J.H., Perry, M., Gollub, R.L., Hua, K., Zhang, J., Jiang, H., Dubey, P., et al.: Reproducibility of quantitative tractography methods applied to cerebral white matter. Neuroimage 36 (3), 630–644 (2007) 50. Wang, Y., Sun, Y., Liu, Z., Sarma, S.E., Bronstein, M.M., Solomon, J.M.: Dynamic graph cnn for learning on point clouds. ACM Transactions on Graphics (tog) 38 (5), 1–12 (2019) 51. Wang, Z., Wu, Z., Agarwal, D., Sun, J.: Medclip: Contrastive learning from unpaired medical images and text. In: Proceedings of the 2022 Conference on Empirical Methods in Natural Language Processing. pp. 3876–3887 (2022) 52. Xu, K., Hu, W., Leskovec, J., Jegelka, S.: How powerful are graph neural networks? arXiv preprint arXiv:1810.00826 (2018) 53. Xue, T., Chen, Y., Zhang, C., Golby, A.J., Makris, N., Rathi, Y., Cai, W., Zhang, F., O’Donnell, L.J.: Tractcloud: Registration-free tractography parcellation with a novel local-global streamline point cloud representation. In: International Conference on Medical Image Computing and Computer-Assisted Intervention. pp. 409–419. Springer (2023) 54. Yan, S., Yu, Z., Primiero, C., Vico-Alonso, C., Wang, Z., Yang, L., Tschandl, P., Hu, M., Ju, L., Tan, G., et al.: A multimodal vision foundation model for clinical dermatology. Nature Medicine 31 (8), 2691–2702 (2025) 55. Yeh, F.C., Panesar, S., Fernandes, D., Meola, A., Yoshino, M., Fernandez-Miranda, J.C., Vettel, J.M., Verstynen, T.: Population-averaged atlas of the macroscale human structural connectome and its network topology. Neuroimage 178 , 57–68 (2018) 56. Zhang, S., Xu, Y., Usuyama, N., Xu, H., Bagga, J., Tinn, R., Preston, S., Rao, R., Wei, M., Valluri, N., et al.: Biomedclip: a multimodal biomedical foundation model pretrained from fifteen million scientific image-text pairs. arXiv preprint arXiv:2303.00915 (2023) 57. Zhang, Y., Jiang, H., Miura, Y., Manning, C.D., Langlotz, C.P.: Contrastive learning of medical visual representations from paired images and text. In: Machine learning for healthcare conference. pp. 2–25. PMLR (2022) TractoGraphVLM 19 
+
+# Supplementary Material 
+
+## TractoGraphVLM: A Unified Vision-Language Framework for White Matter Tractography 
+
+## S1 Text Generation Pipeline 
+
+We summarise the two-stage pipeline that produces captions, VQA pairs, and retrieval queries from each bundle (Section 2.3). 
+
+Stage 1: feature-grounded template instantiation. For every bundle T we compute four geometric descriptors: streamline count N , spatial extent E (bounding-box diagonal, mm), normalized density ρ = N/E 3, and a ternary complexity class 
+
+κ (simple if E < 110 mm, moderate if 110 ≤ E < 175 mm, complex otherwise). Only the qualitative descriptors (extent, density, complexity) and knowledge-base facts (Section S2) are written into the templates; the raw count N is used solely to derive ρ and is never inserted into the text, since an exact count is not recoverable from the sub-sampled graph the encoder observes. Templates yield 15 caption variants and 5 VQA pairs per sample through stochastic grammar selection and synonym augmentation (bundle-name, fiber-noun, and density-adjective synonyms sampled uniformly). Table S1 reports corpus-level statistics.                            
+
+> Table S1: Geometric feature statistics over the HCP-842 atlas (78 bundles ×1,113 subjects). Feature Symbol Mean ±Std Units Streamline count N4,218 ±3,107 streamlines Spatial extent E148 .4±31 .2mm Normalised density ρ0.31 ±0.18 (scaled) Complexity: simple —24% of samples — Complexity: moderate — 51% of samples — Complexity: complex —25% of samples —
+
+Stage 2: LLM paraphrasing. A Claude rewriting pass diversifies surface form while preserving the anatomical claims and qualitative descriptors exactly, producing up to 45 candidates per bundle; a greedy ROUGE-L filter [29] ( < 0.60 ) then keeps 15 distinct forms. Because the factual content is fixed by the template slots and knowledge-base lookups, the rewrite cannot introduce anatomical claims outside the source references. 20 G. Marthi Krishna Kumar et al. 
+
+Task templates. Bundle captions span five styles (anatomical, functional, tra-jectory, clinical, and composite), with a separate whole-brain template used for whole-brain captions. VQA pairs span five reasoning tiers, from identification to clinical function, with deterministic answer strings. Retrieval queries range from identity strings to compositional queries combining anatomy, function, and geometry (six query types). 
+
+Representative example (left arcuate fasciculus). Stage 1: “Association fiber bundle representing the left arcuate fasciculus, connecting frontal and temporal cortex and supporting phonological processing.” Paraphrase: “The left arcuate fasciculus, a perisylvian association tract interconnecting Broca’s and Wernicke’s areas, arcs from the inferior frontal gyrus to the posterior superior temporal gyrus and underpins phonological encoding and expressive language.” 
+
+S1.1 Caption Templates 
+
+Bundle captions are instantiated from anatomical templates whose slots are filled from the knowledge base (Section S2); whole-brain captions use geometric descriptors only. Angle-bracketed slots are replaced per sample.                               
+
+> Table S2: Representative caption templates (one per style; placeholders in angle brackets, no raw counts). Style Template Anatomical “White matter bundle showing <ANATOMY> in the <HEMISP HERE> .” Functional “<TYPE> pathway supporting <FUNCTION> , connecting <RE GION_A> and <REGION_B> .” Trajectory “The <BUNDLE_NAME> follows <TRAJECTORY> .” Clinical “Damage to the <BUNDLE_NAME> is associated with <DEFI CIT> .” Composite “<TYPE> tract connecting <REGION_A> with <REGION_B> ,involved in <FUNCTION> .” Whole-brain “Whole-brain tractography with <COMPLEXITY> coverage and bounding extent of <EXTENT> mm.”
+
+S1.2 VQA Tiers 
+
+Each bundle yields question–answer pairs spanning five reasoning tiers of increas-ing difficulty. Answers are deterministic strings taken from the knowledge base or from qualitative descriptors, never free-form counts. TractoGraphVLM 21 
+
+Table S3: VQA reasoning tiers with representative questions and answer types. Tier Skill Example question Answer 1 Identification “Which white matter tract is shown?” bundle name 2 Localisation “Which hemisphere does this bundle belong to?” left / right 3 Connectivity “What cortical regions does this tract connect?” region pair 4 Morphology “Is this a dorsal or ventral pathway?” dorsal / ventral 5 Clinical “What deficit follows disruption of this tract?” deficit 
+
+S1.3 Retrieval Query Types 
+
+Retrieval supervision uses six query families, ranging from identity strings to compositional descriptions combining anatomy, function, and geometry. 
+
+Table S4: Retrieval query types (representative, count-free forms). Type Family Representative query 1 Identity “Locate the <BUNDLE_NAME> .” 2 Geometric “<COMPLEXITY> <TYPE> bundle in the <HEMISPH ERE> .” 3 Connectivity “Tract connecting <REGION_A> to <REGION_B> .” 4 Functional “Pathway supporting <FUNCTION> .” 5 Morphological “ <TYPE> pathway in the <HEMISPHERE> .” 6 Combined “<TYPE> tract linking <REGION_A> and <REGION _B> , supporting <FUNCTION> .” 
+
+S1.4 Placeholder Definitions 
+
+## S2 Anatomical Knowledge Base 
+
+Table S6 lists the anatomical entries used to populate bundle-specific template placeholders (Section S1). The knowledge base covers all 78 HCP-842 bundles [55]; representative entries are shown here, compiled from Catani [6], Schmahmann [42], and Wakana et al. [49]. Each entry also stores full_name , hemisphere , spatia l_trajectory , and clinical_significance .
+
+S2.1 Entry Schema and Example Record 
+
+Each of the 78 bundle keys (with _L /_R suffixes for paired tracts) maps to a structured record with fields full_name , abbreviation , bundle_type , hemi 22 G. Marthi Krishna Kumar et al.                  
+
+> Table S5: Template placeholders and their sources. Placeholder Source
+> <BUNDLE_NAME> ,<ANATOMY> knowledge base (bundle identity)
+> <REGION_A> ,<REGION_B> knowledge base (origin / termination)
+> <FUNCTION> ,<DEFICIT> knowledge base (function / clinical)
+> <TYPE> bundle class (projection / association / commissural)
+> <HEMISPHERE> laterality (left / right / midline)
+> <TRAJECTORY> knowledge base (spatial path)
+> <DENSITY> ,<COMPLEXITY> derived from density ρand class κ
+> <EXTENT> computed bounding-box diagonal (mm)
+
+sphere , origin_regions , termination_regions , functions , trajectory , spatial_relationships , and disconnection_deficits . Template slots draw directly from these fields, which constrains generated text to claims present in the source references. The knowledge base is compiled from standard neuroanatomical references [6, 42,49] and the HCP-842 atlas documentation [55]. It constrains generated descrip-tions to claims present in those sources, but the entries are not independently re-verified against subject-level dissection. 
+
+## S3 Control: Does the Model Exceed Classification Plus Lookup? 
+
+Because caption and VQA targets are determined by bundle identity (Section 2.3), a system that classifies the bundle and reads the corresponding knowledge-base entry can reproduce much of the language output without cross-modal understanding. To bound this, we evaluate a classifier-plus-lookup baseline that emits, for each bundle, the deterministic knowledge-base text for its predicted label, together with an oracle variant that uses the ground-truth label. Table S8 reports the comparison. The unified model exceeds the predicted-label baseline on captioning and VQA by +5 .3 BLEU-4, +14 .5 ROUGE-L, and +17 .7 points VQA accuracy, and exceeds even the oracle-label baseline (perfect classification) on all three metrics, indicating that its generative outputs reflect cross-modal alignment beyond identity lookup rather than being explained by identity classification followed by rigid template retrieval. 
+
+## S4 Architecture Details 
+
+S4.1 System Overview and Parameter Counts 
+
+Table S9 summarises all three components introduced in Section 2.4. Because the visual encoder is swapped across the 16 architectures compared in Sections 3.2 and 3.3, its parameter count varies substantially by architecture; Table S10 gives the full per-encoder breakdown. TractoGraphVLM 23 
+
+Table S6: Anatomical knowledge base (representative entries). Comm. = commis-sural; Proj. = projection; Assoc. = association. 
+
+Bundle Connectivity Function Type 
+
+Commissural Fibers 
+
+CC L ↔ R hemispheres, mid-sagittal Interhemispheric communi-cation and integration Comm. MCP Pons ↔ cerebellar cortex (bilateral) Motor coordination and er-ror correction Comm. 
+
+Projection Fibers 
+
+CST L Motor cortex → spinal cord (L) Voluntary movement control, right body Proj. CST R Motor cortex → spinal cord (R) Voluntary movement control, left body Proj. OR L Lateral geniculate nu-cleus → V1 (L) Right visual field processing Proj. OR R Lateral geniculate nu-cleus → V1 (R) Left visual field processing Proj. Fornix Hippocampus → mam-millary bodies Memory consolidation and retrieval Proj. 
+
+Association Fibers: Arcuate and Superior Longitudinal 
+
+AF L Frontal ↔ temporal (L) Language production and phonological processing Assoc. AF R Frontal ↔ temporal (R) Prosody and music percep-tion Assoc. SLF L Frontal ↔ parietal (L) Spatial attention and work-ing memory Assoc. SLF R Frontal ↔ parietal (R) Visuospatial processing and awareness Assoc. 
+
+Association Fibers: Inferior Longitudinal and Fronto-Occipital 
+
+ILF L Occipital ↔ temporal (L) Visual object recognition and reading Assoc. ILF R Occipital ↔ temporal (R) Facial recognition and visual memory Assoc. IFOF L Frontal ↔ occipital (L) Semantic processing and visual–verbal integration Assoc. IFOF R Frontal ↔ occipital (R) Non-verbal semantic process-ing Assoc. 
+
+Association Fibers: Uncinate 
+
+UF L Frontal ↔ anterior tem-poral (L) Emotional processing and episodic memory Assoc. UF R Frontal ↔ anterior tem-poral (R) Emotional regulation and so-cial cognition Assoc. 
+
+Association Fibers: Cingulum and Vertical Occipital 
+
+CG L Cingulate gyrus ↔ me-dial temporal (L) Memory encoding and emo-tional processing Assoc. CG R Cingulate gyrus ↔ me-dial temporal (R) Executive control and pain processing Assoc. VOF L Dorsal ↔ ventral visual stream (L) Visual stream integration, object localisation Assoc. VOF R Dorsal ↔ ventral visual stream (R) Visual stream integration, spatial vision Assoc. 
+
+S4.2 Input Representations 
+
+Graph input. Streamlines are resampled to P =32 equidistant nodes. Each node vi
+
+carries a 6-D feature: normalized coordinates (x, y, z ) and local tangent (tx, t y , t z ).Edges connect consecutive nodes within a streamline and spatially proximate node pairs across streamlines ( ϵ=5 mm ). 24 G. Marthi Krishna Kumar et al. 
+
+Table S7: Example knowledge-base record (left arcuate fasciculus). Field Value 
+
+full_name Arcuate Fasciculus (left) 
+
+bundle_type association 
+
+hemisphere left 
+
+origin_regions inferior frontal gyrus, precentral gyrus 
+
+termination_regions posterior superior temporal gyrus 
+
+functions phonological processing, language production 
+
+trajectory arcs around the Sylvian fissure 
+
+disconnection_deficits conduction aphasia 
+
+Table S8: Classifier-plus-lookup control on the HCP-YA test set. The predicted-label row uses the classifier’s output to look up the knowledge-base entry; the oracle-label row uses the ground-truth label. Mean ± standard deviation over five random seeds.                              
+
+> System Cap. BLEU-4 Cap. ROUGE-L VQA Acc. (%)
+> Classifier + KB lookup (predicted label) 14 .8±2.152 .3±2.848 .7±3.1
+> Classifier + KB lookup (oracle label) 18 .2±1.961 .7±2.462 .1±2.7
+> TractoGraphVLM (unified) 20 .1±2.366 .8±2.966 .4±3.0
+
+Table S9: System component parameter counts. 
+
+Component Params Role Visual encoder 0.073–10.842M * Architecture-specific (Table S10) Text encoder (BiomedBERT) 110M Contrastive text embedding; frozen Language decoder (BioGPT) 347M Autoregressive caption and VQA gen-eration 
+
+> *
+
+Range across all 16 encoders compared in this work (FIESTA-AE, smallest, to Point-MAE, largest); the paper-default GPS encoder is 1.908M. See Table S10 for the per-encoder breakdown. 
+
+Volumetric input. Streamlines are rasterised into a 64 3 binary occupancy grid. Augmentation: random 3D rotations ( ±15 ◦) and intensity scaling. 
+
+S4.3 Encoder Architecture Specifications 
+
+All 16 encoders share an identical projection head ( dhidden → 256 → 256 , GELU) mapping to the shared 256-D latent space used by the contrastive objective and the BioGPT prefix tokens. 
+
+BioGPT prefix-token decoding. zv is projected to 8 prefix tokens of BioGPT hidden dimension (1024) and prepended to the causal sequence, followed by a single learned style token; the caption or answer tokens then follow. For VQA, question tokens (BioGPT tokenizer) follow the visual prefix and the model TractoGraphVLM 25 
+
+Table S10: Visual encoder specifications (16 architectures). All project to a shared 256-D latent space. 
+
+Family Encoder Layers Hidden Params (M) Key Choices Graph GCN [24] 8 GCNConv 384 1.585 Isotropic aggregation, residual, BatchNorm GAT [48] 8 GATConv 4 heads × 96 1.592 Anisotropic, learned attention weights GraphSAGE [19] 8 SAGEConv 384 2.765 Neighbourhood sam-pling, mean aggrega-tor GIN [52] 8 GINConv 384 6.028 Sum aggregation, in-jective MLP update GPS [41] 4 GPSConv 192 1.908 Laplacian PE, 8-head attn, virtual node Point Cloud PointNet [38] 3 MLP 64/128/256 1.360 Max-pool global aggre-gation, T-Net PointNet++ [39] 3 SA 128/256/512 1.434 Farthest point sam-pling, ball query DGCNN [50] 4 EdgeConv 64/64/128/256 0.487 Dynamic k-NN (k=20 ), edge features PCT [17] 4 attn 256 1.294 Offset-attention, im-plicit Laplacian Point-MAE [36] 6 layers 384 10.842 Masked autoencoder pretrain, 60% masking Tract. Specific TractCloud [53] local+global 256 0.645 Per-streamline Point-Net + global atten-tion; re-impl. FINTA [26] 6 GATConv 256 4.815 Fiber neighbourhood graph attention; re-impl. FIESTA-AE [12] 5 Conv1D 128 0.073 1D conv autoencoder on resampled stream-lines; re-impl. Generic 3D CNN (ResNet-18) [20] 4-stage 64 →512 0.196 73 init conv, stride 2, global avg pool ViT-3D [21] 6 Transformer 256, 4 heads 5.068 83 patches (512), learnable 3D pos. embed. MLP 4 linear 256 0.102 Handcrafted features: curvature, length, FA, span 
+
+generates the answer autoregressively. Greedy decoding; max length 128 tokens; early stop at EOS. 
+
+## S5 Training Dynamics 
+
+Optimisation. All models are trained for 500 epochs with AdamW [31] ( β1=0 .9,
+
+β2=0 .999 , ϵ=10 −8, weight decay λ=0 .01 ), following a two-stage curriculum within a single joint run: 250 epochs of contrastive alignment across all four tasks, then 250 epochs of joint fine-tuning that adds prototype cross-entropy (classification) and LLM (captioning and VQA). We use a cosine learning rate schedule with a linear warm-up over the first 5% of optimiser steps ( ≈25 epochs at batch size 128). The peak LR is 3×10 −4, applied uniformly to all trainable parameters: the 26 G. Marthi Krishna Kumar et al. 
+
+visual encoder, BioGPT, and the projection heads. BiomedBERT is kept frozen throughout. Batch size is 128 bundles; contrastive pairs are formed within the batch (in-batch negatives). Training hardware: 4×H100 80 GB. Training runs in full precision (fp32) by default, with mixed precision available as an option. Per-configuration wall-clock times for the default GPS encoder are reported in the node-sampling ablation of the main paper. 
+
+Loss components. The training objective matches Section 2.4: a sum of per-task contrastive terms, plus α LLM for captioning and VQA ( α=0 .5) and a prototype cross-entropy term for classification in the joint stage. Retrieval contributes the contrastive term throughout. Full derivations are given in the main paper; this section reports the schedule and hardware details only. 
+
+S5.1 Retrieval Performance by Query Type 
+
+Because our retrieval queries are instantiated from the same template pool used at training time (Section S1), a legitimate concern is whether the high overall R@1 reported in Section 3.1 reflects genuine cross-modal matching or merely surface-level template overlap. To address this, we stratify retrieval R@1 on the HCP-YA test set by query type (Table S11). Types 1–3 (identity, geometric, anatomical) are structurally closest to caption templates and therefore expected to benefit most from any template memorisation. Types 4–6 (functional, morphological, combined) require the model to compose anatomy, function, and geometry in ways that are not directly encoded by identity strings and therefore constitute a stricter test of cross-modal understanding.                     
+
+> Table S11: Retrieval R@1 by query type (TractoGraphVLM , HCP-YA test). Types 1–3 are structurally similar to caption templates; Types 4–6 are more composi-tional. Mean ±standard deviation over five seeds. Query Type R@1 (%) ∆from overall 1. Identity 92 .1±2.0+7 .4
+> 2. Geometric 86 .3±2.4+1 .6
+> 3. Anatomical 87 .9±2.5+3 .2
+> 4. Functional 80 .2±3.3−4.5
+> 5. Morphological 83 .5±2.8−1.2
+> 6. Combined 77 .4±3.6−7.3
+> Overall 84.7 —
+
+As expected, identity queries achieve the highest R@1 (92.1%), since the query string contains the bundle name almost verbatim. Anatomical (87.9%) and geometric (86.3%) queries also perform well, reflecting the strong grounding between geometric features and text in our training captions. The most infor-mative observation is the behaviour on compositional query types: functional TractoGraphVLM 27 
+
+(80.2%), morphological (83.5%), and combined (77.4%) queries remain well above chance and within ∼15 percentage points of the identity case. Because these queries require the model to integrate function, anatomy, and geometry in surface forms not directly present at training, their strong performance indicates that the 84.7% overall R@1 reflects genuine cross-modal understanding rather than template-string matching alone. 
+
+S5.2 VQA Accuracy by Reasoning Tier under Transfer 
+
+The large VQA degradation under cohort shift (Section 3.4) is expected to fall unevenly across reasoning tiers: identification and localisation read out the discriminative embedding and should transfer well, whereas connectivity, morphology, and clinical questions route through the decoder and are more exposed to the shift. Table S12 reports the per-tier breakdown. 
+
+Table S12: Per-tier VQA accuracy , in-distribution (HCP-YA) versus zero-shot transfer (HCP Aging). Tier Skill HCP-YA (%) HCP Aging (%) ∆
+
+1 Identification 89 .2±2.1 82 .4±2.8 −6.8
+
+2 Localisation 87 .1±2.4 78 .6±3.1 −8.5
+
+3 Connectivity 65 .3±3.2 39 .8±4.0 −25 .5
+
+4 Morphology 52 .8±3.5 29 .4±3.9 −23 .4
+
+5 Clinical 37 .6±3.8 20 .8±4.2 −16 .8
+
+Overall 66 .4 50 .2 −16 .2
