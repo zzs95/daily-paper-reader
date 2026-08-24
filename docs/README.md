@@ -9,17 +9,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-08-23</span>
+      <span class="dpr-home-dashboard-kicker">2026-08-24</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 24 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 22 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>24</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>22</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>0</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-08-23 21:30:27 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-08-24 22:00:57 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -30,8 +30,8 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日共生成 24 篇推荐（精读 24 篇，速读 0 篇）</p>
-<p>精读：《AutoVLAK-An Automated Pipeline for Vision-Language Knowledge Base Curation from Open-Access Medical Literature》, 《CLEAR-WSI: Towards Foundation Model Empowered Diagnosis Aligned Whole Slide Image Retrieval》</p>
+<p>今日共生成 22 篇推荐（精读 22 篇，速读 0 篇）</p>
+<p>精读：《A multimodal radiomics, deep learning, and pathomics signature for predicting the prognosis in central conventional chondrosarcoma》, 《Adaptive data augmentation with constraint-aware reinforcement learning for robust chest X-ray classification》</p>
 <p>这些结果覆盖了当下较热的方向，建议先看精读区论文的关键问题与方法。</p>
   </div>
 </section>
@@ -41,10 +41,10 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">24 篇</strong>
+    <strong class="dpr-home-dashboard-count">22 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="AutoVLAK-An Automated Pipeline for Vision-Language Knowledge Base Curation from Open-Access Medical Literature">AutoVLAK-An Automated Pipeline for Vision-Language Knowledge Base Curation from Open-Access Medical Literature</span></li><li><span class="dpr-home-dashboard-paper-title" title="CLEAR-WSI: Towards Foundation Model Empowered Diagnosis Aligned Whole Slide Image Retrieval">CLEAR-WSI: Towards Foundation Model Empowered Diagnosis Aligned Whole Slide Image Retrieval</span></li><li><span class="dpr-home-dashboard-paper-title" title="Clinical Reliability and Failure-Risk Analysis of Deep Learning–Based Postoperative Glioblastoma Segmentation for Radiotherapy: A Multi-Metric Evaluation Using …">Clinical Reliability and Failure-Risk Analysis of Deep Learning–Based Postoperative Glioblastoma Segmentation for Radiotherapy: A Multi-Metric Evaluation Using …</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="A multimodal radiomics, deep learning, and pathomics signature for predicting the prognosis in central conventional chondrosarcoma">A multimodal radiomics, deep learning, and pathomics signature for predicting the prognosis in central conventional chondrosarcoma</span></li><li><span class="dpr-home-dashboard-paper-title" title="Adaptive data augmentation with constraint-aware reinforcement learning for robust chest X-ray classification">Adaptive data augmentation with constraint-aware reinforcement learning for robust chest X-ray classification</span></li><li><span class="dpr-home-dashboard-paper-title" title="End-to-end multimodal pathology foundation model with clinical dialogue">End-to-end multimodal pathology foundation model with clinical dialogue</span></li></ul>
   </div>
 
 </section>
