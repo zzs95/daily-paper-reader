@@ -1,0 +1,16 @@
+---
+title: Multiparametric MRI-Based Radiomics Model Integrating Tumor Lesion and Periprostatic Adipose Tissue for Predicting Bone Metastasis in Prostate Cancer
+authors: Unknown
+date: Unknown
+pdf: "https://www.frontiersin.org/journals/oncology/articles/10.3389/fonc.2026.1918323/full"
+tldr: To develop and validate a multiparametric MRI (mpMRI)-based radiomicsmodel incorporating features from both the tumor lesion and periprostatic adiposetissue (PPAT) for predicting synchronous bone metastasis (BM) in patients with …。
+source: google_scholar_email
+selection_source: fresh_fetch
+motivation: 本文关注一个具有代表性的研究问题，并尝试提升现有方法的效果或可解释性。
+method: 方法与实现细节请参考摘要与正文。
+result: 结果与对比结论请参考摘要与正文。
+conclusion: 总体而言，该工作在所述任务上展示了有效性，并提供了可复用的思路或工具。
+---
+
+## Abstract
+Purpose: To develop and validate a multiparametric MRI (mpMRI)-based radiomicsmodel incorporating features from both the tumor lesion and periprostatic adiposetissue (PPAT) for predicting synchronous bone metastasis (BM) in patients with …

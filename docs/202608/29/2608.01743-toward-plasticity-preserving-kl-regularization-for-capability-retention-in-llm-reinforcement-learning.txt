@@ -1,0 +1,2329 @@
+Title: Toward Plasticity-Preserving KL Regularization for Capability Retention in LLM Reinforcement Learning
+
+URL Source: https://arxiv.org/pdf/2608.01743
+
+Published Time: Tue, 04 Aug 2026 01:52:36 GMT
+
+Number of Pages: 20
+
+Markdown Content:
+# Toward Plasticity-Preserving KL Regularization for Capability Retention in LLM Reinforcement Learning 
+
+Li Wang 1,∗ Xiaodong Lu 1,∗ Xiaohan Wang 1,† Jiajun Chai 1
+
+Wei Lin 1 Tianhao Peng 2,† Guojun Yin 1,†
+
+> 1
+
+Meituan 
+
+> 2
+
+Nanyang Technological University 
+
+Abstract 
+
+Reinforcement learning (RL) has become a central paradigm for large language model (LLM) post-training, but optimiza-tion toward new objectives can degrade capabilities already present in the base model. KL regularization is widely used to mitigate such forgetting by constraining policy drift toward a reference model. However, standard full-policy KL regular-ization constrains the entire response distribution and may un-necessarily restrict exploration and target-task learning. This raises a natural question: can a more precise constraint pre-serve existing capabilities while minimizing interference with learning new tasks? To this end, we propose Correctness-Conditioned KL Regularization (CoKL), a conditional regu-larization framework that narrows the preservation constraint from the full output distribution to correctness-conditioned response distributions. We instantiate CoKL with forward KL divergence and derive a practical finite-group training objective for RL-based LLM post-training. At the popula-tion level, CoKL decouples the total probability assigned to correct responses from their correctness-conditioned distri-bution, thereby regularizing the relative probability allocation among reference-supported correct responses without directly anchoring incorrect outputs or total correctness mass. We fur-ther show that full-policy forward and reverse KL regular-ization induce a strict optimal correctness gap when the refer-ence policy is imperfect, whereas CoKL avoids this limitation. Experiments in controlled multi-solution environments and continual post-training settings across multiple model scales demonstrate that CoKL achieves a more favorable balance be-tween target-task improvement and prior-capability retention than existing regularization methods. Our code is available at https://github.com/Lumina04/CoKL. 
+
+Introduction 
+
+Reinforcement learning (RL) has become a central paradigm for large language model (LLM) post-training. Reinforce-ment Learning from Human Feedback (RLHF) (Bai et al. 2022; Ouyang et al. 2022) is widely used to align model be-havior with human preferences, while Reinforcement Learn-ing with Verifiable Rewards (RLVR) (Guo et al. 2025) enables scalable optimization of reasoning performance 
+
+> ∗
+
+Equal contribution. 
+
+> †
+
+Corresponding authors: tianhao.peng@ntu.edu.sg ;
+
+{wangxiaohan17,yinguojun02}@meituan.com .Y−: old incorrect Y+: old correct         
+
+> 1) Reference Policy 𝜋 !"# 2) Full Forward 𝑫 𝑲𝑳 (𝜋 !"# ||𝜋 𝛉 )3) Full Reverse KL 𝑫 𝑲𝑳 (𝜋 𝛉 ||𝜋 $%& )4) CoKL 𝑫 𝑲𝑳 (𝜋 '(||𝜋 )*+ ()
+> Y− Y+
+> Y− Y+
+> Y− Y+
+> Y− Y+
+> full-distribution anchor
+> incorrect mass retained
+> mode-seeking update
+> incorrect mass reduced weak modes less protected correct-mode shape preserved
+
+Figure 1: Schematic comparison of KL constraint scopes. Full-policy KL constrains correctness mass and the condi-tional distributions of both correct and incorrect responses, whereas CoKL constrains only the correctness-conditioned distribution without anchoring incorrect responses or total correctness mass. through automatically verifiable feedback (Lin et al. 2026b; Lu et al. 2026). Despite these advances, RL-based post-training can degrade capabilities already encoded in the base model. By repeatedly amplifying reward-favored outputs, RL may concentrate probability mass on a narrow set of high-reward behaviors while suppressing alternative response pat-terns and reasoning strategies that remain valid. This form of capability forgetting can manifest as degraded perfor-mance on previously learned or out-of-distribution tasks (Lin et al. 2024; Kotha, Springer, and Raghunathan 2024; Cai et al. 2026; Li et al. 2025a), indicating that adaptation to a new objective may interfere with capabilities acquired be-fore post-training. This issue is particularly consequential for general-purpose LLMs, for which post-training should im-prove adaptation to new objectives without compromising previously acquired capabilities. Achieving effective adapta-tion while preserving existing capabilities therefore remains a fundamental challenge in RL-based LLM post-training. KL regularization is widely used to preserve pretrained ca-pabilities during LLM post-training by constraining policy drift from the base model. As shown in Figure 1, reverse KL tends to favor high-probability regions of the reference pol-icy, whereas forward KL more strongly preserves its support. However, existing KL regularizers are typically applied to the full response distribution(Shao et al. 2024; Liu et al. 2025). Such global constraints may preserve useful behaviors, but can also retain ineffective or erroneous modes, thereby re-stricting exploration and adaptation to new tasks. To avoid arXiv:2608.01743v1 [cs.LG] 3 Aug 2026 this limitation, some approaches remove the KL penalty en-tirely to encourage exploration (Yu et al. 2026; Xue et al. 2025). Yet unconstrained policy updates can cause substan-tial drift from the base model and increase the risk of capabil-ity forgetting. This raises a natural question: can we impose constraints only where preservation is necessary, thereby re-taining existing capabilities while minimizing interference with adaptation during post-training? To preserve existing capabilities without unnecessar-ily restricting learning during post-training, we propose Correctness-Conditioned KL Regularization (CoKL), a more precise conditional regularization framework that constrains the response distribution according to correctness feedback rather than the full output distribution. In this work, we in-stantiate CoKL with forward KL divergence and apply it to the conditional distribution over verified-correct responses. CoKL preserves the relative probability allocation among correct response modes inherited from the reference pol-icy while allowing the total probability assigned to correct responses to increase. Incorrect response modes are there-fore not anchored to the reference policy and can be freely reshaped by the post-training objective. By narrowing the scope of regularization rather than uniformly reducing its strength, CoKL retains previously accessible correct behav-iors while minimizing interference with the acquisition of new capabilities. We derive a practical finite-group objective for RL-based LLM post-training and provide a population-level analysis showing that CoKL decouples the total correct-ness probability from the conditional distribution over cor-rect responses. In contrast, full-policy forward and reverse KL regularization couple these quantities and induce a strict optimal correctness gap when the reference policy is imper-fect. Controlled simulations and continual post-training ex-periments across multiple model scales further demonstrate that CoKL achieves a favorable balance between capability retention and learning during post-training. Our contribu-tions are summarized as follows: 
+
+• We introduce a more precise preservation principle for LLM post-training. Rather than constraining the full re-sponse distribution, it restricts regularization to the condi-tional distribution over verified-correct responses, avoid-ing direct constraints on incorrect outputs and total cor-rectness mass. 
+
+• We instantiate this principle as CoKL, a practical con-ditional regularization method for RL-based LLM post-training, and derive its finite-group training objective. Our population-level analysis shows that CoKL decou-ples total correctness probability from the correctness-conditioned response distribution, whereas full-policy KL induces a strict optimal correctness gap under an imperfect reference policy. 
+
+• We evaluate the distributional behavior of CoKL in a con-trolled multi-solution environment and assess its practi-cal retention–adaptation trade-off in continual LLM post-training across multiple model scales. 
+
+Related work 
+
+LLM RL and Capability Preservation 
+
+Reinforcement learning has become a central component of LLM post-training, enabling models to optimize task-specific objectives and improve complex reasoning capa-bilities. Building on policy optimization methods such as GRPO (Shao et al. 2024), recent algorithms including DAPO (Yu et al. 2026) and GSPO (Zheng et al. 2025) im-prove training stability and optimization efficiency, yield-ing substantial gains in mathematical reasoning (Lin et al. 2026b; Lu et al. 2026) and tool use (Lin et al. 2025; Wang et al. 2026b). However, optimization toward new objectives can shift the model away from its original policy distribu-tion, degrading performance on previously learned tasks (Li et al. 2025c) or suppressing effective reasoning patterns al-ready encoded in the base model (Chen et al. 2026). Prior work has mitigated such interference through regularization, parameter merging (Wang et al. 2026a), and multi-domain training (Cai et al. 2026). In contrast, we revisit KL regular-ization in RL-based post-training and introduce a simple yet more precise constraint that preserves existing capabilities while reducing interference with post-training learning. 
+
+KL Regularization in LLM RL 
+
+KL regularization is a standard component in RLHF and RLVR for stabilizing policy optimization and preventing ex-cessive deviation from a reference policy (Ziegler et al. 2019; Stiennon et al. 2020; Ouyang et al. 2022). Existing methods typically apply KL regularization to the full policy distri-bution while adjusting its direction, strength, or token-level application to balance training stability and exploration (Yu et al. 2026; Xue et al. 2025; Deng et al. 2025; Li et al. 2025b; Lin et al. 2026a; Wang et al. 2025; Cui et al. 2025; Vas-soyan, Beau, and Plaud 2025; Lee, Kang, and Hwang 2026; GX-Chen et al. 2025). However, full-policy constraints do not distinguish the total probability assigned to correct re-sponses from the relative probability allocation within the correct-response set. Recent verifier-aware methods instead operate on correct responses to improve distributional cover-age or diversity. Kruszewski et al. (Kruszewski et al. 2025) construct an explicit target distribution by filtering incorrect responses while preserving the relative reference probabili-ties among correct responses, UCPO (Lochab, Li, and Zhang 2026) encourages a uniform allocation over correct solu-tions, and DSDR (Wan et al. 2026) introduces trajectory-and token-level regularization to promote diversity among correct reasoning paths. In contrast, CoKL conditions both the reference and current policies on correctness and regu-larizes DKL (π+ref ∥π+ 
+
+> θ
+
+). Unlike correct-only target matching, this preserves the reference-induced allocation within the correct-response set without directly optimizing total cor-rectness mass or constraining incorrect responses. 
+
+Preliminaries 
+
+Group Relative Policy Optimization 
+
+Group Relative Policy Optimization (GRPO) (Shao et al. 2024) eliminates the need for a learned value function by estimating advantages from multiple responses generated for the same prompt. Given a prompt xi, the behavior policy 
+
+πθold samples a group Oi = {oi,g }Gg=1 , where each response receives a verifier reward ri,g . Its group-normalized advan-tage is 
+
+Ai,g = ri,g − μi
+
+σi + ϵ , μi = 1
+
+G
+
+> G
+
+X
+
+> g=1
+
+ri,g , (1) where σi is the standard deviation of rewards within Oi, and 
+
+ϵ is a small numerical constant. Since the reward is assigned at the response level, Ai,g is shared by all tokens in oi,g . Let 
+
+ρi,g,t (θ) = πθ (oi,g,t | xi, o i,g,<t )
+
+πθold (oi,g,t | xi, o i,g,<t ) , (2) and define the clipped surrogate 
+
+ℓi,g,t (θ) = min ρi,g,t Ai,g , clip  ρi,g,t , 1 − δ, 1 + δAi,g .
+
+(3) The GRPO objective is then written as 
+
+JGRPO (θ) = E
+
+ 1
+
+G
+
+> G
+
+X
+
+> g=1
+
+1
+
+|oi,g | 
+
+> |oi,g |
+
+X
+
+> t=1
+
+ℓi,g,t (θ)
+
+ , (4) where δ controls the clipping range. 
+
+Method 
+
+To preserve prior capabilities while minimizing interfer-ence with new-task learning, we propose Correctness-Conditioned KL Regularization (CoKL), which constrains only the distribution over verified-correct responses. We de-rive its forward-KL objective and finite-group surrogate and integrate it into GRPO. 
+
+Correctness Decomposition of Full-Policy KL 
+
+For clarity, we formulate CoKL using binary verifier feed-back. For each prompt x, let r(x, y ) ∈ {0, 1} indicate whether response y is accepted as correct by the verifier, thereby inducing a binary partition of the response space. When the verifier provides a continuous score s(x, y ), an analogous partition can be obtained using a task-dependent threshold τ , with rτ (x, y ) = I[s(x, y ) ≥ τ ]. For any policy 
+
+π, we define its total correctness probability as 
+
+Zπ (x) = X
+
+> y
+
+r(x, y )π(y | x), (5) and define the corresponding conditional distributions as 
+
+π+(y | x) = r(x, y )π(y | x)
+
+Zπ (x) ,π−(y | x) = 
+
+ 1 − r(x, y )π(y | x)1 − Zπ (x) .
+
+(6) Here, π+ and π− denote the policy conditioned on producing a correct or incorrect response, respectively. Let πref denote the frozen reference policy and πθ the current policy. For readability, we omit the prompt x below and write Zref =
+
+Zπref (x) and Zθ = Zπθ (x). The full-policy forward KL admits the following decomposition: 
+
+DKL (πref ∥πθ ) = DKL (Bern( Zref )∥ Bern( Zθ )) + Zref DKL 
+
+ π+ref ∥π+
+
+> θ
+
+
+
++ (1 − Zref )DKL 
+
+ π− 
+
+> ref
+
+∥π−
+
+> θ
+
+ .
+
+(7) The derivation is in Appendix A. Eq. 7 shows that full-policy KL simultaneously constrains the total probability of correct-ness, the relative distribution among correct responses, and the distribution among incorrect responses. The first term pulls the current correctness probability Zθ toward that of 
+
+πref , which may conflict with the RL-based post-training objective when the reference policy initially assigns limited probability mass to correct responses. The final term fur-ther anchors the policy to incorrect modes. These constraints are not necessary for preserving effective solutions and may restrict the transfer of probability mass from incorrect to correct responses. We therefore retain only the correctness-conditioned component as the preservation target. 
+
+CoKL Objective and Gradient Interpretation 
+
+Motivated by the decomposition above, we define CoKL as the forward KL divergence between the correctness-conditioned reference policy and the correctness-conditioned current policy: 
+
+LCoKL (x) = DKL 
+
+ π+ref (· | x)∥π+ 
+
+> θ
+
+(· | x) . (8) Unlike a full-policy KL regularizer, CoKL compares the two policies only after conditioning on correctness. It there-fore penalizes changes in the relative probability alloca-tion among correct responses, without explicitly anchor-ing incorrect responses under the reference policy. For a correct response y, we have log π+ 
+
+> θ
+
+(y | x) = log πθ (y |
+
+x) − log Zθ (x). Therefore, up to terms independent of θ,
+
+LCoKL (x) .
+
+= −Ey∼π+ref (·| x) [log πθ (y | x)] + log Zθ (x).
+
+(9) The log Zθ (x) term removes the implicit correctness-mass optimization in correct-only forward-KL replay: 
+
+DKL 
+
+ π+ref ∥πθ
+
+ = DKL 
+
+ π+ref ∥π+
+
+> θ
+
+ − log Zθ .
+
+Thus, CoKL preserves the relative distribution among correct responses while leaving the total correctness probability to be optimized by the RL-based post-training objective. Its gradient is 
+
+∇θ LCoKL (x) = − Ey∼π+ref (·| x) [∇θ log πθ (y | x)] + Ey∼π+  
+
+> θ(·| x)
+
+[∇θ log πθ (y | x)] . (10) The first term anchors the update toward reference-supported correct responses, while the second provides the normaliza-tion correction required by conditioning. The full derivation are provided in Appendix B. 
+
+Sample-based CoKL Surrogate 
+
+The distribution-level objective in Eq. 8 is approximated dur-ing RL-based LLM post-training using sampled responses and verifier outcomes. For each prompt group, we con-struct self-normalized empirical weights over the verified-correct responses. We first present the on-policy finite-group surrogate, where both the reference-side and current-policy-side terms are estimated from fresh samples. Let 
+
+{yij }Gj=1 ∼ πref (· | xi) be reference samples with rewards 
+
+rij = r(xi, y ij ), and let {y′ 
+
+> ij
+
+}Gj=1 ∼ πθ (· | xi) be current-policy samples with rewards r′ 
+
+> ij
+
+= r(xi, y ′ 
+
+> ij
+
+). We define the empirical conditional weights as 
+
+αij = rij 
+
+PGk=1 rik 
+
+, δij = r′
+
+> ij
+
+PGk=1 r′
+
+> ik
+
+. (11) with the convention that αij = 0 if PGk=1 rik = 0 , and 
+
+δij = 0 if PGk=1 r′ 
+
+> ik
+
+= 0 . The on-policy CoKL surrogate is 
+
+bLCoKL = − 1
+
+N
+
+> N
+
+X
+
+> i=1
+> G
+
+X
+
+> j=1
+
+sg( αij ) log πθ (yij | xi)+ 1
+
+N
+
+> N
+
+X
+
+> i=1
+> G
+
+X
+
+> j=1
+
+sg( δij ) log πθ (y′ 
+
+> ij
+
+| xi).
+
+(12) where sg( ·) denotes stop-gradient and N is the number of prompt groups in the minibatch. When a current-policy group contains verified-correct responses, the two terms approxi-mate the reference- and current-policy expectations in Eq. 10, respectively. If no verified-correct response is observed, the current-policy correction is unavailable and the surrogate re-duces to the reference-correct term. Since such zero-correct groups occur more frequently when the current correctness probability is low, this fallback acts as an implicit adaptive gate that strengthens the recovery pressure toward correct responses, as formalized in Appendix B. In the off-policy setting, the current-policy conditional term is estimated from responses generated by a behavior policy πold . Let {ˆyij }Gj=1 ∼ πold (· | xi) denote the rollout group, with verifier rewards ˆrij = r(xi, ˆyij ). Since CoKL is defined over complete responses, we apply importance correction at the sequence level. For a response ˆyij of length 
+
+Tij , we write its sequence log-likelihood as 
+
+ℓθ (ˆ yij | xi) = 
+
+> Tij
+
+X
+
+> t=1
+
+log πθ (ˆ yij,t | xi, ˆyij,<t ). (13) The sequence-level log-ratio is then 
+
+∆ij (θ) = ℓθ (ˆ yij | xi) − ℓold (ˆ yij | xi). (14) To control the variance of off-policy correction, we use the clipped sequence-level importance weight 
+
+˜ρij = exp [clip (∆ ij (θ), log(1 − ϵIS ), log(1 + ϵIS ))] .
+
+(15) The empirical current conditional distribution is approxi-mated by the self-normalized weights 
+
+γij = ˜ρij ˆrij 
+
+PGk=1 ˜ρik ˆrik 
+
+. (16) If the denominator is zero, we set γij = 0 for all responses in that group. The clipped off-policy CoKL surrogate is then 
+
+bLCoKL = − 1
+
+N
+
+> N
+
+X
+
+> i=1
+> G
+
+X
+
+> j=1
+
+sg( αij ) log πθ (yij | xi)+ 1
+
+N
+
+> N
+
+X
+
+> i=1
+> G
+
+X
+
+> j=1
+
+sg( γij ) log πθ (ˆ yij | xi).
+
+(17) 
+
+Integration with RL-Based LLM Post-Training 
+
+We integrate CoKL into RL-based LLM post-training through a reference-correct buffer and a joint RL and reg-ularization objective. Before training, πref is used to gen-erate Gref responses for each prompt in the regularization prompt set. The verifier is then applied to these responses, and prompts with no verified correct reference response are filtered out. The remaining prompt groups form a reference-correct buffer D+, which provides the empirical support for the reference-side term in Eq. 17. During training, we sam-ple a current-task minibatch BRL from the current-task data and independently sample a regularization minibatch BKL 
+
+from D+. Current-task rollouts are used to compute LGRPO ,whereas rollouts generated for BKL instantiate the current-policy conditional term in Eq. 17. The policy is optimized by minimizing 
+
+Ltotal (θ) = LGRPO (θ) + β bLCoKL (θ),
+
+LGRPO (θ) = −JGRPO (θ). (18) where JGRPO is defined in Eq. 4, bLCoKL is the clipped off-policy CoKL surrogate, and β controls the strength of correctness-conditioned preservation. Minimizing LGRPO 
+
+increases the probability of verified-correct responses, while 
+
+bLCoKL preserves the relative probability allocation among reference-supported correct modes. The combined objective improves the current task while preserving the relative al-location among reference-supported correct modes on the regularization prompts, without explicitly constraining their total correctness mass or incorrect responses. The full algo-rithm is summarized in Appendix I. 
+
+Theoretical Analysis 
+
+We next compare the population-level optima induced by CoKL and full-policy KL regularization. To isolate the objective-level bias introduced by different regularizers, we first consider the setting where correctness optimization and regularization are defined on the same prompt distribution. 
+
+Theorem 1 (Correctness-Mass Decoupling under CoKL) .
+
+For β > 0, consider the population-level objective 
+
+JCoKL (π) = Zπ − βD KL 
+
+ π+ref ∥π+ .
+
+The objective depends on π only through Zπ and π+ and is independent of π−. For any two policies π1 and π2 satisfying 
+
+π+1 = π+2 and Zπ2 > Z π1 ,
+
+JCoKL (π2) − JCoKL (π1) = Zπ2 − Zπ1 > 0.
+
+Moreover, over the full probability simplex, 
+
+max π JCoKL (π) = 1, and every global maximizer satisfies 
+
+Zπ⋆ = 1 , π+⋆ = π+ref .The full proof is provided in Appendix C. Theorem 3 shows that, under the population-level CoKL objective, in-creasing the total probability assigned to correct responses does not increase the regularization penalty when their rel-ative allocation is unchanged. The objective therefore per-mits probability mass to move from incorrect to correct re-sponses while preserving the correct-response structure in-herited from the reference policy. Full-policy KL behaves dif-ferently because its Bernoulli component directly constrains the probability allocation between the correct and incorrect response sets. The following theorem quantifies the resulting correctness gap at the population-level optimum. 
+
+Theorem 2 (Strict Correctness Gap Induced by Full-Policy KL) . Let q = Zref ∈ (0 , 1) and β > 0. Consider the full-policy forward- and reverse-KL objectives 
+
+JFKL (π) = Zπ − βD KL (πref ∥π) ,JRKL (π) = Zπ − βD KL (π∥πref ) .
+
+Under the required absolute-continuity conditions, their global optimizers satisfy π+⋆ = π+ref and π−⋆ = π−
+
+ref . The corresponding optimal correctness probabilities are 
+
+Z⋆
+
+FKL = 1 − β + p(β − 1) 2 + 4 βq 
+
+2 ,Z⋆
+
+RKL = σ
+
+
+
+logit( q) + 1
+
+β
+
+
+
+,
+
+where σ(a) = (1+ e−a)−1. Both satisfy q < Z ⋆ < 1 and are strictly decreasing in β. Furthermore, for ⋄ ∈ { FKL , RKL },
+
+lim 
+
+β→0+
+
+Z⋆
+
+⋄ = 1 , lim 
+
+β→∞ Z⋆
+
+⋄ = q. 
+
+The proof is provided in Appendix D. Together, Theo-rems 1 and 2 establish a fundamental distinction between the population-level objectives. The distribution-level CoKL ob-jective preserves the conditional structure of verified-correct responses without penalizing their total probability, whereas full-policy KL shifts the global optimum away from the pure-reward solution Zπ = 1 whenever πref is imperfect. These results characterize the intrinsic objective-level bias of the regularizers, while their practical effects under shared neural parameterization are evaluated in the continual post-training experiments. 
+
+Experiments 
+
+We evaluate CoKL at two complementary levels. The con-trolled environment provides direct access to correctness-conditioned distributions and correct-mode coverage, while the continual LLM experiments assess the downstream trade-off between prior-task retention and new-task adaptation. 
+
+Controlled Multi-Solution RL Environment 
+
+Environment. We consider a controlled contextual bandit with multiple valid solutions. Each input is generated from a latent problem cluster z, for which a subset Cz of the fi-nite action space receives binary reward. To model multiple reasoning modes, we construct a long-tailed oracle distri-bution over the correct actions, pretrain a shared-parameter 2 4 6 8 10 Expected distinct correct modes in 64 samples 0.6 0.7 0.8 0.9 Correct probability  Pcorrect    
+
+> Exact-objective correctness coverage trade-off
+> CoKL Entropy Forward KL JS RL Reverse KL 0123456
+> DKL (+ref +)
+> 0.6 0.7 0.8 0.9 Correct probability  Pcorrect
+> Exact-objective correctness conditional-KL trade-off
+> CoKL Entropy Forward KL JS RL Reverse KL
+
+Figure 2: Trade-offs between correctness and coverage@64 (Left), and between correctness and conditional KL (Right). 0 200 400 600 800 1000 Training step 12345Expected distinct correct modes in 64 samples                  
+
+> Exact-objective dynamics with matched final correctness ( Pfinal correct 0.96)
+> CoKL ( = 0.02)
+> Entropy ( = 0.07)
+> Forward KL ( = 0.002)
+> Reverse KL ( = 0.1)
+> JS ( = 0.3) 0200 400 600 800 1000 Training step 01234
+> DKL ( +ref  + )
+> Exact-objective dynamics with matched final correctness ( Pfinal correct 0.96)
+> CoKL ( = 0.02)
+> Entropy ( = 0.07)
+> Forward KL ( = 0.002)
+> Reverse KL ( = 0.1)
+> JS ( = 0.3)
+
+Figure 3: (Left) Dynamics of correct-mode coverage@64 under the same setting. (Right) Dynamics of DKL (π+ref ∥π+
+
+θ ).MLP to approximate this distribution, and use the resulting frozen model as the common initialization for all methods. We compare unregularized RL with entropy, forward KL, reverse KL, JS, and CoKL regularization. All methods are trained using the exact expected-reward objective and exact regularization over the finite action space. Implementation details are provided in the Appendix E.1. 
+
+Results. For each regularized method, we sweep the regu-larization coefficient and evaluate the final policy using the total correct probability Pcorr , correct-mode coverage@64, and the correctness-conditioned KL DKL (π+ref ∥π+
+
+θ ), with all results averaged over five random seeds. Figure 2 shows the resulting trade-offs. CoKL achieves higher correct-mode coverage and a smaller correctness-conditioned KL while maintaining high correctness, whereas the other regulariz-ers either sacrifice correctness or exhibit stronger deviation from the reference correct-mode distribution. These results indicate that CoKL better mitigates correct-mode collapse and provides a more favorable trade-off between correct-ness improvement and correct-mode preservation. To fur-ther examine the optimization dynamics, we select, for each method, the coefficient whose final correctness is closest to 
+
+Pcorr = 0 .96 . Figure 3 shows the evolution of coverage@64 and the correctness-conditioned KL during training. Under comparable final correctness, CoKL consistently achieves higher correct-mode coverage and a substantially lower con-ditional KL, demonstrating a more favorable balance between correctness improvement and correct-mode preservation. 
+
+Continual Learning under Task Shift 
+
+Tasks and Datasets. We evaluate all methods under a two-stage sequential training protocol consisting of mathemati-cal reasoning followed by general chat, assessing both the retention of previously acquired reasoning capabilities and continued adaptation to the subsequent task. For the math Method Normalized Mathematical Reasoning Normalized Chat Aggregate MATH-Val MATH500 Olympiad Math Avg. Chat-Val Overall                                                                                                                               
+
+> Qwen3-0.6B
+> Base (after Math training) 100.00 100.00 100.00 100.00 0.00 50.00 GRPO w/o KL 0.00 0.00 0.00 0.00 100.00 50.00 Full Reverse-KL 66.79 83.04 55.40 68.41 85.22 76.82 Full Forward-KL 59.66 88.95 64.14 70.92 92.60 81.76 Correct-only Reverse-KL 46.07 52.59 45.93 48.20 87.30 67.75 Correct-only Forward-KL 64.72 90.86 65.08 73.55 94.65 84.10
+> CoKL (ours) 61.96 90.35 64.91 72.41 100.53 86.47
+> Qwen3-1.7B
+> Base (after Math training) 100.00 100.00 100.00 100.00 0.00 50.00 GRPO w/o KL 0.00 0.00 0.00 0.00 100.00 50.00 Full Reverse-KL 33.17 27.55 18.37 26.36 101.81 64.09 Full Forward-KL 88.19 80.77 49.74 72.90 98.14 85.52 Correct-only Reverse-KL 5.48 3.42 6.90 5.27 102.29 53.78 Correct-only Forward-KL 86.68 81.73 51.41 73.28 98.44 85.86
+> CoKL (ours) 88.11 86.63 50.58 75.11 101.45 88.28
+> Qwen3-4B
+> Base (after Math training) 100.00 100.00 100.00 100.00 0.00 50.00 GRPO w/o KL 0.00 0.00 0.00 0.00 100.00 50.00 Full Reverse-KL -186.44 -684.64 -149.25 -340.11 78.25 -130.93 Full Forward-KL 84.11 39.31 12.37 45.26 101.73 73.50 Correct-only Reverse-KL 14.32 -3.66 1.18 3.95 88.97 46.46 Correct-only Forward-KL 83.88 32.91 12.47 43.09 103.65 73.37
+> CoKL (ours) 83.06 43.51 10.75 45.77 104.02 74.90
+
+Table 1: Dual-anchor normalized results. Math Avg. averages the three normalized math scores, while Overall equally averages Math Avg. and normalized Chat-Val. Best and second-best post-training results are bolded and underlined. stage, we randomly sample 50K training examples from Nemotron-Math-v2 (Du et al. 2025) and use an additional 1K examples as the evaluation set. For the chat stage, we use WildChat (Bhaskar, Ye, and Chen 2025) and Skywork-Reward-Llama-3.1-8B-v0.2 (Liu et al. 2024) to score model responses. Dataset statistics are in Appendix E.2. 
+
+Baselines. We compare CoKL with the following GRPO-based baselines: (1) GRPO w/o KL removes the KL regular-izer; (2) Full Reverse-KL applies reverse-KL regularization to the full response distribution; (3) Full Forward-KL applies forward-KL regularization to the full response distribution using all sampled responses; (4) Correct-only Reverse-KL applies reverse-KL regularization only to verified-correct responses; and (5) Correct-only Forward-KL uses only verified-correct responses for forward-KL-style supervised replay. All baselines use the same GRPO training setup and differ only in the auxiliary regularization objective. 
+
+Implementation. We use the Qwen3 family (Yang et al. 2025) as the base models, including Qwen3-0.6B, Qwen3-1.7B and Qwen3-4B. For all models, we enable thinking mode and set the maximum generation length to 8,192 to-kens. Further implementation details are provided in Ap-pendix E.3, and the prompt templates in Appendix H. 
+
+Evaluation. We evaluate all methods on two task cat-egories. Mathematical reasoning is evaluated on MATH-500 (Hendrycks et al. 2021), OlympiadBench (He et al. 2024), and the Math-Val validation set, while chat perfor-mance is evaluated on WildChat-Val (Bhaskar, Ye, and Chen 2025). We sample with temperature 0.7, top-p = 1 .0, and top-k = −1, and report average@8 throughout. Mathemat-ical reasoning is evaluated by exact match and chat perfor-mance by reward-model scores. We apply dual-anchor nor-malization before aggregation to align their scales; details and unnormalized results are provided in Appendix E.5. 
+
+Main Results. As shown in Table 1, GRPO w/o KL and the Reverse-KL variants often suffer from substantial forget-ting of previously acquired mathematical capabilities. The Forward-KL variants generally provide stronger capability retention, but may constrain exploration and adaptation on the new task. CoKL achieves the most favorable balance between prior-capability retention and new-task learning, yielding the highest aggregate performance across all model scales. Compared with the strongest baseline, CoKL im-proves Overall by 2.37 , 2.42 , and 1.40 points on Qwen3-0.6B, Qwen3-1.7B, and Qwen3-4B, respectively, demon-strating the effectiveness of the proposed method. Method Math Avg. Chat-Val Overall 
+
+Models based on Qwen3-1.7B 
+
+CoKL 75.11 101.45 88.28 
+
+w/o term1 3.85 100.83 52.34 w/o term2 73.28 98.44 85.86 
+
+Table 2: Ablation results under dual-anchor normalization. 
+
+Ablation Studies 
+
+Ablation Study of the Loss Structure. To examine the necessity of the two loss terms in CoKL, we conduct an ab-lation study on Qwen3-1.7B by removing each term in Eq. 17, denoted as w/o term1 and w/o term2 , respectively. Remov-ing the second term reduces the objective to the Correct-only Forward-KL formulation. As shown in Table 2, w/o term1 leads to a substantial performance degradation, pri-marily due to pronounced forgetting on the mathematical reasoning tasks. This result confirms that the first term is essential for preserving the model’s existing capabilities. In contrast, w/o term2 underperforms CoKL on the chat task, demonstrating the importance of the normalization correc-tion. This term removes the implicit correctness-mass com-ponent of correct-only reference replay, thereby isolating within-correct distribution preservation and reducing inter-ference with subsequent-task adaptation. 
+
+Batch-Level Correctness Floor. Since CoKL does not di-rectly constrain total correctness mass, we examine an ex-plicit batch-level correctness floor. For p ∈ { ref , θ }, define 
+
+bZp = 1
+
+N G 
+
+> N
+
+X
+
+> i=1
+> G
+
+X
+
+> j=1
+
+rpi,j , gB = [ bZref − bZθ ]+. (19) The auxiliary loss and combined objective are 
+
+Lfloor = − sg( gB)
+
+N G 
+
+> N
+
+X
+
+> i=1
+> G
+
+X
+
+> j=1
+
+ri,j ℓθ (yi,j | xi),
+
+Ltotal = LGRPO + βLCoKL + λfloor Lfloor .
+
+(20) We denote this variant as CoKL +Lfloor with λfloor = 1 .0;since the loss is gated by sg( gB) ∈ [0 , 1] , its effective strength adapts to the correctness deficit rather than acting as a hard constraint. As shown in Table 3, this mild, one-sided mass constraint yields no consistent retention gains while restrict-ing adaptation and reducing the overall score. This echoes our analysis: an explicit correctness-mass term reintroduces the coupling between retention and adaptation that CoKL avoids. Together with the w/o term2 ablation, it further sug-gests that, in our setting, forgetting acts more through drift within the correctness-conditioned distribution than through proportional loss of correctness mass. 
+
+KL Batch Analysis. We examine KL batch sizes of 8, 16, and 32, as shown in Figure 4 (Left). Increasing the batch size from 8 to 16 substantially improves mathematical retention, while the additional gain from 16 to 32 is modest. Chat per-formance varies only slightly across the three settings. These 
+
+Method Math Avg. Chat-Val Overall 
+
+Models based on Qwen3-0.6B 
+
+CoKL 72.41 100.53 86.47 
+
+CoKL + Lfloor 71.65 92.49 82.07 
+
+Models based on Qwen3-1.7B 
+
+CoKL 75.11 101.45 88.28 
+
+CoKL + Lfloor 75.79 99.63 87.71 
+
+Models based on Qwen3-4B 
+
+CoKL 45.77 104.02 74.90 
+
+CoKL + Lfloor 43.02 100.26 71.64 
+
+Table 3: Ablation of the batch-level correctness floor under dual-anchor normalization. The best result is shown in bold .8 16 32      
+
+> Batch size
+> 75 80 85 90 95 100 105 110
+> Normalized Score
+> 75.11 100.38 99.36 101.45 88.28 100.77
+> 100.57 102.17
+> 100.76
+> CoKL Performance vs. Batch Size
+> Math-Mean Chat-Val Overall 0.1 1.0 10.0
+> β
+> 60 70 80 90 100
+> Normalized Score
+> 72.55 75.11 73.38 101.77 101.45 94.25 87.16 88.28 83.81
+> CoKL Performance vs. β
+> Math-Mean Chat-Val Overall
+
+Figure 4: Effects of KL batch size (Left) and loss coefficient 
+
+β (Right) on CoKL performance using Qwen3-1.7B. results suggest that larger KL batches provide a more reliable estimate of the regularization objective and can strengthen capability retention without substantially affecting new-task adaptation. To limit the additional rollout cost, we use a KL batch size of 8 in the main experiments. 
+
+Sensitivity Analysis of the Loss Coefficient β. We ana-lyze β ∈ { 0.1, 1, 10 }. As shown in Figure 4 (Right), a large 
+
+β restricts chat-task adaptation, whereas a small β weakens mathematical capability retention. We therefore set β = 1 .0
+
+to balance retention and adaptation. 
+
+Conclusion 
+
+In this paper, we proposed CoKL, a correctness-conditioned KL regularizer that narrows the preservation constraint from the full response distribution to the conditional distribution over verified-correct responses. At the population level un-der a shared prompt distribution, CoKL decouples total cor-rectness probability from the relative probability allocation among correct responses and, unlike full-policy forward and reverse KL regularization, avoids a strict optimal correctness gap under an imperfect reference policy. Controlled multi-solution experiments directly validate its behavior in preserv-ing the correctness-conditioned distribution under improved correctness, while continual LLM post-training experiments demonstrate a favorable practical trade-off between prior-capability retention and new-task adaptation. References 
+
+Bai, Y.; Jones, A.; Ndousse, K.; Askell, A.; Chen, A.; Das-Sarma, N.; Drain, D.; Fort, S.; Ganguli, D.; Henighan, T.; et al. 2022. Training a helpful and harmless assistant with reinforcement learning from human feedback. arXiv preprint arXiv:2204.05862 .Bhaskar, A.; Ye, X.; and Chen, D. 2025. Language models that think, chat better. arXiv preprint arXiv:2509.20357 .Cai, M.; Liang, Y.; Wang, L.; Wang, Y.; Zhang, Y.; Xia, L.; Sun, Z.; Ye, X.; and Shi, D. 2026. Advancing General-Purpose Reasoning Models with Modular Gradient Surgery. 
+
+arXiv preprint arXiv:2602.02301 .Chen, Z.; Lu, R.; Zhao, A.; Wang, Z.; Yue, Y.; Song, S.; and Huang, G. 2026. Does reinforcement learning really incen-tivize reasoning capacity in llms beyond the base model? 
+
+Advances in Neural Information Processing Systems , 38: 57654–57689. Cui, G.; Zhang, Y.; Chen, J.; Yuan, L.; Wang, Z.; Zuo, Y.; Li, H.; Fan, Y.; Chen, H.; Chen, W.; et al. 2025. The entropy mechanism of reinforcement learning for reasoning language models. arXiv preprint arXiv:2505.22617 .Deng, W.; Wei, L.; Yu, C.; and Wu, T. 2025. Unlocking reasoning capabilities in llms via reinforcement learning ex-ploration. arXiv preprint arXiv:2510.03865 .Du, W.; Toshniwal, S.; Kisacanin, B.; Mahdavi, S.; Moshkov, I.; Armstrong, G.; Ge, S.; Minasyan, E.; Chen, F.; and Git-man, I. 2025. Nemotron-Math: Efficient Long-Context Dis-tillation of Mathematical Reasoning from Multi-Mode Su-pervision. arXiv preprint arXiv:2512.15489 .Guo, D.; Yang, D.; Zhang, H.; Song, J.; Wang, P.; Zhu, Q.; Xu, R.; Zhang, R.; Ma, S.; Bi, X.; et al. 2025. Deepseek-r1: Incentivizing reasoning capability in llms via reinforcement learning. arXiv preprint arXiv:2501.12948 .GX-Chen, A.; Prakash, J.; Guo, J.; Fergus, R.; and Ran-ganath, R. 2025. KL-Regularized Reinforcement Learn-ing is Designed to Mode Collapse. arXiv preprint arXiv:2510.20817 .He, C.; Luo, R.; Bai, Y.; Hu, S.; Thai, Z.; Shen, J.; Hu, J.; Han, X.; Huang, Y.; Zhang, Y.; et al. 2024. Olympiadbench: A challenging benchmark for promoting agi with olympiad-level bilingual multimodal scientific problems. In Proceed-ings of the 62nd Annual Meeting of the Association for Com-putational Linguistics (Volume 1: Long Papers) , 3828–3850. Hendrycks, D.; Burns, C.; Kadavath, S.; Arora, A.; Basart, S.; Tang, E.; Song, D.; and Steinhardt, J. 2021. Measuring mathematical problem solving with the math dataset. arXiv preprint arXiv:2103.03874 .Kotha, S.; Springer, J.; and Raghunathan, A. 2024. Un-derstanding catastrophic forgetting in language models via implicit inference. In International Conference on Learning Representations , volume 2024, 24110–24139. Kruszewski, G.; Erbacher, P.; Rozen, J.; and Dymetman, M. 2025. Whatever Remains Must Be True: Filtering Drives Reasoning in LLMs, Shaping Diversity. arXiv preprint arXiv:2512.05962 .Kwon, W.; Li, Z.; Zhuang, S.; Sheng, Y.; Zheng, L.; Yu, C. H.; Gonzalez, J.; Zhang, H.; and Stoica, I. 2023. Efficient memory management for large language model serving with pagedattention. In Proceedings of the 29th symposium on operating systems principles , 611–626. Lee, C.; Kang, M.; and Hwang, S. J. 2026. SAGE: Shaping Anchors for Guided Exploration in RLVR of LLMs. arXiv preprint arXiv:2605.18864 .Li, D.; Zhou, J.; Brunswic, L. M.; Ghaddar, A.; Sun, Q.; Ma, L.; Luo, Y.; Li, D.; Coates, M.; Hao, J.; et al. 2025a. Omni-Thinker: Scaling Multi-Task RL in LLMs with Hybrid Re-ward and Task Scheduling. arXiv preprint arXiv:2507.14783 .Li, L.; Zhou, Z.; Hao, J.; Liu, J. K.; Miao, Y.; Pang, W.; Tan, X.; Chu, W.; Wang, Z.; Pan, S.; et al. 2025b. The choice of divergence: A neglected key to mitigating diversity collapse in reinforcement learning with verifiable reward. 
+
+arXiv preprint arXiv:2509.07430 .Li, Y.; Pan, Z.; Lin, H.; Sun, M.; He, C.; and Wu, L. 2025c. Can one domain help others? a data-centric study on multi-domain reasoning via reinforcement learning. arXiv preprint arXiv:2507.17512 .Lin, M.; Gong, Z.; Tang, M.; Li, Q.; Wang, C.; Ma, J.; Huang, S.; Tang, K.; and Lu, H. 2026a. expo: Exploration-prioritized policy optimization via adaptive kl regulation and gaussian curriculum sampling. arXiv preprint arXiv:2605.09923 .Lin, Y.; Lin, H.; Xiong, W.; Diao, S.; Liu, J.; Zhang, J.; Pan, R.; Wang, H.; Hu, W.; Zhang, H.; et al. 2024. Mitigating the alignment tax of rlhf. In Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing , 580– 606. Lin, Z.; Wang, X.; Cao, J.; Chai, J.; Wang, L.; Lu, X.; Lin, W.; He, R.; and Yin, G. 2026b. Resrl: Boosting llm reasoning via negative sample projection residual reinforcement learning. 
+
+arXiv preprint arXiv:2605.00380 .Lin, Z.; Wang, X.; Cao, J.; Chai, J.; Yin, G.; Lin, W.; and He, R. 2025. ResT: Reshaping Token-Level Policy Gradi-ents for Tool-Use Large Language Models. arXiv preprint arXiv:2509.21826 .Liu, C. Y.; Zeng, L.; Liu, J.; Yan, R.; He, J.; Wang, C.; Yan, S.; Liu, Y.; and Zhou, Y. 2024. Skywork-Reward: Bag of Tricks for Reward Modeling in LLMs. arXiv preprint arXiv:2410.18451 .Liu, Z.; Chen, C.; Li, W.; Qi, P.; Pang, T.; Du, C.; Lee, W. S.; and Lin, M. 2025. Understanding r1-zero-like training: A critical perspective. arXiv preprint arXiv:2503.20783 .Lochab, A.; Li, B.; and Zhang, R. 2026. Uniform-Correct Policy Optimization: Breaking RLVR’s Indifference to Di-versity. arXiv preprint arXiv:2605.00365 .Lu, X.; Wang, X.; Chai, J.; Yin, G.; Lin, W.; Chen, Z.; Luo, Y.; Zhuang, F.; Ban, Y.; and Wang, D. 2026. Contextual Rollout Bandits for Reinforcement Learning with Verifiable Rewards. arXiv preprint arXiv:2602.08499 .Ouyang, L.; Wu, J.; Jiang, X.; Almeida, D.; Wainwright, C.; Mishkin, P.; Zhang, C.; Agarwal, S.; Slama, K.; Ray, A.; et al. 2022. Training language models to follow instructions with human feedback. Advances in neural information processing systems , 35: 27730–27744. Shao, Z.; Wang, P.; Zhu, Q.; Xu, R.; Song, J.; Bi, X.; Zhang, H.; Zhang, M.; Li, Y.; Wu, Y.; et al. 2024. Deepseekmath: Pushing the limits of mathematical reasoning in open lan-guage models. arXiv preprint arXiv:2402.03300 .Sheng, G.; Zhang, C.; Ye, Z.; Wu, X.; Zhang, W.; Zhang, R.; Peng, Y.; Lin, H.; and Wu, C. 2024. HybridFlow: A Flexible and Efficient RLHF Framework. arXiv preprint arXiv: 2409.19256 .Stiennon, N.; Ouyang, L.; Wu, J.; Ziegler, D.; Lowe, R.; Voss, C.; Radford, A.; Amodei, D.; and Christiano, P. F. 2020. Learning to summarize with human feedback. Advances in neural information processing systems , 33: 3008–3021. Vassoyan, J.; Beau, N.; and Plaud, R. 2025. Ignore the kl penalty! boosting exploration on critical tokens to enhance rl fine-tuning. In Findings of the Association for Computational Linguistics: NAACL 2025 , 6108–6118. Wan, Z.; Shen, Y.; Dou, Z.; Zhou, D.; Zhang, Y.; Wang, X.; Shen, H.; Xiong, J.; Tao, C.; Zhong, Z.; et al. 2026. Dsdr: Dual-scale diversity regularization for exploration in llm reasoning. arXiv preprint arXiv:2602.19895 .Wang, H.; Long, X.; Li, Z.; Xu, Y.; Li, T.; and Tang, Y. 2026a. To Mix or To Merge: Toward Multi-Domain Re-inforcement Learning for Large Language Models. arXiv preprint arXiv:2602.12566 .Wang, J.; Liu, R.; Zhang, F.; Li, X.; Zhou, G.; and Pan, L. 2025. Stabilizing knowledge, promoting reasoning: Dual-token constraints for rlvr. arXiv preprint arXiv:2507.15778 .Wang, L.; Wang, X.; Lu, X.; Zhang, Z.; Wu, J.; Chai, J.; Lin, W.; and Yin, G. 2026b. Implicit Hierarchical GRPO: Decou-pling Tool Invocation from Execution for Tool-Integrated Mathematical Reasoning. arXiv preprint arXiv:2605.18500 .Xue, Z.; Zheng, L.; Liu, Q.; Li, Y.; Zheng, X.; Ma, Z.; and An, B. 2025. Simpletir: End-to-end reinforcement learn-ing for multi-turn tool-integrated reasoning. arXiv preprint arXiv:2509.02479 .Yang, A.; Li, A.; Yang, B.; Zhang, B.; Hui, B.; Zheng, B.; Yu, B.; Gao, C.; Huang, C.; Lv, C.; et al. 2025. Qwen3 technical report. arXiv preprint arXiv:2505.09388 .Yu, Q.; Zhang, Z.; Zhu, R.; Yuan, Y.; Zuo, X.; Yue, Y.; Dai, W.; Fan, T.; Liu, G.; Liu, L.; et al. 2026. Dapo: An open-source llm reinforcement learning system at scale. Advances in Neural Information Processing Systems , 38: 113222– 113244. Zheng, C.; Liu, S.; Li, M.; Chen, X.-H.; Yu, B.; Gao, C.; Dang, K.; Liu, Y.; Men, R.; Yang, A.; et al. 2025. Group sequence policy optimization. arXiv preprint arXiv:2507.18071 .Ziegler, D. M.; Stiennon, N.; Wu, J.; Brown, T. B.; Rad-ford, A.; Amodei, D.; Christiano, P.; and Irving, G. 2019. Fine-tuning language models from human preferences. arXiv preprint arXiv:1909.08593 .
+
+Appendix A: Derivation of the Correctness Decomposition 
+
+For a fixed prompt x, let r(x, y ) ∈ { 0, 1} indicate whether response y is verified as correct. For continuous rewards, samples can be partitioned into positive and negative groups using a threshold, allowing the same analysis to apply. Define the correct and incorrect response sets as 
+
+Y+(x) = {y : r(x, y ) = 1 }, Y−(x) = {y : r(x, y ) = 0 }.
+
+For any policy π, its probability of producing a correct re-sponse is 
+
+Zπ (x) = X
+
+> y
+
+r(x, y )π(y | x). (21) The corresponding correctness-conditioned and incorrectness-conditioned policies are 
+
+π+(y | x) = r(x, y )π(y | x)
+
+Zπ (x) ,π−(y | x) = [1 − r(x, y )] π(y | x)1 − Zπ (x) .
+
+(22) Let πref denote the reference policy and πθ the current policy. For readability, we omit the prompt x below and write 
+
+Zref = Zπref (x), Zθ = Zπθ (x).
+
+We assume 0 < Z ref , Z θ < 1 for notational convenience. The same decomposition extends to boundary cases under the standard extended-value convention for KL divergence. The full-policy forward KL can be partitioned over the correct and incorrect response sets: 
+
+DKL (πref ∥πθ ) = X
+
+> y∈Y +
+
+πref (y) log πref (y)
+
+πθ (y)+ X
+
+> y∈Y −
+
+πref (y) log πref (y)
+
+πθ (y) .
+
+(23) For y ∈ Y +, we have 
+
+πref (y) = Zref π+ref (y), πθ (y) = Zθ π+ 
+
+> θ
+
+(y).
+
+Therefore, the contribution from the correct-response set sat-isfies X
+
+> y∈Y +
+
+πref (y) log πref (y)
+
+πθ (y)= Zref 
+
+X
+
+> y∈Y +
+
+π+ref (y) log Zref π+ref (y)
+
+Zθ π+ 
+
+> θ
+
+(y)= Zref log Zref 
+
+Zθ
+
++ Zref DKL 
+
+ π+ref ∥π+
+
+> θ
+
+ .
+
+(24) Here, the last equality uses 
+
+X
+
+> y∈Y +
+
+π+ref (y) = 1 .
+
+Similarly, for y ∈ Y −,
+
+πref (y) = (1 − Zref )π− 
+
+> ref
+
+(y), πθ (y) = (1 − Zθ )π− 
+
+> θ
+
+(y).
+
+The contribution from the incorrect-response set is 
+
+X
+
+> y∈Y −
+
+πref (y) log πref (y)
+
+πθ (y)= (1 − Zref ) log 1 − Zref 
+
+1 − Zθ
+
++ (1 − Zref )DKL 
+
+ π− 
+
+> ref
+
+∥π−
+
+> θ
+
+ .
+
+(25) Combining Eqs. 24 and 25 gives 
+
+DKL (πref ∥πθ ) = Zref log Zref 
+
+Zθ
+
++ (1 − Zref ) log 1 − Zref 
+
+1 − Zθ
+
++ Zref DKL 
+
+ π+ref ∥π+
+
+> θ
+
+
+
++ (1 − Zref )DKL 
+
+ π− 
+
+> ref
+
+∥π−
+
+> θ
+
+ .
+
+(26) The first two terms form the KL divergence between the Bernoulli distributions induced by the correctness event: 
+
+DKL (Bern( Zref )∥ Bern( Zθ )) = Zref log Zref 
+
+Zθ
+
++ (1 − Zref ) log 1 − Zref 
+
+1 − Zθ
+
+. (27) Hence, the full-policy forward KL admits the decomposition 
+
+DKL (πref ∥πθ ) = DKL (Bern( Zref )∥ Bern( Zθ )) + Zref DKL 
+
+ π+ref ∥π+
+
+> θ
+
+
+
++ (1 − Zref )DKL 
+
+ π− 
+
+> ref
+
+∥π−
+
+> θ
+
+ .
+
+(28) 
+
+Appendix B: Complete Derivation of CoKL 
+
+Setup 
+
+For each prompt x, let πref (y | x) denote the frozen reference policy and πθ (y | x) denote the current policy. Let Y = 1 
+
+denote the event that response y is verified as correct for prompt x. We define r(x, y ) = 1y is correct  ∈ { 0, 1}.The correctness probabilities of the reference and current policies are 
+
+Zref (x) = X
+
+> y
+
+r(x, y )πref (y | x), (29) and 
+
+Zθ (x) = X
+
+> y
+
+r(x, y )πθ (y | x). (30) The corresponding correctness-conditioned policies are 
+
+π+ref (y | x) = r(x, y )πref (y | x)
+
+Zref (x) , (31) and 
+
+π+ 
+
+> θ
+
+(y | x) = r(x, y )πθ (y | x)
+
+Zθ (x) . (32) We assume that Zref (x) > 0 and Zθ (x) > 0, so that the correctness-conditioned policies are well-defined. 
+
+CoKL Objective and Equivalent Form 
+
+CoKL is defined as the forward KL divergence between the correctness-conditioned reference and current policies: 
+
+LCoKL (x) = DKL 
+
+ π+ref (· | x)∥π+ 
+
+> θ
+
+(· | x) . (33) Expanding the KL divergence gives 
+
+LCoKL (x) = X
+
+> y
+
+π+ref (y | x) log π+ref (y | x)
+
+− X
+
+> y
+
+π+ref (y | x) log π+ 
+
+> θ
+
+(y | x).
+
+(34) The first term in Eq. 34 is independent of θ. Moreover, every response in the support of π+ref (· | x) satisfies r(x, y ) = 1. Therefore, using Eq. 32, 
+
+log π+ 
+
+> θ
+
+(y | x) = log πθ (y | x) − log Zθ (x) (35) on the support of π+ref (· | x). Substituting Eq. 35 into Eq. 34 yields, up to terms independent of θ,
+
+LCoKL (x) .
+
+= − Ey∼π+ref (·| x) [log πθ (y | x)] + log Zθ (x),
+
+(36) where .
+
+= denotes equality up to terms independent of θ.
+
+Gradient of the CoKL Objective 
+
+Differentiating Eq. 36, the first term gives 
+
+−Ey∼π+ref (·| x) [∇θ log πθ (y | x)] . (37) For the normalization term, 
+
+∇θ log Zθ (x) = ∇θ Zθ (x)
+
+Zθ (x) . (38) From Eq. 30, 
+
+∇θ Zθ (x) = X
+
+> y
+
+r(x, y )∇θ πθ (y | x). (39) Using 
+
+∇θ πθ (y | x) = πθ (y | x)∇θ log πθ (y | x),
+
+we obtain 
+
+∇θ log Zθ (x) = X
+
+> y
+
+r(x, y )πθ (y | x)
+
+Zθ (x)
+
+· ∇ θ log πθ (y | x).
+
+(40) By Eq. 32, this becomes 
+
+∇θ log Zθ (x) = Ey∼π+  
+
+> θ(·| x)
+
+[∇θ log πθ (y | x)] . (41) Combining Eqs. 37 and 41, the CoKL gradient is 
+
+∇θ LCoKL (x) = − Ey∼π+ref (·| x) [∇θ log πθ (y | x)] + Ey∼π+  
+
+> θ(·| x)
+
+[∇θ log πθ (y | x)] . (42) 
+
+On-Policy Monte Carlo Surrogate 
+
+Consider a minibatch containing N prompt groups {xi}Ni=1 .For each prompt xi, draw G responses from the frozen ref-erence policy: 
+
+yij ∼ πref (· | xi), rij = r(xi, y ij ). (43) The empirical reference-side conditional weights are 
+
+αij = rij 
+
+PGk=1 rik 
+
+. (44) When PGk=1 rik = 0 , we set αij = 0 for all responses in that group. For any function f , the reference-side conditional expectation can be approximated by the self-normalized es-timator 
+
+Ey∼π+ref (·| xi)[f (y)] ≈
+
+> G
+
+X
+
+> j=1
+
+αij f (yij ). (45) Similarly, draw G fresh responses from the current policy: 
+
+y′ 
+
+> ij
+
+∼ πθ (· | xi), r′ 
+
+> ij
+
+= r(xi, y ′ 
+
+> ij
+
+). (46) Define the empirical current-policy conditional weights as 
+
+δij = r′
+
+> ij
+
+PGk=1 r′
+
+> ik
+
+. (47) When PGk=1 r′ 
+
+> ik
+
+= 0 , we set δij = 0 for all responses in that group. The current-policy conditional expectation is then approximated by 
+
+Ey∼π+ 
+
+> θ(·| xi)
+
+[f (y)] ≈
+
+> G
+
+X
+
+> j=1
+
+δij f (y′ 
+
+> ij
+
+). (48) A stop-gradient surrogate whose gradient implements the finite-group approximation of Eq. 42 is 
+
+bLon = − 1
+
+N
+
+> N
+
+X
+
+> i=1
+> G
+
+X
+
+> j=1
+
+sg( αij ) log πθ (yij | xi)+ 1
+
+N
+
+> N
+
+X
+
+> i=1
+> G
+
+X
+
+> j=1
+
+sg( δij ) log πθ (y′ 
+
+> ij
+
+| xi),
+
+(49) where sg( ·) denotes stop-gradient. The second term is a gra-dient surrogate for log Zθ (x), rather than an unbiased scalar estimator of log Zθ (x).The zero-denominator convention above makes the current-policy conditional term vanish when no verified-correct response is observed in a rollout group. We next characterize the resulting expected finite-group update in the on-policy setting. 
+
+Finite-Group Correctness-Recovery Property. For afixed prompt x, let 
+
+sθ (y | x) = ∇θ log πθ (y | x),
+
+and define 
+
+μ+ref (x) = Ey∼π+ref (·| x) [sθ (y | x)] ,μ+ 
+
+> θ
+
+(x) = Ey∼π+  
+
+> θ(·| x)
+
+[sθ (y | x)] = ∇θ log Zθ (x).
+
+Consider the on-policy finite-group surrogate in Eq. 49, where the reference group is conditioned on containing at least one verified-correct response, as in the construction of 
+
+D+. Let 
+
+Kθ =
+
+> G
+
+X
+
+> j=1
+
+r(x, y ′ 
+
+> j
+
+), y′ 
+
+> j
+
+∼ πθ (· | x).
+
+Then the expected gradient of the per-prompt surrogate sat-isfies 
+
+E
+
+h
+
+∇θ bLon (x)
+
+i
+
+= − μ+ref (x) + 1 − (1 − Zθ (x)) G μ+ 
+
+> θ
+
+(x).
+
+(50) Equivalently, 
+
+E
+
+h
+
+∇θ bLon (x)
+
+i
+
+= ∇θ LCoKL (x) − (1 − Zθ (x)) G∇θ log Zθ (x).
+
+(51) Moreover, define 
+
+RG(Z) = 
+
+> ∞
+
+X
+
+> m=G+1
+
+(1 − Z)m
+
+m
+
+= − log Z −
+
+> G
+
+X
+
+> m=1
+
+(1 − Z)m
+
+m , 0 < Z ≤ 1.
+
+(52) Since 
+
+R′
+
+> G
+
+(Z) = − (1 − Z)G
+
+Z , (53) Eq. 51 can be written as 
+
+E
+
+h
+
+∇θ bLon (x)
+
+i
+
+= ∇θ [LCoKL (x) + RG(Zθ (x))] . (54) The recovery term satisfies 
+
+RG(Z) ≥ 0, R′
+
+> G
+
+(Z) < 0 for 0 < Z < 1, (55) and 
+
+lim  
+
+> Z→1
+
+RG(Z) = 0 , lim  
+
+> G→∞
+
+RG(Z) = 0 for every fixed Z > 0.
+
+(56) 
+
+Proof. Conditioned on Kθ = k > 0, the k verified-correct responses are distributed according to π+ 
+
+> θ
+
+(· | x). Therefore, 
+
+E
+
+
+
+> G
+
+X
+
+> j=1
+
+δj sθ (y′ 
+
+> j
+
+| x) Kθ > 0
+
+ = μ+ 
+
+> θ
+
+(x). (57) When Kθ = 0 , all current-policy conditional weights are set to zero. Since 
+
+Kθ ∼ Binomial( G, Z θ (x)) ,
+
+we have 
+
+Pr( Kθ > 0) = 1 − (1 − Zθ (x)) G. (58) Consequently, 
+
+E
+
+
+
+> G
+
+X
+
+> j=1
+
+δj sθ (y′ 
+
+> j
+
+| x)
+
+ = 1 − (1 − Zθ (x)) G μ+ 
+
+> θ
+
+(x). (59) For the reference-side term, conditioning the reference group on containing at least one verified-correct response gives 
+
+E
+
+
+
+> G
+
+X
+
+> j=1
+
+αj sθ (yj | x) Kref > 0
+
+ = μ+ref (x). (60) Combining Eqs. 59 and 60 yields Eq. 50. Using 
+
+∇θ LCoKL (x) = −μ+ref (x) + μ+ 
+
+> θ
+
+(x)
+
+gives Eq. 51. Finally, differentiating Eq. 52 yields 
+
+R′
+
+> G
+
+(Z) = −
+
+> ∞
+
+X
+
+> m=G+1
+
+(1 − Z)m−1 = − (1 − Z)G
+
+Z .
+
+Therefore, 
+
+∇θ RG(Zθ (x)) = −(1 − Zθ (x)) G∇θ log Zθ (x),which proves Eq. 54. The remaining properties follow di-rectly from the nonnegative series representation in Eq. 52. 
+
+□
+
+The finite-group recovery term does not anchor the cur-rent correctness probability to Zref (x). Instead, because 
+
+R′
+
+> G
+
+(Z) < 0, minimizing this term provides a one-sided pressure toward higher correctness. To make this distinc-tion explicit, consider the expected finite-group population objective 
+
+JG(π) = Zπ − β DKL 
+
+ π+ref ∥π+ + RG(Zπ ) . (61) For fixed π+,
+
+∂J G
+
+∂Z π
+
+= 1 + β (1 − Zπ )G
+
+Zπ
+
+> 0. (62) Thus, increasing the total correctness probability strictly im-proves the objective. Under the same unrestricted policy-distribution setting used in Appendix C, every global maxi-mizer therefore satisfies 
+
+Zπ⋆ = 1 , π+⋆ = π+ref . (63) Hence, the finite-group fallback does not reintroduce the strict correctness gap induced by full-policy KL regulariza-tion. 
+
+Off-Policy Estimation 
+
+For completeness, we derive an off-policy extension for set-tings where responses generated by a behavior policy are reused. Suppose that the current-policy conditional term is instead estimated using responses generated by a behavior policy πold :
+
+ˆyij ∼ πold (· | xi), ˆrij = r(xi, ˆyij ). (64) We assume that the support of the current policy is contained in the support of the behavior policy for the responses con-sidered below. For a complete response ˆyij of length Tij ,define its sequence log-likelihood under the current policy as 
+
+ℓθ (ˆ yij | xi) = 
+
+> Tij
+
+X
+
+> t=1
+
+log πθ
+
+ ˆyij,t | xi, ˆyij,<t 
+
+. (65) The behavior-policy log-likelihood ℓold (ˆ yij | xi) is defined analogously. The sequence-level log-importance ratio is 
+
+∆ij (θ) = ℓθ (ˆ yij | xi) − ℓold (ˆ yij | xi). (66) Hence, the sequence-level importance ratio is 
+
+ρij (θ) = exp  ∆ij (θ) = πθ (ˆ yij | xi)
+
+πold (ˆ yij | xi) . (67) For compactness, let Eold ,i [·] denote expectation under 
+
+πold (· | xi). The current correctness probability can be ex-pressed as 
+
+Zθ (xi) = Eold ,i [ρ(ˆ y; θ)r(xi, ˆy)] . (68) Its log-gradient is therefore 
+
+∇θ log Zθ (xi) = Eold ,i [ρ(ˆ y; θ)r(xi, ˆy)∇θ log πθ (ˆ y | xi)] 
+
+Eold ,i [ρ(ˆ y; θ)r(xi, ˆy)] .
+
+(69) Using G behavior-policy samples, this gradient is approxi-mated by 
+
+∇θ log Zθ (xi) ≈
+
+> G
+
+X
+
+> j=1
+
+ρij (θ)ˆ rij 
+
+PGk=1 ρik (θ)ˆ rik 
+
+∇θ log πθ (ˆ yij | xi).
+
+(70) 
+
+Clipped Off-Policy CoKL Surrogate 
+
+Sequence-level importance ratios may have high variance. We therefore define the clipped importance weight 
+
+˜ρij = exp 
+
+h
+
+clip  ∆ij (θ), log(1 − ϵIS ), log(1 + ϵIS )i
+
+.
+
+(71) The corresponding self-normalized current-policy condi-tional weights are 
+
+γij = ˜ρij ˆrij 
+
+PGk=1 ˜ρik ˆrik 
+
+. (72) When the denominator in Eq. 72 is zero, we set γij = 0 
+
+for all responses in that group. Since the clipped importance weights are strictly positive, this case occurs exactly when the behavior-policy rollout group contains no verified-correct response. The current-policy conditional correction is then unavailable, and the surrogate falls back to the reference-correct term. The clipped off-policy CoKL surrogate is 
+
+bLCoKL = − 1
+
+N
+
+> N
+
+X
+
+> i=1
+> G
+
+X
+
+> j=1
+
+sg( αij ) log πθ (yij | xi)+ 1
+
+N
+
+> N
+
+X
+
+> i=1
+> G
+
+X
+
+> j=1
+
+sg( γij ) log πθ (ˆ yij | xi).
+
+(73) Unlike the on-policy surrogate analyzed above, the clipped off-policy surrogate is additionally affected by finite-sample self-normalization, policy mismatch, and importance-ratio clipping, and therefore does not admit the same exact recovery-term characterization. At the point of sample col-lection, θ = θold and ˜ρij = 1 , so it reduces to the on-policy surrogate. During subsequent optimization epochs, the clipped importance weights approximately correct for policy mismatch. 
+
+Appendix C: Proof of Correctness-Mass Decoupling of CoKL 
+
+Theorem 3 (Correctness-Mass Decoupling under CoKL) .
+
+For β > 0, consider the population-level objective 
+
+JCoKL (π) = Zπ − βD KL 
+
+ π+ref ∥π+ .
+
+The objective depends on π only through Zπ and π+ and is independent of π−. For any two policies π1 and π2 satisfying 
+
+π+1 = π+2 and Zπ2 > Z π1 ,
+
+JCoKL (π2) − JCoKL (π1) = Zπ2 − Zπ1 > 0.
+
+Moreover, over the full probability simplex, 
+
+max π JCoKL (π) = 1, and every global maximizer satisfies 
+
+Zπ⋆ = 1 , π+⋆ = π+ref .Proof. We first show that (z, p +, p −) provides a valid pa-rameterization of the unrestricted policy-distribution space. For any policy π satisfying 0 < Z π < 1, define 
+
+z = Zπ = X
+
+> y∈C
+
+π(y),
+
+and 
+
+p+(y) = π(y)
+
+z , y ∈ C , p−(y) = π(y)1 − z , y ∈ I .
+
+These are valid conditional distributions because 
+
+X
+
+> y∈C
+
+p+(y) = 1 , X
+
+> y∈I
+
+p−(y) = 1 .
+
+Moreover, the original policy can be recovered from the triple 
+
+(z, p +, p −) as 
+
+π(y) = 
+
+(zp +(y), y ∈ C ,
+
+(1 − z)p−(y), y ∈ I .
+
+Conversely, let z ∈ (0 , 1) , let p+ be any probability distri-bution on C, and let p− be any probability distribution on I.Define 
+
+πz,p +,p − (y) = 
+
+(zp +(y), y ∈ C ,
+
+(1 − z)p−(y), y ∈ I .
+
+This construction yields a valid policy since 
+
+X
+
+> y∈Y
+
+πz,p +,p − (y) = z X
+
+> y∈C
+
+p+(y) + (1 − z) X
+
+> y∈I
+
+p−(y)= z + (1 − z)= 1 .
+
+It also satisfies 
+
+Zπz,p +,p − = z, π+ 
+
+> z,p +,p −
+
+= p+, π− 
+
+> z,p +,p −
+
+= p−.
+
+Therefore, in the unrestricted policy-distribution space, z,
+
+p+, and p− can be varied separately through this bijective parameterization. Using Zπ = z and π+ = p+, the CoKL objective becomes 
+
+JCoKL (z, p +, p −) = Zπ − βD KL 
+
+ π+ref ∥π+
+
+= z − βD KL 
+
+ π+ref ∥p+ .
+
+The objective is therefore independent of p−. Moreover, for fixed p+ and p− and any 0 < z 1 < z 2 < 1,
+
+JCoKL (z2, p +, p −) − JCoKL (z1, p +, p −)= z2 − βD KL 
+
+ π+ref ∥p+ 
+
+− z1 − βD KL 
+
+ π+ref ∥p+ 
+
+= z2 − z1
+
+> 0.
+
+Thus, increasing the total probability assigned to correct responses while preserving the conditional distributions strictly improves the objective without changing the CoKL penalty. It remains to characterize the global optimum. For every policy, 
+
+Zπ ≤ 1
+
+and 
+
+DKL 
+
+ π+ref ∥π+ ≥ 0.
+
+Consequently, 
+
+JCoKL (π) ≤ Zπ ≤ 1.
+
+Now define the boundary policy 
+
+¯π(y) = 
+
+(π+ref (y), y ∈ C ,
+
+0, y ∈ I .
+
+Since π+ref is normalized over C,
+
+Z¯π = 1 , ¯π+ = π+ref .
+
+Hence, 
+
+DKL 
+
+ π+ref ∥¯π+ = 0 ,
+
+and therefore 
+
+JCoKL (¯ π) = 1 .
+
+Thus, 
+
+max  
+
+> π
+
+JCoKL (π) = 1 .
+
+Finally, let π⋆ be any global maximizer. Since 
+
+JCoKL (π⋆) = 1 , while Zπ⋆ ≤ 1 and the KL divergence is nonnegative, equality requires 
+
+Zπ⋆ = 1 
+
+and 
+
+DKL 
+
+ π+ref ∥π+⋆ = 0 .
+
+A KL divergence is zero if and only if its two arguments are identical. Therefore, 
+
+π+⋆ = π+ref .
+
+Appendix D: Proof of the Strict Correctness Gap under Full-Policy KL 
+
+Theorem 4 (Strict Correctness Gap Induced by Full-Policy KL) . Let q = Zref ∈ (0 , 1) and β > 0. Consider the full-policy forward- and reverse-KL objectives 
+
+JFKL (π) = Zπ − βD KL (πref ∥π) ,JRKL (π) = Zπ − βD KL (π∥πref ) .
+
+Under the required absolute-continuity conditions, their global optimizers satisfy π+⋆ = π+ref and π−⋆ = π− 
+
+> ref
+
+. The corresponding optimal correctness probabilities are 
+
+Z⋆ 
+
+> FKL
+
+= 1 − β + p(β − 1) 2 + 4 βq 
+
+2 ,Z⋆ 
+
+> RKL
+
+= σ
+
+
+
+logit( q) + 1
+
+β
+
+
+
+,
+
+where σ(a) = (1+ e−a)−1. Both satisfy q < Z ⋆ < 1 and are strictly decreasing in β. Furthermore, for ⋄ ∈ { FKL , RKL },
+
+lim 
+
+> β→0+
+
+Z⋆ 
+
+> ⋄
+
+= 1 , lim  
+
+> β→∞
+
+Z⋆ 
+
+> ⋄
+
+= q. 
+
+Proof. By the parameterization established in Appendix C, every policy with 0 < Z π < 1 can be represented as 
+
+(z, p +, p −) = ( Zπ , π +, π −).
+
+The reference policy is correspondingly represented by 
+
+ q, π +ref , π −
+
+> ref
+
+ .Full forward KL. The conditional decomposition of the forward KL gives 
+
+DKL (πref ∥π) = DKL (Bern( q)∥ Bern( z)) + qD KL 
+
+ π+ref ∥p+ + (1 − q)DKL 
+
+ π− 
+
+> ref
+
+∥p− .
+
+The corresponding objective is therefore 
+
+JFKL (z, p +, p −) = z − βD KL (Bern( q)∥ Bern( z)) 
+
+− βqD KL 
+
+ π+ref ∥p+
+
+− β(1 − q)DKL 
+
+ π− 
+
+> ref
+
+∥p− .
+
+For any fixed z, the two conditional KL terms are nonnegative and attain their minimum value of zero at 
+
+p+ = π+ref , p− = π− 
+
+> ref
+
+.
+
+The distributional optimization thus reduces to 
+
+max  
+
+> 0<z< 1
+
+f (z),
+
+where 
+
+f (z) = z − βD KL (Bern( q)∥ Bern( z)) = z − β
+
+
+
+q log qz + (1 − q) log 1 − q
+
+1 − z
+
+
+
+.
+
+The first and second derivatives of f are 
+
+f ′(z) = 1 − β z − qz(1 − z) ,f ′′ (z) = −β
+
+ qz2 + 1 − q
+
+(1 − z)2
+
+
+
+< 0.
+
+Therefore, f is strictly concave on (0 , 1) . Moreover, the for-ward Bernoulli KL diverges as z → 0+ or z → 1−, so the unique global maximum is attained at an interior stationary point. Setting f ′(z) = 0 gives 
+
+1 = β z − qz(1 − z) ,
+
+or equivalently, 
+
+z2 + ( β − 1) z − βq = 0 .
+
+The two roots are 
+
+z = 1 − β ± p(β − 1) 2 + 4 βq 
+
+2 .
+
+Their product is −βq < 0, so exactly one root is positive. The unique feasible solution is therefore 
+
+Z⋆ 
+
+> FKL
+
+= 1 − β + p(β − 1) 2 + 4 βq 
+
+2 .
+
+To determine its location, note that 
+
+f ′(q) = 1 > 0, lim  
+
+> z→1−
+
+f ′(z) = −∞ .
+
+Since f ′ is strictly decreasing, its unique zero satisfies 
+
+q < Z ⋆ 
+
+> FKL
+
+< 1.
+
+The stationary-point equation can be rearranged as 
+
+β = h (Z⋆
+
+> FKL
+
+) , h(z) = z(1 − z)
+
+z − q , z ∈ (q, 1) .
+
+Its derivative is 
+
+h′(z) = − (z − q)2 + q(1 − q)(z − q)2 < 0.
+
+Thus, h is strictly decreasing, and so is its inverse Z⋆
+
+> FKL
+
+(β).Furthermore, 
+
+lim 
+
+> z→q+
+
+h(z) = ∞, lim 
+
+> z→1−
+
+h(z) = 0 ,
+
+which implies 
+
+lim  
+
+> β→0+
+
+Z⋆ 
+
+> FKL
+
+= 1 , lim  
+
+> β→∞
+
+Z⋆ 
+
+> FKL
+
+= q. 
+
+Full reverse KL. The reverse KL admits the analogous decomposition 
+
+DKL (π∥πref )= DKL (Bern( z)∥ Bern( q)) + zD KL 
+
+ p+∥π+ref 
+
+
+
++ (1 − z)DKL 
+
+ p−∥π−
+
+> ref
+
+ .
+
+For fixed z, the two conditional KL terms are minimized at 
+
+p+ = π+ref , p− = π− 
+
+> ref
+
+.
+
+Hence, the optimization reduces to 
+
+max  
+
+> 0≤z≤1
+
+g(z),
+
+where 
+
+g(z) = z − βD KL (Bern( z)∥ Bern( q)) = z − β
+
+
+
+z log zq + (1 − z) log 1 − z
+
+1 − q
+
+
+
+.
+
+Its derivatives are 
+
+g′(z) = 1 − β log z(1 − q)
+
+q(1 − z) ,g′′ (z) = − βz(1 − z) < 0.
+
+Thus, g is strictly concave on (0 , 1) . In addition, 
+
+lim  
+
+> z→0+
+
+g′(z) = + ∞, lim  
+
+> z→1−
+
+g′(z) = −∞ ,
+
+so it has a unique interior global maximizer. Setting g′(z) = 0 gives 
+
+log z(1 − q)
+
+q(1 − z) = 1
+
+β .
+
+Equivalently, 
+
+logit( z) = logit( q) + 1
+
+β ,
+
+and hence 
+
+Z⋆ 
+
+> RKL
+
+= σ
+
+
+
+logit( q) + 1
+
+β
+
+
+
+.Because β−1 > 0 and σ is strictly increasing, 
+
+Z⋆ 
+
+> RKL
+
+> σ (logit( q)) = q. 
+
+Since the sigmoid argument is finite for every finite β > 0,
+
+Z⋆ 
+
+> RKL
+
+< 1.
+
+Therefore, 
+
+q < Z ⋆ 
+
+> RKL
+
+< 1.
+
+Differentiating the closed-form solution gives 
+
+∂Z ⋆
+
+> RKL
+
+∂β = − Z⋆ 
+
+> RKL
+
+(1 − Z⋆
+
+> RKL
+
+)
+
+β2 < 0.
+
+Finally, 
+
+lim 
+
+> β→0+
+
+
+
+logit( q) + 1
+
+β
+
+
+
+= + ∞,
+
+whereas 
+
+lim 
+
+> β→∞
+
+
+
+logit( q) + 1
+
+β
+
+
+
+= logit( q).
+
+Applying the sigmoid function yields 
+
+lim  
+
+> β→0+
+
+Z⋆ 
+
+> RKL
+
+= 1 , lim  
+
+> β→∞
+
+Z⋆ 
+
+> RKL
+
+= q. 
+
+This completes the proof. 
+
+Appendix E: Experimental Details 
+
+E.1 Details of the Controlled Multi-Solution RL Experiment 
+
+The environment contains 48 latent clusters and 200 can-didate actions, of which 12 are correct for each cluster. Cluster centers are sampled in R64 , and inputs are gen-erated as x = μz + 1 .4ϵ, where ϵ ∼ N (0 , I ). The ora-cle policy assigns a total probability mass of 0.10 to the correct-action set. Its correctness-conditioned distribution is sampled from a Dirichlet distribution with concentration 
+
+50 , centered at a Zipf prior whose exponents are linearly spaced over [1 .0, 2.4] ; the Zipf ranks are randomly assigned to the correct actions, and the remaining probability mass is distributed uniformly over incorrect actions. We generate 
+
+8,000 training inputs and 4,000 test inputs. A 64 -128 -128 -
+
+200 MLP with Tanh activations is pretrained for 1,000 steps using soft-label cross-entropy and then frozen as the refer-ence policy. All methods are initialized from this model and trained for 1,000 steps using the exact expected reward and exact regularization, with Adam, batch size 512 , learning rate 
+
+1.2 × 10 −3, and maximum gradient norm 1.0. Results are averaged over 5 random seeds and evaluated every 100 steps. For each regularized method, the coefficient is swept over 
+
+β ∈ { 0.0005 , 0.001 , 0.002 , 0.003 , 0.005 , 0.007 , 0.01 , 0.02 ,
+
+0.03 , 0.05 , 0.07 , 0.1, 0.2, 0.3}, while unregularized RL uses 
+
+β = 0 .
+
+E.2 Datasets for the Main Experiments 
+
+We summarize the number of samples in the training and evaluation datasets in Table 4. Table 4: Statistics of the training and test datasets used by all methods.               
+
+> Dataset Description # Train / Test
+> MATH-Train Math Reasoning 50000 / -MATH-Val Math Reasoning - / 1000 MATH500 Math Reasoning - / 500 Olympiad Math Reasoning - / 674 Chat-Train Chat and Instruction Following 7544 / -Chat-Val Chat and Instruction Following - / 250
+
+E.3 Training and Comparison Details 
+
+For the KL-based methods, after math-task training, we use the resulting model to construct a KL buffer by ran-domly sampling 512 prompts from the math training set. Full Forward-KL and Full Reverse-KL use all 512 prompts, whereas CoKL and the two correct-only baselines use the same subset obtained by filtering out prompts for which none of the Gref = 8 reference responses is verified as correct. During chat-task training, we randomly sample one batch of math data from this buffer to compute the KL loss, while no KL constraint is imposed on the chat data itself. We train all models for 200 steps on the math task. For the chat task, Qwen3-0.6B is trained for 800 steps due to its slower convergence, whereas Qwen3-1.7B and Qwen3-4B are each trained for 600 steps. We set the chat-task batch size to 64. For the KL data, the prompt batch size is set to 16 for the baseline methods and to 8 for CoKL, whose paired reference-policy and current-policy construction yields 16 response groups per update. The mini-batch size is set to 64 for GRPO without KL and to 80 for the KL-based meth-ods. The GRPO rollout group size is set to G = 8 for all methods, and the rollout group size for the KL regulariza-tion prompts is also set to 8 for all KL-based methods. For CoKL, we use Gref = 8 cached reference responses and 
+
+G = 8 fresh current-policy rollouts for each regularization prompt. The current-policy conditional term is therefore es-timated on-policy at each regularization update. We set the CoKL coefficient to β = 1 . To ensure a fair comparison, we conduct hyperparameter searches for all KL-based base-lines using Qwen3-1.7B. Specifically, the KL coefficient is selected from β ∈ { 0.1, 1, 10 } for the Forward-KL variants and from β ∈ { 10 −3, 10 −2, 1} for the Reverse-KL variants. The corresponding raw scores are presented in Figure 5. The Forward-KL and Reverse-KL families achieve their best av-erage performance at β = 1 and β = 10 −3, respectively. Deviating from these values tends either to overconstrain adaptation to the new task or to exacerbate forgetting of pre-viously acquired capabilities. Accordingly, we set β = 1 for all Forward-KL variants and β = 10 −3 for all Reverse-KL variants, and report the results obtained under their respec-tive best-performing configurations. Our framework is im-plemented on top of VeRL (Sheng et al. 2024). The learning rate is set to 1 × 10 −6. All experiments were conducted on 8×H20 GPUs with 141GB of memory, using Python 3.10 and PyTorch 2.6. All models are optimized with the AdamW optimizer ( β1 = 0 .9, β2 = 0 .95 , weight decay 0.01) and 0.001 0.01 1           
+
+> Coefficient β
+> 010 20 30 40
+> Score
+> 41.23 44.79 39.80 38.29 33.72 -2.94 39.76 39.25 18.43
+> Full Reverse-KL Performance vs. Coefficient β
+> Math-Mean Chat Overall 0.1 110
+> Coefficient β
+> 35 40 45 50 55
+> Score
+> 50.43 52.08 52.42 37.20 36.59 35.85 43.81 44.33 44.13
+> Full Forward-KL Performance vs. Coefficient β
+> Math-Mean Chat Overall 0.001 0.01 1
+> Coefficient β
+> 010 20 30 40
+> Score
+> 36.30 34.16 0.41 24.01 8.65 38.51
+> 37.41 29.09 4.53
+> Correct-only Reverse-KL Performance vs. Coefficient β
+> Math-Mean Chat Overall 0.1 110
+> Coefficient β
+> 35 40 45 50 55
+> Score
+> 50.38 52.15 52.18 37.70 36.73 35.97 44.04 44.44 44.08
+> Correct-only Forward-KL Performance vs. Coefficient β
+> Math-Mean Chat Overall
+
+Figure 5: Hyperparameter sensitivity of the baseline methods on Qwen3-1.7B under different KL coefficients β.
+
+Model Zero-Correct At Least One Correct Groups Response 
+
+Qwen3-0.6B 16.08% 83.92% Qwen3-1.7B 12.71% 87.29% Qwen3-4B 3.17% 96.83% 
+
+Table 5: Fraction of current-policy rollout groups containing no verified-correct response during CoKL training. accelerated via vLLM (Kwon et al. 2023). 
+
+E.4 Frequency of Zero-Correct Rollout Groups 
+
+To quantify how often the finite-group fallback is activated, we measure the fraction of current-policy rollout groups on the mathematical regularization buffer that contain no verified-correct response. For a rollout group of size G, we define 
+
+bp0 = 1
+
+Ngroup 
+
+X
+
+i
+
+I
+
+
+
+GX
+
+j=1 
+
+ri,j = 0 
+
+ ,
+
+where Ngroup is the total number of rollout groups collected during training. As shown in Table 5, most rollout groups use the full two-term CoKL update. Zero-correct groups auto-matically activate the reference-correct fallback analyzed in Appendix B, with the activation rate decreasing from 16 .08% 
+
+for Qwen3-0.6B to 3.17% for Qwen3-4B. 
+
+E.5 Dual-Anchor Normalization 
+
+Because mathematical reasoning accuracy and chat reward are measured on different numerical scales, directly averag-ing their raw values may affect the aggregate comparison. We therefore additionally assess aggregation robustness using dual-anchor normalization. The normalization is performed separately within each model scale. For each mathematical reasoning benchmark d, let Mm,d denote the original score of method m. We define its normalized score as 
+
+fMm,d = 100 Mm,d − MGRPO ,d 
+
+MBase ,d − MGRPO ,d 
+
+, (74) where Base and GRPO w/o KL are assigned normalized scores of 100 and 0, respectively. The normalized mathemati-cal score is computed by averaging the three benchmark-level scores: 
+
+fMm = 13
+
+X
+
+d∈D math 
+
+fMm,d , (75) where Dmath = {MATH -Val , MATH500 , Olympiad }. For chat performance, let Cm denote the original Chat-Val score. We reverse the anchor direction and define 
+
+eCm = 100 Cm − CBase 
+
+CGRPO − CBase 
+
+, (76) such that Base and GRPO w/o KL receive normalized chat scores of 0 and 100 , respectively. The normalized aggregate score is 
+
+eSm = fMm + eCm
+
+2 . (77) This normalization measures each method’s relative abil-ity to retain prior mathematical capabilities and learn the new chat task with respect to the Base and GRPO anchors, plac-ing the two objectives on a common scale. We also report the corresponding unnormalized scores in Table 6. Two caveats apply when interpreting these unnormalized scores. First, since math accuracy and chat reward lie on incommensu-rable scales, directly averaging them lets the higher-variance metric dominate and compresses genuine differences in the retention–adaptation trade-off. Second, the achievable gain is bounded by the severity of forgetting: the Math Avg. drop of GRPO w/o KL shrinks from 91 .0% (0.6B) to 40 .2% (1.7B) and 19 .7% (4B), so larger models leave less headroom for any preservation method, and all regularized methods con-verge at the 4B scale. The advantage of CoKL is therefore most pronounced under high forgetting pressure, and natu-rally reduces toward correct-only replay when forgetting is mild. 
+
+E.6 Training Dynamics 
+
+To better understand how different objectives affect the op-timization process, we compare the training dynamics of different methods on the Qwen3-0.6B model. Specifically, we track the validation performance on the chat and math tasks throughout training, using chat reward and math accu-racy as the corresponding evaluation metrics. As shown in Figure 6, GRPO w/o KL achieves strong improvements on the chat task, but its math performance deteriorates substan-tially as training progresses. In contrast, CoKL achieves chat performance comparable to GRPO w/o KL while preserving considerably stronger performance on the math task. Conse-quently, CoKL provides the best overall balance between the two domains and achieves the highest average performance, further validating the effectiveness of our method. 
+
+Appendix F: Additional Experimental Results F.1 Comparison of Computational Cost 
+
+To compare the training overhead, we report the wall-clock time of the first training step using Qwen3-0.6B on 8 ×H20 GPUs, as shown in Table 7. The Forward-KL variants require Method Mathematical Reasoning Chat Aggregate MATH-Val MATH500 Olympiad Math Avg. Chat-Val Overall                                                                                                                               
+
+> Qwen3-0.6B
+> Base (after Math training) 32.46 70.80 34.46 45.91 -12.90 16.51 GRPO w/o KL 2.44 6.25 3.65 4.11 73.98 39.04 Full Reverse-KL 22.49 59.85 20.72 34.35 61.14 47.75 Full Forward-KL 20.35 63.67 23.41 35.81 67.55 51.68 Correct-only Reverse-KL 16.27 40.20 17.80 24.76 62.95 43.86 Correct-only Forward-KL 21.87 64.90 23.70 36.82 69.33 53.08
+> CoKL (ours) 21.04 64.57 23.65 36.42 74.44 55.43
+> Qwen3-1.7B
+> Base (after Math training) 44.67 83.60 47.40 58.56 -8.85 24.86 GRPO w/o KL 18.77 64.00 22.31 35.03 37.45 36.24 Full Reverse-KL 27.36 69.40 26.92 41.23 38.29 39.76 Full Forward-KL 41.61 79.83 34.79 52.08 36.59 44.34 Correct-only Reverse-KL 20.19 64.67 24.04 36.30 38.51 37.41 Correct-only Forward-KL 41.22 80.02 35.21 52.15 36.73 44.44
+> CoKL (ours) 41.59 80.98 35.00 52.52 38.12 45.32
+> Qwen3-4B
+> Base (after Math training) 60.27 91.37 57.62 69.75 -5.12 32.32 GRPO w/o KL 43.09 85.90 39.02 56.00 49.09 52.55 Full Reverse-KL 11.06 48.45 11.26 23.59 37.30 30.45 Full Forward-KL 57.54 88.05 41.32 62.30 50.03 56.17 Correct-only Reverse-KL 45.55 85.70 39.24 56.83 43.11 49.97 Correct-only Forward-KL 57.50 87.70 41.34 62.18 51.07 56.62
+> CoKL (ours) 57.36 88.28 41.02 62.22 51.27 56.74
+
+Table 6: Original evaluation results used for dual-anchor normalization. Math Avg. is the average of MATH-Val, MATH500, and Olympiad, while Overall is the equally weighted mean of Math Avg. and Chat-Val. The best and second-best results among the regularized post-training methods within each model scale are shown in bold and underline, respectively. Table 7: Wall-clock time of the first training step.               
+
+> Method Time (s) Avg. Length
+> GRPO 204.9 929 Correct-only Forward-KL 314.2 2,155 Full Forward-KL 309.9 2,172 Full Reverse-KL 293.4 1,788 Correct-only Reverse-KL 308.8 1,814 CoKL (Ours) 323.4 2,136
+
+rollouts to be generated in advance, whereas the Reverse-KL variants perform additional rollouts during training. More-over, the math data generally produce longer responses. Con-sequently, these KL-based methods incur additional training cost compared with GRPO. Nevertheless, the computational cost of CoKL remains comparable to that of the other KL-based methods, while providing meaningful performance improvements. Therefore, its modest additional overhead is worthwhile. 
+
+F.2 Reward-Blind Validation of Chat Evaluation 
+
+To validate the reliability of the chat reward as an evalua-tion signal, we conduct a reward-blind assessment on 240 generations from 60 non-overlapping WildChat-IF prompts. GPT-5.6 Sol serves as a separate evaluator and rates each re-sponse using a five-point rubric covering instruction follow-ing and response correctness. Model identities and reward scores are hidden during evaluation to prevent potential bias. The chat reward exhibits a positive correlation with the inde-pendent ratings (Spearman’s ρ = 0 .399 ; 95% prompt-cluster bootstrap CI [0 .253 , 0.531] ) and agrees with the evaluator-preferred response in 74.8% of non-tied within-prompt com-parisons (95% CI [66 .3% , 82 .3%] ). Moreover, the reward is negatively correlated with response length ( ρ = −0.342 ), suggesting that its judgments are not driven by a simple pref-erence for verbose responses. These results indicate that the chat reward provides a meaningful external signal for com-paring response quality. 
+
+Appendix G: Use of Large Language Models 
+
+Some parts of the text were refined with the assistance of large language models (LLMs). All content and responsibility for the work remain with the authors. 0 200 400 600 800     
+
+> Training step
+> −10 10 30 50 70
+> Reward
+> Qwen3-0.6B: Chat Reward
+> GRPO w/o KL Correct-only Reverse-KL Full Reverse-KL Correct-only Forward-KL Full Forward-KL CoKL 0200 400 600 800
+> Training step
+> 0510 15 20 25 30 35
+> Accuracy (%)
+> Qwen3-0.6B: Math Accuracy
+> GRPO w/o KL Correct-only Reverse-KL Full Reverse-KL Correct-only Forward-KL Full Forward-KL CoKL
+
+Figure 6: Training dynamics of different methods on Qwen3-0.6B. 
+
+Appendix H: Prompts 
+
+We use the prompts shown in Figure 7. 
+
+Appendix I: Pseudocode of CoKL 
+
+We present the pseudocode of CoKL in Algorithm 1. 
+
+Appendix J: Case Study 
+
+To qualitatively illustrate the behavior of the model trained with CoKL, we present representative outputs generated by the CoKL-trained Qwen3-0.6B model on a math task and a general chat task. As shown in Figures 8 and 9, the model produces a correct step-by-step solution for the mathematical problem while retaining the ability to generate a structured long-form response to a general-purpose instruction. Algorithm 1: Correctness-Conditioned KL Regularization (CoKL) 
+
+Require: Frozen reference policy πref ; initial policy πθ ;current-task reward function R; verifier r; current-task prompt set DRL ; regularization prompt set DKL ; rollout sizes Gref , G ; importance-ratio clipping parameter ϵIS ;update epochs μ; coefficient β
+
+1: D+ ← ∅ 
+
+2: for each prompt x ∈ D KL do 
+
+3: Sample Gref reference responses from πref (· | x) and evaluate them with r
+
+4: if at least one reference response is verified as correct 
+
+then 
+
+5: Add the prompt and its reference responses to D+
+
+6: end if 
+
+7: end for 
+
+8: for iteration = 1 , . . . , I do 
+
+9: Sample a current-task minibatch BRL from DRL 
+
+10: Sample a regularization minibatch BKL from D+
+
+11: Generate G current-policy rollouts for each prompt in 
+
+BRL and BKL 
+
+12: Compute current-task rewards with R and group-relative advantages for BRL 
+
+13: Compute verifier rewards with r for BKL 
+
+14: for optimization epoch = 1 , . . . , μ do 
+
+15: Compute LGRPO on BRL 
+
+16: Compute bLCoKL on BKL using cached reference responses and current rollouts 
+
+17: Update πθ by minimizing LGRPO + β bLCoKL 
+
+18: end for 
+
+19: end for 
+
+20: return πθMath Prompt 
+
+Solve the following math problem. Please reason step by step, and put your final answer within \boxed{}. {problem} 
+
+Chat Prompt 
+
+{raw user question or conversation context} 
+
+Figure 7: Prompt templates used for the math and chat tasks. 
+
+CoKL Qwen3-0.6B Math Output Example 
+
+Question: 
+
+Solve the following math problem. Please reason step by step, and put your final answer within \boxed {} .Compute 505 505 
+
+!
+
+.
+
+Model Answer: 
+
+We are asked to compute the binomial coefficient: 
+
+505 505 
+
+!
+
+.
+
+Step 1: Understanding the Binomial Coefficient 
+
+The binomial coefficient is defined as 
+
+nk
+
+!
+
+= n!
+
+k!( n − k)! .
+
+In this case, n = 505 and k = 505 , so 
+
+505 505 
+
+!
+
+= 505! 505!(505 − 505)! = 505! 505! · 0! .
+
+We know that 
+
+0! = 1 .
+
+Therefore, 
+
+505 505 
+
+!
+
+= 505! 505! · 1 = 1 .
+
+Final Answer: 
+
+1
+
+This is the value of the binomial coefficient  505 505 
+
+.
+
+# ✓
+
+Figure 8: Representative output of the CoKL-trained Qwen3-0.6B model on the math task. CoKL Qwen3-0.6B Chat Output Example 
+
+Question: 
+
+Given the current state of the world, what are the most pressing issues that humanity faces and what are some possible solutions or actions that could be taken to address them? Explain your reasoning and provide evidence or examples to support your claims. 
+
+Model Answer (score: 39.0): 
+
+Here’s a comprehensive and structured response to the query about the most pressing issues humanity faces and possible solutions, based on the current global state. This answer not only addresses the issues but also provides reasoning, evidence, and examples to support each solution, ensuring it aligns with the world’s current challenges and future potential. 
+
+Most Pressing Issues Humanity Faces: A Global Perspective 1. Climate Change and Environmental Degradation Issue: The planet’s ecosystems are collapsing due to greenhouse gas emissions, deforestation, pollution, and species extinction. The Earth’s temperature has risen by over 1.1◦C since pre-industrial times, threatening biodiversity, water availability, and human health. 
+
+Reasoning: Climate change is not a distant threat—it’s a cyclical, interconnected crisis. Historical patterns show that each crisis, such as droughts and wildfires, triggers subsequent environmental stressors. The Intergovernmental Panel on Climate Change (IPCC) emphasizes that 2◦C above pre-industrial levels is now a threshold. Without immediate action, irreversible damage will occur. 
+
+Solutions: Adopt Carbon Neutrality by 2050: Governments and industries must transition to renewable energy, including solar, wind, and hydrogen, and phase out fossil fuels. For example, the European Union’s Green Deal aims to achieve 55% renewables by 2030. 
+
+Reforestation and Restoration Projects: Governments and NGOs can fund protected areas, reforestation initiatives, and marine sanctuaries. The Great Green Wall in Africa, aimed at restoring 35 million hectares, has already reduced deforestation by 40%. 
+
+Individual Actions: Citizens can reduce waste, support sustainable products, and advocate for climate policies. The World Wildlife Fund (WWF) reports that 30% of global conservation efforts come from individual efforts. 
+
+2. Health Disparities and Public Health Crisis Issue: Global health gaps persist: underprivileged communities face higher rates of disease, lack of access to clean water, and poor nutrition. Maternal mortality remains at 240 per 100,000 births, and chronic illnesses disproportionately affect low-income populations. 
+
+Reasoning: Health is not a privilege—it’s a social, economic, and demographic necessity. The World Health Organization (WHO) states that 70% of global diseases are preventable through early diagnosis, treatment, and prevention. However, these resources are unevenly distributed, often due to poverty, education, and political instability. 
+
+Solutions: Universal Health Coverage (UHC): Governments must mandate healthcare access, covering all income levels. India’s UHC program, which provides 100% coverage for 200,000 families, reduces health disparities by 60%. 
+
+Education and Community Health: Invest in schools, health education, and local clinics. Nigeria’s “Health in School” initiative, combining nutrition, mental health, and preventive care, has reduced maternal and child mortality. 
+
+Tech-Driven Health: Digital health platforms, telemedicine, and AI diagnostics can bridge gaps. The WHO’s Digital Health Innovation Hub connects remote regions with specialists, improving care efficiency. 
+
+3. Economic Inequality and Migration Issue: Rapid urbanization, automation, and climate-induced displacement are forcing millions to leave rural areas and migrate to cities, exacerbating social and economic segregation. The global migrant population reached 95 million in 2023, with over 50% from low-income countries. 
+
+Solutions: Fair wages, social safety nets, inclusive urban planning, migration-support systems, and entrepreneurship and skills programs. 
+
+4. Sustainable Energy Transition and Technological Innovation Issue: The transition from fossil fuels to renewables is slow, and many countries face technological, financial, and infrastructural challenges. 
+
+Solutions: Innovation ecosystems, public-private partnerships for energy storage, smart grids, and carbon capture, and education on energy efficiency. 
+
+5. Cultural and Social Resilience Issue: Cultural identity and social cohesion are eroded by urbanization, climate change, and technological change. 
+
+Solutions: Protect heritage and languages, support community-based initiatives, and use education and media to promote cultural diversity. 
+
+Conclusion: A Path Forward—Harmony, Action, and Hope 
+
+The pressing issues humanity faces—climate change, health disparities, economic inequality, energy transition, and cultural resilience—require a holistic, adaptive, and inclusive approach. The solutions proposed above—renewable energy, universal health care, inclusive migration, technological innovation, and cultural preservation—underscore the power of collective effort, evidence-based action, and a mindset rooted in empathy, knowledge, and responsibility. The future is not a destination. It’s a journey. And every step forward, guided by wisdom, innovation, and humanity’s shared commitment, is the key to a world where every person, every planet, and every culture thrive. 
+
+Figure 9: Representative output of the CoKL-trained Qwen3-0.6B model on the general chat task. The reported score is provided by the corresponding chat-task evaluator.

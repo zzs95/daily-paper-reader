@@ -1,0 +1,583 @@
+Title: Data-DPO: Direct Preference Optimization for Target Model Data Selection in LLM Post-Training
+
+URL Source: https://arxiv.org/pdf/2608.16926
+
+Published Time: Wed, 19 Aug 2026 00:02:52 GMT
+
+Number of Pages: 19
+
+Markdown Content:
+# Data-DPO: Direct Preference Optimization for Target Model Data Selection in LLM Post-Training 
+
+Peng Sun 1, Yi Yang 1, Antong Zhang 2, Chunxiao Li 3,Yanbo Wang 4, Dianbo Liu 5, Xin Chen 6, Kai Yu 7, Lu Chen 7, Tianfan Fu 1∗
+
+> 1
+
+Nanjing University 2Brown University 3Fudan University 4North University of China 
+
+> 5
+
+National University of Singapore 6Suzhou Laboratory 7Shanghai Jiao Tong University 
+
+Abstract 
+
+Data selection in supervised fine-tuning aims to select a small set of effective samples from large-scale candidate data, reduc-ing training cost while preserving model performance. How-ever, existing methods usually treat data value as a relatively static property, and pay limited attention to the compatibil-ity between data and the capability distribution of the target model. To address this issue, we propose Data-DPO, a target model-oriented SFT data selection method. Data-DPO ob-serves the local training feedback of the target model on differ-ent samples through one-step probing, transforms activation differences among samples into pairwise data preferences, and trains a lightweight reward model to learn target-model-aware data preferences. In the final selection stage, Data-DPO fur-ther combines target model preference, external quality scores, and marginal diversity to construct a more stable and effec-tive training subset. Experimental results on Vision-Flan and LLaVA-CoT show that Data-DPO consistently outperforms existing data selection baselines under multiple data budgets and stably surpasses full data training performance. 
+
+1 Introduction 
+
+Supervised fine-tuning (SFT) has become a critical step in improving the capabilities of large models (Liu et al. 2024a; Lambert et al. 2025). However, as the scale of instruction data continues to grow, directly fine-tuning on the full dataset is not only computationally expensive, but may also fail to yield optimal performance (Yang, Liu, and Wei 2025). Therefore, how to select a small yet effective training subset from large-scale candidate data, so that the model can achieve com-parable or even better performance with substantially lower training cost, has become an important problem in SFT (Fu, Hamman, and Dutta 2025). Existing data selection methods usually evaluate data value from two perspectives: sample importance and data diversity. The former focuses on the contribution of a sample to model updates or downstream performance (Liu et al. 2025; He et al. 2025), while the latter emphasizes distributional coverage and redundancy reduction (Deb et al. 2025; Bi et al. 2025). Some methods further integrate quality, importance, and di-versity to construct a more balanced training subset (Lee, Li, and Hwang 2024; Yan et al. 2025; Yu et al. 2025). Although 
+
+> ∗
+
+Corresponding author. 
+
+these methods have achieved promising results across differ-ent tasks, most of them still regard data value as a relatively static property, where whether a sample is high-quality is usually determined in advance by the sample itself and the structure of the representation space. However, in the SFT setting, the value of data should not be determined solely by the intrinsic quality of the sam-ple (Zhang, Dai, and Peng 2025). SFT typically does not require a model to learn knowledge from scratch; instead, it further activates, calibrates, and aligns the model’s exist-ing capability distribution (Goyal et al. 2024). Since models differ in architecture, parameter scale, and capability dis-tribution, the same sample may play substantially different roles when used to fine-tune different target models (Hu et al. 2025). Some samples may be too difficult for a weaker model, while being exactly suitable for a stronger model. Similarly, an answer that appears to be high-quality may not necessar-ily match the current learning needs of a specific model (Liu et al. 2026). Therefore, SFT data selection should not only an-swer the question, “Which data is high-quality?”, but should further address, “Which data is more suitable for the target model?”. Based on this observation, we propose Data-DPO, a target-model-aware data selection method for SFT. Data-DPO lever-ages feedback from the target model during a short training process to characterize the compatibility between samples and the current training needs of the model. Specifically, we first select a small set of representative samples from the can-didate data, observe the target model’s training feedback be-fore and after a one-step update, and transform such feedback into pairwise preference relations between data samples. We then train a lightweight reward model to learn data pref-erences conditioned on the target model. To prevent the se-lected subset from being overly biased toward locally easy-to-activate samples, Data-DPO further combines target-model preference, external quality assessment, and data diversity during the final subset construction stage. In this way, it in-corporates the target model’s own feedback into a strong quality-diversity selection framework. We evaluate Data-DPO on two datasets, Vision-Flan and LLaVA-CoT, which cover general instruction tuning and reasoning-oriented fine-tuning scenarios, respectively. Ex-periments are conducted under three data budgets: 5%, 10%, and 15%. We compare Data-DPO with representative base-arXiv:2608.16926v1 [cs.LG] 5 Aug 2026 lines, including random selection, importance estimation, diversity-based selection, and hybrid selection methods. The results show that Data-DPO outperforms existing baselines under all data budgets on Vision-Flan, achieving average relative performance of 100.76%, 102.63%, and 102.70% compared with full-data training, respectively. On LLaVA-CoT, Data-DPO achieves 102.73% and 103.93% of full-data training performance under the 5% and 10% budgets, re-spectively, substantially outperforming all baselines; under the 15% budget, it still maintains performance above full-data training. Our main contributions are as follows: 
+
+• We revisit the problem of SFT data selection from a target-model-conditioned perspective, emphasizing that data value depends not only on the static quality of sam-ples, but also on their compatibility with the capability distribution of the target model. 
+
+• We propose Data-DPO, which constructs data preferences from the target model’s own feedback during a short train-ing process, and combines preference, quality, and diver-sity signals to select a subset better suited to the model. 
+
+• We conduct systematic experiments on Vision-Flan and LLaVA-CoT. The results demonstrate that Data-DPO con-sistently outperforms representative baselines under mul-tiple data budgets and stably surpasses full-data train-ing performance. Further analyses show that our method is robust across different target models, quality scoring sources, and embedding sources. 
+
+2 Related Work 
+
+Existing data selection methods typically select training sub-sets from two complementary perspectives: sample impor-tance and data diversity. The former estimates the contri-bution of each training instance to the target task or model update. For example, LESS (Xia et al. 2024), TIVE (Liu et al. 2025), ICONS (Wu et al. 2024), and OPUS (Wang et al. 2026) select data based on the gradient similarity be-tween training and validation samples; ScalSelect (Wu et al. 2026) evaluates sample importance through the internal at-tention behavior of the target model, especially its atten-tion distribution; EL2N (Paul, Ganguli, and Dziugaite 2021) trains a proxy model on a small subset and identifies infor-mative samples based on their losses under the proxy model. The latter line emphasizes coverage and redundancy reduc-tion. PRISM (Bi et al. 2025), FisherSFT (Deb et al. 2025), SemDeDup (Abbas et al. 2023), Self-Sup (Sorscher et al. 2022), and D2 Pruning (Maharana, Yadav, and Bansal 2023) ensure diversity by embedding-based deduplication or dis-persion, while ICONS (Wu et al. 2024) and INSTAG (Lu et al. 2023) construct representative subsets by maximiz-ing the coverage of downstream task types. Several studies further combine these two perspectives. CoIDO (Yan et al. 2025) trains a unified scorer to jointly model data quality and diversity; DataTailor (Yu et al. 2025) designs selection criteria from multiple dimensions, including sample infor-mativeness, intra- and inter-cluster relations, and dialogue turns; and COINCIDE (Lee, Li, and Hwang 2024) extracts multi-layer representations from the target model and sam-ples data from both intra- and inter-cluster structures. Unlike these methods, we do not treat sample utility as static quality, external similarity, or representation-space coverage. Instead, we directly characterize the activation strength of each sam-ple in the target model and transform it into pairwise data preferences for data selection oriented to the target model. 
+
+3 Method 
+
+3.1 Problem Formulation 
+
+Given an original training set D, data selection aims to select a subset D′ ⊆ D under a fixed budget K, such that the model trained on D′ achieves performance close to, or even better than, training on the full dataset. Let f (·) denote the target-task performance of the model trained on a given dataset. The data selection problem can be formulated as: 
+
+max  
+
+> D′⊆D
+
+f (D′) s.t. |D ′| = K. (1) Here, K denotes the data budget. This formulation captures the core objective of data selection: identifying a limited subset that maximizes downstream model performance. 
+
+3.2 Data-DPO 
+
+We propose Data-DPO, an SFT data selection method tai-lored to the target model. Data-DPO constructs pairwise pref-erences from one-step target model update, trains a reward model from these preferences, and selects the final subset by combining target model preference, general quality, and marginal diversity. The overall pipeline is shown in Figure 1, with implementation details provided in Appendix A. 
+
+Dual View Encoding. Given a candidate sample zi, we denote it as a pair: 
+
+zi = ( ci, y i), (2) where ci is the input condition and yi is the target response. Data-DPO constructs two complementary representations for each sample. The first is a condition embedding: 
+
+eci = Eemb (ci), (3) which encodes only the input condition. This representation is used for probe set construction and for measuring marginal diversity during the final selection stage. The second is a supervision embedding: 
+
+esi = Eemb (ci, y i), (4) which encodes the full supervised signal of the sample and is used for preference learning and final preference scor-ing. Both representations are extracted with a frozen em-bedding model, followed by independent centering and L2-normalization. In the following sections, eci and esi denote the preprocessed embeddings. 
+
+Probe Set Construction. To construct preference supervi-sion, we first sample a prob subset Dp from the full candidate set D. Specifically, we cluster D into m clusters according to the condition embeddings eci :
+
+D =
+
+> m
+
+[
+
+> k=1
+
+Ck. (5) Figure 1: Overview of Data-DPO. Data-DPO constructs a probe set through dual view encoding, derives sample preferences from one-step training feedback of the target model, and learns a target-model-aware reward model. The final subset is then greedily selected by jointly considering preference scores, external quality scores, and marginal diversity. For each cluster Ck, we select nk = ⌈ρ|C k|⌉ samples: 
+
+Dp =
+
+> m
+
+[
+
+> k=1
+
+D(k) 
+
+> p
+
+, |D (k) 
+
+> p
+
+| = nk. (6) To prevent the probing samples from being concentrated in high-density regions within each cluster, we adopt a greedy 
+
+k-center strategy. For each cluster Ck, we initialize the se-lected set Sk with the sample closest to the cluster centroid. Then, at each step, we select the sample that is farthest from the current selected set: 
+
+z∗ = arg max  
+
+> zi∈C k\Sk
+
+min  
+
+> zj∈Sk
+
+ 1 − cos( eci , e cj ) . (7) This procedure encourages Dp to cover a broader condition space, thereby providing more diverse and stable supervision for subsequent preference construction. 
+
+Activation Probing. To characterize the local activation effect of each sample on the target model M0, we perform T
+
+rounds of one-step probing on the prob subset Dp. In the t-th probing round, we sample a batch: 
+
+Bt = {z1, . . . , z b}. (8) For each sample zi ∈ Bt, we first compute its SFT loss before the update: 
+
+ℓ0 
+
+> i
+
+= ℓ(M0, z i). (9) Starting from the same initial model M0, we then perform one temporary SFT update on Bt:
+
+M ′ 
+
+> t
+
+= OneStepUpdate( M0, B t), (10) and compute the loss after the update: 
+
+ℓ1 
+
+> i
+
+= ℓ(M ′ 
+
+> t
+
+, z i). (11) After each probing round, M ′ 
+
+> t
+
+is discarded, and the next round still starts from M0. Therefore, this procedure cap-tures the training dynamics around the target checkpoint rather than the preference of a continuously trained surro-gate model. We define the one-step activation gain of zi as: 
+
+g(t) 
+
+> i
+
+= log ℓ0 
+
+> i
+
++ ϵℓ1 
+
+> i
+
++ ϵ . (12) A larger g(t) 
+
+> i
+
+indicates that the sample yields a greater loss reduction after one update step, suggesting a stronger local activation effect on the current target model. To remove scale differences across probing batches, we further apply batch-level normalization: 
+
+s(t) 
+
+> i
+
+= g(t) 
+
+> i
+
+− μt
+
+σt + ϵ , (13) where μt and σt denote the mean and standard deviation of activation gains within the current batch. The normalized score s(t) 
+
+> i
+
+measures the activation strength of zi relative to other samples in the same batch. 
+
+Preference Construction. Given a probing batch Bt, we construct pairwise preferences using the batch-normalized activation scores. For any two samples zi, z j ∈ Bt, their relative activation margin is: 
+
+d(t) 
+
+> ij
+
+= s(t) 
+
+> i
+
+− s(t) 
+
+> j
+
+. (14) A positive d(t) 
+
+> ij
+
+indicates that zi activates the target model more strongly than zj , yielding zi ≻ zj ; otherwise, we set 
+
+zj ≻ zi. If a pair is compared multiple times, we aggregate its signed margins: 
+
+¯dij = 1
+
+nij nij 
+
+X
+
+> t=1
+
+d(t) 
+
+> ij
+
+, (15) Here, nij is the number of valid comparisons. The final pref-erence direction is determined by the sign of ¯dij , producing: 
+
+P = {(zw, z l)}, (16) with zw and zl denoting the preferred and dispreferred sam-ples, respectively. This aggregation mitigates batch-context noise and yields more stable preference labels. 
+
+Preference Learning. Given the preference set P, we train a target-conditioned reward model for data selection. Specif-ically, we use the supervision embedding esi of each sample 
+
+zi as input to a learnable reward model fθ , implemented as a lightweight residual MLP: 
+
+rθ (zi) = fθ (esi ). (17) The reward logit induces a data selection policy over the prob subset Dp:
+
+πθ (zi) = exp( rθ (zi)) 
+
+P  
+
+> zj∈D p
+
+exp( rθ (zj )) . (18) We optimize fθ with a DPO-style objective in the data space. For each preference pair (zw, z l) ∈ P , the objective compares the policy log-ratio against a reference log-ratio: 
+
+LDPO = −E(zw ,z l)∼P log σ
+
+
+
+log πθ (zw)
+
+πθ (zl) − log πref (zw)
+
+πref (zl)
+
+
+
+.
+
+(19) Under the softmax parameterization above, the normalization term is shared by zw and zl and cancels out: 
+
+log πθ (zw)
+
+πθ (zl) = rθ (zw) − rθ (zl). (20) Unlike standard DPO (Rafailov et al. 2024), where the reference policy is induced by a base SFT model, data selec-tion has no natural model-induced reference policy because the candidate set is predefined rather than sampled from a model policy. A non-uniform reference based on quality scores, cluster sizes, or sampling frequencies would inject additional data priors into the objective. Therefore, we use a uniform empirical reference over Dp:
+
+πref (zi) = 1
+
+|D p| , zi ∈ D p. (21) This gives: 
+
+log πref (zw)
+
+πref (zl) = 0 . (22) Thus, the data-space DPO objective reduces to: 
+
+LData -DPO = −E(zw ,z l)∼P log σ (rθ (zw) − rθ (zl)) . (23) After training, rθ (zi) is applied to the full candidate set D to produce target-conditioned preference scores for all samples. 
+
+Sequential Selection. After training, we score each sample 
+
+zi ∈ D with the learned reward model: 
+
+ri = rθ (zi). (24) Since DPO only constrains pairwise logit differences, we normalize the logits over D and obtain a bounded preference score: 
+
+ˆri = ri − μD
+
+σD + ϵ , pi = σ (ˆ ri) . (25) We then select the final subset sequentially by combin-ing target model preference, external quality, and marginal diversity. Given the selected set St, the diversity gain of a candidate zi is: 
+
+di(St) = 1 − max  
+
+> zj∈St
+
+max  0, cos( eci , e cj ) , (26) where di(St) = 1 if St = ∅. The step reward is: 
+
+R(St, z i) = pi + qi + di(St), (27) where qi ∈ [0 , 1] is an external quality score. At each step, we select: 
+
+zt = arg max 
+
+> zi∈A t
+
+R(St, z i), St+1 = St ∪ { zt}, (28) where At is the current candidate pool. We repeat this process until |SK | = K, yielding the selected subset SK .
+
+4 Experiments 
+
+4.1 Experimental Setup 
+
+Datasets. We evaluate Data-DPO on two datasets, Vision-Flan (Xu et al. 2024) and LLaVA-CoT (Xu et al. 2025). Vision-Flan represents general instruction scenarios, while LLaVA-CoT represents reasoning scenarios. Together, they allow us to assess the effectiveness of Data-DPO across different task complexities and data distributions. Detailed dataset descriptions and preprocessing procedures are pro-vided in Appendix B. 
+
+Target Models. We use LLaVA-V1.5-7B (Liu et al. 2024a) as the target model on Vision-Flan and Llama-3.2-11B-Vision-Instruct (Grattafiori et al. 2024) on LLaVA-CoT. De-tailed training hyperparameters are provided in Appendix C. 
+
+Data Budgets. We evaluate Data-DPO under three data budgets, 5%, 10%, and 15%, for both datasets. 
+
+Baselines. We compare Data-DPO with Random Selec-tion, XMAS (Naharas et al. 2025), COINCIDE (Lee, Li, and Hwang 2024), SemDeDup (Abbas et al. 2023), D2 Pruning (Maharana, Yadav, and Bansal 2023), PRISM (Bi et al. 2025), ScalSelect (Wu et al. 2026), CLIP Score (Hes-sel et al. 2021), and EL2N (Paul, Ganguli, and Dziugaite 2021). These baselines cover representative data selection paradigms based on importance estimation, diversity distri-bution, and the combination of both perspectives. 
+
+Quality and Embedding Models. To reduce com-putational overhead, we use lightweight models with vLLM (Kwon et al. 2023) for batch scoring. For quality scoring, we use Qwen3-VL-4B-Instruct (Bai et al. 2025) on Vision-Flan and Qwen3.5-9B (Team 2026) on LLaVA-CoT. For embedding extraction, we use the lightweight Qwen3-VL-Embedding-2B (Li et al. 2026) model for both datasets. 
+
+Evaluation. Following the design purpose of each dataset, we evaluate the trained target models on different bench-marks. Vision-Flan and LLaVA-CoT are each evaluated on a separate set of 12 benchmarks, with the former focusing on general capability evaluation and the latter covering both rea-soning and general capability evaluation. The specific bench-marks used for each dataset and the corresponding detailed Figure 2: Main results on Vision-Flan and LLaVA-CoT under different data budgets. We report the average relative performance (ARP) of Data-DPO and representative data selection baselines under 5%, 10%, and 15% budgets. Data-DPO achieves consis-tently strong performance across budgets, outperforming existing baselines in most settings and surpassing full-data training in all budgets on both datasets. results are provided in Appendix D. To normalize evaluation scales across benchmarks and datasets, we report Average Relative Performance (ARP): 
+
+ARP = Subset Data Performance Full Data Performance × 100 . (29) 
+
+4.2 Main Results 
+
+Figure 2 presents the results of Data-DPO on the Vision-Flan and LLaVA-CoT datasets. On Vision-Flan, Data-DPO achieves ARP of 100.76, 102.63, and 102.70 under the 5%, 10%, and 15% budgets, re-spectively. These results all surpass the performance of full-data training and are the best among all methods. Compared with the strongest method under each budget, Data-DPO im-proves ARP by 1.31, 2.14, and 2.35, respectively. Compared with random selection, the improvements are 7.80, 7.33, and 8.88 ARP, respectively. On LLaVA-CoT, Data-DPO also demonstrates clear ad-vantages. Under the 5% and 10% budgets, Data-DPO obtains ARP of 102.73 and 103.93, respectively, significantly outper-forming all methods. Compared with the strongest method under the corresponding budgets, Data-DPO improves ARP by 3.60 and 4.14, respectively. When the budget increases to 15%, EL2N achieves an ARP of 102.46, slightly higher than the 101.31 achieved by Data-DPO. Nevertheless, Data-DPO still outperforms all other methods except EL2N and contin-ues to achieve relative performance above full-data training. Overall, Data-DPO demonstrates strong effectiveness and stability across different data budgets. On both datasets, Data-DPO consistently outperforms full-data training, and it sub-stantially outperforms other methods in the overall compar-ison. These results jointly validate the core hypothesis of Data-DPO: data selection should not rely solely on static 
+
+Figure 3: Effect of proxy models in selection. Data-DPO per-forms consistently better when preferences are constructed from the original target model rather than a 5% checkpoint, suggesting that proxy models may provide misaligned selec-tion signals. data quality or representation space coverage, but should ex-plicitly model the target model’s preferences over data. 
+
+5 Analysis and Ablation Studies 
+
+5.1 Analysis of Proxy Models in Selection 
+
+We analyze a key design of Data-DPO: performing one-step probing directly on the original target model. Many existing data selection methods rely on proxy models trained with a small amount of data to provide selection signals (Xia et al. 2024; Lee, Li, and Hwang 2024; Naharas et al. 2025), im-plicitly assuming that such signals can approximate the data needs of the original target model. However, this assumption may be unreliable in the SFT setting. SFT typically aims to Figure 4: Ablation of the selection reward. We report the ARP improvement over random selection, with the absolute ARP shown in parentheses. Combining target model prefer-ence, quality, and marginal diversity achieves the best perfor-mance, highlighting the complementarity of three signals. activate the latent capabilities already acquired during pre-training; even a small amount of SFT can shift the model’s capability distribution, leading to data preferences that are inconsistent with those of the original target model. To verify this, we replace the original LLaVA model used for one-step probing in Data-DPO with a checkpoint trained on randomly sampled 5% Vision-Flan data, while keeping all other components unchanged. As shown in Figure 3, using this checkpoint to construct preferences reduces ARP from 100.76, 102.63, and 102.70 to 93.17, 97.76, and 101.72 under the 5%, 10%, and 15% budgets, respectively. The drop is especially clear under smaller budgets. This result suggests that selection signals from a proxy model can be affected by distribution shift and may fail to reflect the true data needs of the original target model. Therefore, directly constructing data preferences on the original target model is important for the stable performance of Data-DPO. 
+
+5.2 Ablation on Selection Reward 
+
+We analyze the role of the three signals in the final selection reward, including the target model preference learned by Data-DPO, the quality score, and marginal diversity. Figure 4 shows the ablation results on Vision-Flan under the 10% budget. When using only the target model prefer-ence, the ARP is only 92.33, lower than random selection with 95.30. This is because the preference score tends to select samples that can quickly activate the model. Without quality and distribution constraints, the selected data may concentrate in a narrow and easy region, making it diffi-cult to form an effective training distribution. For pairwise combinations, adding marginal diversity improves DPO + Diversity to 99.26, showing that diversity can reduce the concentration caused by preference-based selection. Quality + Diversity reaches 100.21, indicating that the combination of quality and coverage is a stable signal for data selection. In contrast, DPO + Quality only reaches 93.25, suggesting that adding quality constraints alone is still insufficient to address the concentration of preferred samples. Finally, combining all three signals achieves the best ARP of 102.63, clearly outperforming all single signal and pairwise configurations. This demonstrates the complementarity among target model 
+
+Figure 5: Robustness across target models. We evaluate Data-DPO by replacing the target models with LLaVA-v1.5-13B on Vision-Flan and Qwen2VL-2B-Instruct on LLaVA-CoT, the results show that Data-DPO maintains stable perfor-mance across different model scales and model families. preference, sample quality, and marginal diversity, which is crucial for the stable performance of Data-DPO. 
+
+5.3 Robustness Across Target Models 
+
+We evaluate the applicability of Data-DPO across target models by testing LLaVA-v1.5-13B (Liu et al. 2024a) on Vision-Flan and Qwen2VL-2B-Instruct (Wang et al. 2024b) on LLaVA-CoT, covering both variation in parameter scale within the same model family and variation across different model families. As shown in Figure 5, Data-DPO consistently outper-forms random selection in both settings. On Vision-Flan with LLaVA-v1.5-13B, Data-DPO achieves ARP of 93.76, 94.53, and 94.39 under the 5%, 10%, and 15% budgets, improving over random selection by 8.64, 2.27, and 3.25, respectively. On LLaVA-CoT with Qwen2VL-2B-Instruct, Data-DPO also obtains stable gains, reaching 100.13, 97.50, and 98.43 ARP under the three budgets, with improvements of 5.83, 2.25, and 3.66 over random selection. These results show that the target model preferences learned by Data-DPO are not lim-ited to a single model scale or model family, indicating good generalization across different target models. 
+
+5.4 Robustness to Quality Signals 
+
+We analyze the effect of external quality scores as an auxil-iary signal in Data-DPO. Since the final selection reward in-cludes a quality term, it is important that the method does not rely on a specific source of quality scores. To examine this, we replace the default quality scoring model with LLaVA-OneVision-1.5-4B-Instruct (An et al. 2025) on Vision-Flan, while keeping all other settings unchanged. As shown in Figure 6a, Data-DPO still clearly outperforms random selection under all budgets when using the alterna-tive quality scores. Under the 5%, 10%, and 15% budgets, it achieves ARP of 101.23, 100.53, and 103.76, improving over random selection by 8.27, 5.23, and 9.94, respectively. This indicates that the quality score mainly serves as an auxiliary constraint in Data-DPO. The final selection per-formance does not depend on a single quality score source, but comes from the joint effect of target model preference, quality constraint, and marginal diversity. (a) (b) 
+
+Figure 6: Robustness analysis of Data-DPO. (a) Robustness to quality signals. Data-DPO’s effectiveness is not tied to a specific source of quality signals. (b) Robustness to em-bedding sources. Data-DPO’s effectiveness is not tied to a specific embedding source. 
+
+Figure 7: Sensitivity to reward model capacity. We evalu-ate Data-DPO by replacing the default residual MLP reward model with a simpler plain MLP. The plain MLP still achieves competitive performance, suggesting that the effectiveness of Data-DPO mainly comes from target-model-aware pref-erence supervision rather than reward model capacity alone. 
+
+5.5 Robustness to Embedding Sources 
+
+We analyze the sensitivity of Data-DPO to the source of em-beddings. Data-DPO uses embeddings for probe set construc-tion, reward model input representation, and marginal diver-sity computation. Therefore, if the method depends heavily on a specific embedding model, its applicability may be lim-ited. To examine this, we replace the embedding model with Qwen3-VL-Embedding-8B (Li et al. 2026) on Vision-Flan, while keeping all other settings unchanged. As shown in Figure 6b, Data-DPO still consistently outper-forms random selection under all budgets after replacing the embedding model. Under the 5%, 10%, and 15% budgets, it achieves ARP of 99.95, 100.36, and 100.75, improving over random selection by 6.99, 5.06, and 6.93, respectively. Although different embedding models introduce some per-formance variation, Data-DPO maintains stable gains. This indicates that embeddings mainly serve as auxiliary repre-sentation signals in Data-DPO, and the final performance does not depend on a single embedding source. Instead, it is jointly determined by target model preference, quality con-straint, and marginal diversity. 
+
+5.6 Sensitivity to Reward Model Capacity 
+
+We analyze the sensitivity of Data-DPO to the reward model capacity by replacing the default residual MLP with a simpler plain MLP, while keeping all other settings unchanged. Figure 7 shows the results on Vision-Flan, The plain MLP consistently outperforms random selection across all budgets and surpasses full-data training under the 10% and 15% bud-gets, indicating that Data-DPO does not rely on a complex reward model. Under the 5% budget, it achieves 95.36 ARP, improving over random selection by 2.40 but lagging behind the residual MLP at 100.76, suggesting that stronger pref-erence fitting is more helpful when the budget is extremely limited. With larger budgets, the gap narrows: the plain MLP reaches 101.75 and 101.61 ARP under the 10% and 15% bud-gets, compared with 102.63 and 102.70 for the residual MLP. Overall, the plain MLP can already learn effective selection signals from pairwise preferences constructed from target model feedback, while the residual MLP provides higher and more stable performance. This suggests that the gains of Data-DPO mainly come from target-model-aware preference supervision rather than reward model capacity alone. 
+
+6 Conclusion and Limitations 
+
+Conclusion. We propose Data-DPO, a target model-oriented SFT data selection method. Unlike existing meth-ods that treat data value as static quality, Data-DPO uses the training feedback of the target model during a one step update to construct data preferences among samples, and learns target-model-aware data selection signals through a lightweight reward model. During final subset construction, Data-DPO further combines target model preference, exter-nal quality assessment, and marginal diversity to obtain a more stable and effective data distribution. Experimental re-sults show that Data-DPO achieves substantially better per-formance than most baselines on Vision-Flan and LLaVA-CoT under small data budgets, and stably surpasses full data training performance in multiple settings. 
+
+Limitations. Despite its effectiveness, Data-DPO has sev-eral limitations. First, its performance may be affected by biases in external quality signals, embedding sources, and the target model’s preferences, leading to potential degra-dation when these signals are highly biased. Second, the method focuses on quality and preference modeling under distribution preserving settings, which may result in limited effectiveness when the full dataset exhibits substantial distri-bution shifts. Finally, although it avoids training additional proxy models, it still requires additional computation on the prob set, leaving room for further efficiency improvements. A Implementation Details of Data-DPO 
+
+This section supplements the implementation details and hy-perparameters omitted from Section 3.2 to ensure experi-mental reproducibility. 
+
+Dual View Encoding. For each sample zi = ( ci, y i), the condition embedding eci is obtained by feeding only ci into the frozen embedding model, while the supervision embedding 
+
+esi is obtained by feeding the concatenated pair (ci, y i) into the embedding model. 
+
+Probe Set Construction. When constructing the prob sub-set Dp, we adopt spherical clustering with 2000 clusters for Vision-Flan and 1000 clusters for LLaVA-CoT. Within each cluster, probing samples are selected using a fixed probe ratio of ρ = 0 .05 .
+
+Activation Probing. We fix the number of probing rounds to T = 16 , and set the probing batch size to b = 1024 
+
+for each round. During activation probing, the training hy-perparameters are kept the same as those used in the SFT stage. The detailed SFT training configuration is provided in Appendix C. 
+
+Preference Construction. Within each probing batch, we enumerate all unordered sample pairs (i, j ), where i < j .
+
+Preference Learning. We use a lightweight residual MLP as the reward model, which takes the supervision embed-ding esi as input and outputs a scalar reward logit rθ (zi).The input dimension is 2048. We first project the in-put to a hidden dimension of 1024 with a linear layer 
+
+Linear(2048 , 1024) . The projected representation is then passed through 4 residual MLP blocks. Each block con-sists of LayerNorm(1024) , Linear(1024 , 2048) , GELU ac-tivationreference, Dropout(0 .1) , Linear(2048 , 1024) , and dropout, followed by a residual connection. The final out-put is produced by LayerNorm(1024) and Linear(1024 , 1) .The reward model is trained with the AdamW optimizer. The learning rate is set to 1 × 10 −3, and the weight decay is set to 1 × 10 −4. The training batch size is 4096, and the number of training epochs is 5. We split the constructed preference pairs into 95% for training and 5% for validation. The train-ing objective is the Data-DPO objective defined in the main text, namely the pairwise preference optimization objective under a uniform empirical reference. 
+
+Sequential Selection. The external quality score is ob-tained by feeding each sample into a multimodal model, as described in Section 3.2. For each sample, we use a dis-crete rating scale from 1 to 5, and normalize the rating to [0 , 1] . Specifically, the scores 1, 2, 3, 4, 5 are mapped to 
+
+0, 0.25 , 0.5, 0.75 , 1, respectively. The prompts used for qual-ity scoring are shown in Figure 8 and Figure 9. 
+
+B Datasets and Preprocessing Details 
+
+B.1 Datasets 
+
+Vision-Flan. Vision-Flan (Xu et al. 2024) is a human-curated visual instruction tuning dataset that targets broad task coverage and strong cross-task generalization for vision-language models. The dataset is built upon publicly available academic vision benchmarks and reorganizes them into 187 fine-grained visual tasks with manually written task instruc-tions. Each task contains roughly 1,000 examples, resulting in about 186K samples in total. Compared with instruction data generated purely by synthetic pipelines, Vision-Flan empha-sizes expert annotation and validation, which helps reduce instruction artifacts and unreliable supervision. 
+
+LLaVA-CoT. LLaVA-CoT-100k (Xu et al. 2025) is an image-text reasoning instruction dataset designed to improve the structured reasoning ability of vision-language models. It integrates approximately 99K image-question-answer pairs from a mixture of general-purpose and science-targeted VQA datasets. Each sample is annotated with a structured reason-ing response consisting of summary, caption, reasoning, and conclusion stages. 
+
+B.2 Preprocessing Procedures 
+
+For Vision-Flan, we use the original dataset without ad-ditional filtering or format conversion. For LLaVA-CoT, we remove samples without associated images, resulting in 98,572 image-text reasoning samples. The reasoning process and final answer in each response are wrapped with <think></think> and <answer></answer> ,respectively. 
+
+C Training Hyperparameters 
+
+Table 1 summarizes the training hyperparameters used for all target models. For LLaVA-V1.5-7B and LLaVA-V1.5-13B, we follow the hyperparameter settings from the offi-cial LLaVA training code. For Qwen2-VL-2B-Instruct and Llama-3.2-11B-Vision-Instruct, since both models are al-ready instruction-tuned checkpoints, we use a conservative learning rate of 1 × 10 −5 for full-parameter fine-tuning. We set the batch size to 64 for these two models because using a batch size of 128 leads to too few optimization steps within one epoch, both for the full dataset and for subset training, making the training insufficient. 
+
+D Evaluation 
+
+D.1 Evaluation Benchmarks 
+
+We choose benchmarks according to the modality and target capability of each dataset. For Vision-Flan, we use bench-marks covering general multimodal understanding, visual question answering, OCR, document understanding, chart understanding, and science-diagram reasoning. For LLaVA-CoT, we combine multimodal mathematical and logical rea-soning benchmarks with general vision-language bench-marks to evaluate both reasoning ability and overall mul-timodal robustness. For Qwen2-VL-2B-Instruct trained on LLaVA-CoT, we observe that full-data training still yields extremely poor performance on We-Math (Qiao et al. 2025), LogicVista (Xiao et al. 2024), DynaMath (Zou et al. 2024), and MMStar (Chen et al. 2024), making these benchmarks less informative for comparing data selection methods under this target model. Therefore, for this model we evaluate on the remaining eight benchmarks.The full benchmark list is shown in Table 2. D.2 Detailed Evaluation Results 
+
+For the main experiments, Tables 3 and 4 present the full benchmark-level comparison results on Vision-Flan and LLaVA-CoT, respectively, covering Data-DPO and all data selection baselines. We further provide benchmark-level re-sults for the analysis and ablation studies discussed in the main paper and appendix. Specifically, Table 5 reports the results of the proxy-model analysis. Table 6 presents the abla-tion results on the selection reward. Table 7 shows the Vision-Flan results with LLaVA-V1.5-13B as the target model, while Table 8 shows the LLaVA-CoT results with Qwen2-VL-2B-Instruct. Table 9 reports the results under different quality signal sources. Table 10 reports the results under different embedding sources. Finally, Table 11 reports the results with a simplified reward model. 
+
+E Time Cost Analysis 
+
+We measure the time cost of different data selection methods on LLaVA-CoT. Table 12 reports the GPU hours required by each method on a NVIDIA A6000. Data-DPO takes approx-imately 19.0 GPU hours in total. Although its computational cost is slightly higher than other baselines, it remains accept-able compared with full SFT training and achieves the best or near-best performance under most data budgets. Table 1: Training hyperparameters for target models.                                                      
+
+> Model Strategy Epoch Batch size LR Optimizer LR scheduler Warmup ratio LoRA rank LoRA alpha
+> LLaVA-V1.5-7B LoRA 1128 2×10 −4AdamW Cosine 0.03 128 256 LLaVA-V1.5-13B LoRA 1128 2×10 −4AdamW Cosine 0.03 128 256 Qwen2-VL-2B-Instruct Full 164 1×10 −5AdamW Cosine 0.03 ––Llama-3.2-11B-Vision-Instruct Full 164 1×10 −5AdamW Cosine 0.03 ––
+
+Table 2: Evaluation benchmarks used for each dataset. 
+
+Dataset Benchmark 
+
+Vision-Flan GQA (Hudson and Manning 2019) VizWiz (Gurari et al. 2018) TextVQA (Singh et al. 2019) ScienceQA-IMG (Saikh et al. 2022) MME (Liang et al. 2024) MMBench (Liu et al. 2024b) AI2D (Kembhavi et al. 2016) ChartQA (Masry et al. 2022) DocVQA (Mathew, Karatzas, and Jawahar 2021) InfoVQA (Mathew et al. 2022) MMStar (Chen et al. 2024) OCRBench (Liu et al. 2024c) LLaVA-CoT MATH-Vision (Wang et al. 2024a) We-Math (Qiao et al. 2025) LogicVista (Xiao et al. 2024) DynaMath (Zou et al. 2024) MMStar (Chen et al. 2024) MME (Liang et al. 2024) MMBench-EN (Liu et al. 2024b) ScienceQA-IMG (Saikh et al. 2022) AI2D (Kembhavi et al. 2016) ChartQA (Masry et al. 2022) InfoVQA (Mathew et al. 2022) OCRBench (Liu et al. 2024c) Table 3: Main experimental results on Vision-Flan using LLaVA-v1.5-7B as the target model. The best result in each column is highlighted in bold. 
+
+(a) 5% data subset. 
+
+Method GQA VizWiz TextVQA SQA-I MME MMB-CN MMB-EN AI2D ChartQA DocVQA InfoVQA MMStar OCRBench ARP 
+
+Full Data 47.30 55.88 35.83 61.43 1270.40 50.26 55.67 52.14 15.68 15.80 15.53 35.32 26.20 100.00 Random 42.93 55.79 36.54 60.34 1098.02 36.40 26.19 37.82 15.96 16.46 19.99 34.77 27.80 92.96 XMAS 40.38 54.15 37.06 62.42 705.48 39.95 39.95 41.22 15.40 17.98 19.80 34.37 27.50 93.46 COINCIDE 42.15 53.48 38.00 55.03 1000.71 29.12 41.24 36.40 16.64 17.89 17.79 33.51 28.70 92.26 D2Prune 41.02 55.99 37.47 60.59 928.95 36.94 44.93 38.54 16.60 17.68 20.58 33.47 27.90 95.61 EL2N 43.26 54.93 35.94 54.34 898.77 39.78 18.90 34.03 15.80 16.23 18.36 34.13 28.20 88.74 SemDeDup 43.09 55.72 37.31 63.11 1115.77 41.32 48.71 41.16 17.80 19.02 19.42 33.09 27.80 99.45 CLIP 39.24 54.77 31.80 57.71 549.88 38.06 40.38 37.63 15.92 16.78 19.69 33.75 29.20 89.92 PRISM 29.97 52.06 26.73 49.33 1106.50 35.13 16.67 29.99 17.00 19.56 19.35 35.26 27.90 86.08 SCAL 39.52 53.96 36.08 62.87 838.18 38.49 43.64 43.13 15.28 17.67 19.07 34.01 27.50 93.86 Data-DPO (Ours) 45.19 56.05 40.41 61.38 1152.75 40.46 46.39 41.48 15.16 20.05 21.25 35.28 28.00 100.76 
+
+(b) 10% data subset. 
+
+Method GQA VizWiz TextVQA SQA-I MME MMB-CN MMB-EN AI2D ChartQA DocVQA InfoVQA MMStar OCRBench ARP 
+
+Full Data 47.30 55.88 35.83 61.43 1270.40 50.26 55.67 52.14 15.68 15.80 15.53 35.32 26.20 100.00 Random 43.31 56.02 36.13 60.92 1152.77 39.61 31.88 44.50 16.52 17.27 18.08 34.36 27.90 95.30 XMAS 42.73 55.82 36.55 64.40 1008.41 45.19 54.38 43.95 16.20 18.39 18.19 34.28 28.50 99.31 COINCIDE 43.33 57.38 38.70 60.83 1032.00 43.56 41.24 40.16 15.84 18.96 19.25 34.27 29.00 97.93 D2Prune 43.47 56.40 37.81 63.01 1146.50 47.68 51.80 43.01 16.44 17.38 18.78 34.73 29.00 100.49 EL2N 44.08 56.99 38.10 47.99 1088.62 39.52 31.70 29.92 15.64 18.78 18.78 34.94 28.30 92.67 SemDeDup 43.93 56.39 37.20 58.65 1236.25 47.51 45.96 39.31 15.72 18.89 17.58 36.00 28.50 98.97 CLIP 41.02 53.63 38.11 59.84 725.09 34.28 30.50 35.56 16.36 20.29 22.72 34.90 29.10 94.13 PRISM 35.21 48.80 37.87 61.97 751.61 38.49 44.16 44.88 16.44 23.76 23.37 35.92 28.80 98.99 SCAL 42.73 56.26 37.68 60.88 1101.46 44.42 54.81 44.49 14.84 18.29 16.71 33.56 27.80 97.94 Data-DPO (Ours) 46.06 56.38 38.62 59.89 1322.53 43.47 49.14 42.97 17.48 19.05 19.76 36.30 28.10 102.63 
+
+(c) 15% data subset. 
+
+Method GQA VizWiz TextVQA SQA-I MME MMB-CN MMB-EN AI2D ChartQA DocVQA InfoVQA MMStar OCRBench ARP 
+
+Full Data 47.30 55.88 35.83 61.43 1270.40 50.26 55.67 52.14 15.68 15.80 15.53 35.32 26.20 100.00 Random 43.19 56.33 35.41 59.59 1230.04 42.44 38.06 41.06 15.52 16.26 16.26 32.27 27.60 93.82 XMAS 44.68 56.52 37.19 61.18 1012.67 40.72 46.99 44.62 15.84 17.83 17.88 34.95 27.50 97.13 COINCIDE 44.28 56.44 37.52 55.73 1221.20 45.96 39.26 37.50 17.24 19.03 18.32 35.59 28.80 98.39 D2Prune 43.96 57.16 38.40 61.63 1059.64 44.67 49.48 44.66 15.80 17.62 18.60 34.13 28.30 98.94 EL2N 45.81 57.45 38.52 53.69 1105.20 46.22 39.18 43.39 14.68 19.06 17.35 34.56 28.40 96.87 SemDeDup 50.00 51.57 37.30 59.69 1247.46 43.90 45.45 43.13 17.04 18.66 18.93 35.24 28.00 100.35 CLIP 41.33 55.10 38.44 65.25 640.09 39.60 41.67 48.41 16.68 20.19 21.96 37.57 29.30 99.24 PRISM 39.25 52.24 38.62 61.23 770.61 41.67 41.07 43.78 17.96 21.12 21.00 36.22 29.10 98.64 SCAL 43.15 57.90 38.47 57.56 1062.93 46.91 43.99 36.40 15.96 18.82 16.69 35.53 27.70 96.65 Data-DPO (Ours) 46.65 50.19 37.98 62.96 1240.62 46.91 53.26 46.11 17.52 19.68 18.35 35.65 28.20 102.70 Table 4: Main experimental results on LLaVA-CoT using Llama-3.2-11B-Vision-Instruct as the target model. The best result in each column is highlighted in bold. 
+
+(a) 5% data subset. 
+
+Method MATH-Vision We-Math LogicVista DynaMath MMStar MME MMBench-EN ScienceQA-IMG AI2D ChartQA InfoVQA OCRBench ARP 
+
+Full Data 17.01 31.90 29.91 16.23 56.99 1549.25 77.92 95.44 76.94 85.68 62.29 73.50 100.00 Random 14.08 27.99 26.12 16.07 52.35 1405.82 76.37 90.18 73.83 83.88 65.16 71.50 93.98 XMAS 15.69 33.33 32.14 16.11 54.28 1301.91 76.80 90.38 73.93 83.68 64.51 71.20 97.51 COINCIDE 17.63 38.22 31.03 15.27 52.86 1325.47 75.00 91.18 74.81 83.84 64.76 71.50 98.98 D2Prune 17.40 34.14 28.35 14.37 52.22 1271.98 76.03 90.18 74.68 82.96 64.44 73.90 96.36 EL2N 15.86 38.97 33.26 15.53 52.78 1378.95 75.95 91.03 74.19 83.40 65.34 69.20 99.13 SemDeDup 15.33 38.91 28.35 15.49 53.56 1334.17 76.72 90.43 73.02 83.80 65.17 70.90 97.45 CLIP 17.40 38.28 25.00 15.47 54.63 1258.75 76.80 91.42 72.73 80.72 62.10 75.50 96.98 PRISM 17.01 40.63 29.02 13.43 54.79 1353.37 75.09 89.94 72.60 77.28 66.10 74.30 97.75 SCAL 16.32 24.48 26.79 11.50 52.82 1445.83 76.55 89.04 72.93 67.08 67.69 74.90 91.19 Data-DPO (Ours) 16.74 47.64 38.84 15.07 53.82 1223.83 77.23 90.63 74.16 83.84 66.26 69.20 102.73 
+
+(b) 10% data subset. 
+
+Method MATH-Vision We-Math LogicVista DynaMath MMStar MME MMBench-EN ScienceQA-IMG AI2D ChartQA InfoVQA OCRBench ARP 
+
+Full Data 17.01 31.90 29.91 16.23 56.99 1549.25 77.92 95.44 76.94 85.68 62.29 73.50 100.00 Random 15.89 29.20 30.80 15.19 50.67 1471.44 76.55 91.77 74.48 84.12 66.30 74.20 96.85 XMAS 16.97 35.63 32.59 15.73 53.52 1466.86 76.98 92.02 74.03 84.68 64.31 72.10 99.79 COINCIDE 14.67 31.78 31.47 16.19 49.38 1465.80 77.58 92.07 76.04 84.80 65.57 74.20 97.68 D2Prune 16.38 31.09 30.36 15.37 52.11 1449.64 77.23 91.08 74.81 83.76 64.68 72.20 97.21 EL2N 16.05 35.06 31.47 15.57 52.72 1365.12 76.89 91.67 75.19 84.28 65.30 72.70 98.38 SemDeDup 15.82 37.53 30.80 15.59 52.69 1528.53 76.37 91.57 75.00 84.44 64.18 74.00 99.54 CLIP 17.83 30.17 28.57 15.25 53.22 1455.55 76.55 91.22 75.29 81.12 62.29 73.60 96.89 PRISM 16.74 39.43 31.92 13.69 53.56 1426.71 76.12 90.18 73.12 81.04 68.66 74.70 99.40 SCAL 13.91 32.47 26.79 13.43 50.21 1470.95 76.46 90.68 74.22 63.96 67.81 74.90 92.83 Data-DPO (Ours) 17.17 47.99 37.50 15.05 53.23 1436.62 77.15 89.39 73.80 84.36 65.85 72.60 103.93 
+
+(c) 15% data subset. 
+
+Method MATH-Vision We-Math LogicVista DynaMath MMStar MME MMBench-EN ScienceQA-IMG AI2D ChartQA InfoVQA OCRBench ARP 
+
+Full Data 17.01 31.90 29.91 16.23 56.99 1549.25 77.92 95.44 76.94 85.68 62.29 73.50 100.00 Random 15.56 29.54 32.37 15.02 53.44 1530.66 77.75 91.03 74.09 85.44 66.42 74.80 98.08 XMAS 17.30 32.41 32.37 15.23 52.77 1485.83 76.80 92.27 74.61 84.68 65.48 74.20 99.25 COINCIDE 17.04 37.99 31.25 15.35 51.78 1494.57 76.72 92.07 75.36 84.16 65.44 74.20 100.23 D2Prune 16.74 27.30 33.71 15.99 53.32 1477.34 76.89 90.98 74.29 84.68 64.91 74.90 98.30 EL2N 17.14 43.56 31.47 15.29 53.19 1570.67 77.75 91.03 75.74 84.48 65.95 73.50 102.46 
+
+SemDeDup 16.78 34.89 30.58 15.79 53.32 1478.05 77.23 91.52 75.06 84.32 64.90 74.40 99.41 CLIP 18.19 39.08 33.71 14.43 55.46 1477.28 76.55 91.47 73.45 82.12 64.22 75.70 101.27 PRISM 16.18 37.01 31.70 12.10 53.14 1494.04 77.15 90.83 74.42 83.12 67.87 73.80 98.22 SCAL 13.39 25.98 31.47 15.47 51.14 1505.28 78.09 91.77 74.61 68.56 68.94 74.00 94.36 Data-DPO (Ours) 13.19 46.61 34.38 15.03 52.83 1500.34 76.63 90.48 75.52 85.00 66.82 71.40 101.31 Table 5: Ablation results of proxy models in selection on Vision-Flan. We compare activation probing on the original LLaVA-v1.5-7B target model with probing on a checkpoint trained on randomly sampled 5% Vision-Flan data under 5%, 10%, and 15% data budgets. The best result in each column is highlighted in bold. 
+
+(a) 5% data subset. 
+
+Method GQA VizWiz TextVQA SQA-I MME MMB-CN MMB-EN AI2D ChartQA DocVQA InfoVQA MMStar OCRBench ARP 
+
+Full Data 47.30 55.88 35.83 61.43 1270.40 50.26 55.67 52.14 15.68 15.80 15.53 35.32 26.20 100.00 Proxy 42.88 55.74 40.00 51.56 1002.23 36.08 21.31 33.61 16.08 20.76 20.40 34.12 28.80 93.17 Target 45.19 56.05 40.41 61.38 1152.75 40.46 46.39 41.48 15.16 20.05 21.25 35.28 28.00 100.76 
+
+(b) 10% data subset. 
+
+Method GQA VizWiz TextVQA SQA-I MME MMB-CN MMB-EN AI2D ChartQA DocVQA InfoVQA MMStar OCRBench ARP 
+
+Full Data 47.30 55.88 35.83 61.43 1270.40 50.26 55.67 52.14 15.68 15.80 15.53 35.32 26.20 100.00 Proxy 45.25 55.32 39.87 52.60 1057.25 37.71 37.46 38.86 16.68 20.91 19.74 36.01 29.20 97.76 Target 46.06 56.38 38.62 59.89 1322.53 43.47 49.14 42.97 17.48 19.05 19.76 36.30 28.10 102.63 
+
+(c) 15% data subset. 
+
+Method GQA VizWiz TextVQA SQA-I MME MMB-CN MMB-EN AI2D ChartQA DocVQA InfoVQA MMStar OCRBench ARP 
+
+Full Data 47.30 55.88 35.83 61.43 1270.40 50.26 55.67 52.14 15.68 15.80 15.53 35.32 26.20 100.00 Proxy 46.16 56.53 39.47 60.49 1185.56 41.58 43.30 46.28 17.00 20.50 19.17 35.49 28.90 101.72 Target 46.65 50.19 37.98 62.96 1240.62 46.91 53.26 46.11 17.52 19.68 18.35 35.65 28.20 102.70 Table 6: Ablation results on the selection reward. We evaluate different combinations of target model preference, quality score, and marginal diversity on the Vision-Flan dataset using LLaVA-v1.5-7B with a 10% data subset. The best result in each column is highlighted in bold. 
+
+(a) 10% data subset. 
+
+Method GQA VizWiz TextVQA SQA-I MME MMB-CN MMB-EN AI2D ChartQA DocVQA InfoVQA MMStar OCRBench ARP 
+
+Full Data 47.30 55.88 35.83 61.43 1270.40 50.26 55.67 52.14 15.68 15.80 15.53 35.32 26.20 100.00 DPO 44.55 42.98 33.18 58.51 1223.71 42.78 49.66 40.51 15.44 13.46 17.95 34.99 24.80 92.33 Quality 44.05 56.48 38.46 59.35 1158.65 41.15 39.08 37.37 17.00 19.72 19.48 35.95 29.60 98.96 Diversity 44.07 55.78 37.28 54.49 1166.17 38.32 25.95 38.27 16.64 20.23 18.24 35.74 28.80 95.12 DPO + Diversity 45.22 55.20 38.01 62.32 1189.84 39.00 47.94 43.65 15.76 18.33 19.56 35.29 27.50 99.26 DPO + Quality 44.25 38.24 36.84 59.64 1299.21 43.55 52.23 41.90 16.08 12.72 16.98 36.48 24.00 93.25 Diversity + Quality 45.48 53.35 39.47 55.92 1167.70 44.67 42.18 43.17 16.76 20.02 19.15 36.48 28.90 100.21 All 46.06 56.38 38.62 59.89 1322.53 43.47 49.14 42.97 17.48 19.05 19.76 36.30 28.10 102.63 
+
+Table 7: Robustness results across target models on Vision-Flan using LLaVA-v1.5-13B as the target model. The best result in each column is highlighted in bold. 
+
+(a) 5% data subset. 
+
+Method GQA VizWiz TextVQA SQA-I MME MMB-CN MMB-EN AI2D ChartQA DocVQA InfoVQA MMStar OCRBench ARP 
+
+Full Data 49.02 55.92 35.82 70.60 1318.89 56.44 60.74 57.67 19.44 20.03 19.87 35.65 29.50 100.00 Random 43.02 56.82 34.35 63.46 1178.91 36.25 41.23 45.66 14.88 14.87 18.17 32.17 29.00 85.12 Data-DPO 43.46 57.59 39.03 65.29 1276.61 43.99 49.05 46.96 16.52 20.26 22.81 30.97 29.80 93.76 
+
+(b) 10% data subset. 
+
+Method GQA VizWiz TextVQA SQA-I MME MMB-CN MMB-EN AI2D ChartQA DocVQA InfoVQA MMStar OCRBench ARP 
+
+Full Data 49.02 55.92 35.82 70.60 1318.89 56.44 60.74 57.67 19.44 20.03 19.87 35.65 29.50 100.00 Random 44.98 58.13 36.43 68.26 1176.93 47.60 55.56 49.63 16.56 16.97 19.08 31.35 29.60 92.26 Data-DPO 45.22 51.10 38.26 66.29 1314.84 46.22 52.66 52.04 16.80 19.73 21.82 32.42 29.60 94.53 
+
+(c) 15% data subset. 
+
+Method GQA VizWiz TextVQA SQA-I MME MMB-CN MMB-EN AI2D ChartQA DocVQA InfoVQA MMStar OCRBench ARP 
+
+Full Data 49.02 55.92 35.82 70.60 1318.89 56.44 60.74 57.67 19.44 20.03 19.87 35.65 29.50 100.00 Random 45.25 56.96 38.03 65.05 1176.15 42.70 46.99 48.32 16.60 18.38 18.23 34.86 29.40 91.14 Data-DPO 47.75 56.18 37.70 67.63 1293.21 43.04 41.41 49.74 17.92 19.46 21.66 35.30 30.10 94.39 Table 8: Robustness results across target models on LLaVA-CoT using Qwen2VL-2B-Instruct as the target model. The best result in each column is highlighted in bold. 
+
+(a) 5% data subset. 
+
+Method MATH-Vision MME MMB-EN SQA-I AI2D ChartQA InfoVQA OCRBench ARP 
+
+Full Data 9.05 1350.72 64.86 77.89 63.18 73.44 49.67 71.00 100.00 Random 9.74 1233.91 58.08 71.19 59.29 69.00 45.24 67.90 94.30 Data-DPO 15.10 955.55 60.48 72.88 60.23 68.84 46.09 67.30 100.13 
+
+(b) 10% data subset. 
+
+Method MATH-Vision MME MMB-EN SQA-I AI2D ChartQA InfoVQA OCRBench ARP 
+
+Full Data 9.05 1350.72 64.86 77.89 63.18 73.44 49.67 71.00 100.00 Random 9.80 1216.21 61.08 69.26 59.52 71.04 45.98 68.90 95.25 Data-DPO 12.14 1039.20 60.74 73.18 59.68 71.40 47.10 67.30 97.50 
+
+(c) 15% data subset. 
+
+Method MATH-Vision MME MMB-EN SQA-I AI2D ChartQA InfoVQA OCRBench ARP 
+
+Full Data 9.05 1350.72 64.86 77.89 63.18 73.44 49.67 71.00 100.00 Random 8.68 1282.13 59.97 71.99 59.49 71.52 46.41 69.20 94.77 Data-DPO 11.91 1135.57 61.00 72.88 59.62 71.68 47.20 69.00 98.43 
+
+Table 9: Robustness to quality scoring models on Vision-Flan. We compare the default Qwen3-VL-4B-Instruct quality scoring model with LLaVA-OneVision-1.5-4B-Instruct under 5%, 10%, and 15% data budgets. The best result in each column is highlighted in bold. 
+
+(a) 5% data subset. 
+
+Method GQA VizWiz TextVQA SQA-I MME MMB-CN MMB-EN AI2D ChartQA DocVQA InfoVQA MMStar OCRBench ARP 
+
+Full Data 47.30 55.88 35.83 61.43 1270.40 50.26 55.67 52.14 15.68 15.80 15.53 35.32 26.20 100.00 Random 42.93 55.79 36.54 60.34 1098.02 36.40 26.19 37.82 15.96 16.46 19.99 34.77 27.80 92.96 Qwen3-VL-4B 45.19 56.05 40.41 61.38 1152.75 40.46 46.39 41.48 15.16 20.05 21.25 35.28 28.00 100.76 LLaVA-OV-4B 44.24 57.67 39.66 64.70 1096.94 39.35 49.48 44.17 15.56 19.09 21.61 34.95 28.00 101.23 
+
+(b) 10% data subset. 
+
+Method GQA VizWiz TextVQA SQA-I MME MMB-CN MMB-EN AI2D ChartQA DocVQA InfoVQA MMStar OCRBench ARP 
+
+Full Data 47.30 55.88 35.83 61.43 1270.40 50.26 55.67 52.14 15.68 15.80 15.53 35.32 26.20 100.00 Random 43.31 56.02 36.13 60.92 1152.77 39.61 31.88 44.50 16.52 17.27 18.08 34.36 27.90 95.30 Qwen3-VL-4B 46.06 56.38 38.62 59.89 1322.53 43.47 49.14 42.97 17.48 19.05 19.76 36.30 28.10 102.63 
+
+LLaVA-OV-4B 46.38 54.49 38.34 60.49 1198.31 44.50 50.26 43.07 16.00 18.52 20.10 33.53 27.90 100.53 
+
+(c) 15% data subset. 
+
+Method GQA VizWiz TextVQA SQA-I MME MMB-CN MMB-EN AI2D ChartQA DocVQA InfoVQA MMStar OCRBench ARP 
+
+Full Data 47.30 55.88 35.83 61.43 1270.40 50.26 55.67 52.14 15.68 15.80 15.53 35.32 26.20 100.00 Random 43.19 56.33 35.41 59.59 1230.04 42.44 38.06 41.06 15.52 16.26 16.26 32.27 27.60 93.82 Qwen3-VL-4B 46.65 50.19 37.98 62.96 1240.62 46.91 53.26 46.11 17.52 19.68 18.35 35.65 28.20 102.70 LLaVA-OV-4B 46.50 57.07 39.18 61.68 1229.97 43.21 49.23 44.85 17.48 20.17 20.62 35.84 28.30 103.76 Table 10: Robustness to embedding sources on Vision-Flan. We compare different embedding sources for Data-DPO using LLaVA-v1.5-7B with 5%, 10%, and 15% data subsets. The best result in each column is highlighted in bold. 
+
+(a) 5% data subset. 
+
+Method GQA VizWiz TextVQA SQA-I MME MMB-CN MMB-EN AI2D ChartQA DocVQA InfoVQA MMStar OCRBench ARP 
+
+Full Data 47.30 55.88 35.83 61.43 1270.40 50.26 55.67 52.14 15.68 15.80 15.53 35.32 26.20 100.00 Random 42.93 55.79 36.54 60.34 1098.02 36.40 26.19 37.82 15.96 16.46 19.99 34.77 27.80 92.96 2B 45.19 56.05 40.41 61.38 1152.75 40.46 46.39 41.48 15.16 20.05 21.25 35.28 28.00 100.76 
+
+8B 45.25 56.69 37.86 61.82 1186.49 41.58 50.52 42.16 17.08 17.85 19.09 34.48 27.70 99.95 
+
+(b) 10% data subset. 
+
+Method GQA VizWiz TextVQA SQA-I MME MMB-CN MMB-EN AI2D ChartQA DocVQA InfoVQA MMStar OCRBench ARP 
+
+Full Data 47.30 55.88 35.83 61.43 1270.40 50.26 55.67 52.14 15.68 15.80 15.53 35.32 26.20 100.00 Random 43.31 56.02 36.13 60.92 1152.77 39.61 31.88 44.50 16.52 17.27 18.08 34.36 27.90 95.30 2B 46.06 56.38 38.62 59.89 1322.53 43.47 49.14 42.97 17.48 19.05 19.76 36.30 28.10 102.63 
+
+8B 44.84 56.70 37.19 62.72 1320.22 42.53 48.54 44.24 16.92 16.53 18.87 36.34 27.50 100.36 
+
+(c) 15% data subset. 
+
+Method GQA VizWiz TextVQA SQA-I MME MMB-CN MMB-EN AI2D ChartQA DocVQA InfoVQA MMStar OCRBench ARP 
+
+Full Data 47.30 55.88 35.83 61.43 1270.40 50.26 55.67 52.14 15.68 15.80 15.53 35.32 26.20 100.00 Random 43.19 56.33 35.41 59.59 1230.04 42.44 38.06 41.06 15.52 16.26 16.26 32.27 27.60 93.82 2B 46.65 50.19 37.98 62.96 1240.62 46.91 53.26 46.11 17.52 19.68 18.35 35.65 28.20 102.70 
+
+8B 47.27 56.82 37.95 49.73 1262.70 46.22 46.13 37.21 18.48 18.60 20.07 37.29 27.60 100.75 Table 11: Sensitivity to reward model capacity on Vision-Flan. We compare Data-DPO with the default residual MLP reward model and a simpler plain MLP reward model using LLaVA-v1.5-7B under 5%, 10%, and 15% data budgets. The best result in each column is highlighted in bold. 
+
+(a) 5% data subset. 
+
+Method GQA VizWiz TextVQA SQA-I MME MMB-CN MMB-EN AI2D ChartQA DocVQA InfoVQA MMStar OCRBench ARP 
+
+Full Data 47.30 55.88 35.83 61.43 1270.40 50.26 55.67 52.14 15.68 15.80 15.53 35.32 26.20 100.00 Random 42.93 55.79 36.54 60.34 1098.02 36.40 26.19 37.82 15.96 16.46 19.99 34.77 27.80 92.96 Plain 44.26 57.45 38.62 53.40 1145.31 43.21 32.47 35.85 15.36 17.53 19.27 37.40 27.90 95.36 Residual 45.19 56.05 40.41 61.38 1152.75 40.46 46.39 41.48 15.16 20.05 21.25 35.28 28.00 100.76 
+
+(b) 10% data subset. 
+
+Method GQA VizWiz TextVQA SQA-I MME MMB-CN MMB-EN AI2D ChartQA DocVQA InfoVQA MMStar OCRBench ARP 
+
+Full Data 47.30 55.88 35.83 61.43 1270.40 50.26 55.67 52.14 15.68 15.80 15.53 35.32 26.20 100.00 Random 43.31 56.02 36.13 60.92 1152.77 39.61 31.88 44.50 16.52 17.27 18.08 34.36 27.90 95.30 Plain 46.41 54.19 38.81 60.34 1242.31 43.04 52.92 44.69 17.08 18.98 18.82 34.70 28.40 101.75 Residual 46.06 56.38 38.62 59.89 1322.53 43.47 49.14 42.97 17.48 19.05 19.76 36.30 28.10 102.63 
+
+(c) 15% data subset. 
+
+Method GQA VizWiz TextVQA SQA-I MME MMB-CN MMB-EN AI2D ChartQA DocVQA InfoVQA MMStar OCRBench ARP 
+
+Full Data 47.30 55.88 35.83 61.43 1270.40 50.26 55.67 52.14 15.68 15.80 15.53 35.32 26.20 100.00 Random 43.19 56.33 35.41 59.59 1230.04 42.44 38.06 41.06 15.52 16.26 16.26 32.27 27.60 93.82 Plain 46.30 54.50 37.51 60.34 1257.74 45.96 52.41 47.44 16.44 18.68 18.01 36.38 27.50 101.61 Residual 46.65 50.19 37.98 62.96 1240.62 46.91 53.26 46.11 17.52 19.68 18.35 35.65 28.20 102.70 Table 12: Time cost comparison of different methods on LLaVA-CoT. 
+
+Method GPU Hours 
+
+XMAS 15.99 ScalSelect 8.82 PRISM 6.70 COINCIDE 9.06 D2 PRUNE 12.51 EL2N 9.57 SemDeDup 9.55 Data-DPO (Ours) 19.00 
+
+Figure 8: Scoring prompt for estimating the quality score on Vision-Flan. Figure 9: Scoring prompt for estimating the quality score on LLaVA-CoT. References 
+
+Abbas, A.; Tirumala, K.; Simig, D.; Ganguli, S.; and Mor-cos, A. S. 2023. Semdedup: Data-efficient learning at web-scale through semantic deduplication. arXiv preprint arXiv:2303.09540 .An, X.; Xie, Y.; Yang, K.; Zhang, W.; Zhao, X.; Cheng, Z.; Wang, Y.; Xu, S.; Chen, C.; Zhu, D.; et al. 2025. Llava-onevision-1.5: Fully open framework for democratized mul-timodal training. arXiv preprint arXiv:2509.23661 .Bai, S.; Cai, Y.; Chen, R.; Chen, K.; Chen, X.; Cheng, Z.; Deng, L.; Ding, W.; Gao, C.; Ge, C.; et al. 2025. Qwen3-vl technical report. arXiv preprint arXiv:2511.21631 .Bi, J.; Wang, Y.; Yan, D.; Huang, W.; Jin, Z.; Ma, X.; Yan, S.; Hecker, A.; Ye, M.; Xiao, X.; et al. 2025. Prism: Self-pruning intrinsic selection method for training-free multimodal data selection. arXiv preprint arXiv:2502.12119 .Chen, L.; Li, J.; Dong, X.; Zhang, P.; Zang, Y.; Chen, Z.; Duan, H.; Wang, J.; Qiao, Y.; Lin, D.; et al. 2024. Are we on the right way for evaluating large vision-language mod-els? Advances in Neural Information Processing Systems ,37: 27056–27087. Deb, R.; Thekumparampil, K.; Kalantari, K.; Hiranandani, G.; Sabach, S.; and Kveton, B. 2025. Fishersft: Data-efficient supervised fine-tuning of language models using information gain. arXiv preprint arXiv:2505.14826 .Fu, Y.; Hamman, F.; and Dutta, S. 2025. T-SHIRT: Token-Selective Hierarchical Data Selection for Instruction Tuning. In Belgrave, D.; Zhang, C.; Lin, H.; Pascanu, R.; Koniusz, P.; Ghassemi, M.; and Chen, N., eds., Advances in Neural In-formation Processing Systems , volume 38, 113932–113958. Curran Associates, Inc. Goyal, S.; Baek, C.; Kolter, J. Z.; and Raghunathan, A. 2024. Context-parametric inversion: Why instruction fine-tuning may not actually improve context reliance. In The Thirteenth International Conference on Learning Represen-tations .Grattafiori, A.; Dubey, A.; Jauhri, A.; Pandey, A.; Kadian, A.; Al-Dahle, A.; Letman, A.; Mathur, A.; Schelten, A.; Vaughan, A.; et al. 2024. The llama 3 herd of models. arXiv preprint arXiv:2407.21783 .Gurari, D.; Li, Q.; Stangl, A. J.; Guo, A.; Lin, C.; Grauman, K.; Luo, J.; and Bigham, J. P. 2018. Vizwiz grand challenge: Answering visual questions from blind people. In Proceed-ings of the IEEE conference on computer vision and pattern recognition , 3608–3617. He, H.; Liu, X.; Lin, Z.; Tang, M.; Cheng, Y.; Wang, J.; Li, W.; Cheng, P.; and Gong, Y. 2025. Learning from the Best, Differently: A Diversity-Driven Rethinking on Data Selection. arXiv preprint arXiv:2510.18909 .Hessel, J.; Holtzman, A.; Forbes, M.; Le Bras, R.; and Choi, Y. 2021. Clipscore: A reference-free evaluation metric for image captioning. In Proceedings of the 2021 conference on empirical methods in natural language processing , 7514– 7528. Hu, Y.; Fan, Z.; Wang, X.; Li, G.; Qiu, Y.; Yang, Z.; Wu, W.; Wu, K.; Sun, Y.; Deng, X.; et al. 2025. TinyAlign: Boosting Lightweight Vision-Language Models by Mitigating Modal Alignment Bottlenecks. arXiv preprint arXiv:2505.12884 .Hudson, D. A.; and Manning, C. D. 2019. Gqa: A new dataset for real-world visual reasoning and compositional question answering. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , 6700–6709. Kembhavi, A.; Salvato, M.; Kolve, E.; Seo, M.; Hajishirzi, H.; and Farhadi, A. 2016. A diagram is worth a dozen images. In European conference on computer vision , 235– 251. Springer. Kwon, W.; Li, Z.; Zhuang, S.; Sheng, Y.; Zheng, L.; Yu, C. H.; Gonzalez, J.; Zhang, H.; and Stoica, I. 2023. Efficient memory management for large language model serving with pagedattention. In Proceedings of the 29th symposium on operating systems principles , 611–626. Lambert, N.; Morrison, J.; Pyatkin, V.; Huang, S.; Ivison, H.; Brahman, F.; Miranda, L. J. V.; Liu, A.; Dziri, N.; Lyu, S.; Gu, Y.; Malik, S.; Graf, V.; Hwang, J. D.; Yang, J.; Bras, R. L.; Tafjord, O.; Wilhelm, C.; Soldaini, L.; Smith, N. A.; Wang, Y.; Dasigi, P.; and Hajishirzi, H. 2025. Tulu 3: Pushing Frontiers in Open Language Model Post-Training. arXiv:2411.15124. Lee, J.; Li, B.; and Hwang, S. J. 2024. Concept-skill transferability-based data selection for large vision-language models. In Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing , 5060–5080. Li, M.; Zhang, Y.; Long, D.; Chen, K.; Song, S.; Bai, S.; Yang, Z.; Xie, P.; Yang, A.; Liu, D.; et al. 2026. Qwen3-VL-Embedding and Qwen3-VL-Reranker: A Unified Frame-work for State-of-the-Art Multimodal Retrieval and Ranking. 
+
+arXiv preprint arXiv:2601.04720 .Liang, Z.; Xu, Y.; Hong, Y.; Shang, P.; Wang, Q.; Fu, Q.; and Liu, K. 2024. A survey of multimodel large language mod-els. In Proceedings of the 3rd International Conference on Computer, Artificial Intelligence and Control Engineering ,405–409. Liu, H.; Li, C.; Li, Y.; and Lee, Y. J. 2024a. Improved baselines with visual instruction tuning. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , 26296–26306. Liu, S.; Chen, T.; Li, X.; Wang, Y.; and Zhang, J. 2026. Data Difficulty and the Generalization–Extrapolation Tradeoff in LLM Fine-Tuning. arXiv preprint arXiv:2605.12906 .Liu, Y.; Duan, H.; Zhang, Y.; Li, B.; Zhang, S.; Zhao, W.; Yuan, Y.; Wang, J.; He, C.; Liu, Z.; et al. 2024b. Mmbench: Is your multi-modal model an all-around player? In European conference on computer vision , 216–233. Springer. Liu, Y.; Li, Z.; Huang, M.; Yang, B.; Yu, W.; Li, C.; Yin, X.-C.; Liu, C.-L.; Jin, L.; and Bai, X. 2024c. Ocrbench: on the hidden mystery of ocr in large multimodal models. Science China Information Sciences , 67(12): 220102. Liu, Z.; Zhou, K.; Zhao, W. X.; Gao, D.; Li, Y.; and Wen, J.-R. 2025. Less is more: High-value data selection for vi-sual instruction tuning. In Proceedings of the 33rd ACM International Conference on Multimedia , 3712–3721. Lu, K.; Yuan, H.; Yuan, Z.; Lin, R.; Lin, J.; Tan, C.; Zhou, C.; and Zhou, J. 2023. # instag: Instruction tagging for analyzing supervised fine-tuning of large language models. 
+
+arXiv preprint arXiv:2308.07074 .Maharana, A.; Yadav, P.; and Bansal, M. 2023. D2 pruning: Message passing for balancing diversity and difficulty in data pruning. arXiv preprint arXiv:2310.07931 .Masry, A.; Do, X. L.; Tan, J. Q.; Joty, S.; and Hoque, E. 2022. Chartqa: A benchmark for question answering about charts with visual and logical reasoning. In Findings of the association for computational linguistics: ACL 2022 , 2263– 2279. Mathew, M.; Bagal, V.; Tito, R.; Karatzas, D.; Valveny, E.; and Jawahar, C. 2022. Infographicvqa. In Proceedings of the IEEE/CVF Winter Conference on Applications of Computer Vision , 1697–1706. Mathew, M.; Karatzas, D.; and Jawahar, C. 2021. Docvqa: A dataset for vqa on document images. In Proceedings of the IEEE/CVF winter conference on applications of computer vision , 2200–2209. Naharas, N.; Nguyen, D.; Bulut, N.; Bateni, M.; Mirrokni, V.; and Mirzasoleiman, B. 2025. Data Selection for Fine-tuning Vision Language Models via Cross Modal Alignment Trajectories. arXiv preprint arXiv:2510.01454 .Paul, M.; Ganguli, S.; and Dziugaite, G. K. 2021. Deep learning on a data diet: Finding important examples early in training. Advances in neural information processing systems ,34: 20596–20607. Qiao, R.; Tan, Q.; Dong, G.; MinhuiWu, M.; Sun, C.; Song, X.; Wang, J.; Gongque, Z.; Lei, S.; Zhang, Y.; et al. 2025. We-math: Does your large multimodal model achieve human-like mathematical reasoning? In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , 20023–20070. Rafailov, R.; Sharma, A.; Mitchell, E.; Ermon, S.; Manning, C. D.; and Finn, C. 2024. Direct Preference Optimiza-tion: Your Language Model is Secretly a Reward Model. arXiv:2305.18290. Saikh, T.; Ghosal, T.; Mittal, A.; Ekbal, A.; and Bhat-tacharyya, P. 2022. Scienceqa: A novel resource for question answering on scholarly articles. International Journal on Digital Libraries , 23(3): 289–301. Singh, A.; Natarajan, V.; Shah, M.; Jiang, Y.; Chen, X.; Batra, D.; Parikh, D.; and Rohrbach, M. 2019. Towards vqa models that can read. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , 8317–8326. Sorscher, B.; Geirhos, R.; Shekhar, S.; Ganguli, S.; and Mor-cos, A. 2022. Beyond neural scaling laws: beating power law scaling via data pruning. Advances in Neural Information Processing Systems , 35: 19523–19536. Team, Q. 2026. Qwen3. 5-Omni Technical Report. arXiv preprint arXiv:2604.15804 .Wang, K.; Pan, J.; Shi, W.; Lu, Z.; Ren, H.; Zhou, A.; Zhan, M.; and Li, H. 2024a. Measuring multimodal mathemati-cal reasoning with math-vision dataset. Advances in Neural Information Processing Systems , 37: 95095–95169. Wang, P.; Bai, S.; Tan, S.; Wang, S.; Fan, Z.; Bai, J.; Chen, K.; Liu, X.; Wang, J.; Ge, W.; et al. 2024b. Qwen2-vl: Enhancing vision-language model’s perception of the world at any resolution. arXiv preprint arXiv:2409.12191 .Wang, S.; Ouyang, X.; Xu, T.; Hu, Y.; Liu, J.; Chen, G.; Zhang, T.; Zheng, J.; Yang, K.; Ren, X.; et al. 2026. OPUS: Towards Efficient and Principled Data Selection in Large Language Model Pre-training in Every Iteration. arXiv preprint arXiv:2602.05400 .Wu, C.; Mao, J.; Miao, Y.; Lian, S.; Yu, B.; Lin, X.; Huang, C.; Zhang, L.; and Chen, K. 2026. ScalSelect: Scalable Training-Free Multimodal Data Selection for Efficient Visual Instruction Tuning. arXiv preprint arXiv:2602.11636 .Wu, X.; Xia, M.; Shao, R.; Deng, Z.; Koh, P. W.; and Rus-sakovsky, O. 2024. Icons: Influence consensus for vision-language data selection. arXiv preprint arXiv:2501.00654 .Xia, M.; Malladi, S.; Gururangan, S.; Arora, S.; and Chen, D. 2024. Less: Selecting influential data for targeted instruction tuning. arXiv preprint arXiv:2402.04333 .Xiao, Y.; Sun, E.; Liu, T.; and Wang, W. 2024. Logicvista: Multimodal llm logical reasoning benchmark in visual con-texts. arXiv preprint arXiv:2407.04973 .Xu, G.; Jin, P.; Wu, Z.; Li, H.; Song, Y.; Sun, L.; and Yuan, L. 2025. Llava-cot: Let vision language models reason step-by-step. In Proceedings of the IEEE/CVF International Con-ference on Computer Vision , 2087–2098. Xu, Z.; Feng, C.; Shao, R.; Ashby, T.; Shen, Y.; Jin, D.; Cheng, Y.; Wang, Q.; and Huang, L. 2024. Vision-flan: Scaling human-labeled tasks in visual instruction tuning. In 
+
+Findings of the Association for Computational Linguistics: ACL 2024 , 15271–15342. Yan, Y.; Zhong, M.; Zhu, Q.; Gu, X.; Chen, J.; and Li, H. 2025. CoIDO: Efficient Data Selection for Visual Instruc-tion Tuning via Coupled Importance-Diversity Optimization. 
+
+arXiv preprint arXiv:2510.17847 .Yang, X.; Liu, C.; and Wei, Y. 2025. Data Selection Mat-ters: Towards Robust Instruction Tuning of Large Multimodal Models. In Belgrave, D.; Zhang, C.; Lin, H.; Pascanu, R.; Koniusz, P.; Ghassemi, M.; and Chen, N., eds., Advances in Neural Information Processing Systems , volume 38, 9326– 9364. Curran Associates, Inc. Yu, Q.; Shen, Z.; Yue, Z.; Wu, Y.; Qin, B.; Zhang, W.; Li, Y.; Li, J.; Tang, S.; and Zhuang, Y. 2025. Mastering collabora-tive multi-modal data selection: A focus on informativeness, uniqueness, and representativeness. In Proceedings of the IEEE/CVF International Conference on Computer Vision ,155–165. Zhang, D.; Dai, Q.; and Peng, H. 2025. The Best Instruction-Tuning Data are Those That Fit. In Belgrave, D.; Zhang, C.; Lin, H.; Pascanu, R.; Koniusz, P.; Ghassemi, M.; and Chen, N., eds., Advances in Neural Information Processing Sys-tems , volume 38, 141172–141208. Curran Associates, Inc. Zou, C.; Guo, X.; Yang, R.; Zhang, J.; Hu, B.; and Zhang, H. 2024. Dynamath: A dynamic visual benchmark for evalu-ating mathematical reasoning robustness of vision language models. arXiv preprint arXiv:2411.00836 .
