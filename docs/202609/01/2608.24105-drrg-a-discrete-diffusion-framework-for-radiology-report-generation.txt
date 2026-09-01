@@ -1,0 +1,382 @@
+Title: DRRG: A Discrete Diffusion Framework for Radiology Report Generation
+
+URL Source: https://arxiv.org/pdf/2608.24105
+
+Published Time: Wed, 26 Aug 2026 00:45:59 GMT
+
+Number of Pages: 11
+
+Markdown Content:
+# DRRG: A Discrete Diffusion Framework for Radiology Report Generation 
+
+## Shaoyang Zhou a,1 , Yingshu Li a,1 , Yunyi Liu a,1 , Lijun Pu b, Lingqiao Liu c, Lei Wang d and Luping Zhou a,∗
+
+> a
+
+School of Electrical and Computer Engineering, The University of Sydney, Sydney, NSW, 2006, Australia 
+
+> b
+
+Department of Radiology, The First Affiliated Hospital of Soochow University, Suzhou, Jiangsu, 215006, China 
+
+> c
+
+School of Computer Science, The University of Adelaide, Adelaide, SA, 5005, Australia 
+
+> d
+
+School of Computing and Information Technology, University of Wollongong, Wollongong, NSW, 2522, Australia 
+
+A R T I C L E I N F O 
+
+Keywords :Radiology report generation Discrete diffusion large language model Chest X-ray 
+
+A B S T R A C T 
+
+Purpose: Automatic radiology report generation (RRG) has been widely explored to improve report-ing accuracy and reduce radiologists’ workload. Most existing methods rely on autoregressive (AR) frameworks that generate reports token by token and cannot revise earlier content, making them prone to error propagation and inconsistent with the iterative refinement process of radiological reporting. In contrast, discrete diffusion large language models (DLLMs) generate text through iterative denoising, naturally enabling report refinement. However, DLLMs have not been extensively investigated for RRG. In this study, we developed and evaluated a discrete diffusion framework for RRG that enables iterative refinement rather than conventional left-to-right autoregressive decoding. 
+
+Materials and methods: We developed DRRG, a DLLM-based framework that formulates RRG as iterative masked-token denoising. DRRG incorporates a clinical-entities-aware complementary mask to improve token supervision coverage and emphasize clinically important entities, together with a concept-conditioning module that injects image-derived clinical concepts into visual representations. DRRG was trained and evaluated on MIMIC-CXR and CheXpert Plus. 
+
+Results: On MIMIC-CXR, DRRG achieved BLEU-4 of 0.210, CheXpert-F1 of 0.549, RadGraph-F1 of 0.281, GREEN of 0.360, and RaTEScore of 0.604, outperforming the compared methods on most reported metrics, despite employing a substantially smaller LLM decoder. On CheXpert Plus, DRRG achieved the highest BLEU-4 (0.119) and CheXpert-F1 (0.347) among the compared methods. 
+
+Conclusion: Discrete diffusion provides an effective alternative to autoregressive radiology report generation by enabling iterative, bidirectional report refinement. Incorporating clinically focused masking and image-derived concept conditioning improves report quality and clinical consistency. 
+
+## 1. Introduction 
+
+1.1. Background 
+
+Radiology reports summarize imaging findings and pro-vide critical evidence for clinical diagnosis and treatment planning. Unlike general descriptive text, radiology report-ing is safety-critical: incorrect negation or contradictory findings may lead to misinterpretation and inappropriate patient management. Therefore, semantic consistency and logical correctness are essential not only for fluency, but also for clinical reliability. Nevertheless, producing such high-quality reports is time-consuming and places a substantial burden on radiologists 1,3 , especially with the rapid growth of imaging volume. Consequently, automatic radiology report generation (RRG) has received increasing attention as a means to reduce radiologists’ workload 28 .Existing RRG methods are predominantly built upon autoregressive (AR) decoding for its strong language model-ing capability and have achieved remarkable progress 23,45 .
+
+> ∗
+
+Corresponding author.  
+
+> szho0189@uni.sydney.edu.au
+
+(S. Zhou); yingshu.li@sydney.edu.au 
+
+(Y. Li); yunyi.liu1@sydney.edu.au (Y. Liu); 20255232248@stu.suda.edu.cn 
+
+(L. Pu); lingqiao.liu@adelaide.edu.au (L. Liu); leiw@uow.edu.au (L. Wang); luping.zhou@sydney.edu.au (L. Zhou) 
+
+> ORCID
+
+(s): 0000-0001-8762-2424 (L. Zhou) 
+
+> 1
+
+Co-first authors. 
+
+However, this paradigm introduces potential risks for safety-critical clinical reporting, because reports are generated and fixed sequentially from left to right, with each token con-ditioned only on previously generated tokens. As a result, once an erroneous token is produced, it becomes part of the context for subsequent predictions, which may amplify early mistakes 9. This mechanism is also misaligned with real-world radiology workflow, where reports are typically drafted, reviewed, and iteratively revised to ensure coher-ence and correctness 35 .These observations raise a fundamental question: Is strictly left-to-right generation suitable for clinical report-ing? We hypothesize that radiology report generation is not merely sequential language modeling, but a global consistency optimization problem requiring report-level coordination of clinical findings. Since left-to-right decod-ing fixes early predictions without later revision, iterative refinement with full bidirectional context provides a more suitable paradigm for satisfying clinical constraints. Discrete diffusion large language models (DLLMs) naturally align with this process, as illustrated in Figure 1. Through iterative masked-token denoising, DLLMs 30 enable non-causal, bidi-rectional refinement conditioned on global context. Recent studies show that DLLMs can match strong AR baselines on general-domain language tasks 51,54 . However, diffusion-based generation for RRG remains relatively underexplored, 
+
+S. Zhou et al.: Preprint submitted to Elsevier Page 1 of 11 arXiv:2608.24105v1 [cs.CV] 25 Aug 2026 A Discrete Diffusion Framework for Radiology Report Generation 
+
+particularly regarding its ability to preserve report-level semantic consistency and accurately model specialized ra-diological terminology. To investigate the applicability of discrete diffusion models to radiology report generation, we introduce DRRG, a task-specific discrete diffusion large language model. DRRG formulates report generation as iterative masked-token denoising, enabling non-causal refinement over the full report context and better aligning with the revisable nature of radiology reporting. To improve clinical relia-bility, we introduce a clinical-entities-aware complemen-tary mask that enhances training effectiveness and empha-sizes fine-grained clinical findings. We further propose a concept-conditioning module that injects clinically mean-ingful signals into denoising, promoting clinical grounding and observation-level consistency. The key contributions of our work are summarized in the following points: • We develop DRRG, a discrete diffusion framework for radiology report generation that generates reports through iterative masked-token denoising, enabling predictions to be progressively refined using bidirec-tional report context. • We introduce a clinical-entities-aware complemen-tary mask and a concept-conditioning module. The former improves training effectiveness by increasing supervision coverage and placing greater emphasis on clinically important entities, while the latter incorpo-rates image-derived clinical information to strengthen guidance during denoising. • Extensive experiments on different datasets show that DLLM-based RRG achieves performance comparable to strong AR baselines, while ablation studies and case analyses validate the proposed components and the feasibility of DLLM-based RRG. 
+
+1.2. Related Work 
+
+1.2.1. Automated Radiology Report Generation 
+
+Automated radiology report generation (RRG) aims to translate medical images into diagnostically meaning-ful reports and is commonly formulated as a clinically grounded extension of image captioning 39,53 . Most exist-ing methods adopt an encoder–decoder framework, where visual representations are extracted by an image encoder and then decoded into reports. Early CNN–RNN mod-els 16,17,55 were limited in modeling global context and long-range dependencies, while transformer-based methods 7,52 
+
+improved both visual and textual representation learning through attention mechanisms 38 . More recently, LLM-based decoders 26,45 have been introduced to transfer linguistic knowledge and domain priors to RRG, improving report fluency and factual consistency. However, despite these advances, most methods 22 still rely on autoregressive decod-ing, which may suffer from error accumulation and limited revisability. Alternative generation paradigms that more 
+
+Figure 1: Comparison of radiologists’ report writing and the generation patterns of DLLMs and AR LLMs. Green, blue, and red tokens denote high-confidence, fixed, and low-confidence predictions, while ✓ and × indicate correct and incorrect predictions. closely reflect the iterative nature of radiology reporting have received relatively limited attention. 
+
+1.2.2. Discrete Diffusion Language Model 
+
+Recent DLLMs 30,51 have shown competitive perfor-mance against AR models. Beyond unimodal settings, subse-quent efforts have extended DLLMs to multimodal architec-tures 21,54 , where visual inputs are incorporated as additional conditioning signals to guide denoising and generation. Recently, LLaDA-MedV 8 further adapts this paradigm to biomedical imagery, indicating that DLLMs can be effec-tively generalized to medically grounded vision–language scenarios. Despite these developments, DLLM frameworks remain relatively underexplored in the context of RRG, where generation requires clinically faithful long-form nar-ratives and fine-grained alignment with subtle evidence. 
+
+## 2. Materials and methods 
+
+We introduce DRRG, a multimodal discrete diffusion framework for CXR report generation, as illustrated in Fig-ure 2. This section describes the data collection and method-ology of DRRG. 
+
+2.1. Data collection 
+
+We evaluate our model with two datasets: MIMIC-CXR 18 and CheXpert Plus 4 for radiology report generation. 
+
+2.1.1. MIMIC-CXR 
+
+MIMIC-CXR 18 is a public chest radiography dataset comprising 377,110 CXR images and 227,835 free-text re-ports from 64,588 patients. Following the split of 7, we use 270,790 training samples, 2,130 validation samples, and 3,858 test samples. 
+
+2.1.2. CheXpert Plus 
+
+CheXpert Plus 4 is a radiology benchmark comprising 223,228 CXR images and 187,711 reports from 64,725   
+
+> S. Zhou et al.: Preprint submitted to Elsevier Page 2 of 11 A Discrete Diffusion Framework for Radiology Report Generation
+
+Figure 2: Overview of DRRG. Given a CXR image–report pair, DRRG extracts concept-conditioned visual features and applies clinical-entities-aware complementary masking to emphasize clinical entities. The discrete diffusion language model reconstructs masked report tokens from prompt and noise-injected response tokens, while prompt and unmasked response tokens are excluded from the loss. patients. Following the CXPMRG-Bench split 43 , we use 40,463 training samples, 5,780 validation samples, and 11,562 test samples. 
+
+2.2. Methodology 
+
+2.2.1. Model Architecture and Loss Function 
+
+DRRG extracts visual features, derives clinical concept representations, and generates reports through a discrete diffusion language model trained with a clinical-entities-aware complementary mask. We first describe the model architecture and training objective, followed by the training strategy and inference procedure. 
+
+Vision Encoder: We adopt SigLIP2 37 as the vision encoder 𝐸 for its strong visual representation capacity and large-scale image–text pretraining. Given a CXR image 𝐼 ,the encoder extracts a sequence of visual tokens: 
+
+𝑉 = 𝐸 (𝐼 ; 𝜃 𝑣 ), 𝑉 ∈ ℝ𝐵 ×𝑦 ×𝐷 , (1) where 𝐵 denotes the batch size, 𝑦 the number of visual tokens, 𝐷 the hidden dimension of the vision encoder, and 
+
+𝜃 𝑣 the parameters of 𝐸 . The visual tokens 𝑉 are then passed to the concept-conditioning module. 
+
+Concept-Conditioning Module: Accurate noise pre-diction requires informative conditioning. However, visual features alone may not provide sufficiently precise guidance for the denoising process. We therefore introduce a concept-conditioning module that augments visual representations with clinical priors. Given visual features 𝑉 ∈ ℝ𝐵 ×𝑦 ×𝐷 , we first apply mean pooling over the token dimension to obtain a global image representation 𝑉 mean ∈ ℝ𝐵 ×𝐷 . A linear classifier 𝑊 𝑐 then predicts 𝐶 = 14 clinical observations 13 , followed by a sigmoid activation to produce multi-label concept scores: 
+
+𝑝 0 = 𝜎 (𝑊 𝑐 (𝑉 mean )) , 𝑝 0 ∈ ℝ𝐵 ×𝐶 . (2) To transform the predicted distribution into a concept representation, we introduce a learnable concept embedding table 𝑇 ∈ ℝ𝐶 ×𝐷 , where each row corresponds to a clinical concept. The predicted scores are used to aggregate concept embeddings through a probability-weighted combination: 
+
+𝑒 𝑐𝑜𝑛 =
+
+> 𝐶
+
+∑
+
+> 𝑐 =1
+
+𝑝 0,𝑐 𝑇 𝑐 , 𝑒 𝑐𝑜𝑛 ∈ ℝ𝐵 ×𝐷 . (3) The concept feature 𝑒 𝑐𝑜𝑛 is further transformed by a fu-sion head 𝑊 𝑓 , broadcast along the visual-token dimension, and added to the original visual features: ̃𝐻 = 𝑉 + Broadcast( 𝑊 𝑓 (𝑒 𝑐𝑜𝑛 )) ,̃ 𝐻 ∈ ℝ𝐵 ×𝑦 ×𝐷 . (4) Finally, a MLP mapper projects ̃ 𝐻 into the text hidden-state space of dimension 𝑑 , yielding the final conditioning representations 𝐻 ∈ ℝ𝐵 ×𝑦 ×𝑑 . By injecting structured clini-cal priors into visual tokens, this module provides clinically grounded conditioning for the denoising process. 
+
+Discrete Diffusion Language Model: We adopt Qwen3-0.6B-diffusion-mdlm-v0.1 58 as the backbone of our lan-guage model. It is initialized from the pretrained Qwen3-0.6B foundation model 47 and further adapted with a discrete diffusion modeling objective. Its 0.6B parameter scale offers a practical balance between modeling capacity and compu-tational efficiency. The input sequence is constructed by concatenating the concept-conditioned visual features 𝐻 , clinical context 𝑌 ,including Indication, Comparison, Technique, and History, and the ground-truth report 𝐺 0.Following the LLaDA training paradigm 30 , we sample a mask ratio 𝑡 ∼  (0 , 1) for each training instance. Tokens in the target report region 𝐺 0 are independently replaced with a special [MASK] token with probability 𝑡 and kept unchanged with probability 1− 𝑡 , producing a masked sequence 𝐺 𝑡 . This defines the forward noising process. 
+
+Loss Function: Given the masked report 𝐺 𝑡 , the model is trained to recover the clean report 𝐺 0 given the concept-conditioned features 𝐻 and clinical context 𝑌 . Following discrete diffusion modeling objectives 30 , we optimize:   
+
+> S. Zhou et al.: Preprint submitted to Elsevier Page 3 of 11 A Discrete Diffusion Framework for Radiology Report Generation
+
+Figure 3: Illustration of the clinical-entities-aware comple-mentary mask. Clinical entities are assigned higher masking probabilities than normal entities in both the original and complementary masked samples. The loss is computed only on masked response tokens. 
+
+𝑎 = − 𝔼 𝑡,𝐻,𝑌 ,𝐺 0,𝐺 𝑡 
+
+[
+
+1
+
+𝑡 
+
+∑
+
+> 𝑗 ∈𝑡
+
+log 𝑝 𝜃 
+
+(𝐺 0[𝑗 ] ∣ 𝐻, 𝑌 , 𝐺 𝑡 
+
+)]
+
+,
+
+(5) where 𝑡 = { 𝑗 ∣ 𝐺 𝑡 [𝑗 ] = [MASK] } denotes the set of masked positions within the response token sequence. We further supervise the concept-conditioning module with clinical labels 𝑦 𝑐 extracted by CheXbert 36 . The pre-dicted observation probabilities 𝑝 0 are optimized with a binary cross-entropy loss: 
+
+𝑐 = − 1
+
+𝐶 
+
+> 𝐶
+
+∑
+
+> 𝑐 =1
+
+[𝑦 𝑐 log 𝑝 0,𝑐 + (1 − 𝑦 𝑐 ) log(1 − 𝑝 0,𝑐 )] . (6) The overall training objective is defined as: 
+
+𝑡 = 𝑎 + 𝜆 𝑐 , (7) where 𝜆 controls the contribution of concept supervision and is set to 0.5 in all experiments. 
+
+2.2.2. Training Strategies and Algorithms 
+
+Two-stage Training: We apply two-stage training for cross-modal alignment. In the first stage, we freeze the visual encoder and language model, and optimize only the mapper to align visual representations with the text embed-ding space, thereby stabilizing cross-modal alignment. In the second stage, all modules are unfrozen and jointly fine-tuned end-to-end, allowing the entire model to adapt to the target generation task. 
+
+Clinical-Entities-Aware Complementary Mask: Uni-form random masking in discrete diffusion modeling is inefficient, as each forward pass supervises only a subset of tokens 21 and treats clinically important and auxiliary tokens equally. This is particularly limiting for radiology reports, where clinical entities carry dense diagnostic information and determine report correctness. We therefore extend complementary masking 21 with clinical-entity awareness, as illustrated in Figure 3. For each report 𝐺 0, we construct two complementary masked views, such that tokens preserved in one view are preferentially masked in the other to increase token-level supervision coverage, while assigning higher masking probabilities to clinical entity tokens to emphasize clinically important con-tent. For normal entity tokens, the two views are masked with probabilities 𝑡 and 1 − 𝑡 , respectively. For clinical entity tokens, we use RadGraph 14 to identify entity spans in the report and assign them higher masking probabilities, i.e., 𝛼𝑡 
+
+and 𝛼 (1 − 𝑡 ) for the two views, where 𝛼 is set to 1.2. The entity-level mask probabilities are clipped to the range [0 , 1] 
+
+when they exceed 1. This design encourages the model to focus denoising supervision on core clinical findings while preserving complete report-level coverage. 
+
+2.2.3. Inference Process 
+
+At inference time, we follow the iterative denoising procedure of LLaDA 30 . Given a target length 𝐿 , we initialize the report as a fully masked sequence 𝐺 1 and iteratively de-noise and refine it over 𝐾 discrete timesteps until obtaining the clean output prediction ̂ 𝐺 0.At each timestep, the mask ratio is 𝑡 𝑖 ; the denoising model simultaneously predicts token distributions for all masked positions, conditioned on the concept-conditioned features 𝐻 , clinical context 𝑌 , and current sequence 𝐺 𝑡 𝑖 . For each masked position 𝑗 , we select the most likely token ̂𝑔 [𝑗 ] = arg max  
+
+> 𝑣 ∈
+
+𝑝 𝜃 (𝑣 ∣ 𝐻, 𝑌 , 𝐺 𝑡 𝑖 ), (8) and compute the confidence score.  denotes the vocabulary. Following the low-confidence re-masking strategy, we rank all masked positions by confidence and commit only the top 𝑚 𝑖 newly committed tokens specified by the 𝐾 -step schedule. The remaining low-confidence positions are re-masked and refined in the next timestep. Let Ω𝑖 denote the selected high-confidence positions. The update is: 
+
+𝐺 𝑡 𝑖 +1 [𝑗 ] = 
+
+{̂𝑔 [𝑗 ], 𝑗 ∈ Ω 𝑖 ,
+
+> [MASK]
+
+, 𝑗 ∈ 𝑡 𝑖 ⧵ Ω𝑖 , |Ω𝑖 | = 𝑚 𝑖 . (9) 
+
+## 3. Results 
+
+Our model adopts a vision–language architecture with a SigLIP2 vision encoder 37 and a Qwen3-0.6B-diffusion-mdlm-v0.1 text decoder 58 . We fully fine-tune the model on two NVIDIA RTX 5090 GPUs using a per-device batch size of 2, gradient accumulation over 4 steps, and an initial learning rate of 1 × 10 −4 . AdamW is used with a cosine learning rate schedule and a warmup ratio of 0.03. During evaluation, we set the sequence length to 𝐿 = 100 and set the number of denoising steps to 𝐾 = 72 .To comprehensively evaluate our model, we adopt three categories of metrics: lexical, clinical, and LLM-based met-rics. For lexical evaluation, we employ widely used natural language generation (NLG) metrics, including BLEU 32 and ROUGE-L 24 , to measure surface-level similarity between generated and reference reports. For clinical evaluation, we   
+
+> S. Zhou et al.: Preprint submitted to Elsevier Page 4 of 11
+
+A Discrete Diffusion Framework for Radiology Report Generation 
+
+Table 1 
+
+NLG performance of DRRG and existing RRG methods on the MIMIC-CXR dataset. For each metric, the best-performing result is shown in bold, and the second-best result is underlined. Model names marked with * indicate results reported in their original papers. For models using LLM-based text decoders, the corresponding parameter sizes are reported. 
+
+Dataset Model Publication BLEU-1 BLEU-2 BLEU-3 BLEU-4 ROUGE-L MIMIC-CXR 
+
+R2Gen * 7 EMNLP’20 0.353 0.218 0.145 0.103 -R2GenCMN * 6 ACL-IJCNLP’21 0.353 0.218 0.148 0.106 -METransformer * 44 CVPR’23 0.386 0.250 0.169 0.124 0.291 DCL * 20 CVPR’23 - - - 0.109 0.284 KiUT * 12 CVPR’23 0.393 0.243 0.159 0.113 0.285 CvT2DistilGPT2 * 29 AIM’23 0.393 0.248 0.171 0.127 0.155 R2GenGPT * (7B) 45 Meta-Rad’23 0.411 0.267 0.186 0.134 0.297 Bootstrapping * (14.2B) 26 AAAI’24 0.402 0.262 0.180 0.128 0.291 EKAGen * 2 CVPR’24 0.419 0.258 0.170 0.119 0.287 Multi-Grained * 25 TMI’24 0.406 0.267 0.190 0.141 0.309 DAMPER * 11 AAAI’25 0.402 0.284 0.227 0.193 0.301 DART * 33 CVPR’25 0.437 0.279 0.191 0.137 0.310 MultiP-R2Gen * (7B) 5 TMI’25 0.425 0.279 0.194 0.140 0.307 KACL * (8B) 34 MICCAI’25 0.414 0.270 0.184 0.136 0.303 MambaXray-VL-Large * (7B) 43 CVPR’25 0.422 0.268 0.184 0.133 0.289 REVTAF-RRG * 57 ICCV’25 0.465 0.318 0.235 0.182 0.336 
+
+DRRG (0.6B) - 0.452 0.332 0.259 0.210 0.343 
+
+Table 2 
+
+Performance comparison of DRRG and existing RRG methods on CXPMRG-Bench for NLG and clinical metrics.                                                                                                     
+
+> Model BLEU-4 ROUGE-L Precision Recall F1
+> XProNet 40 0.100 0.265 0.314 0.247 0.259 ORGan 10 0.086 0.261 0.288 0.287 0.277 M2KT 48 0.078 0.247 0.044 0.142 0.058 TIMER 46 0.083 0.254 0.345 0.238 0.234 CvT2DistilGPT2 29 0.067 0.238 0.285 0.252 0.246 R2Gen 70.081 0.246 0.318 0.200 0.181 R2GenCMN 60.087 0.256 0.329 0.241 0.231 Zhu et al. 59 0.074 0.235 0.217 0.308 0.205 CAMANet 41 0.083 0.249 0.328 0.224 0.216 Token-Mixer 50 0.091 0.261 0.309 0.270 0.288 PromptMRG 15 0.095 0.222 0.258 0.265 0.281 R2GenGPT 45 0.101 0.266 0.315 0.244 0.260 R2GenCSR 42 0.100 0.265 0.315 0.247 0.259 MambaXray-VL-B 43 0.105 0.267 0.333 0.264 0.273 MambaXray-VL-L 43 0.112 0.276 0.377 0.319 0.335
+> DRRG 0.119 0.265 0.374 0.342 0.347
+
+report CheXpert precision, recall, and F1 scores 36 , which assess report-level agreement across 14 CheXpert observa-tions 13 . We further use RadGraph-F1 14 to evaluate consis-tency at the clinical entity and relation levels. To provide an assessment more closely aligned with expert clinical judgement, we additionally adopt two LLM-based metrics. GREEN 31 identifies clinically meaningful errors, whereas RaTEScore 56 measures clinical entity correspondence be-tween generated and reference reports while accounting for synonyms and negation. Tables 1, 2, 3, and 4 compare DRRG with existing RRG methods. Specifically, Table 1 reports NLG performance on MIMIC-CXR, while Table 2 presents both NLG and 
+
+Table 3 
+
+Results for CheXpert Precision, Recall, and F1 scores on the MIMIC-CXR dataset.                                                      
+
+> Model Publication Precision Recall F1
+> R2Gen 7EMNLP’20 0.333 0.273 0.276 R2GenCMN 6ACL-IJCNLP’21 0.334 0.275 0.278 R2GenGPT 45 Meta-Rad’23 0.392 0.387 0.389 METransformer 44 CVPR’23 0.364 0.309 0.311 Multi-Grained 25 TMI’24 0.457 0.337 0.330 MambaXray-VL-Large 43 CVPR’25 0.411 0.373 0.395 KACL 34 MICCAI’25 0.503 0.442 0.469 DAMPER 11 AAAI’25 0.512 0.473 0.507 DART 33 CVPR’25 0.533 0.546 0.520
+> DRRG -0.558 0.540 0.549
+
+CheXpert-based clinical results on CXPMRG-Bench. Ta-bles 3 and 4 further evaluate clinical reliability on MIMIC-CXR using CheXpert precision, recall, and F1, as well as RadGraph-F1, GREEN, and RaTEScore. Tables 5 and 6 and Figures 5, 7, 8, and 9 present the abla-tion and hyperparameter analyses. Table 5 evaluates the con-tributions of the diffusion framework, clinical-entities-aware complementary mask, and concept-conditioning module, while Figure 9 reports their effects on clinical and LLM-based metrics. Figures 8, 7, and 5 examine the effects of the clinical-entity masking factor, concept-loss weight, and ini-tial generation length, respectively. Table 6 further compares the performance and inference efficiency of autoregressive and diffusion decoding under different denoising steps. Figures 4 and 6 provide qualitative case studies. Figure 4 compares reports generated by the AR and DLLM models to illustrate their different error patterns, whereas Figure 6 visualizes the iterative refinement process and shows how additional denoising steps correct incorrect descriptions. 
+
+S. Zhou et al.: Preprint submitted to Elsevier Page 5 of 11 A Discrete Diffusion Framework for Radiology Report Generation 
+
+Figure 4: Case study comparing reports generated by AR and DLLM models. Words highlighted in red indicate incorrect descriptions, words highlighted in blue denote reference content, and words highlighted in green indicate correct descriptions. 
+
+Table 4 
+
+Results on the LLM-based metrics GREEN and RaTEScore, as well as the clinical metric RadGraph-F1 (RG 𝐹 1). 
+
+Model Publication RG 𝐹 1 GREEN RaTE 
+
+R2Gen 7 EMNLP’20 0.172 0.276 0.526 R2GenCMN 6 ACL-IJCNLP’21 0.182 0.297 0.538 CvT2DistilGPT2 29 AIM’23 0.196 0.320 0.527 R2GenGPT 45 Meta-Rad’23 0.187 0.300 0.528 PromptMRG 15 AAAI’24 0.190 0.287 0.528 KARGEN 23 ICMCC’24 0.203 0.308 0.533 EKAGen 2 CVPR’24 0.199 0.256 0.512 MultiP-R2Gen 5 TMI’25 0.208 – –
+
+DRRG - 0.281 0.360 0.604 
+
+Figure 5: (a) Distribution of Qwen3-tokenized report lengths in MIMIC-CXR. (b) Performance under different initial generation lengths. 
+
+## 4. Discussion 
+
+4.1. Comparison with Existing Methods 
+
+To better assess the performance of DRRG, we compare our model with existing RRG frameworks on the MIMIC-CXR and CheXpert Plus datasets. We report the results using NLG, clinical, and LLM-based metrics to provide a comprehensive evaluation of the model. 
+
+Table 5 
+
+Ablation study conducted on the MIMIC-CXR dataset. “Diff.” indicates whether a DLLM or an AR model is used. “Clinical-entities” indicates whether clinical entity tokens are as-signed higher masking probabilities than other report tokens. “Concept-condition” indicates whether concept features are added to the vision features.                                     
+
+> Diff. Clinical-entities Concept-condition BLEU-1 BLEU-2 BLEU-3 BLEU-4 ROUGE-L
+> ×××0.430 0.306 0.236 0.192 0.300
+> ✓××0.449 0.328 0.254 0.204 0.335
+> ✓✓×0.450 0.330 0.256 0.206 0.340
+> ✓×✓0.445 0.326 0.254 0.205 0.338
+> ✓✓✓0.452 0.332 0.259 0.210 0.343
+
+Table 6 
+
+Performance and efficiency comparison of autoregressive de-coding and diffusion decoding with different denoising steps.                             
+
+> Diff. Steps BLEU-1 BLEU-2 BLEU-3 BLEU-4 ROUGE-L Time (case)
+> ×–0.430 0.306 0.236 0.192 0.300 1.80s
+> ✓32 0.447 0.325 0.250 0.200 0.338 0.97s
+> ✓64 0.451 0.331 0.258 0.208 0.342 1.91s
+> ✓72 0.452 0.332 0.259 0.210 0.343 2.13s
+
+NLG Metrics: The NLG results on MIMIC-CXR and CheXpert Plus are reported in Table 1 and Table 2. On MIMIC-CXR, DRRG achieves the best performance on BLEU-2, BLEU-3, BLEU-4, and ROUGE-L, with scores of 0.332, 0.259, 0.210, and 0.343, respectively. It also obtains the second-best BLEU-1 score of 0.452, slightly behind REVTAF-RRG 57 . Compared with recent LLM-based RRG methods, DRRG achieves stronger NLG performance with a substantially smaller 0.6B text decoder, whereas the listed LLM-based competitors use text decoders with 7B or more parameters. On CheXpert Plus, DRRG achieves the best BLEU-4 score and a competitive ROUGE-L of 0.265. These results demonstrate the effectiveness of DRRG, suggesting that DLLMs provide a strong alternative to conventional AR-based RRG models. 
+
+Clinical Metrics: Table 2, Table 3, and Table 4 report the clinical performance of DRRG and competing methods on CheXpert Plus and MIMIC-CXR. On CheXpert Plus, DRRG achieves the best CheXpert recall and F1 scores, outperforming MambaXray-VL-L 43 by 0.023 and 0.012, respectively, while obtaining the second-best precision score 
+
+S. Zhou et al.: Preprint submitted to Elsevier Page 6 of 11 A Discrete Diffusion Framework for Radiology Report Generation 
+
+Figure 6: Case study of DRRG’s iterative refinement. Reference colors indicate the corresponding image regions, while blue, green, and red highlights denote reference, correct, and incorrect findings, respectively. Step 72 further refines the report by correcting false findings generated at Step 48. 
+
+Figure 7: Effect of the weighting factor 𝜆 for the concept loss 
+
+𝑐 on model performance in terms of BLEU-4, ROUGE-L, CheXpert-F1, and RadGraph-F1 (RG 𝐹 1). of 0.374. On MIMIC-CXR, DRRG achieves the best preci-sion and F1 scores of 0.558 and 0.549, surpassing DART 33 
+
+by 0.025 and 0.029, respectively, with only a marginally lower recall. In addition, DRRG obtains a RadGraph-F1 score of 0.281, which is 35.1% higher than the second-best MultiP-R2Gen 5. These results show that DRRG not only improves textual similarity but also better preserves clinically relevant findings, demonstrating its effectiveness for radiology report generation. 
+
+LLM-based Metrics: As shown in Table 4, DRRG further achieves the best LLM-based evaluation results, with GREEN and RaTEScore values of 0.360 and 0.604, re-spectively. This suggests that its generated reports are more consistent with clinically grounded assessment criteria. 
+
+4.2. Ablation Analysis of Model Components 
+
+We ablate the key components of DRRG on MIMIC-CXR using different metrics. The results are reported in 
+
+Figure 8: Effect of the clinical-entity masking factor proba-bility factor 𝛼 in terms of BLEU-4, ROUGE-L, CheXpert-F1, and RadGraph-F1 (RG 𝐹 1). Table 5 and Figure 9. We further report the performance– efficiency comparison between DRRG and the AR baseline across different denoising steps in Table 6. We first compare AR- and DLLM-based generation paradigms under comparable model configurations. Specif-ically, the AR baseline uses the same SigLIP2 vision en-coder 37 and a Qwen3-0.6B text decoder 47 , making the training paradigm the main difference between the two models. The DLLM variant is equipped with the standard complementary mask 21 , enabling all tokens in each sample to contribute to training. As shown in Table 5, the DLLM-based model consistently outperforms the AR baseline across all NLG metrics, with gains of 0.019, 0.022, 0.018, 0.012, and 0.035, respectively. These results demonstrate the effectiveness of DLLM-based iterative denoising for radiology report generation under the evaluated setting.   
+
+> S. Zhou et al.: Preprint submitted to Elsevier Page 7 of 11 A Discrete Diffusion Framework for Radiology Report Generation
+
+We further analyze the contribution of each DRRG module. Introducing clinical-entities-aware probability ad-justment into the standard complementary masking strategy yields an average NLG improvement of 0.0024 across the five NLG metrics, suggesting its benefit for fine-grained clinical entity modeling. When the concept-conditioning module is further incorporated, the two modules bring larger gains across both NLG and clinical metrics, improv-ing BLEU-1, BLEU-2, BLEU-3, BLEU-4, and ROUGE-L by 0.003, 0.004, 0.005, 0.006, and 0.008, respectively. RaTEScore, CheXpert precision, recall, and F1 further increase by 1.17%, 2.01%, 5.88%, and 3.98%. These im-provements indicate that both designs enhance report quality and clinical consistency. 
+
+4.3. Analysis of Training and Generation Settings 
+
+Beyond evaluating the contribution of individual model components, we further investigate the effects of key hy-perparameters in both the training and generation stages, including the masking ratio of clinical entities, the weighting factor of the concept loss, the initial generation length, and the number of denoising steps. To examine the effect of the clinical-entity masking factor, we vary 𝛼 from 1.0 to 1.6, as reported in Figure 8. Increasing 𝛼 from 1.0 to 1.2 improves BLEU-4 from 0.205 
+
+to 0.210 , ROUGE-L from 0.338 to 0.343 , and RadGraph F1 from 0.278 to 0.281 . These results indicate that mod-erately increasing the masking probability of core findings encourages the model to place greater emphasis on clinical entities. However, further increasing 𝛼 leads to a decline across all evaluation metrics. A larger masking factor causes more clinical entities to be removed from the corrupted reports during training, thereby reducing the number of training instances in which the model can learn to recover masked content from the remaining visible clinical entities. Consequently, during iterative inference, the model becomes less capable of using already recovered clinical entities to reconstruct the remaining masked tokens. Overall, 𝛼 = 1 .2
+
+provides the most appropriate balance between enhancing the model’s attention to clinical entities and preserving suf-ficient entity-level information for iterative reconstruction. Regarding the concept-loss weight, as shown in Fig-ure 7, assigning a small weight of 0.25 results in the lowest performance across all four evaluation metrics. Increasing the weight from 0.25 to 0.5 improves BLEU-4, ROUGE-L, CheXpert-F1, and RadGraph-F1 by 0.025, 0.014, 0.060, and 0.033, respectively, demonstrating that explicit supervision of clinical observations can effectively guide the denoising process and improve both linguistic quality and clinical correctness. The performance continues to improve slightly when the weight is increased to 0.75. However, further increasing it to 1.0 leads to consistent degradation across all metrics. This suggests that an excessively large concept-loss weight may overemphasize observation classification at the expense of coherent and accurate report generation. As shown in Figure 5, the initial generation length has a substantial impact on model performance. An overly short 
+
+Figure 9: Clinical metric and LLM-based metric results of the ablation study, comparing the performance of the baseline and DRRG models. sequence yields relatively poor performance on most met-rics, as the restricted generation capacity may force the model to omit clinically important findings. The best overall performance is achieved at an initial length of 100 tokens, which provides sufficient capacity for comprehensive report generation while closely matching the empirical training dis-tribution: 231,714 of the 270,790 training samples contain fewer than 100 tokens. In contrast, sequences of 150 and 200 tokens are sparsely represented during training, limiting the model’s ability to learn reliable denoising dynamics for such long sequences. In addition, with the number of denoising steps fixed, a longer initial sequence requires more tokens to be retained at each iteration. Consequently, some low-confidence predictions may be preserved prematurely instead of being further refined, increasing the likelihood that erroneous content remains in the final report. These two factors jointly account for the performance degradation observed at longer initial generation lengths. Nevertheless, enabling discrete diffusion models to adaptively determine the appropriate generation length remains an open problem that is being actively explored in recent studies 19,27,49 .For the denoising steps, increasing the steps from 32 to 72 consistently improves all NLG metrics, indicating that more denoising iterations enable better report refinement, but also increase inference time from 0.97s to 2.13s per case. Compared with the autoregressive baseline, DRRG achieves a better quality–efficiency trade-off: with 64 steps, it obtains higher scores at a comparable runtime, and even with only 32 steps, it still outperforms the corresponding AR baseline while using only 53.9% of its inference time. These results demonstrate the effectiveness and efficiency of DRRG. 
+
+4.4. Qualitative Analysis 
+
+To examine the potential of DLLMs in mitigating error propagation, we present a case study in Figure 4, which compares the reports generated by the AR-based model and the DLLM-based model with the reference report. The AR-generated report hallucinates several findings, beginning   
+
+> S. Zhou et al.: Preprint submitted to Elsevier Page 8 of 11 A Discrete Diffusion Framework for Radiology Report Generation
+
+with the early erroneous phrase “some patchy areas of alve-olar infiltrate.” This illustrates a typical error-propagation issue in AR models, where an early incorrect token se-quence is fixed as context and further amplifies subsequent hallucinations. In contrast, the DLLM-generated report bet-ter matches the reference report. Through iterative denois-ing, low-confidence tokens can be re-masked and revised, thereby reducing the impact of error propagation and im-proving report accuracy. Figure 6 illustrates the progressive refinement process of DRRG. The reference report describes several key findings as absent, including focal consolidation, pleural effusion, and pneumothorax. At Step 24, the generated report remains dominated by noisy intermediate predictions, with numerous duplicated and fragmented tokens, while clinically mean-ingful findings have not yet been reliably recovered. By Step 48, the sentence structure has become substantially more coherent; however, the model fails to generate the appropriate negation and incorrectly converts several absent findings into positive observations, resulting in a poten-tially clinically consequential false-positive statement. With additional denoising steps, the report at Step 72 restores the correct negation for consolidation, pleural effusion, and pneumothorax, while further improving fluency by reducing grammatical artifacts. This example illustrates the potential of iterative denoising to correct clinically important seman-tic errors and progressively improve report quality. 
+
+## 5. Conclusion 
+
+We proposed DRRG, a discrete diffusion framework for radiology report generation. By formulating report gener-ation as iterative denoising rather than autoregressive de-coding, DRRG enables bidirectional refinement and bet-ter aligns with the revisable nature of radiology reporting. With the clinical-entities-aware complementary mask and concept-conditioning module, DRRG improves data effi-ciency, enhances clinical-entity awareness, and guides the denoising process with clinical concepts. Extensive exper-iments on MIMIC-CXR and CheXpert Plus demonstrate its effectiveness across different evaluation metrics. Further ablation studies validate the contribution of the proposed modules, while the case study illustrates the potential of DRRG to mitigate error propagation in report generation. 
+
+## CRediT authorship contribution statement 
+
+Shaoyang Zhou: Conceptualization, Methodology, Soft-ware, Data curation, Formal analysis, Validation, Visualiza-tion, Writing – review & editing, Writing – original draft. 
+
+Yingshu Li: Conceptualization, Methodology, Software, Data curation, Validation, Writing – review & editing. 
+
+Yunyi Liu: Data curation, Validation, Investigation, Writing – review & editing. Lijun Pu: Investigation, Validation, Methodology, Writing – review & editing. Lingqiao Liu: 
+
+Methodology, Investigation, Data curation, Writing – review & editing. Lei Wang: Conceptualization, Methodology, Validation, Writing – review & editing. Luping Zhou: Con-ceptualization, Methodology, Investigation, Data curation, Writing – review & editing. 
+
+## Ethics statement 
+
+This study used two publicly available and de-identified chest radiography datasets, MIMIC-CXR and CheXpert Plus. No new participants were recruited, and no identifiable personal information was collected or accessed in this study. All data were used in accordance with the corresponding data-use requirements and institutional access procedures. Therefore, this study constituted a secondary analysis of existing de-identified data and did not require additional informed consent from individual patients. 
+
+## Availability of data and materials 
+
+The datasets used in this study, including MIMIC-CXR and CheXpert Plus, are publicly available from their re-spective official repositories, subject to the corresponding access requirements and data-use agreements. The source code and implementation details of DRRG will be made publicly available on GitHub upon publication. 
+
+## Declaration of generative AI and AI-assisted technologies in the writing process 
+
+During the preparation of this work, the authors used ChatGPT (OpenAI) to improve the readability and language of the manuscript. After using this tool, the authors carefully reviewed and edited the content as needed and take full responsibility for the content of the published article. 
+
+## Declaration of competing interests 
+
+Luping Zhou is a member of the Editorial Board of Meta-Radiology. She was not involved in the peer-review process. The manuscript was independently handled by an-other member of the Editorial Board. All authors declare that they have no competing financial interests or personal relationships that could have influenced the work reported in this paper. 
+
+## Acknowledgements 
+
+The authors have no acknowledgements to declare. 
+
+## References      
+
+> [1] Bailey, C.R., Bailey, A.M., McKenney, A.S., Weiss, C.R., 2022. Understanding and appreciating burnout in radiologists. [2] Bu, S., Li, T., Yang, Y., Dai, Z., 2024. Instance-level expert knowledge and aggregate discriminative attention for radiology report gener-ation, in: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, pp. 14194–14204. [3] Cao, D.J., Hurrell, C., Patlas, M.N., 2023. Current status of burnout in canadian radiology. Canadian Association of Radiologists Journal 74, 37–43.
+> S. Zhou et al.: Preprint submitted to Elsevier Page 9 of 11
+
+A Discrete Diffusion Framework for Radiology Report Generation 
+
+[4] Chambon, P., Delbrouck, J.B., Sounack, T., Huang, S.C., Chen, Z., Varma, M., Truong, S.Q., Chuong, C.T., Langlotz, C.P., 2024. Chex-pert plus: Augmenting a large chest x-ray dataset with text radiology reports, patient demographics and additional image formats. arXiv preprint arXiv:2405.19538 . [5] Chen, Z., Li, Y., Wang, Z., Gao, P., Barthelemy, J., Zhou, L., Wang, L., 2025. Enhancing radiology report generation via multi-phased supervision. IEEE Transactions on Medical Imaging . [6] Chen, Z., Shen, Y., Song, Y., Wan, X., 2022. Cross-modal memory networks for radiology report generation. arXiv preprint arXiv:2204.13258 . [7] Chen, Z., Song, Y., Chang, T.H., Wan, X., 2020. Generating radiology reports via memory-driven transformer. arXiv preprint arXiv:2010.16056 . [8] Dong, X., Zhu, W., Chen, X., Wang, Z., Qiu, P., Tang, S., Li, X., Wang, Y., 2025. Llada-medv: Exploring large language diffu-sion models for biomedical image understanding. arXiv preprint arXiv:2508.01617 . [9] Du, T., Fang, L., Yang, W., Zhang, C., Wei, Z., Wang, Y., Wang, Y., . Any-order any-subset autoregressive model, in: The Fourteenth International Conference on Learning Representations. [10] Hou, W., Xu, K., Cheng, Y., Li, W., Liu, J., 2023. Organ: observation-guided radiology report generation via tree reasoning. arXiv preprint arXiv:2306.06466 . [11] Huang, X., Chen, W., Liu, J., Lu, Q., Luo, X., Shen, L., 2025. Damper: A dual-stage medical report generation framework with coarse-grained mesh alignment and fine-grained hypergraph matching, in: Proceedings of the AAAI Conference on Artificial Intelligence, pp. 3769–3778. [12] Huang, Z., Zhang, X., Zhang, S., 2023. Kiut: Knowledge-injected u-transformer for radiology report generation, in: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, pp. 19809–19818. [13] Irvin, J., Rajpurkar, P., Ko, M., Yu, Y., Ciurea-Ilcus, S., Chute, C., Marklund, H., Haghgoo, B., Ball, R., Shpanskaya, K., et al., 2019. Chexpert: A large chest radiograph dataset with uncertainty labels and expert comparison, in: Proceedings of the AAAI conference on artificial intelligence, pp. 590–597. [14] Jain, S., Agrawal, A., Saporta, A., Truong, S.Q., Duong, D.N., Bui, T., Chambon, P., Zhang, Y., Lungren, M.P., Ng, A.Y., et al., 2021. Radgraph: Extracting clinical entities and relations from radiology reports. arXiv preprint arXiv:2106.14463 . [15] Jin, H., Che, H., Lin, Y., Chen, H., 2024. Promptmrg: Diagnosis-driven prompts for medical report generation, in: Proceedings of the AAAI Conference on Artificial Intelligence, pp. 2607–2615. [16] Jing, B., Wang, Z., Xing, E., 2019. Show, describe and conclude: On exploiting the structure information of chest x-ray reports, in: Proceedings of the 57th annual meeting of the association for com-putational linguistics, pp. 6570–6580. [17] Jing, B., Xie, P., Xing, E., 2018. On the automatic generation of med-ical imaging reports, in: Proceedings of the 56th annual meeting of the association for computational linguistics (volume 1: long papers), pp. 2577–2586. [18] Johnson, A.E., Pollard, T.J., Greenbaum, N.R., Lungren, M.P., Deng, C.y., Peng, Y., Lu, Z., Mark, R.G., Berkowitz, S.J., Horng, S., 2019. Mimic-cxr-jpg, a large publicly available database of labeled chest radiographs. arXiv preprint arXiv:1901.07042 . [19] Li, J., Dong, X., Zang, Y., Cao, Y., Wang, J., Lin, D., 2026. Beyond fixed: Training-free variable-length denoising for diffusion large lan-guage models, in: International Conference on Learning Representa-tions, pp. 91715–91731. [20] Li, M., Lin, B., Chen, Z., Lin, H., Liang, X., Chang, X., 2023. Dynamic graph enhanced contrastive learning for chest x-ray report generation, in: Proceedings of the IEEE/CVF Conference on Com-puter Vision and Pattern Recognition, pp. 3334–3343. [21] Li, S., Kallidromitis, K., Bansal, H., Gokul, A., Kato, Y., Kozuka, K., Kuen, J., Lin, Z., Chang, K.W., Grover, A., 2025a. Lavida: A large diffusion language model for multimodal understanding. arXiv preprint arXiv:2505.16839 . [22] Li, Y., Liu, Y., Wang, Z., Liang, X., Liu, L., Wang, L., Zhou, L., 2025b. S-rrg-bench: Structured radiology report generation with fine-grained evaluation framework. Meta-Radiology , 100171. [23] Li, Y., Wang, Z., Liu, Y., Wang, L., Liu, L., Zhou, L., 2024. Kargen: Knowledge-enhanced automated radiology report generation using large language models, in: International Conference on Medical Im-age Computing and Computer-Assisted Intervention, Springer. pp. 382–392. [24] Lin, C.Y., 2004. Rouge: A package for automatic evaluation of summaries, in: Text summarization branches out, pp. 74–81. [25] Liu, A., Guo, Y., Yong, J.h., Xu, F., 2024a. Multi-grained radiol-ogy report generation with sentence-level image-language contrastive learning. IEEE Transactions on Medical Imaging . [26] Liu, C., Tian, Y., Chen, W., Song, Y., Zhang, Y., 2024b. Bootstrapping large language models for radiology report generation, in: Proceed-ings of the AAAI Conference on Artificial Intelligence, pp. 18635– 18643. [27] Liu, H., Yang, Z., Su, B., 2026. Diffusion lms can approximate optimal infilling lengths implicitly. arXiv preprint arXiv:2602.00476 .[28] Najdenkoska, I., Zhen, X., Worring, M., Shao, L., 2022. Uncertainty-aware report generation for chest x-rays by variational topic inference. Medical Image Analysis 82, 102603. [29] Nicolson, A., Dowling, J., Koopman, B., 2023. Improving chest x-ray report generation by leveraging warm starting. Artificial intelligence in medicine 144, 102633. [30] Nie, S., Zhu, F., You, Z., Zhang, X., Ou, J., Hu, J., Zhou, J., Lin, Y., Wen, J.R., Li, C., 2026. Large language diffusion models. Advances in Neural Information Processing Systems 38, 50608–50646. [31] Ostmeier, S., Xu, J., Chen, Z., Varma, M., Blankemeier, L., Bluethgen, C., Md, A., Moseley, M., Langlotz, C., Chaudhari, A., et al., 2024. Green: Generative radiology report evaluation and error notation, in: Findings of the Association for Computational Linguistics: EMNLP 2024, pp. 374–390. [32] Papineni, K., Roukos, S., Ward, T., Zhu, W.J., 2002. Bleu: a method for automatic evaluation of machine translation, in: Proceedings of the 40th annual meeting of the Association for Computational Lin-guistics, pp. 311–318. [33] Park, S.J., Heo, K.S., Shin, D.H., Son, Y.H., Oh, J.H., Kam, T.E., 2025. Dart: Disease-aware image-text alignment and self-correcting re-alignment for trustworthy radiology report generation, in: Proceed-ings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), pp. 15580–15589. [34] Sha, Y., Pan, H., Meng, W., Li, K., 2025. Contrastive knowledge-guided large language models for medical report generation, in: In-ternational Conference on Medical Image Computing and Computer-Assisted Intervention, Springer. pp. 111–120. [35] Sharpe Jr, R.E., Surrey, D., Gorniak, R.J., Nazarian, L., Rao, V.M., Flanders, A.E., 2012. Radiology report comparator: a novel method to augment resident education. Journal of digital imaging 25, 330–336. [36] Smit, A., Jain, S., Rajpurkar, P., Pareek, A., Ng, A.Y., Lungren, M.P., 2020. Chexbert: combining automatic labelers and expert annotations for accurate radiology report labeling using bert. arXiv preprint arXiv:2004.09167 . [37] Tschannen, M., Gritsenko, A., Wang, X., Naeem, M.F., Alabdul-mohsin, I., Parthasarathy, N., Evans, T., Beyer, L., Xia, Y., Mustafa, B., et al., 2025. Siglip 2: Multilingual vision-language encoders with improved semantic understanding, localization, and dense features. arXiv preprint arXiv:2502.14786 . [38] Vaswani, A., 2017. Attention is all you need. Advances in Neural Information Processing Systems . [39] Vinyals, O., Toshev, A., Bengio, S., Erhan, D., 2015. Show and tell: A neural image caption generator, in: Proceedings of the IEEE conference on computer vision and pattern recognition, pp. 3156– 3164. [40] Wang, J., Bhalerao, A., He, Y., 2022. Cross-modal prototype driven network for radiology report generation, in: European Conference on 
+
+S. Zhou et al.: Preprint submitted to Elsevier Page 10 of 11 A Discrete Diffusion Framework for Radiology Report Generation 
+
+Computer Vision, Springer. pp. 563–579. [41] Wang, J., Bhalerao, A., Yin, T., See, S., He, Y., 2024a. Camanet: class activation map guided attention network for radiology report generation. IEEE Journal of Biomedical and Health Informatics 28, 2199–2210. [42] Wang, X., Li, Y., Wang, F., Wang, S., Li, C., Jiang, B., 2024b. R2gencsr: Retrieving context samples for large language model based x-ray medical report generation. arXiv preprint arXiv:2408.09743 . [43] Wang, X., Wang, F., Li, Y., Ma, Q., Wang, S., Jiang, B., Tang, J., 2025. Cxpmrg-bench: Pre-training and benchmarking for x-ray medical report generation on chexpert plus dataset, in: Proceedings of the Computer Vision and Pattern Recognition Conference, pp. 5123– 5133. [44] Wang, Z., Liu, L., Wang, L., Zhou, L., 2023a. Metransformer: Radiol-ogy report generation by transformer with multiple learnable expert tokens, in: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, pp. 11558–11567. [45] Wang, Z., Liu, L., Wang, L., Zhou, L., 2023b. R2gengpt: Radiology report generation with frozen llms. Meta-Radiology 1, 100033. [46] Wu, Y., Huang, I.C., Huang, X., 2023. Token imbalance adaptation for radiology report generation, in: Conference on Health, Inference, and Learning, PMLR. pp. 72–85. [47] Yang, A., Li, A., Yang, B., Zhang, B., Hui, B., Zheng, B., Yu, B., Gao, C., Huang, C., Lv, C., et al., 2025a. Qwen3 technical report. arXiv preprint arXiv:2505.09388 . [48] Yang, S., Wu, X., Ge, S., Zheng, Z., Zhou, S.K., Xiao, L., 2023. Radiology report generation with a learned knowledge base and multi-modal alignment. Medical Image Analysis 86, 102798. [49] Yang, Y., Wang, C., Wang, S., Wen, Z., Qi, B., Xu, H., Zhang, L., 2025b. Diffusion llm with native variable generation lengths: Let [eos] lead the way. arXiv preprint arXiv:2510.24605 . [50] Yang, Y., Yu, J., Fu, Z., Zhang, K., Yu, T., Wang, X., Jiang, H., Lv, J., Huang, Q., Han, W., 2024. Token-mixer: Bind image and text in one embedding space for medical image reporting. IEEE Transactions on Medical Imaging 43, 4017–4028. [51] Ye, J., Xie, Z., Zheng, L., Gao, J., Wu, Z., Jiang, X., Li, Z., Kong, L., 2025. Dream 7b: Diffusion large language models. arXiv preprint arXiv:2508.15487 . [52] You, D., Liu, F., Ge, S., Xie, X., Zhang, J., Wu, X., 2021. Aligntrans-former: Hierarchical alignment of visual regions and disease tags for medical report generation, in: International Conference on Medical Image Computing and Computer-Assisted Intervention, Springer. pp. 72–82. [53] You, Q., Jin, H., Wang, Z., Fang, C., Luo, J., 2016. Image captioning with semantic attention, in: Proceedings of the IEEE conference on computer vision and pattern recognition, pp. 4651–4659. [54] You, Z., Nie, S., Zhang, X., Hu, J., Zhou, J., Lu, Z., Wen, J.R., Li, C., 2025. Llada-v: Large language diffusion models with visual instruction tuning. arXiv preprint arXiv:2505.16933 . [55] Zhang, Y., Wang, X., Xu, Z., Yu, Q., Yuille, A., Xu, D., 2020. When radiology report generation meets knowledge graph, in: Proceedings of the AAAI conference on artificial intelligence, pp. 12910–12917. [56] Zhao, W., Wu, C., Zhang, X., Zhang, Y., Wang, Y., Xie, W., 2024. Ratescore: A metric for radiology report generation, in: Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing, pp. 15004–15019. [57] Zhou, Q., Liang, G., Li, X., Chen, J., Wang, Z., Yao, C., Wu, S., 2025. Learnable retrieval enhanced visual-text alignment and fusion for radiology report generation, in: Proceedings of the IEEE/CVF International Conference on Computer Vision, pp. 22529–22538. [58] Zhou, Z., Chen, L., Tong, H., Song, D., 2026. dllm: Simple diffu-sion language modeling. URL: https://arxiv.org/abs/2602.22661 ,
+
+> arXiv:2602.22661
+
+.[59] Zhu, Q., Mathai, T.S., Mukherjee, P., Peng, Y., Summers, R.M., Lu, Z., 2023. Utilizing longitudinal chest x-rays and reports to pre-fill radiology reports, in: International Conference on Medical Image Computing and Computer-Assisted Intervention, Springer. pp. 189– 198. 
+
+S. Zhou et al.: Preprint submitted to Elsevier Page 11 of 11
