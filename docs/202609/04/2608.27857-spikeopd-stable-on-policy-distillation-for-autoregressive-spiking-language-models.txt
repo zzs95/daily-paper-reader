@@ -1,0 +1,1414 @@
+Title: SpikeOPD: Stable On-Policy Distillation for Autoregressive Spiking Language Models
+
+URL Source: https://arxiv.org/pdf/2608.27857
+
+Published Time: Mon, 31 Aug 2026 00:26:31 GMT
+
+Number of Pages: 17
+
+Markdown Content:
+# SpikeOPD: Stable On-Policy Distillation for Autoregressive Spiking Language Models 
+
+## Enqiao Lu 1,2,3 Xingrui Yu 2, † Yiwei Fu 4 Zhenglin Wan 5 Pengfei Zhou 5
+
+## Wangbo Zhao 5 Muqing Jian 1,6 Xueyi Zhang 5 Yang You 5 Ivor Tsang 2,3  
+
+> 1
+
+The Chinese University of Hong Kong, Shenzhen 2 Agency for Science, Technology and Research (A*STAR), Singapore  
+
+> 3
+
+Nanyang Technological University, Singapore 4 Peking University 5 National University of Singapore 6 Rice University 
+
+Abstract 
+
+Spiking neural networks (SNNs) offer a path to energy-efficient language modeling through sparse encoding and event-driven computation, but training capable spiking language models from scratch remains difficult. A practical alternative is ANN-to-SNN migration through knowledge distillation (KD), where a pretrained artificial neural network (ANN) teacher supervises an SNN student. Existing migration approaches distill on fixed corpus prefixes, whereas autoregressive inference conditions on self-generated prefixes, creating prefix-source mismatch .It manifests as output-policy mismatch with the ANN teacher and internal spiking-dynamics drift between self-generated and matched corpus prefixes. On-policy distillation (OPD) offers a natural way to mitigate both manifestations by con-tinuing teacher supervision on self-generated prefixes. We evaluate a teacher-only full-KL variant, Vanilla OPD, via a controlled stress test and observe it may suffer from delayed rollout-feedback collapse. This result shows that on-policy coverage alone does not ensure stable adaptation. Motivated by these findings, we propose SpikeOPD, a stable on-policy distillation framework for autoregressive SNNs that learns from self-generated prefixes while maintaining rollout stability. It applies full-KL teacher correction to reduce output-policy mismatch, while matched-prefix policy anchoring constrains policy departure from the frozen reference SNN on the same prefixes. Layerwise spike regularization further limits firing-rate deviations during on-policy adaptation. Across three model scales, SpikeOPD improves average accuracy over the corre-sponding KD SNNs by 0.8, 1.7, and 2.9 points at 0.125B, 0.35B, and 1.3B, respectively, while preserving their sparse-compute profiles. 
+
+## Introduction 
+
+Autoregressive language generation repeatedly applies a large network to produce one token at a time, making dense acti-vation computation and data movement persistent inference costs (Horowitz 2014). Spiking neural networks (SNNs) instead use sparse binary spikes to trigger computation on event-driven neuromorphic hardware (Davies et al. 2018; Roy, Jaiswal, and Panda 2019). This execution model is attractive for long generation, where sparse computation recurs across decoding steps. Recent work has extended SNNs from vision to language encoders and causal generators (Zhu et al. 2023; Lv et al. 2025; Bal and Sengupta 2024; Xing et al. 2024b,a; 
+
+> †
+
+Corresponding author: yu_xingrui@a-star.edu.sg .
+
+Guo et al. 2026; Zhou et al. 2026). Yet large generative SNNs remain difficult to train from scratch (Fang et al. 2021; Zheng et al. 2021). We therefore ask how to transfer a pretrained ANN language model into an SNN without losing language ability or sparse activity. Existing ANN-to-SNN migration strategies directly inherit pretrained ANN weights and then calibrate or fine-tune the resulting SNN (Diehl et al. 2015; Rueckauer et al. 2017; Sengupta et al. 2019; Rathi et al. 2020; Deng and Gu 2021), introduce quantization-like spike representations for language models (Xing et al. 2024b), or transfer ANN knowledge through distillation (Hinton, Vinyals, and Dean 2015). This paper focuses on distillation-based ANN-to-SNN migration, where an ANN teacher supervises an SNN student on fixed corpus prefixes. For example, BiSpikCLM is a causal SNN trained by Spike-Aware Alignment Distillation (SpAD), which transfers embeddings, attention, features, and token targets from an ANN teacher (Guo et al. 2026). During autoregres-sive inference, the SNN instead conditions on self-generated prefixes, and one changed token can alter every later prefix. This prefix-source mismatch is related to exposure bias and learner-induced covariate shift (Bengio et al. 2015; Ross, Gordon, and Bagnell 2011). A generative SNN addition-ally exposes recurrent spiking dynamics beyond the cited dense-model formulations (Bellec et al. 2018). We call the training-to-inference shift from corpus to self-generated prefixes prefix-source mismatch, related to exposure bias and learner-induced covariate shift (Bengio et al. 2015; Ross, Gordon, and Bagnell 2011). Paired-prefix controls isolate two manifestations under matched prompts, positions, and lengths: output-policy mismatch with the ANN teacher and internal spiking-dynamics drift. This gives our first question: RQ1: How does prefix-source mismatch manifest as output-policy mismatch and internal spiking-dynamics drift? 
+
+To mitigate both manifestations of prefix-source mismatch, a common choice is on-policy distillation (OPD), which continues teacher supervision on self-generated prefixes. We examine its teacher-only full-KL variant, Vanilla OPD. Be-cause the policy being updated also generates its training prefixes, a large correction can redirect the next rollout and change the following training distribution. This feedback mo-tivates controlling how each correction redirects later rollouts. This gives our second question: RQ2: Can Vanilla OPD arXiv:2608.27857v1 [cs.AI] 28 Aug 2026 adapt without sustained degeneration of rollout statistics, which we call rollout-feedback collapse? 
+
+We answer both questions empirically. For RQ1, paired-prefix controls show two manifestations of prefix-source mismatch: greater output-policy mismatch with the ANN teacher and internal spiking-dynamics drift across spike rates, hidden states, and membrane potentials. A separate stress test answers RQ2: Vanilla OPD preserves early task accuracy before entering delayed rollout-feedback collapse. These results shape SpikeOPD. Full-KL teacher correction addresses output-policy mismatch, while layerwise spike regularization penalizes firing-rate deviations from a frozen reference SNN. The instability exposed by RQ2 motivates matched-prefix policy anchoring, which compares the active SNN and frozen reference SNN on the same self-generated prefixes to limit policy movement. Hidden-state and membrane-potential gaps remain diagnostics. Across eight tasks, SpikeOPD improves the corresponding KD SNN baselines by 0.8, 1.7, and 2.9 average points at 0.125B, 0.35B, and 1.3B. Our contributions are: 
+
+• Diagnostic findings. Paired-prefix diagnostics show that prefix-source mismatch manifests as output-policy mis-match and internal spiking-dynamics drift. Matched-seed stress tests further reveal delayed rollout-feedback collapse in Vanilla OPD. 
+
+• Stable on-policy distillation. We propose SpikeOPD, combining full-KL teacher correction, matched-prefix policy anchoring, and layerwise spike regularization over self-generated prefixes. 
+
+• Multi-scale validation. Across 0.125B, 0.35B, and 1.3B SNNs, SpikeOPD improves eight-task average accuracy by 0.8, 1.7, and 2.9 points, remains non-collapsed in all 10 matched-seed runs at 0.125B, and retains the analytical sparse-compute profile. 
+
+## Related Work 
+
+Training and transferring spiking language models. 
+
+Deep SNNs are commonly obtained through surrogate-gradient training, ANN-to-SNN conversion, or teacher-student transfer. Surrogate gradients enable temporal training (Neftci, Mostafa, and Zenke 2019; Wu et al. 2018; Fang et al. 2021; Zheng et al. 2021), conversion calibrates inherited weights and firing rates (Diehl et al. 2015; Rueckauer et al. 2017; Sengupta et al. 2019; Rathi et al. 2020; Deng and Gu 2021), and distillation supervises logits, features, or atten-tion (Hinton, Vinyals, and Dean 2015; Romero et al. 2014; Zagoruyko and Komodakis 2016; Sanh et al. 2019; Sun et al. 2019; Jiao et al. 2020). Spike-form attention was introduced in vision Transformers before language work progressed from distilled encoders to recurrent and larger causal generators (Zhou et al. 2022; Yao et al. 2023; Lv et al. 2025; Bal and Sengupta 2024; Zhu et al. 2023; Xing et al. 2024b,a). BiSpik-CLM combines causal spiking attention with spike-aware alignment, while winner-take-all spiking Transformers pro-vide another causal-attention design (Guo et al. 2026; Zhou et al. 2026). These systems obtain capable SNN checkpoints from fixed corpus prefixes but do not address prefix-source mismatch during autoregressive sampling. 
+
+On-policy language-model distillation. Sequence-level distillation, scheduled sampling, and DAgger motivate learn-ing beyond fixed corpus prefixes (Kim and Rush 2016; Bengio et al. 2015; Ross, Gordon, and Bagnell 2011). Recent meth-ods vary the divergence and rollout source: MiniLLM uses reverse KL, DistiLLM mixes on- and off-policy samples, and generalized OPD applies teacher losses to student genera-tions (Gu et al. 2024; Ko et al. 2024; Agarwal et al. 2024). EOPD, Lightning OPD, and OPRD add entropy-aware se-lection, stored trajectories, or representation alignment (Jin et al. 2026; Wu, Han, and Cai 2026; Yang et al. 2026). More broadly, KL-controlled policy updates limit departure from a reference behavior in policy optimization and language-model alignment (Schulman et al. 2015; Ouyang et al. 2022). These objectives and diagnostics remain mainly token- or representation-level, whereas SNN updates can also alter spike activity and membrane trajectories. This distinction mo-tivates diagnosing internal spiking-dynamics drift separately from output-policy mismatch. 
+
+## Empirical Analysis 
+
+Prefix-Source Mismatch in Knowledge Distillation 
+
+RQ1 pairs each self-generated prefix from the KD checkpoint with a corpus prefix matched by prompt, position, and length. Figures 1 and 2 summarize the output and internal effects. All methods use the same fixed prefix bank. KD Offline                
+
+> KD Corpus
+> SpikeOPD SpikeOPD Corpus
+> (B) Prompt-internal prefix gap
+> 4812 16 20 24 28 32
+> Rollout step
+> Self-Teacher KL
+> 4812 16 20 24 28 32
+> Rollout step
+> Self − Corpus KL
+> KD Gap
+> 2.8
+> 2.4
+> 2.0
+> 1.6
+> 1.2
+> 0.8
+> 1.0
+> 0.8
+> 0.6
+> 0.4
+> 0.2
+> 0.0
+> (A) Teacher KL on matched prefixes
+> SpikeOPD Gap Vanilla OPD
+> Vanilla Corpus Vanilla OPD Gap
+
+Figure 1: Paired-prefix output-policy diagnostic on 256 prompts. (A) Teacher-to-SNN KL on self-generated (solid) and corpus (dashed) prefixes. (B) Prompt-internal Self −Corpus gap. 
+
+Output-policy mismatch. For prompt p, position t, check-point c, and source a ∈ { self , corp }, output-policy mismatch is the full-vocabulary teacher-to-SNN KL 
+
+κac,p,t = X
+
+> v∈V
+
+pT (v | sap,t ) log pT (v | sap,t )
+
+qc(v | sap,t ) . (1) Figure 1(A) shows higher KL for KD than SpikeOPD on both sources. Because corpus KL also varies with position, we isolate the paired effect with 
+
+Gc(t) = 1
+
+N
+
+> N
+
+X
+
+> p=1
+
+ κself  
+
+> c,p,t
+
+− κcorp 
+
+> c,p,t
+
+ . (2) In Figure 1(B), GKD (t) grows from near zero to about 0.9,whereas SpikeOPD remains smaller. Thus SpikeOPD reduces both absolute teacher KL and the paired prefix-source effect. (A) Prefix spike -rate drift       
+
+> 0.8
+> 1.6
+> 2.4
+> 3.2
+> 510 15 20 25 30 Rollout step
+> Spike -rate gap ( ×10 ⁻⁴)
+
+KD  SpikeOPD Vanilla OPD 
+
+(B) Hidden -state gap  (C) Membrane drift  
+
+> 0.096
+> 0.100
+> 0.104
+> 0.102
+> KD
+> 0.100
+> Vanilla OPD
+> 0.095
+> SpikeOPD
+> 2.8
+> 3.2
+> 3.6 3.46
+> KD
+> 3.30
+> Vanilla OPD
+> 2.67
+> SpikeOPD
+
+Figure 2: Internal effects under matched prompts, positions, and lengths: (A) spike-rate gap, (B) hidden-state gap, and (C) aggregate membrane-potential gap. Smaller is better. 
+
+Internal spiking-dynamics drift. For layer l with Nl neu-rons, we define the firing rate and the within-checkpoint prefix-source gap as 
+
+rc,a p,t,l = 1
+
+TsNl
+
+X
+
+> τ,i
+
+sc,a p,t,l,i,τ ,Dspk (c, t ) = 1
+
+N L 
+
+X
+
+> p,l
+
+rc, self  
+
+> p,t,l
+
+− rc, corp  
+
+> p,t,l
+
+.
+
+(3) The KD gap grows with rollout position. Vanilla OPD reduces it, and SpikeOPD remains lower throughout, as shown in panel A of Figure 2. Aggregated L1 hidden-state and membrane-potential gaps fall from 0.102 and 3.46 for KD to 0.100 and 
+
+3.30 for Vanilla OPD, then to 0.095 and 2.67 for SpikeOPD, as shown in panels B and C. These controlled results answer RQ1 and motivate super-vising both output behavior and SNN-specific event dynamics. We next ask whether teacher-only full-KL OPD can do so without destabilizing later rollouts. 
+
+Vanilla OPD Is Insufficient for Stable Distillation 
+
+Starting from the same KD checkpoint, Vanilla OPD applies only full-KL teacher supervision to self-generated prefixes. Figure 1 shows a late warning: its Self −Corpus gap accelerates toward KD, whereas SpikeOPD remains lower. Figure 2 provides the complementary internal view, where Vanilla OPD retains greater internal drift than SpikeOPD in all three diagnostics under matched prefixes. Its hidden-state and membrane-potential gaps remain at 0.100 and 3.30 , above the 0.095 and 2.67 achieved by SpikeOPD. We stress-test 10 matched seeds using adjacent repetition and 1 − Dist.-4. Collapse begins when their 20-update means exceed 0.10 and 0.05 , respectively. Figure 3 shows the delay: early updates remain close to KD, but repeated text then enters later training contexts and shifts the rollout distribution. All 10 Vanilla OPD seeds eventually collapse. Table 1 shows that Small-LR and clipping only postpone collapse to updates 527 and 327. Later onset is not stability 
+
+Method LR Clip Step C/T Onset Avg. ↑ Adj. ↓ Dist.-4 ↑
+
+Vanilla OPD η0 - 500 10 /10 168.5 34.8 39.1 83.7 Small-LR η0/3 - 1000 10 /10 527 34.8 36.0 85.5 Clipped η0 1.0 500 10 /10 327 34.5 31.5 87.8 SpikeOPD η0 - 1000 0/10 - 35.5 0.1 99.2 
+
+Table 1: Stability controls from one KD checkpoint. C/T re-ports collapsed/tested runs, and Onset averages first-collapse updates. Collapse uses 20-update Adj. and 1 − Dist.-4 thresh-olds of 0.10 and 0.05. Avg. is the last pre-onset eight-task average or final average. over the full budget. SpikeOPD remains stable in all 10 runs. Their failure motivates a frozen reference SNN on the same self-generated prefixes, coupled with teacher correction and spike regularization. 
+
+## Method 
+
+Preliminaries 
+
+Spiking neurons and rate coding. The causal student follows the decoder-only BiSpikCLM architecture (Guo et al. 100  200  300  400  500       
+
+> Training step
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> Rate
+> Adjacent repeat rate
+> 100 200 300 400 500
+> Training step
+> Repeated 4-gram fraction
+> SpikeOPD Vanilla OPD
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+
+Figure 3: Delayed rollout-feedback collapse in one of 10 matched trajectories. Adjacent repetition measures equal neighboring-token pairs, while 1 − Dist.-4 measures repeated contiguous four-token sequences. Vanilla OPD becomes repet-itive, whereas SpikeOPD remains stable. Lower is better. SpikeOPD  update loop  Sample & detach 
+
+x Active SNN     
+
+> Q K V
+> Sampled tokens
+> y₁ y₂ y₃ · · · yₖ
+> Detached prefix
+
+Trained  SNN  student model 
+
+Teacher -guided policy correction  Same detached s                 
+
+> ₜ·full V
+> ANN teacher distribution
+> v₁ v₂ v₃ v₄ v₅ v₆ v₇ v₈
+> Active SNN distribution
+> v₁ v₂ v₃ v₄ v₅ v₆ v₇ v₈
+> full -vocabulary KL
+
+Matched -Prefix Policy Anchoring ·  Layerwise  Spike Regularization    
+
+> ANN teacher Referenc eSNN
+
+𝛥𝜃       
+
+> 1
+> 1
+> 1
+> 00
+> 0
+> 0
+> 0
+> 0
+> Active SNN
+> Frozen reference SNN Layerwise Spike Regularization
+> Matched -Prefix Policy Anchoring
+> Same detached prefix
+> Layer Layer Selected
+> ×
+> Layer Layer Selected
+> ×
+> Q
+> K
+> V
+> Q
+> K
+> V
+
+· · ·  
+
+> Q
+> K
+> V
+> Q
+> K
+> V
+> Trainable model
+> 𝑦 1:𝐾
+
+πθ
+
+st = (x, y <t )
+
+πT πref = π θ0
+
+𝜋 𝜃       
+
+> 𝜋 𝑟𝑒𝑓 = 𝜋 𝜃 0
+> 𝑠 𝑡
+> ℓ − 2 ℓ − 1 ℓ
+> ℓ − 𝟐 ℓ − 1 ℓ
+> 𝑝 𝑇 (· |𝑠 𝑡 )𝑞 𝜃 (· |𝑠 𝑡 )
+
+𝐿 𝑂𝑃𝐷  
+
+> ℓ ∈ 𝑆 𝑠𝑝𝑘 (𝛥𝐿 = 3)
+
+𝑞 𝜃 (· |𝑠 𝑡 )
+
+𝑞 𝑟𝑒𝑓 (· |𝑠 𝑡 )
+
+𝐿 𝑟𝑒𝑓   
+
+> 𝑄 𝜏
+> 𝐾 𝜏
+> 𝑉 𝜏
+> 𝐴 𝑆 𝜏 𝑂 𝜏
+> 𝑄 𝜏
+> 𝐾 𝜏
+> 𝑉 𝜏
+> 𝐴 𝑆 𝜏 𝑂 𝜏
+
+pT(· |s t) Dense target over V    
+
+> 𝑣 1, 𝑣 2, … , 𝑣 |𝑉|
+> Frozen model Forward evaluation θ update Spike activity
+
+Figure 4: Overview of SpikeOPD. On the same detached self-generated prefixes, teacher correction transfers the ANN distribution, policy anchoring constrains departure from the frozen reference SNN, and spike regularization controls selected-layer firing rates. Only θ is updated. 2026). A leaky integrate-and-fire neuron updates as 
+
+uτi = αu τ −1 
+
+> i
+
++ Iτi − Vth sτ −1 
+
+> i
+
+, sτi = 1[uτi ≥ Vth ]. (4) Here uτi , Iτi , and sτi denote the membrane potential, input current, and binary spike indicator, while α and Vth are the leak factor and firing threshold. The next computation receives the rate code ¯h = T −1
+
+> s
+
+P 
+
+> τ
+
+sτ . The thresholding operation is trained with surrogate gradients (Neftci, Mostafa, and Zenke 2019). 
+
+Softmax-free causal spiking attention. For spike-coded 
+
+Hτ , BiSpikCLM forms binary queries, keys, and values: 
+
+Qτ = S(Hτ WQ), Kτ = S(Hτ WK ),V τ = S(Hτ WV ),AτS = S
+
+
+
+Qτ (Kτ )⊤/√d
+
+
+
+⊙ Mcausal ,Oτ = AτS V τ .
+
+(5) 
+
+S denotes the spike function, and Mcausal preserves autore-gressive factorization. Binary AτS routes computation through spike events. The same events determine layerwise activity, leaving firing rates free to drift under output-only matching. 
+
+Overview of SpikeOPD 
+
+Offline KD creates prefix-source mismatch when an SNN conditions on self-generated rather than corpus prefixes, while direct on-policy correction can destabilize later rollouts. To address both issues, SpikeOPD adapts a KD checkpoint using teacher-guided policy correction, matched-prefix policy anchoring, and layerwise spike regularization. As shown in Figure 4, these components jointly correct the output policy, constrain policy departure, and stabilize internal spiking dynamics. 
+
+Teacher-Guided Policy Correction 
+
+Prefix-source mismatch places the SNN on prefixes absent from its offline corpus. At each update, the active SNN πθ
+
+samples K tokens and forms prefixes st = ( x, y <t ). The frozen ANN teacher πT evaluates the same prefixes, giving 
+
+pT (v | st) = πT (v | st) and qθ (v | st) = πθ (v | st).Sampled token identities are detached, while gradients pass through qθ and the active-SNN spike paths. We transfer the teacher’s full distribution with 
+
+LOPD = 1
+
+K
+
+> K
+
+X
+
+> t=1
+
+KL( pT (· | st) ∥ qθ (· | st)) . (6) The logit gradient qθ − pT corrects every vocabulary co-ordinate and retains teacher uncertainty. It provides dense supervision on self-generated prefixes that are rare offline. Ap-pendix C gives the full-vocabulary objective and its gradient properties. Full-KL coverage exposes the teacher on self-generated prefixes, but early corrections can redirect later rollouts. Vanilla OPD’s delayed collapse in the controlled stress test therefore motivates an explicit policy-movement constraint. 
+
+Matched-Prefix Policy Anchoring 
+
+The reference SNN is a frozen copy of the initial KD checkpoint, πref = πθ0 . Because corpus prefixes do not capture where the active policy changes, the active and reference SNNs evaluate identical self-generated prefixes. This matched-prefix design supplies a stability target that preserves transferred language ability and sparse execution, giving qref (v | st) = πref (v | st) and 
+
+Lref = 1
+
+K
+
+> K
+
+X
+
+> t=1
+
+KL( qθ (· | st) ∥ qref (· | st)) . (7) Here, LOPD (see Eq. (6)) aligns the active SNN with the ANN teacher, while Lref anchors it to the frozen SNN on the identical self-generated prefixes without blocking teacher-guided correction. 
+
+Layerwise Spike Regularization 
+
+Matched-prefix policy anchoring constrains output behavior, while layerwise spike activity remains an independent degree of freedom. Layers can compensate to preserve logits while some become silent or overly active. We therefore regularize selected layers rather than a network-wide spike count. For B
+
+trajectories, layer l fires at rate 
+
+rl = 1
+
+BKT sNl
+
+X
+
+> b,t,τ,i
+
+st,τ b,l,i . (8) Let rref  
+
+> l
+
+be the rate of the frozen reference SNN on the same prefixes. We use the fixed layer set Sspk = {3, 6, 9, 12 } at all three model scales and penalize deviations both from a viable interval and from the frozen reference SNN rate: 
+
+Lspk = 1
+
+|S spk |
+
+X
+
+> l∈S spk
+
+  [rmin − rl]2+ + [ rl − rmax ]2+
+
++ ρ(rl − rref  
+
+> l
+
+)2.
+
+(9) The interval discourages silent or saturated selected layers, even if the reference approaches a boundary. The reference term penalizes deviations from the firing rates of the frozen reference SNN on self-generated prefixes. Per-layer penalties prevent increases and decreases from cancelling globally. We set ρ = 1 and use the same frozen reference SNN used for matched-prefix policy anchoring. 
+
+Joint Training Objective 
+
+Because LOPD changes the active policy, it also changes the prefixes and internal rates observed at the next update. We therefore evaluate all objectives on the same fresh prefix batch: 
+
+Ltotal = LOPD + βref Lref + λspk Lspk . (10) 
+
+LOPD corrects the output policy, Lref limits departure from the reference policy, and Lspk constrains selected-layer firing dynamics. Only the active SNN parameters θ are updated; the ANN teacher and reference SNN remain frozen. We keep βref 
+
+and λspk fixed throughout SpikeOPD adaptation. Appendix B gives the complete update sequence, and Appendix D derives the gradients of both stability terms. After training, the teacher and reference SNN are discarded. Deployment uses only the updated SNN, without an auxiliary model, reranker, or second decoding pass. 
+
+## Experiments 
+
+Experimental Setup 
+
+Benchmark Datasets. We evaluate retained language abil-ity on eight zero-shot benchmarks: ARC-Easy/Challenge (ARC-e/ARC-c) (Clark et al. 2018), WinoGrande (WG) (Sak-aguchi et al. 2020), BoolQ (BQ) (Clark et al. 2019), PIQA (Bisk et al. 2020), HellaSwag (HS) (Zellers et al. 2019), OpenBookQA (OBQA) (Mihaylov et al. 2018), and HeadQA (HQA) (Vilares and Gómez-Rodríguez 2019). SpikeOPD sees no examples from these tasks. We report each accuracy and their unweighted mean. 
+
+Compared Baselines. All controlled 0.125B baselines share one KD checkpoint and update budget. We compare continued SpAD, hard-label SFT, Vanilla OPD, and the on-policy EOPD, Lightning OPD, and OPRD variants (Jin et al. 2026; Wu, Han, and Cai 2026; Yang et al. 2026). The scale study reports OPT teachers (Zhang et al. 2022), KD and SpikeOPD-adapted BiSpikCLM models at 0.125B, 0.35B, and 1.3B, plus published SpikeGPT checkpoints (Zhu et al. 2023). 
+
+Evaluation Metrics. We report accuracy on each of the eight zero-shot benchmarks and their unweighted average to measure retained language capability. To assess generation stability under the same decoding setting, we use adjacent repetition (Adj.), the fraction of unique four-token sequences (Dist.-4), and the maximum identical-token run length (Run) (Holtzman et al. 2019; Welleck et al. 2019). Lower Adj. and Run indicate fewer local repetitions and severe degeneration, whereas higher Dist.-4 indicates greater sequence diversity; jointly, they distinguish isolated repetition from broader roll-out collapse. Fire Rate follows Eq. 8 and measures the sparse activation level of the SNN. Operations and energy are ana-lytical estimates computed using the matched BiSpikCLM protocol (Guo et al. 2026), rather than hardware latency or power measurements; Appendix E specifies the calculation boundary, formulas, and operation-energy constants. 
+
+Implementation Details. SpikeOPD starts from a 4,000-update SpAD checkpoint and 480-token FineWeb prompts (Penedo et al. 2024), generating K = 32 tokens at tem-perature 1.0 with Ts = 4 . We train for 500 updates using 
+
+(1 , β ref , λ spk ) = (1 , 0.75 , 0.3) and Sspk = {3, 6, 9, 12 }. Con-trolled experiments use 0.125B models, and the scale study adds 0.35B and 1.3B. Scale results use three seeds, the stabil-ity test uses 10 matched seeds, and paired-prefix diagnostics use N = 256 fixed pairs. Remaining implementation and reproducibility details are in the appendix. 
+
+Performance Comparison with KD Baselines 
+
+We test whether on-policy adaptation scales without sacrific-ing sparse execution by comparing SpikeOPD with matched KD checkpoints at 0.125B, 0.35B, and 1.3B. For SpikeOPD, Table 2 reports three-run means for every task accuracy, the unweighted eight-task average, and firing rate. The eight-task averages are 35 .5 ± 0.02% , 40 .0 ± 0.19% , and 44 .3 ± 0.12% ,and the firing rates are 0.17 ± 0.006 , 0.17 ± 0.000 , and 
+
+0.19 ± 0.010 , respectively, where each uncertainty is the sample standard deviation across the three runs. Zero-shot Accuracy (%) Analytical Efficiency                                                                                                                                                             
+
+> Model Scale ARC-e ARC-c WG BQ PIQA HS OBQA HQA Avg. ↑OPs ↓Rate ↓Energy ↓
+> OPT Teacher 0.125B 43.4 19.3 52.4 54.2 62.4 31.9 20.3 23.5 38.4 125.6 NA 126.0 KD 0.125B 37.1 19.1 51.2 47.8 53.8 27.6 18.4 22.2 34.7 27.7 0.17 9.3 SpikeGPT 0.046B 32.3 16.2 50.2 45.7 54.6 25.3 15.7 20.6 32.6 3.7 0.17 3.3
+> SpikeGPT 0.216B 35.2 17.7 50.7 47.3 55.1 27.6 17.3 23.1 34.3 18.3 0.17 16.5 SpikeOPD 0.125B 39.1 19.2 51.9 48.5 55.3 28.1 19.0 22.6 35 .527.5 0.17 9.2 OPT Teacher 0.35B 47.5 22.2 55.3 57.2 66.1 40.7 25.7 26.6 42.7 360.8 N/A 197.6 KD 0.35B 42.1 20.7 50.8 55.3 60.5 32.8 21.8 22.3 38.3 85.7 0.18 16.9 SpikeOPD 0.35B 44.2 20.9 56.1 55.7 62.2 35.0 21.8 24.2 40 .083.7 0.17 16.7
+> OPT Teacher 1.3B 57.4 30.6 60.4 60.5 71.7 52.8 33.2 30.7 49.7 1237.1 N/A 632.2 KD 1.3B 44.5 23.6 55.2 56.9 62.8 40.8 25.2 22.3 41.4 130.7 0.18 67.3 SpikeOPD 1.3B 48.9 25.6 58.3 57.4 65.5 46.3 27.6 24.6 44 .3128.3 0.19 66.8
+
+Table 2: Zero-shot accuracy and analytical efficiency. For SpikeOPD, all task accuracies, Avg., and Rate are three-seed means; the corresponding sample standard deviations for Avg. and Rate are reported in the text. Avg. is unweighted. OPs and Energy are reported in G and mJ. Bold marks the best matched-scale SNN accuracy, including ties.                                                                                                                 
+
+> Zero-shot Accuracy (%) Rollout Statistics
+> Method ARC-e ARC-c WG BQ PIQA HS OBQA HQA Avg. Adj. ↓Dist.-4 ↑Run ↓
+> KD 37.1 19.1 51.2 47.8 53.8 27.6 18.4 22.2 34.7 0.16 99.83 1.0433 Continued SpAD 37.3 19.1 49.6 48.0 54.2 27.3 18.4 22.0 34.5 0.16 99.77 1.0457 SFT 36.8 16.9 50.6 38.4 49.1 25.9 20.0 18.8 32.1 0.09 7.28 1.0275
+> Vanilla OPD 36.0 17.0 49.0 38.4 49.9 26.1 22.0 20.3 32.3 39.09 83.67 6.9041 EOPD 37.3 17.5 51.3 46.2 54.1 27.3 21.2 21.7 34.6 24.77 87.21 5.8413 Lightning OPD 37.1 19.2 50.1 45.8 51.5 26.8 21.1 21.7 34.2 0.13 99.23 1.0513 OPRD 36.8 18.7 48.9 46.2 51.3 26.7 21.6 22.0 34.0 0.16 99.72 1.0836 SpikeOPD 39.1 19.2 51.9 48.5 55.3 28.1 19.0 22.6 35.5 0.11 99.19 1.0477
+
+Table 3: Controlled 0.125B comparison from one checkpoint and 500 updates. Adj., Dist.-4, and Run denote adjacent repetition (%), unique four-token fraction (%), and maximum identical-token run length. Bold marks the best accuracy, including ties. The benefit is broad and becomes more pronounced over the tested scale range: SpikeOPD improves the KD average by 0.8, 1.7, and 2.9 points. The three-run task means improve on every reported task at 0.125B and 1.3B; at 0.35B, seven improve and OpenBookQA is unchanged. These improve-ments require neither downstream-task training nor additional analytical compute; operation and energy estimates remain slightly below KD, while firing rates remain comparable. This pattern suggests that correcting prefix-source mismatch re-covers language capability without compromising the sparse inference profile. 
+
+Comparison with Post-Training Methods 
+
+We compare post-training methods with different supervision and data sources under the same 0.125B KD checkpoint and 500-update budget, including continued offline training, hard-label SFT, and existing on-policy distillation methods. Table 3 evaluates both task accuracy and rollout statistics to determine whether post-training gains coexist with stable generation. The controlled comparison reveals that effective post-training requires more than additional updates or exposure to self-generated prefixes. Existing methods either preserve rollout statistics without improving accuracy or update on-policy and suffer generation degeneration. SpikeOPD is the only method that raises the KD average from 34.7% to 35.5% while keeping rollout statistics close to the initial checkpoint. This result indicates that teacher correction must be coupled with explicit control of policy movement and internal spiking dynamics to break the observed accuracy–stability trade-off. 
+
+Ablation Study 
+
+We evaluate the three components of SpikeOPD by individ-ually removing teacher-guided policy correction, matched-prefix policy anchoring, or layerwise spike regularization from Eq. 10. All variants use the same 0.125B checkpoint, self-generated prefixes, optimization schedule, and update budget. Figure 5 reports their accuracy across eight zero-shot benchmarks and the average. The full configuration achieves the highest average accu-racy of 35.5%, while removing any component degrades performance. Obs. 1: Teacher-guided correction provides the optimization direction. Without LOPD , the preservation objectives can restrict policy changes but cannot transfer the ANN teacher’s distribution on self-generated prefixes, leav-ing prefix-source mismatch insufficiently corrected. Obs. 2: 
+
+Matched-prefix policy anchoring is the primary stability con-straint. Removing Lref produces the largest decline, from 35.5% to 31.7%, showing that teacher supervision alone can-not ensure stable adaptation. Since policy updates also alter ARC-E ARC-C WG BQ PIQA HS OBQA HQA 
+
+> Avg.
+> 010 20 30 40 50 60
+> Accuracy (%)
+> Full SpikeOPD w/o OPD w/o reference KL w/o spike reg.
+
+Figure 5: Component ablation at 0.125B. “w/o reference KL” removes matched-prefix policy anchoring. The other labels remove the named term in Eq. 10. subsequent prefixes, unconstrained movement can amplify early deviations. The frozen reference limits this feedback on the same visited prefixes without blocking teacher correction. 
+
+Obs. 3: Spike regularization provides a complementary inter-nal constraint. Its removal reduces accuracy because output alignment cannot fully preserve layerwise spiking behavior, which may drift even when similar logits are maintained. This result is consistent with Figure 2(A). Overall, the three objec-tives jointly control the correction direction, policy movement, and internal spiking dynamics. 
+
+Initialization Robustness 
+
+According to Figure 6, we test whether SpikeOPD depends on a mature offline checkpoint by adapting models after 1,000, 2,000, and 4,000 SpAD updates and comparing each result with its matched initialization. ARC-E ARC-C WG BQ PIQA HS OBQA HQA 
+
+> Avg.
+> 010 20 30 40 50 60
+> Accuracy (%)
+> 1k-O 1k-S 2k-O 2k-S Final-O Final-S
+
+Figure 6: Initialization robustness across 1k, 2k, and final 4k offline checkpoints. O and S denote the matched KD and SpikeOPD results. All three pairs improve. SpikeOPD improves all three matched checkpoints by 0.6– 0.8 points, although initialization maturity still determines absolute performance. The consistent relative gain shows that SpikeOPD complements rather than replaces spike-aware offline alignment: offline training establishes language capabil-ity, whereas on-policy adaptation addresses the prefix-source mismatch that appears when the model conditions on its own generations. 
+
+Sensitivity Analysis 
+
+We study two hyperparameters that control adaptation strength: rollout length K determines the extent of self-generated context, while the layer interval ∆L determines the coverage of internal spike constraints. Tables 4 and 5 vary them at 0.125B under a fixed update budget and report both accuracy and rollout quality.                                  
+
+> KUpd. Gen./upd. Avg. ↑Adj. ↓Dist.-4 ↑
+> 8500 8B34.9 0.2 99.0 16 500 16 B35.3 0.1 99.3 32 500 32 B35 .50.1 99.2 64 500 64 B35.2 0.2 99.1 128 500 128 B34.8 0.3 98.8
+
+Table 4: Rollout-length sensitivity at 0.125B. Metrics are percentages. The shaded default uses three seeds and other rows use one fixed seed.                                      
+
+> Layers Avg. ↑Adj. ↓Dist.-4 ↑Rate
+> ∆L= 1 35.0 0.2 99.0 0.176
+> ∆L= 2 35.3 0.1 99.3 0.171
+> ∆L= 3 35 .50.1 99.2 0.173 ∆L= 4 35.2 0.1 99.1 0.168
+> ∆L= 6 34.9 0.2 99.0 0.164
+> ∆L= 12 34.6 0.3 98.8 0.158
+
+Table 5: Layer-selection sensitivity at 0.125B. None removes spike regularization. Metrics are percentages except Rate. The shaded default uses three seeds and other rows use one. The shared finding is that stable on-policy adaptation bene-fits from bounded self-generated context and selective internal constraints rather than maximal coverage. Short rollouts pro-vide insufficient on-policy exposure, whereas excessively long rollouts may accumulate feedback from the evolving policy; similarly, dense spike constraints may suppress useful adaptation, while sparse constraints leave internal drift under-controlled. The intermediate optima at K = 32 and ∆L = 3 
+
+in Tables 4 and 5 support this interpretation. 
+
+## Conclusion 
+
+We propose SpikeOPD, which employs full KL teacher cor-rection, prefix-matching strategy anchoring, and layer-wise spike regularization on self-generated prefixes. Across three different scales, SpikeOPD improves knowledge distillation performance by 0.8, 1.7, and 2.9 percentage points, respec-tively, without increasing analytical sparse computation over-head or requiring auxiliary models at deployment time. This study offers a novel technical pathway for autoregressive SNN distillation. 
+
+## References 
+
+Agarwal, R.; Vieillard, N.; Zhou, Y.; Stanczyk, P.; Ramos Garea, S.; Geist, M.; and Bachem, O. 2024. On-policy distillation of language models: Learning from self-generated mistakes. In International Conference on Learning Representations , volume 2024, 21246–21263. Bal, M.; and Sengupta, A. 2024. Spikingbert: Distilling bert to train spiking language models using implicit differentiation. In 
+
+Proceedings of the AAAI conference on artificial intelligence ,volume 38, 10998–11006. Bellec, G.; Salaj, D.; Subramoney, A.; Legenstein, R.; and Maass, W. 2018. Long short-term memory and learning-to-learn in networks of spiking neurons. Advances in neural information processing systems , 31. Bengio, S.; Vinyals, O.; Jaitly, N.; and Shazeer, N. 2015. Scheduled sampling for sequence prediction with recurrent neural networks. Advances in neural information processing systems , 28. Bisk, Y.; Zellers, R.; Gao, J.; Choi, Y.; et al. 2020. Piqa: Rea-soning about physical commonsense in natural language. In 
+
+Proceedings of the AAAI conference on artificial intelligence ,volume 34, 7432–7439. Clark, C.; Lee, K.; Chang, M.-W.; Kwiatkowski, T.; Collins, M.; and Toutanova, K. 2019. Boolq: Exploring the surprising difficulty of natural yes/no questions. In Proceedings of the 2019 conference of the north American chapter of the association for computational linguistics: Human language technologies, volume 1 (long and short papers) , 2924–2936. Clark, P.; Cowhey, I.; Etzioni, O.; Khot, T.; Sabharwal, A.; Schoenick, C.; and Tafjord, O. 2018. Think you have solved question answering? try arc, the ai2 reasoning challenge. 
+
+arXiv preprint arXiv:1803.05457 .Davies, M.; Srinivasa, N.; Lin, T.-H.; Chinya, G.; Cao, Y.; Choday, S. H.; Dimou, G.; Joshi, P.; Imam, N.; Jain, S.; et al. 2018. Loihi: A neuromorphic manycore processor with on-chip learning. Ieee micro , 38(1): 82–99. Deng, S.; and Gu, S. 2021. Optimal conversion of conventional artificial neural networks to spiking neural networks. arXiv preprint arXiv:2103.00476 .Diehl, P. U.; Neil, D.; Binas, J.; Cook, M.; Liu, S.-C.; and Pfeif-fer, M. 2015. Fast-classifying, high-accuracy spiking deep networks through weight and threshold balancing. In 2015 International joint conference on neural networks (IJCNN) ,1–8. ieee. Fang, W.; Yu, Z.; Chen, Y.; Huang, T.; Masquelier, T.; and Tian, Y. 2021. Deep residual learning in spiking neural networks. Advances in neural information processing systems ,34: 21056–21069. Gu, Y.; Dong, L.; Wei, F.; and Huang, M. 2024. Minillm: Knowledge distillation of large language models. In The twelfth international conference on learning representations .Guo, S.; Zhou, C.; Wang, J.; Chen, K.; Meng, Q.; and Ma, Z. 2026. BiSpikCLM: A Spiking Language Model integrating Softmax-Free Spiking Attention and Spike-Aware Alignment Distillation. arXiv preprint arXiv:2605.13859 .Hinton, G.; Vinyals, O.; and Dean, J. 2015. Distill-ing the knowledge in a neural network. arXiv preprint arXiv:1503.02531 .Holtzman, A.; Buys, J.; Du, L.; Forbes, M.; and Choi, Y. 2019. The curious case of neural text degeneration. arXiv preprint arXiv:1904.09751 .Horowitz, M. 2014. 1.1 computing’s energy problem (and what we can do about it). In 2014 IEEE international solid-state circuits conference digest of technical papers (ISSCC) ,10–14. IEEE. Jiao, X.; Yin, Y.; Shang, L.; Jiang, X.; Chen, X.; Li, L.; Wang, F.; and Liu, Q. 2020. Tinybert: Distilling bert for natural language understanding. In Findings of the association for computational linguistics: EMNLP 2020 , 4163–4174. Jin, W.; Min, T.; Yang, Y.; Wei, D.; Zhou, Y.; Kadhe, S. R.; Baracaldo, N.; and Lee, K. 2026. Entropy-aware on-policy distillation of language models. In Forty-third International Conference on Machine Learning .Kim, Y.; and Rush, A. M. 2016. Sequence-level knowledge distillation. In Proceedings of the 2016 conference on empiri-cal methods in natural language processing , 1317–1327. Ko, J.; Kim, S.; Chen, T.; and Yun, S.-Y. 2024. Distillm: Towards streamlined distillation for large language models. 
+
+arXiv preprint arXiv:2402.03898 .Lv, C.; Li, T.; Qiao, W.; Wang, X.; Wu, M.; Liu, W.; Dou, S.; Zheng, X.; and Huang, X. 2025. Spikebert: A language spikformer learned from bert with knowledge distillation. 
+
+Neural Networks , 108482. Mihaylov, T.; Clark, P.; Khot, T.; and Sabharwal, A. 2018. Can a suit of armor conduct electricity? a new dataset for open book question answering. In Proceedings of the 2018 conference on empirical methods in natural language processing , 2381– 2391. Neftci, E. O.; Mostafa, H.; and Zenke, F. 2019. Surrogate gradient learning in spiking neural networks. IEEE Signal Processing Magazine , 36(6): 51–63. Ouyang, L.; Wu, J.; Jiang, X.; Almeida, D.; Wainwright, C. L.; Mishkin, P.; Zhang, C.; Agarwal, S.; Slama, K.; Ray, A.; et al. 2022. Training language models to follow instructions with human feedback. arXiv preprint arXiv:2203.02155 .Penedo, G.; Kydlíček, H.; Lozhkov, A.; Mitchell, M.; Raffel, C.; Von Werra, L.; Wolf, T.; et al. 2024. The fineweb datasets: Decanting the web for the finest text data at scale. Advances in Neural Information Processing Systems , 37: 30811–30849. Rathi, N.; Srinivasan, G.; Panda, P.; and Roy, K. 2020. En-abling deep spiking neural networks with hybrid conversion and spike timing dependent backpropagation. arXiv preprint arXiv:2005.01807 .Romero, A.; Ballas, N.; Kahou, S. E.; Chassang, A.; Gatta, C.; and Bengio, Y. 2014. FitNets: hints for thin deep nets (2014). arXiv preprint arXiv:1412.6550 , 3. Ross, S.; Gordon, G.; and Bagnell, D. 2011. A reduction of imitation learning and structured prediction to no-regret online learning. In Proceedings of the fourteenth international conference on artificial intelligence and statistics , 627–635. JMLR Workshop and Conference Proceedings. Roy, K.; Jaiswal, A.; and Panda, P. 2019. Towards spike-based machine intelligence with neuromorphic computing. Nature ,575(7784): 607–617. Rueckauer, B.; Lungu, I.-A.; Hu, Y.; Pfeiffer, M.; and Liu, S.-C. 2017. Conversion of continuous-valued deep networks to efficient event-driven networks for image classification. 
+
+Frontiers in neuroscience , 11: 682. Sakaguchi, K.; Le Bras, R.; Bhagavatula, C.; and Choi, Y. 2020. Winogrande: An adversarial winograd schema chal-lenge at scale. In Proceedings of the AAAI conference on artificial intelligence , volume 34, 8732–8740. Sanh, V.; Debut, L.; Chaumond, J.; and Wolf, T. 2019. Distil-BERT, a distilled version of BERT: smaller, faster, cheaper and lighter. arXiv preprint arXiv:1910.01108 .Schulman, J.; Levine, S.; Abbeel, P.; Jordan, M.; and Moritz, P. 2015. Trust region policy optimization. In International conference on machine learning , 1889–1897. PMLR. Sengupta, A.; Ye, Y.; Wang, R.; Liu, C.; and Roy, K. 2019. Going deeper in spiking neural networks: VGG and residual architectures. Frontiers in neuroscience , 13: 95. Sun, S.; Cheng, Y.; Gan, Z.; and Liu, J. 2019. Patient knowl-edge distillation for bert model compression. In Proceedings of the 2019 conference on empirical methods in natural lan-guage processing and the 9th international joint conference on natural language processing (EMNLP-IJCNLP) , 4323–4332. Vilares, D.; and Gómez-Rodríguez, C. 2019. HEAD-QA: A healthcare dataset for complex reasoning. In Proceedings of the 57th Annual Meeting of the Association for Computational Linguistics , 960–966. Welleck, S.; Kulikov, I.; Roller, S.; Dinan, E.; Cho, K.; and Weston, J. 2019. Neural text generation with unlikelihood training. arXiv preprint arXiv:1908.04319 .Wu, Y.; Deng, L.; Li, G.; Zhu, J.; and Shi, L. 2018. Spatio-temporal backpropagation for training high-performance spik-ing neural networks. Frontiers in neuroscience , 12: 331. Wu, Y.; Han, S.; and Cai, H. 2026. Lightning opd: Efficient post-training for large reasoning models with offline on-policy distillation. arXiv preprint arXiv:2604.13010 .Xing, X.; Gao, B.; Liu, Z.; Clifton, D. A.; Xiao, S.; Zhang, W.; Du, L.; Zhang, Z.; Li, G.; and Zhang, J. 2024a. Spikellm: Scaling up spiking neural network to large language models via saliency-based spiking. In The Thirteenth International Conference on Learning Representations .Xing, X.; Zhang, Z.; Ni, Z.; Xiao, S.; Ju, Y.; Fan, S.; Wang, Y.; Zhang, J.; and Li, G. 2024b. Spikelm: Towards general spike-driven language modeling via elastic bi-spiking mechanisms. 
+
+arXiv preprint arXiv:2406.03287 .Yang, S.; Zhu, G.; Song, B.; Wang, H.; Xia, M.; Zheng, X.; Ma, Y.; Chen, Z.; Wang, W.; and Chen, G. 2026. OPRD: On-Policy Representation Distillation. arXiv preprint arXiv:2606.06021 .Yao, M.; Hu, J.; Zhou, Z.; Yuan, L.; Tian, Y.; Xu, B.; and Li, G. 2023. Spike-driven transformer. Advances in neural information processing systems , 36: 64043–64058. Zagoruyko, S.; and Komodakis, N. 2016. Paying more attention to attention: Improving the performance of convolu-tional neural networks via attention transfer. arXiv preprint arXiv:1612.03928 .Zellers, R.; Holtzman, A.; Bisk, Y.; Farhadi, A.; and Choi, Y. 2019. Hellaswag: Can a machine really finish your sentence? In Proceedings of the 57th annual meeting of the association for computational linguistics , 4791–4800. Zhang, S.; Roller, S.; Goyal, N.; Artetxe, M.; Chen, M.; Chen, S.; Dewan, C.; Diab, M.; Li, X.; Lin, X. V.; et al. 2022. Opt: Open pre-trained transformer language models. arXiv preprint arXiv:2205.01068 .Zheng, H.; Wu, Y.; Deng, L.; Hu, Y.; and Li, G. 2021. Going deeper with directly-trained larger spiking neural networks. In 
+
+Proceedings of the AAAI conference on artificial intelligence ,volume 35, 11062–11070. Zhou, C.; Guo, S.; Wang, J.; Ma, D.; Che, K.; Chen, B.; Meng, Q.; Ma, Z.; and Tian, Y. 2026. Winner-Take-All Spiking Transformer for Language Modeling. arXiv preprint arXiv:2604.11321 .Zhou, Z.; Zhu, Y.; He, C.; Wang, Y.; Yan, S.; Tian, Y.; and Yuan, L. 2022. Spikformer: When spiking neural network meets transformer. arXiv preprint arXiv:2209.15425 .Zhu, R.-J.; Zhao, Q.; Li, G.; and Eshraghian, J. K. 2023. Spikegpt: Generative pre-trained language model with spiking neural networks. arXiv preprint arXiv:2302.13939 .A Overview and Notation 
+
+This supplement provides the Stage 2 training protocol, the properties of full-vocabulary on-policy distillation, the two stability terms, the shared-prefix diagnostic protocol, and the analytical-efficiency totals reported in the main paper. It then gives an implementation-level record of the offline SpAD initialization, including cross-domain attention and feature alignment, the exact Stage 1 optimization settings, and a reset-aware finite-horizon surrogate-gradient analysis. It uses the same symbols and reporting boundaries as the main paper. Let x ∼ D prompt be a corpus prompt and let y1: K be a continuation sampled from an active spiking student. The state at response position t is st = ( x, y <t ). The frozen ANN teacher, active SNN, and frozen offline SNN reference define distributions over the complete vocabulary V:
+
+pT (v | st) = softmax( zT (st)) v ,qθ (v | st) = softmax( zθ (st)) v ,qref (v | st) = softmax( zref (st)) v .
+
+(1) The reference parameters equal the Stage 1 checkpoint and remain frozen. Rollout token identities are detached from the computation graph. Consequently, the sampled sequence chooses the states on which supervision is applied, while gradients at an update are computed with the visited prefixes held fixed. 
+
+## B Detailed Experimental Protocol 
+
+Models, data, and two-stage training 
+
+We study matched OPT teachers and causal BiSpikCLM students at 125M, 0.35B, and 1.3B parameters (Zhang et al. 2022; Guo et al. 2026). Stage 1 uses the FineWeb-Edu subset specified in Section F; Stage 2 draws prompts from FineWeb (Penedo et al. 2024). Stage 1 performs offline spike-aware ANN-to-SNN distillation for 4,000 updates. Stage 2 starts from that checkpoint, copies it once to form the frozen reference SNN, and updates only the active SNN. At every Stage 2 update, we sample a batch of 480-token FineWeb prompts. The active SNN generates K = 32 new tokens with sampling temperature 1.0. The frozen teacher and frozen reference then score every visited prefix st over the full vocabulary. The default accuracy and controlled-comparison runs use 500 updates, batch size 16, and learning rate 1.5 × 10 −6. The separate stability stress test follows the horizons reported in the main paper: 500 updates for Vanilla and Clipped OPD, and 1,000 updates for Small-LR OPD and SpikeOPD. No example from any downstream benchmark is used for gradient-based optimization. 
+
+Fixed Stage 2 objective 
+
+For a batch of B sampled trajectories, the complete teacher correction is 
+
+LOPD = 1
+
+BK 
+
+> B
+
+X
+
+> b=1
+> K
+
+X
+
+> t=1
+
+KL( pT (· | sb,t ) ∥ qθ (· | sb,t )) . (2)                               
+
+> Setting Value Stage 1 checkpoint 4,000 updates Prompt length 480 tokens Rollout length K32 tokens Rollout temperature 1.0 Simulation steps Ts4Diagnostic prompt count 256 Default Stage 2 horizon 500 updates Stability-stress horizon 500 or 1,000 updates Global trajectory batch B16 Learning rate 1.5×10 −6
+> Teacher correction Full-vocabulary forward KL Loss weights 1.00 : 0 .75 : 0 .30
+> Spike-rate interval [0 .01 ,0.58]
+> Reference-rate coefficient ρ1Default training layers {3,6,9,12 }
+> Trajectory diagnostics All Lspiking layers (125M only) Trainable network Active SNN only
+
+Table 1: Stage 2 reproducibility record. The objective weights are fixed throughout each run, including the 1,000-update stability runs. The matched-prefix reference penalty is 
+
+Lref = 1
+
+BK 
+
+> B
+
+X
+
+> b=1
+> K
+
+X
+
+> t=1
+
+KL( qθ (· | sb,t ) ∥ qref (· | sb,t )) . (3) For a batch of B trajectories and each monitored layer l ∈Sspk , let st,τ b,l,i ∈ { 0, 1} be the spike of neuron i in batch item b
+
+at response position t and simulation step τ . Its batch-averaged rate is 
+
+rl = 1
+
+BKT sNlBX
+
+> b=1
+> K
+
+X
+
+> t=1
+> Ts
+
+X 
+
+> τ=1
+> Nl
+
+X
+
+> i=1
+
+st,τ b,l,i , (4) Let rref  
+
+> l
+
+be the rate produced by the frozen reference on the same prefixes. The activity penalty is 
+
+Lspk = 1
+
+|S spk |
+
+X
+
+> l∈S spk
+
+ [rmin − rl]2+ + [ rl − rmax ]2+
+
++ ρ(rl − rref  
+
+> l
+
+)2,
+
+(5) where ρ = 1 throughout. The default/full method and all non-layer-sensitivity experiments use Sspk = {3, 6, 9, 12 } at every model scale. The layer-sensitivity study instead uses the set {∆L, 2∆ L, . . . , 12 } specified by each tested interval. The all-layer quantities used only for trajectory diagnosis in Section B are not the training regularizer. The outer Stage 2 objective is fixed for the entire run: 
+
+Ltotal = 1 .00 LOPD + 0 .75 Lref + 0 .30 Lspk . (6) There is no weight schedule and SpikeOPD does not replay a Stage 1 loss during Stage 2. Continued SpAD is the sole diag-nostic control that intentionally reuses the Stage 1 objective for 500 additional offline updates. Thus, the ratio 1 : 0 .75 : 0 .3
+
+always refers to full-KL teacher correction, matched-prefix policy anchoring, and layerwise spike regularization, respec-tively. The latter two terms form a coupled two-level stability module: Lref constrains policy drift on matched prefixes, while Lspk constrains spike activity. Full SpikeOPD always uses both terms together; single-term removals in the ablation are diagnostic only. 
+
+Update sequence 
+
+Each Stage 2 update executes the following sequence: 1. Sample a batch of 480-token FineWeb prompts. 2. Generate 32 tokens from the active SNN at temperature 
+
+1.0 and detach the sampled token identities. 3. Run the frozen ANN teacher, active SNN, and frozen reference SNN on the same visited prefixes. 4. Compute the complete vocabulary sums in Eqs. 2 and 3; no vocabulary truncation or token-level Monte Carlo estimator is used. 5. Accumulate active and reference firing rates for the layer set l ∈ S spk of the current configuration and evaluate Eq. 5; the default set is {3, 6, 9, 12 }.6. Form Eq. 6, backpropagate through the active SNN with surrogate gradients, and update only θ.The teacher and reference are discarded after training. In-ference therefore uses the same student architecture and introduces no auxiliary network or new module. 
+
+Controlled baselines and evaluation 
+
+All controlled 125M post-training comparisons start from the same 4,000-update checkpoint, use Ts = 4 , and receive the same 500-update budget. Offline SpAD evaluates the checkpoint without Stage 2. Continued SpAD applies the original offline objective for 500 additional FineWeb updates. 
+
+SFT performs standard causal-language-model fine-tuning on the same FineWeb sequences: at each corpus prefix, the ground-truth next token from that sequence is the hard target in a cross-entropy loss. It does not use tokens sampled from the active rollout as labels. Vanilla OPD applies full forward KL alone and removes the complete coupled two-level stability module; it omits both Lref and Lspk . SpikeOPD uses Eq. 6. SpikeGPT is reported only as external context and is not a training-matched control (Zhu et al. 2023). The recent-method controls preserve the same prompt length, continuation length, temperature, and update budget. 
+
+Lightning OPD (Wu, Han, and Cai 2026) first generates the complete fixed trajectory buffer from the 4,000-update checkpoint and caches frozen-teacher full-vocabulary scores on those prefixes. Its 500 updates sample only this buffer, without refreshing trajectories as the SNN changes, and in-clude the same selected-layer Lspk used by SpikeOPD. OPRD 
+
+(Yang et al. 2026) uses active-student rollouts and temporally averages SNN hidden states across all four simulation steps. A learned linear map aligns each of the L student layers to its matched teacher layer with MSE; the representation coefficient is calibrated on the first five minibatches so its gradient norm is of the same order as the common full-KL calibration signal, then held fixed. 
+
+EOPD (Jin et al. 2026) uses the frozen teacher’s token entropy to switch between reverse KL at low entropy and forward KL at high entropy. The high-entropy branch uses the teacher-probability Top-50 approximation, and the threshold is fixed to the 80th percentile of one teacher-scored calibration minibatch. For a fair SNN comparison, EOPD retains the same selected-layer Lspk as SpikeOPD but does not use the matched-prefix reference-policy term. These controls isolate entropy-aware divergence switching, fixed replay, and representation supervision under a common SNN budget. Zero-shot accuracy is evaluated on ARC-Easy and ARC-Challenge (Clark et al. 2018), WinoGrande (Sakaguchi et al. 2020), BoolQ (Clark et al. 2019), PIQA (Bisk et al. 2020), HellaSwag (Zellers et al. 2019), OpenBookQA (Mihaylov et al. 2018), and HeadQA (Vilares and Gómez-Rodríguez 2019). The scale study uses three independent runs per scale, and the main table reports three-run means for every SpikeOPD task accuracy, the unweighted eight-task average, and firing rate. The sample standard deviations of the eight-task average are 0.02 , 0.19 , and 0.12 percentage points at 125M, 0.35B, and 1.3B, respectively; the corresponding firing-rate standard deviations are 0.006 , 0.000 , and 0.010 . The collapse stress test uses the same 10 matched seeds for Vanilla OPD, Small-LR OPD, Clipped OPD, and SpikeOPD. Unless a table explicitly reports a multi-seed aggregate, other controlled ablations and sensitivity settings are single runs. The downstream evaluation examples are not mixed into either training stage. 
+
+Diagnostic definitions 
+
+For a generated continuation y1: K , adjacent repetition is 
+
+Radj (y) = 1
+
+K − 1
+
+> K
+
+X
+
+> t=2
+
+1[yt = yt−1]. (7) The maximum run is the length of the longest contiguous sequence of an identical token. Distinct-4 is the number of unique contiguous 4-grams divided by the total number K −3.The repeated-4-gram fraction used in the training trace is the fraction of positions whose current 4-gram already appeared earlier in the same continuation. These complementary statis-tics distinguish local token loops from broader phrase reuse; lower repetition and shorter runs are better, whereas higher distinct-4 is better (Holtzman et al. 2019; Welleck et al. 2019). At rollout depth t, teacher–student KL is evaluated before the average over response positions in Eq. 2. For checkpoint 
+
+c, prompt n, and source a ∈ { self , corp }, let 
+
+κac,n,t = KL  pT (· | san,t ) ∥ qc(· | san,t ) ,Gc(t) = 1
+
+N
+
+> N
+
+X
+
+> n=1
+
+ κself  
+
+> c,n,t
+
+− κcorp 
+
+> c,n,t
+
+ . (8) Absolute curves average κac,n,t over the 256 prompts, while 
+
+Gc(t) is the paired source gap. Internal-dynamics diagnostics use the same self-generated prefix and length-matched corpus-prefix pair. We formalize all three internal diagnostics as follows. Let 
+
+c ∈ { coff , c van , c meth } index the fixed 4,000-update offline checkpoint, the Vanilla OPD checkpoint after 500 Stage 2 updates, and the SpikeOPD checkpoint after 500 Stage 2 updates, respectively. Let a ∈ { self , corp } index a stored self-generated prefix and its length-matched corpus-prefix control from the same prompt and position. For prompt 
+
+n ∈ { 1, . . . , N }, response position t ∈ { 1, . . . , K }, layer 
+
+l ∈ { 1, . . . , L } of width dl and Nl spiking neurons, and simulation step τ ∈ { 1, . . . , T s}, write sc,a n,t,l,i,τ ∈ { 0, 1} for a spike, Hc,a n,t,l,τ ∈ Rdl for the hidden vector, and U c,a n,t,l,τ ∈
+
+Rdl for the corresponding membrane-potential vector. Here 
+
+N = 256 , K = 32 , and Ts = 4 .For a single prompt, position, layer, checkpoint, and prefix type, define the simulation-time and neuron-averaged spike rate 
+
+rc,a n,t,l = 1
+
+TsNlTsX 
+
+> τ=1
+> Nl
+
+X
+
+> i=1
+
+sc,a n,t,l,i,τ . (9) The checkpoint-specific spike-rate drift at rollout depth t is 
+
+Dspk (c, t ) = 1
+
+N L 
+
+> N
+
+X
+
+> n=1
+> L
+
+X
+
+> l=1
+
+rc, self  
+
+> n,t,l
+
+− rc, corp  
+
+> n,t,l
+
+. (10) Figure 2A in the main paper plots 10 4Dspk (c, t ) for Offline-only, Vanilla OPD, and SpikeOPD; the multiplier is a display scale, not a physical unit. The direct Offline-only–SpikeOPD comparison is 
+
+∆spk (t) = Dspk (coff , t ) − Dspk (cmeth , t ), (11) where ∆spk (t) > 0 means that SpikeOPD has a smaller spike-rate gap than Offline-only on the same stored prefixes and controls. Vanilla OPD is evaluated under the same protocol as an intermediate diagnostic control, while ∆spk (t) retains the direct Offline-only–SpikeOPD definition used for the reported improvement. The hidden vector is first aggregated over simulation time: 
+
+¯Hc,a n,t,l = 1
+
+TsTsX 
+
+> τ=1
+
+Hc,a n,t,l,τ . (12) For every coordinate j, prompt, position, and layer, define the absolute hidden discrepancy and its layer mean by 
+
+δH,c n,t,l,j = ¯Hc, self  
+
+> n,t,l,j
+
+− ¯Hc, corp  
+
+> n,t,l,j
+
+,gH,c n,t,l = 1
+
+dldlX
+
+> j=1
+
+δH,c n,t,l,j ,GH (c) = 1
+
+N KL 
+
+> N
+
+X
+
+> n=1
+> K
+
+X
+
+> t=1
+> L
+
+X
+
+> l=1
+
+gH,c n,t,l .
+
+(13) Thus gH,c n,t,l is the hidden-state gap for one prompt–position– layer item, and GH (c) is the reported checkpoint-level gap. Membrane drift retains the simulation-step axis instead of averaging the trace before taking the distance: 
+
+DU (c) = 1
+
+N KLT sNX
+
+> n=1
+> K
+
+X
+
+> t=1
+> L
+
+X
+
+> l=1
+> Ts
+
+X 
+
+> τ=1
+
+1
+
+dl
+
+U c, self  
+
+> n,t,l,τ
+
+− U c, corp  
+
+> n,t,l,τ 1
+
+.
+
+(14) Only the hidden state is averaged over simulation time before taking the distance. Equation 14 instead computes a membrane distance at each of the four simulation steps and then aver-ages over τ . In both diagnostics, 1/d l produces a coordinate mean within a layer, and the outer 1/L gives every layer equal weight rather than weighting wider layers more heavily. The re-ported values are GH (coff ) = 0 .102 , GH (cvan ) = 0 .100 , and 
+
+GH (cmeth ) = 0 .095 for hidden states, and DU (coff ) = 3 .46 ,
+
+DU (cvan ) = 3 .30 , and DU (cmeth ) = 2 .67 for membrane potentials. Both quantities use native model-internal units. The mem-brane coordinates are not physical volts, are not divided by 
+
+Vth , are not variance-normalized, and are not z-scored; the hidden coordinates likewise receive no variance normaliza-tion or z-scoring beyond the explicit temporal and coordinate means above. Consequently, these raw diagnostics support paired checkpoint comparisons only when architecture, pa-rameterization, activation scale, prefix bank, and aggregation are held fixed. They must not be compared directly across model scales or differently parameterized SNNs without an additional shared normalization. These quantities are diag-nostics only and are not direct optimization targets except for the firing-rate statistics in Eq. 5. 
+
+Shared-prefix cross-evaluation protocol 
+
+The fixed 4,000-update offline checkpoint generated once and stored one 32-token trajectory for each of the same 256 prompts, forming a common prefix bank. Offline-only, the 500-update Vanilla OPD checkpoint, and the 500-update SpikeOPD checkpoint are cross-evaluated by replaying every stored token identity unchanged through all three checkpoints; no checkpoint-specific resampling is performed during the diagnostic comparison. The frozen ANN teacher also scores these same stored prefixes. For internal-dynamics metrics, each stored rollout prefix is paired with its corresponding offline-prefix control, and the same pair is used for all three checkpoints. We first compute teacher KL, spike-rate drift, hidden-state gap, and membrane drift within each prompt– prefix pair and then aggregate across the common bank. This matched-input protocol measures conditional checkpoint re-sponses on a common prefix distribution; it does not compare independently resampled native rollouts. As stated in the main paper, these trajectory diagnostics are reported for the 125M model only. 
+
+## C Why Full-Vocabulary KL Is an Exact Stage 2 Target 
+
+Snapshot objective and unbiased trajectory average 
+
+Because the active policy changes between updates, distin-guish the parameters ¯θ that generate a rollout batch from the parameters θ differentiated in that update. Define the snapshot objective 
+
+JOPD (θ; ¯θ) = Ex∼D prompt Ey∼π¯θ (·| x)
+
+"
+
+1
+
+K
+
+> K
+
+X
+
+> t=1
+
+KL( pT (· | st)∥qθ (· | st))] .
+
+(15) 
+
+Proposition 1 (Exact per-prefix evaluation) . At any fixed pre-fix st, Eq. 2 evaluates the teacher–student forward KL exactly over V. It introduces no bias from vocabulary truncation or sampled teacher tokens. Proof. Both pT (· | st) and qθ (· | st) are explicitly evaluated at every vocabulary coordinate, and the implemented loss is the defining finite sum 
+
+X
+
+> v∈V
+
+pT (v | st) log pT (v | st)
+
+qθ (v | st) . (16) No random token subset appears in this expression. 
+
+Proposition 2 (Unbiased Monte Carlo estimate of the snap-shot objective) . Let B prompt–trajectory pairs be sampled independently from the distribution in Eq. 15. Their empirical mean is unbiased for JOPD (θ; ¯θ). Under the usual inter-changeability condition for differentiation and expectation, its detached-prefix gradient is unbiased for ∇θ JOPD (θ; ¯θ).Proof. The result follows from linearity of expectation over independently sampled prompt–trajectory pairs. Because rollout identities are detached, differentiation acts only on qθ at the realized prefixes. If the per-trajectory gradient is integrable, differentiation and expectation can be interchanged. The statement is deliberately about the snapshot, or semi-gradient, objective. It does not differentiate through discrete sampling or through the dependence of the future state dis-tribution on θ, and it is not a global convergence claim for the nonconvex SNN. The prefix sample is stochastic; the vocabulary sum at each sampled prefix is exact. 
+
+Cross-entropy equivalence, gradient, and curvature 
+
+At a fixed prefix, abbreviate pv = pT (v | st) and qv = qθ (v |
+
+st). Then 
+
+KL( p∥q) = − X
+
+> v∈V
+
+pv log qv − H(p), (17) where the teacher entropy H(p) is constant with respect to the student. Full forward KL and full-vocabulary teacher cross-entropy therefore have identical student gradients. Let z ∈ R|V| be the student logits and q = softmax( z).For every token j,
+
+∂KL( p∥q)
+
+∂z j
+
+= qj − pj . (18) Thus every vocabulary coordinate receives a calibrated cor-rection. Tokens overweighted by the student have positive gradient, while tokens underweighted relative to the teacher have negative gradient. 
+
+Proposition 3 (Positive semidefinite logit curvature) . The Hessian of the per-prefix forward KL with respect to student logits is 
+
+∇2 
+
+> z
+
+KL( p∥q) = diag( q) − qq ⊤ ⪰ 0. (19) 
+
+Hence the loss is convex in logits, up to the softmax-invariant additive logit direction. Proof. For any vector a,
+
+a⊤(diag( q) − qq ⊤)a = Ej∼q [a2 
+
+> j
+
+] − Ej∼q [aj ]2
+
+= Var j∼q (aj ) ≥ 0. (20) This local logit property does not make the parameterized SNN objective convex. Its practical value is that full KL supplies a dense, well-defined correction on every visited prefix without introducing an additional support-selection rule. 
+
+## D Stability Terms and Their Gradients 
+
+Matched-prefix reference KL 
+
+At one prefix, abbreviate q = qθ (· | st) and r = qref (· | st).The reference term satisfies 
+
+KL( q∥r) = Ej∼q [log qj − log rj ]. (21) It therefore measures the expected log-probability displace-ment from the frozen offline SNN under behavior currently favored by the active student. For student logit zj ,
+
+∂KL( q∥r)
+
+∂z j
+
+= qj
+
+
+
+log qj
+
+rj
+
+− KL( q∥r)
+
+
+
+. (22) The teacher and reference play different roles on the same prefix: Eq. 18 points toward the ANN teacher, whereas Eq. 22 penalizes a large departure from the competent offline policy. Because this is a soft penalty, teacher-supported deviations re-main possible when their reduction in full-KL loss outweighs the reference cost. Using the active distribution in the first argument is inten-tional. It emphasizes tokens to which the updated student assigns probability even when the offline reference consid-ers them unlikely. This is the behavior implicated in self-reinforcing rollout drift and repetition collapse. The empirical stability results in the main paper support this mechanism; Eq. 21 alone is not a proof that every trajectory remains stable. 
+
+Spike-rate regularization 
+
+For one layer, define Nr = BKT sNl, so that r = N −1
+
+> r
+
+P 
+
+> i
+
+si,where the compact index i ranges over batch items, response positions, simulation steps, and neurons. The derivative of the layer penalty in Eq. 5 with respect to an individual spike (with derivative zero at an interval boundary) is 
+
+∂ℓ l
+
+∂s i
+
+= 2
+
+Nr
+
+(r − rmin )1r<r min 
+
++ ( r − rmax )1r>r max + ρ(r − rref ).
+
+(23) Binary thresholding is differentiated with a surrogate deriva-tive, ∂s i/∂u i ≈ ψ(ui − Vth ) (Neftci, Mostafa, and Zenke 2019). 
+
+Proposition 4 (Bounded activity gradient) . Suppose all rates and interval endpoints lie in [0 , 1] and |ψ| ≤ Mψ . The magnitude of the membrane-level gradient contributed by one monitored layer and one spike is at most 
+
+2(1 + ρ)Mψ
+
+Nr
+
+, (24) before the outer average over the monitored set (four layers in the default configuration) and the fixed factor 0.30 .Proof. At most one interval term is active, and its absolute deviation is at most one. The reference-rate deviation is also at most one. Apply the triangle inequality to Eq. 23 and multiply by the surrogate-gradient bound. The interval terms discourage silent or saturated operating regimes, whereas the reference-rate term retains how activity is distributed across depth. A network-wide mean would allow one overactive layer to cancel an underactive layer; the layerwise loss does not. The constraint acts on aggregate event traffic, not on individual spike identities, hidden states, or membrane values. 
+
+## E Analytical Efficiency Reporting 
+
+We follow the analytical inference protocol used by BiSpik-CLM (Guo et al. 2026). This is an operation-based estimate, not a wall-plug or on-chip power measurement. Under the 45-nm operation-energy model adopted by that protocol, a dense multiply–accumulate (MAC) costs 
+
+EMAC = 4 .6 pJ , (25) whereas an event-driven accumulation (AC) costs 
+
+EAC = 0 .9 pJ . (26) For a spike-driven component c in layer l, let f cr (l) be its measured firing rate in spikes per neuron per simulation step, Ts the number of simulation steps, and FLOPs c(l) the MAC count of the equivalent dense component. Its synaptic-operation count is 
+
+SOPs c(l) = f cr (l)TsFLOPs c(l). (27) Embedding and LM-head computations remain dense, while the SFSA and SFFN blocks are counted as spike-driven AC computation. The reported analytical operation count is 
+
+OPs SNN = FLOPs Embed + FLOPs LM -head 
+
++
+
+> L
+
+X
+
+> l=1
+
+(SOPs SFSA (l) + SOPs SFFN (l)) , (28) and the corresponding energy estimate is 
+
+ESNN = EMAC (FLOPs Embed + FLOPs LM -head )+ EAC 
+
+> L
+
+X
+
+> l=1
+
+(SOPs SFSA (l) + SOPs SFFN (l)) .
+
+(29) For the matched ANN teacher, all counted components use dense MACs, giving 
+
+EANN = EMAC FLOPs ANN ,total . (30) When operation counts are expressed in billions, multiplying by pJ per operation yields mJ. The main table reports the aggregate model Rate rounded to two decimal places, but Eqs. 27–29 use the unrounded component- and layer-specific firing rates. Consequently, the displayed aggregate Rate is not multiplied by a single FLOP total and cannot be used to reconstruct OPs or energy. In particular, a slightly higher rounded aggregate Rate can coexist with lower OPs when activity is redistributed toward components with smaller equivalent dense-operation counts. The OPs column also combines dense MAC counts and spike-driven AC counts, whose energy constants differ. The aggregate OPs, Rate, and Energy values are reported in the main paper; they should be interpreted as arithmetic proxies under this shared boundary, not as hardware measurements. 
+
+## F Offline SpAD Initialization 
+
+This section specifies how the 4,000-update checkpoint θ0 is constructed. It expands the brief initialization description in the main paper into an implementation-level record; it does not introduce an additional contribution or a loss used by SpikeOPD. Stage 1 adopts the public BiSpikCLM SpAD data, optimizer, temporal, surrogate, and five-branch outer-loss recipe (Guo et al. 2026); the two inner SAA/SFA mixing coefficients are checkpoint-local fields and are identified separately below. The ANN teacher is frozen, the SNN student is trainable, and both use the OPT tokenizer and vocabulary. After Stage 1, SpikeOPD discards the five losses below and accesses the checkpoint only through its initialization, qref ,and rref  
+
+> l
+
+; Continued SpAD is the intentionally separate control that reuses them. 
+
+Stage 1 data and optimization record 
+
+The retained checkpoint uses the Ts = 4 branch of the public recipe and the FineWeb-Edu 10BT sample without an additional filtering stage (Penedo et al. 2024). “10BT” identifies the source pool, not the number of tokens necessarily consumed by the 4,000 retained updates. The public training record does not state a fixed sequence length or a packing policy, so we do not infer either quantity from the corpus name. Table 2 records every Stage 1 field available in the public report or the retained checkpoint configuration and separates it from the Stage 2 settings in Table 1. 
+
+Implementation-level softmax-free spiking attention 
+
+Let B1 be the offline minibatch size, n the padded se-quence length, h the number of heads, and dh the width of one head. At student layer l and simulation step τ ,the input is Xl,τ S ∈ { 0, 1}B1×n×hd h . The compact main-paper expression names the pre-output aggregation AS VS
+
+as O and writes score scaling explicitly; the public exe-cutable path uses unscaled coincidence counts and contin-ues through the downstream attention-output and output-projection neurons. These are hard-forward parameteriza-tions of the same stateful attention neuron only when the complete membrane scale is transformed. Specifically, with 
+
+c = √dh, compare uτ = αu τ −1 + Cτ /c − vAaτ −1 against 
+
+euτ = αeuτ −1 + Cτ − cv Aaτ −1. If eu0 = cu 0 and there is no additional unscaled bias, induction gives euτ = cu τ and therefore identical hard spikes under thresholds vA and cv A.This observation reconciles the forward notation; it does not assert that the two surrogate backward graphs are identical at a fixed sharpness. All Stage 1 equations and gradient bounds Stage 1 setting Value Teacher / student OPT / BiSpikCLM Tokenizer and vocabulary Shared with OPT Updates used for θ0 4,000 Simulation steps Ts 4Optimizer Adam Learning rate 5 × 10 −4
+
+Schedule Cosine decay Warm-up ratio 0.2 Microbatch per GPU 16 Gradient accumulation 16 steps Effective batch per GPU 256 Global effective batch (8 GPUs) 2,048 Global gradient-norm clip 0.7 Soft-target temperature TKD 2.0 Surrogate family / sharpness Arctangent / ξ = 2 
+
+Hardware 8× RTX 4090 (24GB) 
+
+Table 2: Stage 1 initialization record. The public recipe’s effective batch of 256 is device-local ( 16 × 16 ); under eight-way data parallelism the corresponding global effective batch is 2,048 sequences per optimizer step. below refer to the unscaled public execution path with ξ = 2 .For head a, that implementation-level order is 
+
+Ql,τ S,a = SQ(Xl,τ S W lQ,a ),Kl,τ S,a = SK (Xl,τ S W lK,a ),V l,τ S,a = SV (Xl,τ S W lV,a ),Cl,τ S,a = Ql,τ S,a (Kl,τ S,a )⊤,
+
+eCl,τ S,a = M ⊙ Cl,τ S,a ,Al,τ S,a = M ⊙ S A( eCl,τ S,a ),Zl,τ S,a = Al,τ S,a V l,τ S,a ,Rl,τ S,a = SAV (Zl,τ S,a ),Ol,τ S = SO
+
+
+
+Concat ha=1 Rl,τ S,a W lO
+
+
+
+.
+
+(31) For batch item b, let mb,i ∈ { 0, 1} be the non-padding indicator and define Mb,i,j = mb,i mb,j 1[j ≤ i]. The first multiplication in Eq. 31 produces integer coincidence counts from binary Q and K. Masked counts enter the attention neuron; the mask is reapplied to its output, and SAV converts the integer AV accumulation back to spikes before output projection. Consequently, Al,τ S,a,b,i,j = 0 for every future or padded key, and Rl,τ S,a,b,i depends only on valid value spikes at positions j ≤ i. Equation 31’s ZS = AS VS is the tensor denoted by O in the main-paper shorthand; RS and the final projection spell out the subsequent public SFSA operations. There is no softmax, and the threshold parameterization avoids executing 1/√dh as a separate floating-point operation. For supervision, the frozen teacher exports post-softmax causal attention maps AmT,b ∈ [0 , 1] n×n. A layer map π(l)
+
+and a head map χl(a) identify the teacher tensor paired with student layer l and head a. Uniform layer skipping and head-wise mapping are used only when depths or head counts differ; for a shape-matched OPT–BiSpikCLM pair, both maps are the identity. Padding locations, future-token entries, and positions without a next-token target are excluded by their corresponding masks. 
+
+Temporal fusion and teacher-to-spike encoding 
+
+For any student tensor XτS , temporal fusion is the empirical rate 
+
+¯XS = 1
+
+TsTsX 
+
+> τ=1
+
+XτS . (32) For a set of valid scalar coordinates ΩX , we use 
+
+MSE ΩX (X, Y ) = 1
+
+|ΩX |
+
+X
+
+> ω∈ΩX
+
+(Xω − Yω )2. (33) This definition fixes the normalization for padding and causal masks. The static ANN tensor must also be represented in the student’s spike domain. For each scalar x of a teacher ten-sor XT , repeat x as a constant current and run the same subtractive-reset LIF dynamics: 
+
+uτx = αu τ −1 
+
+> x
+
++ x − Vth sτ −1 
+
+> x
+
+,sτx = 1[uτx ≥ Vth ], RTs (x) = 1
+
+TsTsX 
+
+> τ=1
+
+sτx. (34) Equation 34 is applied entry-wise, with zero initial membrane state and the same neuron parameters as the corresponding student module. Thus RTs (XT ) is an empirical-rate target in 
+
+[0 , 1] rather than an unspecified quantizer. At Ts = 4 it is a finite-horizon proxy; no asymptotic equality between ANN values and spike rates is assumed. 
+
+Five aligned targets 
+
+For an offline sequence x1: n, let the teacher export embeddings 
+
+ET , hidden states HmT , attention maps AmT , and logits zT .The student produces EτS , Hl,τ S , Al,τ S , and zS . Projection Pe
+
+maps student embeddings to teacher width. In the continuous feature branch, P lh is the public MLP or linear width-matching map and is followed by LayerNorm. For a shape-matched pair the width projection may reduce to the identity, but LayerNorm remains part of the alignment transform. 
+
+Embedding alignment (EA). The first loss supplies a target before the first transformer block: 
+
+LEA = MSE ΩE
+
+ Pe( ¯ES ), E T
+
+ . (35) 
+
+Spike-attention alignment (SAA). Let PA contain every matched student-layer/head pair (l, a ), and let ΩA contain causal, non-padding attention entries. The rate-domain and continuous-domain terms are 
+
+Lrate SAA = 1
+
+|P A|
+
+X
+
+> (l,a )∈P A
+
+MSE ΩA
+
+ ¯AlS,a , RTs (Aπ(l)
+
+> T,χ l(a)
+
+)
+
+
+
+,
+
+Lcont SAA = 1
+
+|P A|
+
+X
+
+> (l,a )∈P A
+
+MSE ΩA
+
+ ¯AlS,a , A π(l)
+
+> T,χ l(a)
+
+
+
+,
+
+LSAA = γattn Lrate SAA + (1 − γattn )Lcont SAA .
+
+(36) The first branch compares two empirical spike rates and therefore respects the student’s discrete representation. The second branch preserves the teacher’s continuous relational structure after student temporal fusion. Unlike the abbreviated earlier definition, Eq. 36 requires no row-renormalization operator, so an all-zero student attention row remains well-defined. 
+
+Spike-feature alignment (SFA). For the matched layer set 
+
+PH , define 
+
+eHlS = LayerNorm  P lh( ¯HlS ) . (37) The feature objectives are 
+
+Lrate SFA = 1
+
+|P H |
+
+X
+
+> l∈P H
+
+MSE ΩH
+
+ ¯HlS , RTs (Hπ(l) 
+
+> T
+
+)
+
+
+
+,
+
+Lcont SFA = 1
+
+|P H |
+
+X
+
+> l∈P H
+
+MSE ΩH
+
+ eHlS , H π(l)
+
+> T
+
+
+
+,
+
+LSFA = γfeat Lrate SFA + (1 − γfeat )Lcont SFA .
+
+(38) When widths differ, the teacher tensor in the rate branch is first mapped to student width and the student tensor in the continuous branch is mapped to teacher width. In the models used here the widths match, so these shape maps reduce to identities and do not add deployment parameters. 
+
+Soft- and hard-token alignment. For valid next-token positions Ωtok , define 
+
+pt,T KD  
+
+> T
+
+= softmax( ztT /T KD ),qt,T KD  
+
+> S
+
+= softmax( ztS /T KD ),
+
+LSTA = T 2KD 
+
+|Ωtok |
+
+X
+
+> t∈Ωtok
+
+KL 
+
+
+
+pt,T KD  
+
+> T
+
+∥qt,T KD 
+
+> S
+
+
+
+,
+
+LHTA = − 1
+
+|Ωtok |
+
+X
+
+> t∈Ωtok
+
+log qS (xt+1 | x≤t).
+
+(39) The factor T 2KD compensates for the 1/T KD factor introduced when differentiating the softened logits. 
+
+Complete Stage 1 objective. The checkpoint is trained with 
+
+LSpAD = λemb LEA + λattn LSAA + λfeat LSFA 
+
++ λsoft LSTA + λhard LHTA , (40) where 
+
+TKD = 2 , (λemb , λ attn , λ feat , λ soft , λ hard )= (0 .2, 0.1, 0.1, 0.3, 0.3) , γattn = γfeat = 0 .5. (41) The five outer weights sum to one. This keeps the numerical loss scale interpretable, but does not by itself guarantee equal parameter-gradient norms across the five branches. The two inner mixing coefficients are checkpoint-configuration fields recorded for this submission; they are not reported in the public training table and therefore constitute a checkpoint-specific completion of the public outer recipe, not a value attributed to the public paper. These Stage 1 coefficients must not be confused with the Stage 2 ratio 1 : 0 .75 : 0 .3 in Eq. 6. 
+
+Stage 1 update sequence 
+
+Each offline update has the following order: 1. tokenize a FineWeb-Edu batch once and use the same padding and next-token masks for teacher and student; 2. run the frozen OPT teacher without gradient storage and cache the matched embeddings, attention maps, hidden states, and logits; 3. unroll the BiSpikCLM student for Ts = 4 simulation steps, retaining the spike and membrane traces required by BPTT; 4. construct the teacher spike proxies in Eq. 34, then evaluate Eqs. 35, 36, 38, and 39; 5. form Eq. 40, backpropagate only through the student and any training-time alignment projections, clip the resulting global gradient norm to 0.7, and take one Adam update under the cosine schedule. Only the student parameters are retained in θ0. Teacher-side spike proxies and width-alignment projections are training interfaces; they do not create an auxiliary inference path. 
+
+Surrogate-gradient propagation with subtractive reset 
+
+The main paper states the LIF forward dynamics. Here we analyze the backward recurrence actually induced by its subtractive reset. To avoid overloading the leak α, let ξ denote the sharpness of the arctangent surrogate: 
+
+eSξ (v) = 1
+
+π arctan 
+
+ πξv 
+
+2
+
+
+
++ 12 ,ψξ (v) = ξ/ 21 + ( πξv/ 2) 2 .
+
+(42) Stage 1 uses ξ = 2 , and therefore 
+
+0 ≤ ψξ (v) ≤ Mψ = ξ/ 2 = 1 . (43) The hard threshold is used in the forward pass; Eq. 42 supplies only the backward derivative. Consider one vector-valued LIF module with input current 
+
+Iτ = W X τ :
+
+uτ = αu τ −1 + W X τ − Vth sτ −1, sτ = 1[uτ ≥ Vth ].
+
+(44) Holding the presynaptic trace fixed for this local temporal calculation, define 
+
+Dτ = diag( ψξ (uτ − Vth )) , Jτ = αI − Vth Dτ −1.
+
+(45) Then the surrogate temporal Jacobian is 
+
+∂u τ
+
+∂u k ≈ Jτ Jτ −1 · · · Jk+1 , 1 ≤ k < τ ≤ Ts. (46) This expression retains the derivative of the reset spike. Dropping that term would replace Jτ by αI and would not describe Eq. 44. 
+
+Proposition 5 (Finite-horizon temporal-gradient bound) . Let 
+
+¯κ = max 2≤τ ≤Ts ∥Jτ ∥2. Under the surrogate derivative in Eq. 42, 
+
+∂u τ
+
+∂u k 2
+
+≤ ¯κτ −k, ¯κ ≤ max {α, |α − Vth Mψ |} . (47) If ¯κ < 1, the temporal state map is contractive in this local surrogate sense. Regardless of whether this sufficient condi-tion holds, the maximum temporal amplification within the checkpoint used here is finite and bounded by max(1 , ¯κ3)
+
+because Ts = 4 .Proof. Each Dτ is diagonal with entries in [0 , M ψ ]. Hence 
+
+Jτ is diagonal with entries in [α − Vth Mψ , α ], which gives the second inequality. Submultiplicativity of the spectral norm applied to Eq. 46 gives the first. The largest separation between two of four simulation steps is three. The same Jacobian appears in the reset-aware eligibility trace. With eτ = ∂u τ /∂W and X τ = ∂(W X τ )/∂W , the local recurrence is 
+
+eτ = X τ + Jτ eτ −1, e0 = 0 . (48) 
+
+Proposition 6 (Bounded reset-aware eligibility trace) . As-sume ∥X τ ∥2 ≤ MX and use the ¯κ of Proposition 5. Then 
+
+∥eτ ∥2 ≤ MXτ −1X
+
+> j=0
+
+¯κj . (49) 
+
+For ¯κ < 1, this is at most MX /(1 − ¯κ); for the implemented 
+
+Ts = 4 , it is at most MX (1 + ¯ κ + ¯ κ2 + ¯ κ3) without a contraction assumption. Proof. Unroll Eq. 48, apply the triangle inequality, and bound every product of j temporal Jacobians by ¯κj .To include all future temporal paths, let cτ denote the direct derivative of the loss component evaluated at step τ with respect to sτ , and let aτ = ∂L/∂u τ be the total membrane adjoint. BPTT gives 
+
+aτ = Dτ cτ + J⊤ 
+
+> τ+1
+
+aτ +1 , aTs+1 = 0 ,∂L
+
+∂W =
+
+> Ts
+
+X 
+
+> τ=1
+
+(X τ )⊤aτ . (50) If ∥cτ ∥2 ≤ ML and ∥X τ ∥2 ≤ MX , unrolling Eq. 50 yields 
+
+∥aτ ∥2 ≤ Mψ MLTs−τX
+
+> j=0
+
+¯κj ,
+
+∂L
+
+∂W 2
+
+≤ MX Mψ MLTsX 
+
+> τ=1
+> Ts−τ
+
+X
+
+> j=0
+
+¯κj .
+
+(51) This is a local temporal bound for the unrolled module before accounting for spatial Jacobians in preceding layers. The output losses are also bounded at the logit interface: for one valid position, 
+
+∂∂z S
+
+h
+
+T 2KD KL( pTKD  
+
+> T
+
+∥qTKD  
+
+> S
+
+)
+
+i
+
+> 2
+
+= TKD ∥qTKD  
+
+> S
+
+− pTKD  
+
+> T
+
+∥2 ≤ √2 TKD ,
+
+(52) and hard-label cross-entropy satisfies ∥∂ CE /∂z S ∥2 ≤ √2.These bounds isolate three safeguards: the surrogate slope is bounded, only four temporal steps are unrolled, and the realized global parameter gradient is clipped at 0.7. They do not prove global convergence, rule out vanishing gradients, or bound products of all spatial layer Jacobians. They also concern the surrogate backward graph, not the nonexistent classical derivative of the hard threshold. Their purpose is narrower: to make explicit why the Stage 1 temporal recur-rence has a controlled finite-horizon gradient contribution under stated bounded-input assumptions. 
+
+## G Reproducibility Checklist 
+
+Stage 1 follows the fixed record in Table 2: the frozen OPT teacher and trainable SNN share tokenization, all alignment masks are explicit, the arctangent surrogate uses ξ = 2 , and the global gradient norm is clipped at 0.7. Stage 2 computes teacher, active-SNN, and reference-SNN logits on identical detached prefixes. It uses full-vocabulary KL with a stable log-softmax, Ts = 4 , and ρ = 1 ; the default training layer set is Sspk = {3, 6, 9, 12 }, with only the explicit layer-sensitivity study changing it. In contrast, trajectory diagnostics average all L layers at 125M and replay identical stored tokens through Offline-only, the 500-update Vanilla OPD checkpoint, and the 500-update SpikeOPD checkpoint. The scale study uses three independent runs per scale and reports three-run means for all SpikeOPD task accuracies, Avg., and firing rate. The collapse comparison uses the same 10 matched seeds for Vanilla OPD, Small-LR OPD, Clipped OPD, and SpikeOPD; explicitly identified non-default sensitivity settings and other controlled ablations remain single runs. OPs and energy follow Eqs. 27–29 and are not hardware measurements.
