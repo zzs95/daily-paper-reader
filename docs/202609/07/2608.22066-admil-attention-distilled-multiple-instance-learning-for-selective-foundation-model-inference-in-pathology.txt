@@ -1,0 +1,313 @@
+Title: ADMIL: Attention-Distilled Multiple Instance Learning for Selective Foundation Model Inference in Pathology
+
+URL Source: https://arxiv.org/pdf/2608.22066
+
+Published Time: Tue, 25 Aug 2026 00:56:07 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# ADMIL: Attention-Distilled Multiple Instance Learning for Selective Foundation Model Inference in Pathology 
+
+## Duncan Stothers 1, Ren-Chin Wu 2, William Lotter 1,3,4 ∗ 
+
+> 1
+
+Department of Data Science, Dana-Farber Cancer Institute, Boston, MA  
+
+> 2
+
+Department of Pathology, Dana-Farber Cancer Institute, Boston, MA  
+
+> 3
+
+Department of Pathology, Brigham and Women’s Hospital, Boston, MA  
+
+> 4
+
+Harvard Medical School, Boston, MA 
+
+Abstract 
+
+Attention-based multiple instance learning (ABMIL) using pathology foundation model embeddings is effective for slide-level tasks, but exhaustive inference requires applying a large image encoder to every foreground tile despite the subsequent attention distribution often concentrating over a small sub-set of informative regions. We introduce ADMIL (Attention-
+
+Distilled Multiple Instance Learning), a selective-compute framework that distills an ABMIL teacher’s attention into a lightweight tile-selection model, PriorNet. Using an Efficient-Net architecture, PriorNet learns the teacher attention distri-bution from raw tile pixels with KL divergence; at inference, it scores the foreground pool, selects the top-K tiles, and invokes the expensive foundation model only on that subset before a selected-bag ABMIL student predicts the slide la-bel. Across BRACS, PANDA, and CAMELYON16, ADMIL matches full-teacher headline performance at K = 4 , 8, and 
+
+128 tiles, respectively, avoiding >98% of foundation model (Virchow2) tile embeddings and model inference FLOPs. Random and teacher-attention oracle controls show that this result depends on task-relevant selection rather than tile-count reduction alone. Quantitative and qualitative analyses suggest that PriorNet recovers the teacher’s tile ordering with high fi-delity while focusing on task-relevant morphological regions. ADMIL shows that nearly all expensive tile encodings can be removed without sacrificing slide-level performance, provid-ing a potential path for more efficient deployment in clinical settings where latency and compute costs are key considera-tions. 
+
+## Introduction 
+
+Pathology foundation models have become a standard source of tile-level representations for whole-slide image (WSI) analysis. A typical pipeline partitions each WSI into fore-ground tiles, embeds every tile with a foundation model encoder, and aggregates the resulting bag with attention-based multiple-instance learning (ABMIL) (Ilse, Tomczak, and Welling 2018; Campanella et al. 2019; Lu et al. 2021; Chen et al. 2024; Lu et al. 2024; Vorontsov et al. 2024; Xu et al. 2024). This paradigm has shown strong performance for a range of tasks, including metastasis detection, tumor subtyping, and histologic grading (Campanella et al. 2019; Litjens et al. 2018; Brancati et al. 2022; Bulten et al. 2022; Diab et al. 2025). Its computational profile, however, is poorly matched to clinical deployment. A single WSI may contain 
+
+> ∗
+
+Correspondence: lotterb@ds.dfci.harvard.edu 
+
+thousands to tens of thousands of foreground tiles, so ex-haustive foundation model inference can dominate latency, compute costs, and throughput. This cost is particularly striking because trained ABMIL models rarely use all tiles equally. Their slide prediction is often supported by a highly concentrated attention dis-tribution over a small subset of morphologically informa-tive regions for the particular task. The expensive encoder is therefore applied broadly even though the final classifier con-centrates on a narrow evidence set. This mismatch suggests a selective-compute strategy: use a cheap model to identify likely high-value tiles before invoking the expensive pathol-ogy foundation model. We introduce Attention-Distilled Multiple Instance Learn-ing (ADMIL), a framework to substantially reduce the infer-ence cost of foundation model-based ABMIL while preserv-ing performance. Given a trained ABMIL model, ADMIL first distills its attention distribution into a lightweight en-coder, PriorNet, which is trained using KL divergence to predict the teacher-assigned attention weight for each tile. For a user-defined deployment budget K, a separate ABMIL is then trained using foundation model embeddings from only the K tiles receiving the highest PriorNet scores. At infer-ence, PriorNet scores the full foreground pool, the foundation model embeds only the selected tiles, and the corresponding top-K ABMIL model produces the slide prediction. This design differs from conventional model compression. PriorNet does not replace the foundation model or the AB-MIL architecture; it gates access to the expensive encoder. It also differs from heuristic tissue filtering and random sub-sampling because the selection rule is distilled from task-specific teacher behavior. The resulting pipeline preserves the high-capacity representation where it matters while avoiding most foundation model evaluations elsewhere. Our contributions are threefold: 
+
+• We formulate attention distillation as a selective-compute policy for foundation model-based ABMIL and show that a lightweight PriorNet trained by KL divergence recovers useful teacher evidence. 
+
+• Across BRACS, PANDA, and CAMELYON16, ADMIL matches the full-teacher headline performance at small tile budgets, avoiding 98 .5% –99 .8% of foundation model tile embeddings and reducing model inference FLOPs by 
+
+98 .3% –99 .6% .arXiv:2608.22066v1 [cs.CV] 22 Aug 2026 Teacher FM ABMIL 
+
+❄
+
+Stage 1: Attention Distillation Teacher attention 
+
+🔥 
+
+# ŷ
+
+❄
+
+> prediction
+> Teacher FM ABMIL
+
+❄
+
+Stage 2: Top-K ABMIL 
+
+# ŷ
+
+> Top-K selection
+
+❄ 🔥 
+
+> PriorNet PriorNet
+
+Figure 1: ADMIL overview. Stage 1: A lightweight image encoder (PriorNet) learns to estimate the attention distribution produced by a frozen foundation model-based ABMIL teacher. Stage 2: PriorNet selects the top-K tiles for generating foundation model embeddings, which are used to train a separate top-K ABMIL predictor. At deployment, ADMIL reduces compute cost by decreasing the number of foundation model calls. 
+
+• We quantitatively and qualitatively evaluate tile selection fidelity, observing strong concordance between teacher-and student-selected tiles. 
+
+## Related Work 
+
+Weakly supervised WSI classification. WSI classifica-tion is naturally formulated as multiple-instance learning, where a slide is a bag of tiles and supervision is avail-able only at the bag level. Attention-based MIL introduced a permutation-invariant learned aggregation rule consisting of an interpretable, attention-weighted average of tile features (Ilse, Tomczak, and Welling 2018). Large-scale studies and later variants such as CLAM, DSMIL, and TransMIL demon-strated the effectiveness of weakly supervised WSI learning (Campanella et al. 2019; Lu et al. 2021; Li, Li, and Eliceiri 2021; Shao et al. 2021). When combined with foundation models, ABMIL remains a standard approach and often still outperforms other variants (Shao et al. 2025). ADMIL is nonetheless complementary to potential improvements in the aggregator: it targets the upstream cost of producing founda-tion model features for every candidate tile. 
+
+Pathology foundation models. Self-supervised and mul-timodal pathology models have become strong general-purpose feature extractors. CTransPath and HIPT intro-duced transformer-based and hierarchical pretraining for histopathology (Wang et al. 2022; Chen et al. 2022); UNI and CONCH demonstrated broad transfer across visual and multimodal tasks respectively (Chen et al. 2024; Lu et al. 2024); and Virchow and Prov-GigaPath further scaled pathol-ogy pretraining and whole-slide modeling (Vorontsov et al. 2024; Xu et al. 2024). These models improve downstream performance but make exhaustive tile encoding increasingly expensive. ADMIL is designed specifically for this high-capacity, high-cost feature-extraction regime. 
+
+Efficiency for gigapixel pathology. Several prior works have sought to reduce the computational burden of WSI analysis through new MIL strategies. ZoomMIL introduced a differentiable coarse-to-fine MIL network that progres-sively identifies informative regions and allocates higher-resolution processing only to selected areas (Thandiackal et al. 2022). HDMIL similarly distinguishes between high-and low-resolution processing by distilling high-resolution attention into a low-resolution pre-screening network (Dong et al. 2025). Recent work has specifically targeted the cost of pathology foundation models. H0-mini focuses on distilling the features of large foundation models directly, resulting in a more efficient encoder (Filiot et al. 2025). EAGLE uses a cheaper WSI-level foundation model to select a fixed set of 25 tiles for processing by a larger foundation model (Nei-dlinger et al. 2026). Rather than pursuing efficiency through multi-resolution processing (e.g., ZoomMIL, HDMIL), com-pressed feature extraction (e.g., H0-mini), or task-agnostic tile selection using a separately pretrained model (e.g., EA-GLE), ADMIL distills a task-specific foundation model AB-MIL teacher directly into a lightweight attention predictor. The resulting PriorNet ranks tiles before foundation model inference, retaining the original high-capacity encoder for informative regions while avoiding its application to the vast majority of the slide. 
+
+## Methods: ADMIL 
+
+Problem Setting and Full-Bag Teacher 
+
+A slide is represented by a foreground tile bag X = {xi}Ni=1 ,where N varies by slide. A frozen foundation model fθ maps each tile to an embedding zi = fθ (xi). The full-bag teacher computes attention logits 
+
+ai = w⊤ 
+
+> a
+
+tanh( Wazi + ba)
+
+and normalized attention 
+
+αi = exp( ai)
+
+PNj=1 exp( aj ) .
+
+The teacher slide representation is h = P 
+
+> i
+
+αizi, followed by a task head gψ (h). The teacher is trained on the full foreground bag and then frozen. Its exported attention distri-bution provides tile-level supervision for PriorNet. ADMIL ADMIL Critical K Full Teacher Random Top-K Teacher Top-K Oracle Figure 2: Slide-level performance versus selected tile budget. Columns correspond to CAMELYON16, PANDA, and BRACS. The top row reports each dataset’s primary metric and the bottom row its secondary metric. The black dotted line denotes full-teacher performance, which is compared to ADMIL, a random tile selector, and a top-K teacher oracle. The red dashed vertical line indicates the K value where ADMIL reaches teacher performance. The x-axis is logarithmic and reports both raw 
+
+K and the corresponding mean foreground fraction. Error bars correspond to 95% confidence intervals. 
+
+Attention Distillation with KL Divergence 
+
+PriorNet is a lightweight image-space model, pϕ, that pro-duces one scalar score si = pϕ(xi) per foreground tile. Scores are normalized across the slide: 
+
+qi = exp( si)
+
+PNj=1 exp( sj ) .
+
+PriorNet is trained with the KL distillation objective, 
+
+Lprior = DKL (α ∥ q) = 
+
+> N
+
+X
+
+> i=1
+
+αi log αi + ϵqi + ϵ .
+
+Rather than training PriorNet uniformly over all tiles, we use attention-guided sampling to increase the representation of highly attended tiles while reducing training cost. Specif-ically, for each dataset, we train on Z% of foreground tiles in the training set, distributed evenly across WSIs to target an equal number of tiles, M , per WSI. The retained tiles per WSI consist of the top M/ 2 ranked by teacher attention and an additional M/ 2 sampled from the remaining foreground pool. For the KL distillation loss, the teacher’s attention dis-tribution is re-normalized over the sampled tiles. In the main experiments, we set Z = 10% and additionally assess sensi-tivity using Z ∈ { 5, 20 }%. During evaluation, deployment, and top-K ABMIL training, PriorNet scores the complete foreground tile pool. 
+
+Top-K Selection and Selected-Bag ABMIL 
+
+Let πs denote the permutation that orders PriorNet scores from largest to smallest. ADMIL selects 
+
+SK (X) = {πs(1) , . . . , π s(min( K, N )) }.
+
+Only selected tiles are embedded by the foundation model at inference: 
+
+zi = fθ (xi), i ∈ SK (X).
+
+A separate top-K ABMIL is trained under this selected-bag condition. For i ∈ SK (X), it computes 
+
+ρi = w⊤ 
+
+> b
+
+tanh( Wbzi + bb), βi = exp( ρi)
+
+P  
+
+> j∈SK(X)
+
+exp( ρj ) ,
+
+then forms 
+
+hK = X 
+
+> i∈SK(X)
+
+βizi, ˆyK = gω (hK ),
+
+with optimization using the original slide-level task loss. 
+
+## Methods: Evaluation Approach 
+
+We compare ADMIL against several baselines, evaluating predictive performance, inference efficiency, and agreement between PriorNet predictions and teacher ABMIL attention values. Figure 3: Teacher-support retrieval by PriorNet. Values correspond to the fraction of the teacher top-K tiles found among the PriorNet top-T tiles, averaged across test slides within each dataset. Cells with T < K are masked. All panels use the same color scale. 
+
+Baselines and Controls 
+
+Full foundation model ABMIL teacher. The original ABMIL teacher embeds every foreground tile using the foun-dation model and serves as the full-compute performance reference. 
+
+Random top-K. For each slide, K foreground tiles are sampled uniformly without replacement and used to train and evaluate a separate selected-bag ABMIL architecture. This controls for whether any subset of the same size is sufficient. 
+
+Teacher top-K oracle. The oracle uses the teacher’s own full-bag attention to select 
+
+Soracle  
+
+> K
+
+(X) = TopK( {αi}Ni=1 ).
+
+It is not deployable because obtaining α requires full-bag foundation model inference, but it estimates the performance attainable when teacher evidence is recovered perfectly. 
+
+Attention Fidelity Analysis 
+
+PriorNet’s ability to recapitulate the teacher’s attention is evaluated using correlation and retrieval metrics. For every slide, we compute the Pearson and Spearman correlation between PriorNet and teacher normalized attention values. We then average these values across test-set slides to obtain dataset-level agreement metrics. We also measure teacher-support retrieval: for teacher support size K and PriorNet retrieval depth T ≥ K, we compute 
+
+Rℓ(K, T ) = |TopK( αℓ) ∩ TopT( qℓ)|
+
+min( K, N ℓ) .
+
+We evaluate K, T ∈ { 1, 2, 4, 8, 16 , 32 , 64 , 128 } and mask cells where T < K . This analysis compares full-foreground teacher attention α with the full-foreground PriorNet distri-bution q; it is distinct from the selected-bag student attention 
+
+β.
+
+Sensitivity Analysis 
+
+We assess sensitivity to the training tile sampling parameter 
+
+Z. The default Z = 10% setting is used for all headline results; the 5% and 20% settings test whether the method’s behavior depends strongly on this supervision fraction. All other training and evaluation procedures are held fixed across settings. This analysis is intended to assess robustness to Z,rather than to select an alternative headline configuration. 
+
+Inference Efficiency Assessment 
+
+Inference efficiency is assessed based on percentage of foun-dation model embeddings avoided and FLOPs saved. These calculations are reported for a critical budget Kcrit , which corresponds to the number of tile embeddings needed to reach teacher performance for a particular dataset and task. Details of these calculations are provided in the Appendix. 
+
+## Methods: Experimental Setup 
+
+Datasets and Tasks 
+
+We evaluated ADMIL on three public WSI benchmarks. CAMELYON16 contains lymph node biopsies for breast can-cer metastasis detection (Litjens et al. 2018; Ehteshami Be-jnordi et al. 2017), with 270 WSIs for model development and 129 for testing and an average of 12,391 foreground tiles per WSI. PANDA consists of prostate biopsies for six-class ISUP grade classification (Bulten et al. 2022) with an aver-age of 531 foreground tiles per WSI. As PANDA does not have a canonical test split, we split the data into 90/10% de-velopment/testing corresponding to 9,553 and 1,062 WSIs, respectively. BRACS contains breast biopsies and we assess the three-class benign, atypical, and malignant classification task (Brancati et al. 2022), with 458 and 87 WSIs for devel-opment and testing, respectively, with an average of 2,513 foreground tiles per slide. We performed three global runs for each dataset using seeds 0, 1, and 2. For each global seed, we kept the test Student Top Attended Patches Teacher Top Attended Patches Teacher ABMIL Attention Student Top-K ABMIL Attention Teacher ABMIL Attention Student Top-K ABMIL Attention Teacher Top Attended Patches Student Top Attended Patches Student Top Attended Patches Teacher #1 Teacher #2 Teacher #3 Teacher #4 Student #1 Student #2 Student #3 Student #4 Student #1 Student #2 Student #3 Student #4 Teacher #1 Teacher #2 Teacher #3 Teacher #4 Figure 4: Example attention maps. Each row contains a representative test slide from one dataset (left: CAMELYON16, right: PANDA). Panels show the WSI thumbnail, full-bag teacher attention, selected-bag student attention, and the top attended tiles. partition fixed and split the development set into a label-stratified 70/30 training/validation split using the global seed. PriorNet and all ABMIL training used the training split; model checkpoints were selected based on the validation split. PANDA was split at the patient level because it contains multiple slides per patient; CAMELYON16 and BRACS only contain one slide per patient. 
+
+Statistical Analysis 
+
+We report AUROC and AUPRC for CAMELYON16, quadratic weighted kappa (QWK) and within-1 accuracy for PANDA, and balanced accuracy and macro one-vs-rest AU-ROC for BRACS. Unless otherwise noted, presented metrics correspond to average test-set performance across the three independent runs. Uncertainty is estimated with 1,000 hier-archical bootstrap replicates. 
+
+Models and Training 
+
+Model Architectures. We use Virchow2 as the foundation model tile encoder (Vorontsov et al. 2024). Full-bag teachers and selected-bag students use non-gated ABMIL with a 512-dimensional tanh attention layer, a scalar attention scorer, and a task head with a 512-dimensional hidden layer. Pri-orNet uses an EfficientNet-B0 (Tan and Le 2020) backbone initialized with ImageNet-1K V1 weights and a scalar output head. All models operated on foreground-only tiles of size 
+
+224 × 224 .
+
+PriorNet Training. A separate PriorNet model was trained on each dataset for 20 epochs using AdamW with an initial learning rate of 10 −4, batch size corresponding to 1 WSI, weight decay of 10 −5, cosine learning-rate decay, mixed pre-cision, dropout of 0.2, and gradient-norm clipping at 1.0. As described above, PriorNet was trained using a KL-divergence loss, with checkpoint selection based on the validation split. PriorNet training was independent of deployment budget K.
+
+ABMIL Training. Teacher and student ABMIL models were optimized with AdamW for 40 epochs with weight decay of 10 −4, batch size of 1, cosine learning rate decay, mixed-precision training, dropout of 0.1, and gradient-norm clipping at 1.0. Teachers used an initial learning rate of 10 −4;students used an initial rate of 10 −3, as we found that a higher learning rate facilitated convergence when training with fewer tiles. CAMELYON16 used class-balanced binary cross entropy as the loss function; PANDA and BRACS used class-balanced cross entropy. A separate ABMIL student was trained for every evaluated tile budget K. Checkpoints for all ABMIL models were selected based on the best validation headline metric during training. 
+
+## Results 
+
+ADMIL Matches Full-Bag Performance at Small Tile Budgets 
+
+Figure 2 shows the performance of ADMIL across tile bud-gets compared to the full-teacher ABMIL model. For each dataset, a low-budget regime is observed in which ABMIL matches teacher performance with a small percentage of foundation model embedded tiles. On the primary metrics, ADMIL first reaches the teacher threshold at K = 4 for BRACS balanced accuracy, K = 8 for PANDA QWK, and 
+
+K = 128 for CAMELYON16 AUROC. These budgets corre-5% Training Tiles 10% Training Tiles (main) 20% Training Tiles Full Teacher Mean Figure 5: Sensitivity to the PriorNet supervision tile budget. Each panel compares PriorNet models trained with 5%, 10%, or 20% of each slide’s foreground candidates. The black dotted line denotes the full-teacher reference. Error bars correspond to 95% confidence intervals. The 10% setting is the default used for main results; the other curves assess robustness to the supervision fraction. spond to 99 .8% , 98 .5% , and 99 .0% fewer foundation model tile embeddings, respectively (Table 1), which translates to similar levels of model inference FLOPs saved given Prior-Net’s lightweight architecture. The secondary metrics show the same qualitative behavior. ADMIL reaches the mean teacher AUPRC on CAMELYON16 at K = 128 (0.977; 95% CI [0.959, 0.991]), the mean teacher within-1 accu-racy on PANDA at K = 16 (0.918; 95% CI [0.909, 0.928]), and the mean teacher macro one-vs-rest AUROC on BRACS at K = 32 (0.860; 95% CI [0.819, 0.899]). ADMIL’s per-formance via PriorNet-based tile selection also consistently approaches the teacher-selection oracle and substantially ex-ceeds random sampling, especially at low K.
+
+PriorNet Recovers the Teacher’s Attention Ordering 
+
+The performance results suggest that PriorNet effectively identifies task-informative tiles by distilling the teacher model’s attention. To directly assess how well PriorNet re-capitulates the teacher’s attention patterns, we computed the correlation between PriorNet-predicted and teacher-assigned tile attention using the test set of each dataset. PriorNet ex-hibits positive agreement with the teacher across all three datasets (Table 2). Spearman correlation is consistently higher than Pearson correlation, suggesting that PriorNet more faithfully recovers the teacher’s ranking of tile im-portance than the exact magnitude of its attention weights. Rank agreement is strongest on PANDA (0.839), followed by CAMELYON16 (0.799) and BRACS (0.579). The retrieval matrices in Figure 3 provide a direct selection-oriented view of fidelity. Despite an average of 12,391, 2,513, and 531 foreground tiles per WSI for CAME-LYON16, BRACS, and PANDA respectively, PriorNet’s top selected tile matches the top teacher tile 14%, 9%, and 26% of the time for the three datasets respectively, with recall increasing as the PriorNet retrieval depth grows. Together with the correlation results, this indicates that the lightweight model learns a useful approximation to the teacher’s task-specific evidence ranking before foundation model embed-ding. 
+
+Qualitative Review Finds Histologically Plausible Evidence 
+
+Representative ABMIL-derived attention maps produced by the teacher and student models are shown in Figure 4. In the CAMELYON16 example (left), both models assign high attention to tiles containing tumor cells, consistent with the ground-truth metastasis label and the corresponding model predictions. In the PANDA example (right), several of the highest-attention tiles overlap between the two models and contain high-grade prostate carcinoma morphology consis-tent with the ISUP 5 label. In both examples, the student attention map largely aligns with the teacher while showing higher sparsity, driven by the top-K selection mechanism. Overall, this qualitative analysis provides a sanity check that the student attends to plausible morphology, complementing the quantitative analyses. 
+
+Performance Is Robust Across PriorNet Supervision Budgets 
+
+Results of the sensitivity analysis for the training tile-sampling percentage are contained in Figure 5. Across datasets and metrics, the three curves follow similar per-formance trajectories with overlapping confidence intervals, Table 1: Performance at the descriptive critical tile budget Kcrit . FM saved indicates the percentage of foundation model tile embeddings avoided. Model FLOPs saved accounts for PriorNet, foundation model, and ABMIL operations at inference. Dataset Metric Kcrit                             
+
+> Full teacher Teacher 95% CI ADMIL at
+> Kcrit
+> ADMIL 95% CI FM saved (%) FLOPs saved (%) BRACS Balanced Acc. 40.648 [0.594, 0.700] 0.670 [0.617, 0.720] 99.8 99.6 PANDA QWK 80.854 [0.838, 0.870] 0.858 [0.842, 0.874] 98.5 98.3 CAMELYON16 AUROC 128 0.976 [0.954, 0.991] 0.978 [0.960, 0.992] 99.0 98.7
+
+Table 2: Correlation between teacher attention and PriorNet scores. Values are computed per WSI and then averaged across WSIs. Dataset Pearson Pearson 95% CI Spearman Spearman 95% CI CAMELYON16 0.456 [0.425, 0.487] 0.799 [0.778, 0.821] PANDA 0.622 [0.532, 0.713] 0.839 [0.816, 0.861] BRACS 0.342 [0.246, 0.412] 0.579 [0.518, 0.628] suggesting robustness to this hyperparameter. We retain 10% 
+
+as the default and interpret the 5% and 20% runs as evidence that the method is not narrowly tuned to one exact fraction. 
+
+## Discussion 
+
+Our results show that the standard foundation model-based ABMIL pipeline contains substantial redundant tile-level computation. The full teacher processes every foreground tile, yet ADMIL reaches the same mean headline perfor-mance using only four selected BRACS tiles, eight PANDA tiles, and 128 CAMELYON16 tiles. The corresponding re-duction in foundation model calls exceeds 98% in all three datasets. This is not simply a consequence of bag redundancy: random top-K students perform worse in the low-budget regime, whereas the teacher-attention oracle and learned PriorNet selection retain much more of the full-bag perfor-mance. The magnitude of the compute reduction follows from the large per-tile asymmetry between the selector and the foun-dation model. The Virchow2 checkpoint requires 340 .132 
+
+GFLOPs per tile, compared with 0.769 GFLOPs for Prior-Net. Scanning the complete foreground pool with PriorNet contributes only about 0.226% of the full-teacher model-forward FLOPs, after which Virchow2 is applied to just 
+
+0.16% , 1.51% , and 1.03% of foreground tiles on BRACS, PANDA, and CAMELYON16, respectively. Consequently, estimated model inference savings remain close to the re-duction in Virchow2 calls despite scoring every foreground tile with PriorNet. The attention-fidelity results clarify what PriorNet recov-ers. Spearman correlation is consistently higher than Pear-son correlation, suggesting that exact probability calibration is less important than preserving the ordering of teacher-relevant tiles. Some variation across datasets is also ob-served, where higher correlations are observed for PANDA and CAMELYON16 than BRACS. BRACS combines het-erogeneous benign, atypical, and malignant morphologies and uses a larger physical field of view, which may make lo-cal teacher attention harder to predict from isolated raw tiles. Nevertheless, BRACS still reaches the full-teacher balanced accuracy at only four selected tiles, suggesting that perfect global correlation is not necessary for effective decision-focused retrieval. Sensitivity experiments show that ADMIL is not tied to one exact PriorNet supervision budget. The 5%, 10%, and 20% curves retain the same qualitative shape and largely overlapping uncertainty, with small task-specific differences rather than a consistent ordering. Compared to strong prior works focusing on hierarchical spatial processing (Thandiackal et al. 2022; Dong et al. 2025) or task-agnostic model compression or tile selection (Filiot et al. 2025; Neidlinger et al. 2026), ADMIL is designed specifically for efficient inference with high-performing, MIL-level foundation model pipelines. The benefit of foun-dation model representations lies in their adaptability across downstream tasks; however, in clinical use, predictions are ultimately made for specific tasks, and the most relevant tiles can differ accordingly. ADMIL learns to approximate this relevance based on teacher supervision, enabling highly streamlined inference while preserving the underlying model representations and prediction architecture. Several limitations remain. First, ADMIL depends on the stability and relevance of teacher attention. A high-performing teacher may attend to confounders or distribute evidence diffusely, reducing selector reliability. Second, 
+
+Kcrit is a post-hoc summary of the test curve rather than a deployable validation-selected operating point; a produc-tion system should choose K on validation data. Third, we assessed ADMIL using three common benchmarks and a high-performing base foundation model, but future valida-tion with additional datasets and FMs is an important direc-tion. Finally, although ADMIL is designed to reduce infer-ence time and computational cost for scalable deployment, it introduces additional overhead during training. 
+
+## Conclusion 
+
+ADMIL converts a trained ABMIL teacher’s attention into a selective-compute policy. With a KL-trained PriorNet and a selected-bag ABMIL student, the method preserves teacher performance while avoiding most foundation model embed-dings across three distinct tasks. Quantitative attention agree-ment, teacher-support retrieval, supervision-budget sensitiv-ity, and morphology-consistent examples jointly support the central mechanism: the teacher’s implicit localization behav-ior can be distilled early enough to reduce expensive infer-ence. This offers a simple and extensible path toward more deployable pathology foundation model systems. References 
+
+Brancati, N.; Anniciello, A. M.; Pati, P.; Riccio, D.; Scog-namiglio, G.; Jaume, G.; De Pietro, G.; Di Bonito, M.; Fon-cubierta, A.; Botti, G.; Gabrani, M.; Feroce, F.; and Frucci, M. 2022. BRACS: A Dataset for BReAst Carcinoma Sub-typing in H&E Histology Images. Database , 2022: baac093. Bulten, W.; Kartasalo, K.; Chen, P.-H. C.; Ström, P.; Pinck-aers, H.; van Boven, H.; Vink, R.; et al. 2022. Artificial Intelligence for Diagnosis and Gleason Grading of Prostate Cancer: The PANDA Challenge. Nature Medicine , 28: 154– 163. Campanella, G.; Hanna, M. G.; Geneslaw, L.; Miraflor, A.; Silva, V. W. K.; Busam, K. J.; Brogi, E.; Reuter, V. E.; Klim-stra, D. S.; and Fuchs, T. J. 2019. Clinical-grade Computa-tional Pathology Using Weakly Supervised Deep Learning on Whole Slide Images. Nature Medicine , 25: 1301–1309. Chen, R. J.; Chen, C.; Li, Y.; Chen, T. Y.; Trister, A. D.; Krishnan, R. G.; and Mahmood, F. 2022. Scaling Vision Transformers to Gigapixel Images via Hierarchical Self-Supervised Learning. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,16144–16155. Chen, R. J.; Ding, T.; Lu, M. Y.; Williamson, D. F. K.; Jaume, G.; Song, A. H.; Chen, B.; Zhang, A.; Shao, D.; Shaban, M.; Williams, M.; Oldenburg, L.; Weishaupt, L. L.; Wang, J. J.; Vaidya, A.; Le, L. P.; Gerber, G.; Sahai, S.; Williams, W.; and Mahmood, F. 2024. Towards a General-purpose Foundation Model for Computational Pathology. Nature Medicine , 30: 850–862. Diab, A. R.; Karn, E. E.; Wu, R.; Ruiz, E. S.; and Lot-ter, W. 2025. Leveraging Foundation Models for Histologi-cal Grading in Cutaneous Squamous Cell Carcinoma using PathFMTools. In Proceedings of the 5th Machine Learning for Health (ML4H) Symposium .Dong, J.; et al. 2025. Fast and Accurate Gigapixel Clas-sification with Hierarchical Distillation Multiple Instance Learning. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition .Ehteshami Bejnordi, B.; et al. 2017. Diagnostic Assessment of Deep Learning Algorithms for Detection of Lymph Node Metastases in Women With Breast Cancer. JAMA , 318(22): 2199–2210. Filiot, A.; Dop, N.; Tchita, O.; Riou, A.; Peeters, T.; Valter, D.; Scalbert, M.; Saillard, C.; Robin, G.; and Olivier, A. 2025. Distilling foundation models for robust and efficient models in digital pathology. arXiv:2501.16239. Ilse, M.; Tomczak, J. M.; and Welling, M. 2018. Attention-based Deep Multiple Instance Learning. In Proceedings of the 35th International Conference on Machine Learning ,2127–2136. PMLR. Li, B.; Li, Y.; and Eliceiri, K. W. 2021. Dual-Stream Multiple Instance Learning Network for Whole Slide Image Classifi-cation with Self-Supervised Contrastive Learning. In Pro-ceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 14318–14328. Litjens, G.; Bandi, P.; Bejnordi, B. E.; Geessink, O.; Balken-hol, M.; Bult, P.; Halilovic, A.; Hermsen, M.; van de Loo, R.; Vogels, R.; Manson, Q. F.; Stathonikos, N.; Baidoshvili, A.; van Diest, P.; Wauters, C.; van Dijk, M.; and van der Laak, J. 2018. 1399 H&E-stained Sentinel Lymph Node Sections of Breast Cancer Patients: The CAMELYON Dataset. Giga-Science , 7(6): giy065. Lu, M. Y.; Chen, B.; Williamson, D. F. K.; Chen, R. J.; Liang, I.; Ding, T.; Jaume, G.; Odintsov, I.; Le, L. P.; Gerber, G.; Parwani, A. V.; Zhang, A.; and Mahmood, F. 2024. A Visual-language Foundation Model for Computational Pathology. 
+
+Nature Medicine , 30: 863–874. Lu, M. Y.; Williamson, D. F. K.; Chen, T. Y.; Chen, R. J.; Barbieri, M.; and Mahmood, F. 2021. Data-efficient and weakly supervised computational pathology on whole-slide images. Nature Biomedical Engineering , 5(6): 555–570. Neidlinger, P.; Lenz, T.; Foersch, S.; Loeffler, C. M. L.; Clus-mann, J.; Gustav, M.; Shaktah, L. A.; Langer, R.; Dislich, B.; Boardman, L. A.; French, A. J.; Goode, E. L.; Gsur, A.; Brezina, S.; Gunter, M. J.; Steinfelder, R.; Behrens, H.-M.; Röcken, C.; Harrison, T.; Peters, U.; Phipps, A. I.; Curigliano, G.; Fusco, N.; Marra, A.; Hoffmeister, M.; Brenner, H.; and Kather, J. N. 2026. A deep learning framework for efficient pathology image analysis. Nat. Commun. , 17(1). Shao, D.; Chen, R. J.; Song, A. H.; Runevic, J.; Lu, M. Y.; Ding, T.; and Mahmood, F. 2025. Do Multiple Instance Learning Models Transfer? In International Conference on Machine Learning .Shao, Z.; Bian, H.; Chen, Y.; Zhang, J.; Zheng, Y.; Zhao, K.; and Li, J. 2021. TransMIL: Transformer based Correlated Multiple Instance Learning for Whole Slide Image Clas-sification. In Advances in Neural Information Processing Systems , volume 34, 2136–2147. Curran Associates, Inc. Tan, M.; and Le, Q. V. 2020. EfficientNet: Rethink-ing Model Scaling for Convolutional Neural Networks. arXiv:1905.11946. Thandiackal, K.; Chen, B.; Pati, P.; Jaume, G.; Williamson, D. F. K.; Gabrani, M.; and Goksel, O. 2022. Differentiable Zooming for Multiple Instance Learning on Whole-Slide Images. arXiv:2204.12454. Vorontsov, E.; Bozkurt, A.; Casson, A.; Shaikovski, G.; Zele-chowski, M.; Severson, K.; Zimmermann, E.; Hall, J.; Tenen-holtz, N.; Klimstra, D. S.; Rothrock, B.; Liu, S.; et al. 2024. A Foundation Model for Clinical-grade Computational Pathol-ogy and Rare Cancers Detection. Nature Medicine , 30: 2924– 2935. Wang, X.; Yang, S.; Zhang, J.; Wang, M.; Zhang, J.; Yang, W.; Huang, J.; and Han, X. 2022. Transformer-based Unsu-pervised Contrastive Learning for Histopathological Image Classification. Medical Image Analysis , 81: 102559. Xu, H.; Usuyama, N.; Bagga, J.; Zhang, S.; Rao, R.; Nau-mann, T.; Wong, C.; Gero, Z.; Gonzalez, J.; Gu, Y.; Xu, Y.; Wei, M.; Wang, W.; et al. 2024. A Whole-slide Foundation Model for Digital Pathology from Real-world Data. Nature ,630: 181–188. Appendix 
+
+Inference Efficiency Assessment Details 
+
+For slide ℓ with Nℓ foreground tiles, the fraction of expensive foundation model tile embeddings avoided at budget K is 
+
+FM -savings( K) = 1 −
+
+P 
+
+> ℓ
+
+min( K, N ℓ)
+
+P 
+
+> ℓ
+
+Nℓ
+
+.
+
+Calculation of FLOPs ( F ) for model inference additionally includes PriorNet scoring over the full foreground pool and the teacher/student MIL heads: 
+
+FADMIL ,ℓ = NℓFPriorNet + min( K, N ℓ)FFM + FtopKMIL 
+
+compared with 
+
+Fteacher ,ℓ = NℓFFM + Fteacher MIL 
+
+I/O and preprocessing are excluded from FLOPs calcula-tions, and thus reduction in FLOPs should be interpreted at the model-forward level rather than wall-clock latency or total computation. For each dataset and metric, we define the descriptive critical budget 
+
+Kcrit = min {K : M ADMIL (K) ≥ M teacher },
+
+where the bars denote means over the three observed global runs. Kcrit is computed from the complete test performance curve and is therefore a post-hoc descriptive summary, not a validation-selected deployment hyperparameter. Checkpoint selection itself uses validation data only.

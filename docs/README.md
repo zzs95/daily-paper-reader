@@ -9,17 +9,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-09-06</span>
+      <span class="dpr-home-dashboard-kicker">2026-09-07</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 23 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 26 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>23</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>26</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>0</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-09-06 22:31:36 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-09-07 23:49:20 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -30,8 +30,8 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日共生成 23 篇推荐（精读 23 篇，速读 0 篇）</p>
-<p>精读：《Comparative analysis of PSMA-RADS Version 2.0 versus bone uptake metastatic probability (BUMP) score for characterising focal bone uptake on [18F] PSMA-1007 …》, 《Complementing Scale: Novel Guidance Methods for Improving Language Models Ofir Press A dissertation》</p>
+<p>今日共生成 26 篇推荐（精读 26 篇，速读 0 篇）</p>
+<p>精读：《A Cross-Sectional Comparative Correlation Study of Computed Tomography and Magnetic Resonance Imaging in the Evaluation of Pediatric Hydrocephalus.》, 《A Vision-Language Framework for Predicting Brain Tumor Recurrence from Multimodal, Longitudinal Patient Data》</p>
 <p>这些结果覆盖了当下较热的方向，建议先看精读区论文的关键问题与方法。</p>
   </div>
 </section>
@@ -41,10 +41,10 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">23 篇</strong>
+    <strong class="dpr-home-dashboard-count">26 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Comparative analysis of PSMA-RADS Version 2.0 versus bone uptake metastatic probability (BUMP) score for characterising focal bone uptake on [18F] PSMA-1007 …">Comparative analysis of PSMA-RADS Version 2.0 versus bone uptake metastatic probability (BUMP) score for characterising focal bone uptake on [18F] PSMA-1007 …</span></li><li><span class="dpr-home-dashboard-paper-title" title="Complementing Scale: Novel Guidance Methods for Improving Language Models Ofir Press A dissertation">Complementing Scale: Novel Guidance Methods for Improving Language Models Ofir Press A dissertation</span></li><li><span class="dpr-home-dashboard-paper-title" title="CoVLA: Vision-Language Alignment with Fewer Vision Tokens">CoVLA: Vision-Language Alignment with Fewer Vision Tokens</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="A Cross-Sectional Comparative Correlation Study of Computed Tomography and Magnetic Resonance Imaging in the Evaluation of Pediatric Hydrocephalus.">A Cross-Sectional Comparative Correlation Study of Computed Tomography and Magnetic Resonance Imaging in the Evaluation of Pediatric Hydrocephalus.</span></li><li><span class="dpr-home-dashboard-paper-title" title="A Vision-Language Framework for Predicting Brain Tumor Recurrence from Multimodal, Longitudinal Patient Data">A Vision-Language Framework for Predicting Brain Tumor Recurrence from Multimodal, Longitudinal Patient Data</span></li><li><span class="dpr-home-dashboard-paper-title" title="Detection-Gated Cavity Segmentation on Chest X-rays with Vision–Language Pretraining">Detection-Gated Cavity Segmentation on Chest X-rays with Vision–Language Pretraining</span></li></ul>
   </div>
 
 </section>
