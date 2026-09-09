@@ -1,0 +1,935 @@
+Title: Dense Clinical Contrasts Enhance Medical Knowledge Updating in Large Language Models
+
+URL Source: https://arxiv.org/pdf/2608.30405
+
+Published Time: Tue, 01 Sep 2026 02:12:40 GMT
+
+Number of Pages: 31
+
+Markdown Content:
+# Dense Clinical Contrasts Enhance Medical Knowledge Updating in Large Language Models 
+
+Yangmin Huang 1,2,*,† , Shu Quan 1,* , He Geng 1, Xin Ye 1,† , Qianyun Du 1,Zhiyang He 1, Jiaxue Hu 1, Xiaodong Tao 11 Xunfei Healthcare Technology Co., Ltd.  
+
+> 2
+
+USTC-Xunfei Healthcare Digital and Health Joint Laboratory 
+
+{ymhuang9, shuquan, hegeng2, xinye6, qydu, zyhe, jxhu2, xdtao}@iflytek.com 
+
+Abstract 
+
+Medical knowledge changes continually, mak-ing large language models vulnerable to relying on outdated yet clinically plausible information. We study whether the format of supervision affects medical knowledge updating under a matched training-budget setting. We introduce SEER-Bench, a temporally anchored oncology-staging benchmark curated from the latest ver-sioned SEER Research Data release, and render identical medical update events from NCCN oncology guidelines into four supervision for-mats: EMQ, MSQ, FITB, and SAQ. Across SEER-Bench and HealthBench Professional, EMQ gives the most stable external transfer and retention among same-budget SFT variants. With EMQ supervision, the updated 4B model produces competitive results on temporally an-chored oncology staging, reaching 64.8% an-swer accuracy and 59.6% rationale accuracy on SEER-Bench. Diagnostic analyses suggest that EMQ exposes denser clinical contrast signals while preserving discriminative representations with smaller movement from the base model. These results show that medical knowledge up-dating depends not only on the update algo-rithm, but also on how knowledge is structured as supervision. 
+
+1 Introduction 
+
+Large language models (LLMs) are increasingly used for medical question answering and clinical decision support (Thirunavukarasu et al., 2023; Singhal et al., 2023; Nori et al., 2023), yet their parametric knowledge can become stale as medical standards update (Lazaridou et al., 2021; Dhingra et al., 2022). This challenge is especially critical in oncology, where staging criteria, treatment guide-lines, and drug labels are frequently revised (Strobl et al., 2023). These revisions are often incremen-tal and highly conditional; even narrowly scoped 
+
+> *Equal contribution.
+> †Corresponding authors.
+
+guideline revisions can substantially alter clinical decision pathways. For instance, the latest NCCN updates prioritize immediate EBRT or systemic therapy for unresectable, locoregional invasive thy-roid cancer, rendering the previous routine stan-dard of 131 I whole-body imaging obsolete (NCCN, 2026). When such updates are not incorporated, LLMs may assign an outdated stage that changes eligibility for surgery, radiotherapy, or systemic treatment; recommend a superseded management pathway that delays appropriate care; or support an obsolete recommendation with an overconfident rationale that makes the error difficult to detect; Appendix J gives a versioned guideline example of each potential failure mode. These failures may occur unevenly across cancer populations, particu-larly when certain cancer types, clinical presenta-tions, languages, or guideline regions are underrep-resented in training or update supervision. Although various methods address LLM knowl-edge staleness—ranging from retrieval to paramet-ric editing (Wang et al., 2024)—one question re-mains underexplored in temporally evolving med-ical adaptation: how should knowledge updates be represented as supervision before adaptation? Moreover, systematically evaluating how these supervision formats affect model adaptation re-quires an explicit temporal anchor to determine whether performance reflects pre-existing para-metric knowledge or the successful incorporation of newly revised guidance. Yet existing medical benchmarks primarily assess long-stable textbook knowledge (Jin et al., 2021; Pal et al., 2022), while temporal benchmarks focus on general-domain facts (Vu et al., 2024), leaving a gap for a bench-mark with a well-defined clinical time boundary for evaluating period-specific medical updates. In this paper, we bridge this gap by introduc-ing SEER-Bench , a temporally anchored oncology staging benchmark curated from the latest released SEER Research Data (Surveillance, Epidemiology, arXiv:2608.30405v1 [cs.AI] 31 Aug 2026 Figure 1: Overview of supervision formats repurposed for SFT. SAQ, FITB, and MSQ rely on isolated, one-to-one or one-to-few decision structures. EMQ introduces a networked structure, requiring the model to resolve many-to-many correspondences within a shared answer pool. 
+
+and End Results (SEER) Program, 2026), which contains staging information that strictly aligns with up-to-date NCCN guidelines. The bench-mark contains 1,992 curated cases across 16 cancer types. We conduct a format-varied study that ren-ders identical NCCN medical update events into four supervision formats (National Comprehen-sive Cancer Network, 2025) (Figure 1), using a shared adaptation setup. Among same-budget SFT variants, EMQ yields the strongest external gen-eralization, reaching 64.8% SEER-Bench answer accuracy with Qwen3-4B (Qwen Team, 2025d) and, in a descriptive rather than controlled com-parison, falling within the range of several much larger external reference systems evaluated under the same protocol. Input-density, representation-preservation, and cost-benefit analyses provide di-agnostic evidence consistent with this advantage. Our contributions are as follows: • We introduce SEER-Bench, a real-world on-cology staging benchmark with an explicit temporal anchor for evaluating time-sensitive medical reasoning in LLMs. • We show that EMQ provides the strongest external transfer and retention among same-budget SFT variants. • We provide input-density, representation-preservation, and cost-benefit analyses that link EMQ’s advantage to dense clinical con-trast signals and more economical representa-tional change. • We release SEER-Bench, related code and prompts at https://github.com/Iflytek-Medical-SouthChina/SeerBench .
+
+2 Related Work 
+
+Medical QA benchmarks and knowledge tempo-rality. Medical QA benchmarks commonly use licensing-exam formats such as MCQs, extended matching items, and clinical vignettes (Jin et al., 2021, 2019; Pal et al., 2022; Kung et al., 2023; Singhal et al., 2025; Geng et al., 2026). Most, however, evaluate long-stable textbook knowledge rather than temporally versioned guideline transi-tions. Newer benchmarks improve task realism or contamination control (Arora et al., 2025; Yan et al., 2026; Quan et al., 2026), but do not directly target clinical update events; temporal QA studies fur-ther show that LLMs can rely on stale pretraining facts (Vu et al., 2024; Mousavi et al., 2024). SEER-Bench addresses this gap by evaluating oncology staging from the latest versioned SEER Research Data release (Surveillance, Epidemiology, and End Results (SEER) Program, 2026), with versioned registry fields, cohort filtering, and tumor-site cov-erage. 
+
+Mechanisms for updating LLM knowledge. 
+
+LLM knowledge updating has been studied through retrieval-augmented generation, which surfaces ex-ternal evidence at inference time (Lewis et al., 2020; Vu et al., 2024); continual pretraining, which refreshes parameters at high computational cost (Jang et al., 2022); knowledge editing, which modifies model behavior locally (Meng et al., 2022; Zheng et al., 2023); and parameter-efficient fine-tuning such as LoRA (Hu et al., 2021; Ge et al., 2024). These lines mainly differ in how updates are injected. Our study asks a complementary ques-tion: under a shared updating setup, how does the supervision format used to present the update affect downstream transfer? 
+
+Supervision format in medical training. 
+
+Knowledge-centric medical training data is often rendered as MCQs with distractors (Sileo et al., 2024), mixed QA formats (Qiu et al., 2025), or cloze-style probes (Petroni et al., 2019). EMQs, a standard medical-exam format (Frey et al., 2022; Case and Swanson, 1993), require many-to-many matching within a shared candidate space. Prior training-data studies often change content, difficulty, format, and optimization objectives together (Wang et al., 2023; Mukherjee et al., 2023), making the role of format difficult to inspect. We therefore compare the same update events rendered as SAQ, MSQ, FITB, and EMQ under a same-budget updating protocol. 
+
+3 Same-Budget Updating Protocol 
+
+3.1 Medical Update Events 
+
+The atomic unit of supervision is a medical up-date event , represented as a triplet (abase , a new , d ).Here, anew denotes the recommendation supported by the current guideline standard, abase denotes the alternative recommendation elicited from the target base model when it rejects anew , and d describes the clinically relevant contrast between them. Thus, 
+
+abase operationalizes the model’s non-current med-ical knowledge, rather than requiring every alterna-tive to be traceable to a historical guideline version. As illustrated in the top panel of Figure 2, in the first stage, model-conditioned triplet construction, we derive current recommendations anew from NCCN clinical practice guideline in oncology (Na-tional Comprehensive Cancer Network, 2025) and query the target base model to identify non-current medical knowledge. For each anew , the model judges whether the recommendation is correct; when it rejects the current recommendation, we elicit its alternative answer as abase and ask it to ex-plain the clinical contrast d. The resulting triplets therefore target cases where the base model does not reliably encode the current recommendation. The full construction prompt is shown in Figure 5. In the second stage, format rendering, we use Gemini 3.1 Pro (Google DeepMind, 2026) with format-specific prompts (Appendix A) to instan-tiate the model-conditioned triplets as training items. We denote by Rf the prompt-specified rendering rule for format f . For each format 
+
+f ∈ {SAQ , FITB , MSQ , EMQ }, each item is generated as 
+
+q(f ) 
+
+> i
+
+= Rf (anew ,i , B i, D i, s i) , (1) where anew ,i is the unique current recommendation targeted by item qi, Bi is the set of elicited base-model alternatives, Di contains the corresponding clinical contrasts, and si is the source reference material. The prompt requires each item to reflect the contrast between anew ,i and Bi so that super-vision remains anchored to the intended update. Duplicate anew targets are removed before render-ing; thus each training item targets one current recommendation, although it may contain multiple base-model alternatives. 
+
+3.2 Human-in-the-Loop Quality Verification 
+
+Quality verification follows an iterative human-in-the-loop process. After each rendering round, we sample a stratified 10% subset of generated items for expert review. Clinical reviewers assess whether the item correctly reflects the intended up-date target, whether the clinical vignette is plausi-ble, whether the answer and rationale are consistent with the source recommendation, and whether the distractors or non-current alternatives are clinically meaningful. Reviewer feedback is then incorpo-rated into the rendering process, and the revised prompts are used in the next generation round. We repeat this review-and-revision cycle until the generated items reach a stable quality level. In the final audit, 94.8% of reviewed items pass hu-man quality inspection. Items that fail the audit are either revised or removed before training. De-tails on expert profiles, annotation protocols, and SEER-Bench Knowledge Update Pipeline                
+
+> Medical Update Events
+> Correct Outdated time
+> Model-Conditioned Triplet
+> 𝒂 𝒃𝒂𝒔𝒆 𝒅 𝒂 𝒏𝒆𝒘
+> （,,）
+> Formats Generation
+> SAQ FITB MSQ EMQ
+> Answer [BLANK]
+> Quality Verification Experts Inspection Models voting Case extraction Vignette synthesis and item generation Quality Control
+> Latest Version
+> Filtering
+> unknown None…
+> Expert Validation
+> Answer validation Source traceability Omission consistency
+> Cleaning
+> Structural Case Expert template Case synthesis Query synthesis
+> Model Knowledge Updated Answer Clinical Explanation
+> Extraction
+
+Figure 2: Construction pipeline for update supervision and SEER-Bench. The top panel converts NCCN guideline changes into structured update units and four verified supervision formats. The bottom panel selects SEER Research Data cases, constructs clinical vignettes, and applies multi-stage quality control. 
+
+the iterative verification procedure are provided in Appendix B and Algorithm 1. All formats are constructed from the same pool of 2,530 unique vignettes; Appendix D provides token-budget and matched-vignette controls. 
+
+3.3 Supervision Formats 
+
+All formats are generated from the same update targets and source references, using format-specific prompts that require clinical case analysis rather than isolated factual recall. Each item is anchored to the contrast between the current recommenda-tion anew , the base-model alternatives Bi, and the clinical contrast explanations Di. Thus, all for-mats expose both the target update and clinically plausible non-current alternatives; the controlled variable is how these contrasts are structured within the training instance. The full rendering prompts are provided in Appendix A. • SAQ (Short Answer Question): presents a clinical case and asks for the current recom-mendation, the rationale, and the contrast with non-current alternatives. • MSQ (Multiple Select Question): presents a clinical case with item-specific answer op-tions, including clinically plausible alterna-tives, and asks the model to select all options supported by the current recommendation. • FITB (Fill-in-the-Blank): masks the critical updated medical entity in a clinical narrative and asks the model to complete it, with expla-nation reflecting the clinical contrast. • EMQ (Extended Matching Question): groups related clinical vignettes into a shared option space and asks the model to match each vi-gnette to the current recommendation. The key structural distinction is therefore not whether a format contains contrastive information, but how that information is organized. In SAQ, MSQ, and FITB, contrast is local to a single clin-ical vignette: SAQ expresses it in the rationale, MSQ expresses it through item-specific alterna-tives, and FITB expresses it through the masked en-tity and explanation. EMQ instead jointly presents multiple related vignettes and candidate answers in a shared option space, requiring cross-vignette discrimination among clinically similar alternatives and creating a many-to-many relational supervision signal. 
+
+3.4 Co-Presented Contrast Structure 
+
+We formalize the structural difference among for-mats by the contrastive alternatives co-presented within a training instance. For item i, let anew ,i be the current recommendation and let N (f ) 
+
+> i
+
+denote the non-current or clinically plausible alternatives exposed by format f through the vignette, rationale, answer options, or explanation. The co-presented contrast set is 
+
+Z(f ) 
+
+> i
+
+= {anew ,i } ∪ N (f ) 
+
+> i
+
+, (2) All formats expose contrastive information, but they differ in the scope over which this contrast is organized. In SAQ, FITB, and MSQ, the contrast set is local to one clinical vignette. SAQ expresses the contrast through the rationale, FITB through the masked updated entity and explanation, and MSQ through item-specific answer options. Although MSQ may contain multiple correct or incorrect options, these alternatives are still organized around a single vignette. EMQ changes the scope of contrast. For a block 
+
+G of related update items, it jointly presents mul-tiple vignettes and a shared option space, yielding the block-level contrast set 
+
+Z(EMQ ) 
+
+> G
+
+= [
+
+> j∈G
+
+Z(EMQ ) 
+
+> j
+
+, (3) Thus each vignette is interpreted not only against its own local alternatives, but also against alterna-tives tied to adjacent clinical updates in the same block. This produces a denser relational supervi-sion signal: clinically similar recommendations are co-presented within a single instance, forcing cross-vignette discrimination among updated and non-current alternatives. This view motivates the diagnostics in Section 6: if EMQ’s advantage comes from networked con-trast rather than merely longer text, it should ex-pose more clinically relevant entities, place related entities closer together, and preserve discrimina-tive representations with less unnecessary move-ment. A candidate-level gradient interpretation is provided in Appendix C. 
+
+4 SEER-Bench 
+
+Evaluating the format-controlled updating protocol above requires a benchmark with an explicit knowl-edge temporal anchor: the model must reason un-der a versioned clinical time boundary rather than merely rely on long-stable textbook knowledge. To this end, we construct SEER-Bench (Figure 2, bottom panel), which evaluates structured staging reasoning on cases curated from the latest released SEER Research Data (Surveillance, Epidemiology, and End Results (SEER) Program, 2026). The benchmark contains 1,992 cases across 16 cancer-type groups, and every item undergoes double-blind expert review in alignment with the latest NCCN guideline to verify case fidelity, staging cor-rectness, and rationale validity; disagreements are resolved by adjudication before inclusion. We re-port two complementary metrics: answer accuracy, the proportion of cases whose predicted staging/-classification label is completely correct, and ratio-nale accuracy, the stricter proportion whose final answer and supporting clinical rationale are both correct. The complete construction pipeline, co-hort filtering, tumor-site distribution, expert-review protocol, metric definitions, and rationale-grading prompt are detailed in Appendix E. 
+
+5 Experiments 
+
+This section evaluates whether the supervision format affects external generalization after med-ical knowledge updating under a shared adapta-tion setup and matched training budget, using Qwen3-4B (Qwen Team, 2025d) as the primary backbone. We focus primarily on two newer English-language external evaluations: SEER-Bench tests transfer to temporally anchored on-cology staging, whereas HealthBench Professional (hereafter, HealthBench) (Hicks et al., 2026) tests post-update retention on real clinician-chat tasks. MedGUIDE (Li et al., 2025) serves strictly as a narrow diagnostic rather than a global benchmark. Its HCC slice remains unchanged over time, serv-ing as a static stability check. Conversely, the NSCLC slice has changed drastically, acting as a knowledge-conflict check where up-to-date mod-els are penalized by outdated ground truth. Ad-ditional experimental details are provided in Ap-pendix F, and the Base RAG inference prompt is in Appendix G; the auxiliary Chinese-language trans-fer evaluation and representative MedGUIDE cases are in Appendices H and I. 
+
+5.1 External Transfer and Retention 
+
+In the controlled SFT rows of Table 1, the same up-date content yields substantially different external-generalization outcomes when rendered in differ-ent supervision formats. Among the SFT supervi-sion formats, EMQ gives the strongest transfer to temporally anchored oncology staging, improving SEER-Bench answer accuracy from 57.6 to 64.8 and rationale accuracy from 50.7 to 59.6, while modestly increasing the HealthBench score from System / update SEER-Bench HealthBench MedGUIDE                                                                                                     
+
+> Acc. ↑Rat. Acc. ↑Score ↑HCC ↑NSCLC
+> A. Same-budget Qwen3-4B updates
+> Base model 57.6 50.7 0.247 63.1 32.7 SFT, EMQ 64.8 59.6 0.263 82.1 23.2 SFT, MSQ 61.7 55.1 0.243 72.6 24.7 SFT, FITB 61.5 50.9 0.237 66.4 28.7 SFT, SAQ 62.7 52.1 0.253 67.9 26.8 RAG, Base RAG 59.6 47.2 0.177 66.3 25.0 RAG, CARE 60.0 52.0 0.195 69.8 20.2 Editing, RECIPE 63.8 49.2 0.099 65.5 25.6 Editing, AlphaEdit 57.9 48.0 0.087 55.7 20.8
+> B. External systems without task-specific updating
+> Qwen3-235B 59.3 52.3 0.297 78.6 47.0 Kimi-2.5 60.6 51.9 0.463 66.7 25.0 GLM-5 63.2 55.7 0.439 77.4 58.6 DeepSeek-R1 62.3 58.5 0.377 75.0 65.8 Claude-Opus-4.6 67.3 64.2 0.503 73.8 50.6 Gemini-3.1-Pro 65.6 62.0 0.509 90.5 85.1 GPT-5.4 65.1 63.4 0.538 89.3 82.1
+> +MediTron-70B 58.1 49.5 0.262 56.3 23.6
+> +HuatuoGPT-O1-70B 60.2 57.4 0.354 68.5 36.0
+
+Table 1: Full English benchmark results. Panel A reports same-budget Qwen3-4B update results across supervision formats. Panel B provides descriptive external-system context without task-specific updating, and + marks medical LLMs. Within the MedGUIDE slices, HCC represents the only subset with unchanged NCCN guideline, while NSCLC reflects a largely outdated knowledge base and is excluded from the best/second-best performance rankings. Bold and underline denote the best and second-best values within each panel. 
+
+0.247 to 0.263. By contrast, MSQ, FITB, and SAQ yield smaller SEER-Bench gains and less fa-vorable HealthBench retention than EMQ, suggest-ing that the supervision format influences whether medical updates translate into stable, transferable model behavior. The retrieval and knowledge-editing baselines reveal a failure mode of medical knowledge up-dating. Base RAG and CARE yield only modest SEER-Bench changes while reducing the Health-Bench score to 0.177 and 0.195, respectively; RECIPE and AlphaEdit similarly reduce it to 0.099 and 0.087. These results suggest an unfavorable transfer-retention trade-off: in-context evidence injection and highly localized parameter edits pro-vide limited SEER-Bench transfer while degrading broader clinician-facing medical performance. The reference-model rows further reveal a mis-match between broad clinician-facing medical ca-pability on HealthBench and temporally anchored oncology performance on SEER-Bench. The ref-erence LLMs obtain higher HealthBench scores than the controlled Qwen3-4B variants, ranging from 0.297 to 0.538, but their SEER-Bench answer accuracy does not increase monotonically with HealthBench performance. As descriptive context rather than a controlled model-scale comparison, the reference-model rows provide a scale for in-terpreting the magnitude of the controlled-format gains: Qwen3-4B updated with EMQ reaches 64.8 SEER-Bench answer accuracy, which falls within the range of several much larger reference sys-tems evaluated under the same prompting proto-col. These results suggest that gains from format-controlled medical updating only partially overlap with broader clinician-facing medical performance. We also repeat the controlled protocol on Llama-3.1-8B-Instruct (Grattafiori et al., 2024) as an additional backbone check (Appendix K). The same qualitative pattern holds: EMQ is again the strongest SFT format on SEER-Bench, improving answer accuracy from 58.0 to 65.2 and rationale accuracy from 51.1 to 60.0, while slightly increas-ing HealthBench from 0.260 to 0.276. MedGUIDE again shows a boundary condition, with FITB per-forming best on the NSCLC slice. Statistical tests for the main controlled comparisons are reported in Appendix L. Format SEER-Bench MedGUIDE                           
+
+> HCC ↑NSCLC ↑HCC ↑NSCLC Base 63.9 44.8 63.1 32.7 EMQ 80.8 58.4 82.1 23.2 MSQ 78.6 56.5 72.6 24.7 FITB 72.3 55.1 66.4 28.7 SAQ 74.2 53.2 67.9 26.8
+> Table 2: Cancer-type slice accuracy on SEER-Bench and MedGUIDE. The SEER-Bench columns and the MedGUIDE HCC column are keyed to current NCCN standards, whereas the MedGUIDE NSCLC answer key is largely outdated and is excluded from the ranking.
+
+5.2 Older Direct-Acquisition Benchmarks Can Be Misleading 
+
+While SEER-Bench and HealthBench characterize external transfer and retention, MedGUIDE pro-vides a view of direct acquisition on earlier update slices. Despite being published during the same his-torical period, its expert-selected HCC and NSCLC slices differ in their temporal stability: after expert-verification, HCC slice remains mostly unchanged between the historical and latest versions, whereas the NSCLC slice changes drastically. We there-fore treat MedGUIDE not as a global ranking of supervision formats, but as a diagnostic tool for un-derstanding how direct-acquisition scores interact with the volatility and age of specific benchmark slices. The two slices show different patterns. On HCC, EMQ achieves the highest score, consistent with its stronger transfer behavior on SEER-Bench. On NSCLC, however, FITB obtains the highest score. Rather than indicating a general advantage of FITB, this result suggests that masked-span su-pervision may leave the model more compatible with older, locally memorized knowledge. In other words, a high score on an older slice can partly reflect persistence of non-current knowledge rather than successful updating toward the current stan-dard. Table 2 quantifies this contrast and extends the same cancer-type slices to SEER-Bench. An ex-pert disease-level audit finds that the NCCN guide-line for HCC updates about 1–3 times per year, and 92.2% of MedGUIDE HCC questions remain concordant with the latest NCCN version. While NSCLC guideline updates 4–6 versions per year and only 43.8% of questions remaining concor-dant. On the three slices keyed to current knowl-                             
+
+> Format Overall Reversion Frequent Lower-upd.
+> (2.5%) (59.9%) (37.6%) Base 57.6 56.0 54.5 62.6 EMQ 64.8 62.0 62.4 68.9
+> MSQ 61.7 62.0 60.9 63.2 FITB 61.5 54.0 58.9 66.1 SAQ 62.7 56.0 60.1 67.3
+> Table 3: SEER-Bench answer accuracy by temporal-update stratum. Reversion : a return to an earlier staging rule would change the current case’s stage. Frequent :the applicable staging rules changed in at least three successive revisions. Lower-upd. : all remaining cases that changed in fewer revisions.
+
+edge (SEER-Bench HCC/NSCLC and MedGUIDE HCC), EMQ leads consistently, whereas on the outdated-keyed MedGUIDE NSCLC slice every updated model scores below the base model. Such persistence of stale associations is precisely what makes outdated knowledge clinically hazardous: a staging error can change treatment intensity, and a stale recommendation or an overconfident rationale can delay or misdirect appropriate care (Appendix J presents concrete guideline-versioned cases). Thus, the mixed MedGUIDE results highlight a limitation of older direct-acquisition benchmarks: they can reward formats that preserve or recover stale local associations. MedGUIDE therefore com-plements the main results by showing why external, temporally anchored evaluations such as SEER-Bench are necessary for assessing whether medical updates generalize beyond direct slice acquisition. 
+
+5.3 Effect of Knowledge-Update Frequency 
+
+A natural question for a temporally anchored benchmark is whether the observed format effects vary with how frequently the underlying knowl-edge changes. We therefore conduct an expert-verified post-hoc stratification of all 1,992 SEER-Bench cases into three mutually exclusive temporal-update strata (Table 3). To keep this audit indepen-dent of the LLM-generated alternatives, the strata are assigned from the versioned revision history of the applicable staging rules rather than from the generated candidates. EMQ achieves the highest or tied-highest point estimate in every stratum. Frequent-update cases are substantially harder before adaptation (base accuracy 54.5% against 62.6% on lower-update-density cases), yet the adaptation gains are not attenuated there and remain strongly format-Format Training supervision SEER-Bench inference Q tok. A tok. Q ent. ↑ A ent. ↑ Step share ↑ Ent. dist. ↓ A ent. ↑ Step share ↑ Ent. dist. ↓ 1024-tok Acc. ↑ 1024-tok Rat. ↑                                                       
+
+> Base ––––––22.2 1.27% 60.12 56.5 49.8 EMQ 258.7 398.4 11.4 12.6 2.03% 52.58 29.6 3.44% 31.04 62.9 57.8
+> MSQ 260.2 393.9 10.7 10.6 1.07% 61.71 28.2 2.36% 38.71 59.8 53.7 FITB 254.3 388.8 5.8 8.9 1.51% 72.26 25.2 1.49% 58.06 58.4 49.5 SAQ 261.5 401.1 8.9 11.3 1.27% 58.64 27.3 2.69% 34.78 61.2 51.3
+
+Table 4: Diagnostic clinical-relation signal density in training supervision and SEER-Bench inference. Q tok. and A tok. denote average prompt and answer length; Q ent. and A ent. denote the average number of cancer-related entities per item; Step share is the percentage of period-delimited reasoning steps containing cancer-related answer entities; Ent. dist. is the average token distance between adjacent cancer-related entities, where lower indicates denser local relations. The 1024-token columns are computed in a separate SEER-Bench run with the same generation-token limit and therefore may differ from Table 1. 
+
+dependent, with EMQ strongest on this stratum covering 59.9% of the benchmark. On reversion-sensitive cases, EMQ and MSQ both reach 62.0%, against 56.0% for both base model and SAQ, and 54.0% for FITB, consistent with explicit candidate sets helping distinguish competing current and non-current associations; MSQ, however, gains little on lower-update-density cases, whereas EMQ re-mains effective across all strata, suggesting that its shared candidate pool induces more transferable decision boundaries than discrimination tied to a single local option set. 
+
+6 Understanding the EMQ Advantage 
+
+Section 5 shows that EMQ provides the strongest external transfer and retention among the same-budget SFT variants. We examine this pattern through a diagnostic input-to-representation chain: EMQ exposes denser clinical contrast signals while preserving discriminative representations with less movement from the base model. Implementation details for the representation probes are provided in Appendix M. 
+
+6.1 Clinical Relation Signal Density 
+
+Table 4 provides a diagnostic check of whether EMQ’s structural differences are visible before representation-level analysis. The four training cor-pora have comparable prompt and answer lengths, but EMQ exposes the most tumor-related entities in both prompts and answers, has the largest share of reasoning steps containing tumor-related answer entities, and yields the shortest average distance between related entities. This pattern is consistent with the view that EMQ’s shared option pool does not merely add text, but organizes isolated update facts into a denser local clinical-relation structure. A similar signal-density pattern appears in SEER-Bench outputs after updating. Compared with the base model, all format-updated variants generally increase the number of tumor-related entities in the response, but EMQ produces the largest increase and the shortest distance between related entities. With the same 1024-token gen-eration limit, EMQ still achieves the best answer and rationale accuracy. These diagnostics make a pure length-based explanation less likely: EMQ is associated with responses that concentrate a fixed reasoning budget into a denser structure of mutu-ally constraining oncology entities. Appendix N further probes this potential confound with density-matched MSQ and shuffled-EMQ controls. To fur-ther rule out the possibility that EMQ’s gains are driven merely by more unique vignettes or a larger token budget, Appendix D reports vignette/token accounting and two matched-vignette controls. All formats are rendered from the same pool of 2,530 unique vignettes, and EMQ remains strongest when vignette exposure is matched or when single-vignette EMQ instances are constructed. 
+
+6.2 Representation Economy 
+
+Table 5 connects the input- and output-side patterns above to representation-level diagnostics. EMQ has the smallest mean L2 displacement across eval-uated layers, the smallest final-layer L2 displace-ment, and the highest mean CKA, while retaining tied-best final-layer linear-probe accuracy. This pat-tern suggests that denser clinical relation signals are associated with transfer gains without broad repre-sentational displacement; instead, EMQ preserves more of the base model’s class-discriminative struc-ture as measured by the probe. Figure 3 shows that this representational preser-vation holds across layers and is most visible in the deep layers. EMQ’s L2 ratio is 0.058 over Format L2 avg. ↓ L2 final ↓ CKA avg. ↑ Probe ↑                
+
+> EMQ 0.039 0.097 0.9943 0.9848
+> MSQ 0.049 0.111 0.9914 0.9848
+> FITB 0.047 0.114 0.9932 0.9834 SAQ 0.055 0.127 0.9902 0.9779
+
+Table 5: Representation-level mechanism summary. L2 avg. is averaged over all evaluated layers; L2 final and Probe are computed at the final layer. 0 6 12 18 24 30 36 
+
+> Layer
+> 0.00 0.03 0.06 0.09 0.12
+> Relative L2 change
+> EMQ SAQ FITB MSQ
+
+Figure 3: Layer-wise L2 ratio relative to the Qwen3-4B. Lower indicates a smaller representational change. 
+
+layers 28–35 versus 0.084 for SAQ, and 0.097 at the final layer versus 0.127 for SAQ, a 24% reduc-tion. This pattern is consistent with the view that dense matching supervision guides the update to-ward task-relevant directions while avoiding broad representational drift. The clustering diagnostics in Appendix O reveal a useful ranking conflict: unsupervised compact-ness metrics favor FITB or SAQ, whereas the lin-ear probe favors EMQ and MSQ. This suggests that tighter unsupervised clusters are not neces-sarily better for knowledge updating; excessive compression of intra-class variance may remove fine-grained clinical substructure needed for down-stream discrimination. 
+
+6.3 Cross-Scale Cost-Benefit View 
+
+Figure 4 extends the final-layer cost-benefit com-parison across 1.7B, 4B, 8B, and 14B Qwen3 back-bones (Yang et al., 2025). Across all evaluated scales, EMQ lies in the low-movement, positive-gain region, whereas SAQ more often occupies a higher-movement, lower-gain region, especially for smaller backbones. MSQ can also yield positive probe gains, but generally requires larger represen-tational movement than EMQ. Appendix P reports the corresponding SEER-Bench task results. The same qualitative pattern 2 4 6 8 10 12 
+
+> Cosine distance from base ( 10 −3 )
+> −1.0 −0.8 −0.6 −0.4 −0.2 0.0 0.2 0.4
+> Linear-probe accuracy gain (%)
+> 1.7B 4B 8B 14B EMQ FITB MSQ SAQ
+
+Figure 4: Final-layer cost-benefit comparison. X-axis is cosine distance from the base model; Y -axis is the change in linear-probe accuracy over the base model. 
+
+holds at the task level: EMQ gives the best an-swer and rationale accuracy for every evaluated backbone, improving answer accuracy from 54.2 to 60.5 on Qwen3-1.7B and from 58.7 to 67.8 on Qwen3-14B. These cross-scale results suggest that the EMQ advantage is not an artifact of the 4B main setting, but a consistent supervision-format pattern across model capacities. 
+
+7 Conclusion 
+
+We studied an often-overlooked variable in medi-cal knowledge updating: whether the supervision format affects generalization under a shared adap-tation setup and matched training budget. We in-troduced SEER-Bench as a temporally anchored oncology-staging benchmark and rendered med-ical update events into four supervision formats. Across same-budget SFT comparisons, EMQ gives the most stable external transfer and retention, pro-ducing competitive SEER-Bench results with an updated 4B model. Our diagnostics suggest that EMQ’s advantage is associated with denser clini-cal contrast signals and more economical represen-tational movement. Overall, medical knowledge updating should not be treated only as a choice of update algorithm; the structure used to present knowledge as supervision also shapes whether the update transfers to external tasks. 
+
+Limitations 
+
+This study has several limitations. First, SEER-Bench and the update items rely partly on LLM-assisted construction; although we apply source tracing, answer-space validation, and expert spot checks, residual clinical or linguistic errors may re-main. Second, the experiments focus on oncology and mainly on a 4B base model with LoRA-based adaptation, so the observed format effects may dif-fer across medical domains, model scales, and up-date algorithms. Third, although we hold update content and training budget fixed, the formats differ in length, candidate-set size, and surface complex-ity, which may partially contribute to the observed gaps. Finally, our representation analyses are di-agnostic rather than causal, and the NSCLC slice suggests that EMQ is not uniformly optimal: slot-like molecular updates may benefit more from the focused autoregressive signal provided by FITB. 
+
+Ethical Considerations and Data Statement 
+
+This work studies medical knowledge updating as an offline evaluation and model-adaptation prob-lem, not as a deployed clinical decision-support system. The reported models should not be used to make diagnosis, staging, treatment, or medication decisions without qualified clinical oversight. SEER-Bench is constructed from de-identified, versioned SEER records and is intended solely for developing and evaluating questions related to tu-mor staging using real-world oncology cases. To reduce construction errors, we employ multiple quality-control procedures, including source trac-ing, answer-space validation, model-based consen-sus voting, and expert review. Human involvement was limited to professional annotation and qual-ity verification of de-identified research materials. Complete annotation guidelines, risk disclaimers (explicitly staging minimal risk limited to profes-sional time commitment) and confidentiality agree-ments are also provided in the annotation process. Reviewers with clinical or biomedical expertise were compensated for their annotation time, as doc-umented in our annotation records. The annotation task did not involve patient contact, intervention, or real-time clinical decision-making, and reviewer-identifying information will not be released. We integrate references to the National Compre-hensive Cancer Network (NCCN) Guidelines® and the Chinese Guideline/ Expert Consensus. These external knowledge sources are utilized under open-use principles solely for academic research, bench-marking, and pedagogical evaluation. We publicly release SEER-Bench, and the construction and evaluation prompts and code of the four format supervision at 
+
+https://github.com/Iflytek-Medical-SouthChina/SeerBench , subject to source-resource licenses and data-use restrictions. Provenance and use conditions are documented in the accompanying data card. We also acknowledge the use of Gemini-3.1-Pro for linguistic refinement and editorial suggestions during the manuscript revision. 
+
+Acknowledgments 
+
+This work was supported by the Noncommunicable Chronic Diseases-National Science and Technol-ogy Major Project (Grant No. 2023ZD0509100). 
+
+References            
+
+> Anthropic. 2026. Introducing Claude Opus 4.6. Rahul K Arora, Jason Wei, Rebecca Soskin Hicks, Pre-ston Bowman, Joaquin Quiñonero-Candela, Foivos Tsimpourlas, Michael Sharman, Meghan Shah, An-drea Vallone, Alex Beutel, et al. 2025. Healthbench: Evaluating large language models towards improved human health. arXiv preprint arXiv:2505.08775 .Susan M Case and David B Swanson. 1993. Extended-matching items: a practical alternative to free-response questions. Teaching and Learning in Medicine: An International Journal , 5(2):107–115. Junying Chen, Zhenyang Cai, Ke Ji, Xidong Wang, Wanlong Liu, Rongsheng Wang, and Benyou Wang. 2025. Towards medical complex reasoning with llms through medical verifiable problems. In Findings of the Association for Computational Linguistics: ACL 2025 , pages 14552–14573. Zeming Chen, Alejandro Hernández Cano, Angelika Romanou, Antoine Bonnet, Kyle Matoba, Francesco Salvi, Matteo Pagliardini, Simin Fan, Andreas Köpf, Amirkeivan Mohtashami, et al. 2023. Meditron-70b: Scaling medical pretraining for large language mod-els. arXiv preprint arXiv:2311.16079 .Frank C. Detterbeck, Gavitt A. Woodard, Anna S. Bader, Sanja Dacic, Michael J. Grant, Henry S. Park, and Lynn T. Tanoue. 2024. The proposed ninth edition TNM classification of lung cancer. Chest ,166(4):882–895. Bhuwan Dhingra, Jeremy R. Cole, Julian Martin Eisenschlos, Daniel Gillick, Jacob Eisenstein, and William W. Cohen. 2022. Time-aware language mod-els as temporal knowledge bases. Transactions of the Association for Computational Linguistics , 10:257– 273. Anna Frey, Tobias Leutritz, Joy Backhaus, Alexander Hörnlein, and Sarah König. 2022. Item format statis-tics and readability of extended matching questions as an effective tool to assess medical students. Scien-tific Reports , 12(1):20982.
+
+Xiou Ge, Ali Mousavi, Edouard Grave, Armand Joulin, Kun Qian, Benjamin Han, Mostafa Arefiyan, and Yunyao Li. 2024. Time sensitive knowledge editing through efficient finetuning. In Proceedings of the 62nd Annual Meeting of the Association for Compu-tational Linguistics (Volume 2: Short Papers) , pages 583–593. He Geng, Yangmin Huang, Lixian Lai, Qianyun Du, Hui Chu, Zhiyang He, Jiaxue Hu, and Xiaodong Tao. 2026. ProMedical: Hierarchical fine-grained criteria modeling for medical LLM alignment via explicit injection. In Proceedings of the 64th Annual Meet-ing of the Association for Computational Linguis-tics (Volume 1: Long Papers) , pages 36955–36994, San Diego, California, United States. Association for Computational Linguistics. Google DeepMind. 2026. Gemini 3.1 Pro model card. Aaron Grattafiori, Abhimanyu Dubey, Abhinav Jauhri, Abhinav Pandey, Abhishek Kadian, Ahmad Al-Dahle, Aiesha Letman, Akhil Mathur, Alan Schelten, Alex Vaughan, et al. 2024. The llama 3 herd of mod-els. arXiv preprint arXiv:2407.21783 .Daya Guo, Dejian Yang, Haowei Zhang, Junxiao Song, Peiyi Wang, Qihao Zhu, Runxin Xu, Ruoyu Zhang, Shirong Ma, Xiao Bi, et al. 2025. Deepseek-r1: In-centivizing reasoning capability in llms via reinforce-ment learning. arXiv preprint arXiv:2501.12948 .Robert I. Haddad, Lindsay Bischoff, Megan Apple-white, Victor Bernet, Erik Blomain, Maria Brito, Naifa Lamki Busaidy, Michael Campbell, Olivia De-Lozier, Quan-Yang Duh, Hormoz Ehya, Erin Grady, Theresa Guo, Megan Haymart, Jason P. Hunt, Fouad Kandeel, Anupam Kotwal, Dominick M. Lamonica, Jochen Lorch, and 22 others. 2025. NCCN Guide-lines® Insights: Thyroid Carcinoma, Version 1.2025. 
+
+Journal of the National Comprehensive Cancer Net-work , 23(7):e250033. Rebecca Soskin Hicks, Mikhail Trofimov, Dominick Lim, Rahul K Arora, Foivos Tsimpourlas, Pre-ston Bowman, Michael Sharman, Chi Tong, Kavin Karthik, Arnav Dugar, et al. 2026. Healthbench pro-fessional: Evaluating large language models on real clinician chats. arXiv preprint arXiv:2604.27470 .Edward J Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Lu Wang, and Weizhu Chen. 2021. Lora: Low-rank adap-tation of large language models. arXiv preprint arXiv:2106.09685 .Joel Jang, Seonghyeon Ye, Changho Lee, Sohee Yang, Joongbo Shin, Janghoon Han, Gyeonghun Kim, and Minjoon Seo. 2022. Temporalwiki: A lifelong bench-mark for training and evaluating ever-evolving lan-guage models. In Proceedings of the 2022 Confer-ence on Empirical Methods in Natural Language Processing , pages 6237–6250. Di Jin, Eileen Pan, Nassim Oufattole, Wei-Hung Weng, Hanyi Fang, and Peter Szolovits. 2021. What disease does this patient have? a large-scale open domain question answering dataset from medical exams. Ap-plied Sciences , 11(14). Qiao Jin, Bhuwan Dhingra, Zhengping Liu, William Co-hen, and Xinghua Lu. 2019. Pubmedqa: A dataset for biomedical research question answering. In Proceed-ings of the 2019 conference on empirical methods in natural language processing and the 9th interna-tional joint conference on natural language process-ing (EMNLP-IJCNLP) , pages 2567–2577. Tiffany H Kung, Morgan Cheatham, Arielle Medenilla, Czarina Sillos, Lorie De Leon, Camille Elepaño, Maria Madriaga, Rimel Aggabao, Giezel Diaz-Candido, James Maningo, et al. 2023. Performance of chatgpt on usmle: potential for ai-assisted medical education using large language models. PLoS digital health , 2(2):e0000198. Leila Kutob and Frank Schneider. 2020. Lung cancer staging. Surgical Pathology Clinics , 13(1):57–71. Angeliki Lazaridou, Adhi Kuncoro, Elena Gribovskaya, Devang Agrawal, Adam Liska, Tayfun Terzi, Mai Gimenez, Cyprien de Masson d’Autume, Tomas Ko-cisky, Sebastian Ruder, et al. 2021. Mind the gap: Assessing temporal generalization in neural language models. Advances in Neural Information Processing Systems , 34:29348–29363. Patrick Lewis, Ethan Perez, Aleksandra Piktus, Fabio Petroni, Vladimir Karpukhin, Naman Goyal, Hein-rich Küttler, Mike Lewis, Wen-tau Yih, Tim Rock-täschel, et al. 2020. Retrieval-augmented generation for knowledge-intensive nlp tasks. Advances in neu-ral information processing systems , 33:9459–9474. Xiaomin Li, Mingye Gao, Yuexing Hao, Taoran Li, Guangya Wan, Zihan Wang, and Yijun Wang. 2025. Medguide: Benchmarking clinical decision-making in large language models. arXiv preprint arXiv:2505.11613 .Kevin Meng, Arnab Sen Sharma, Alex Andonian, Yonatan Belinkov, and David Bau. 2022. Mass-editing memory in a transformer. arXiv preprint arXiv:2210.07229 .Moonshot AI. 2026. Kimi K2.5: Open visual agentic model for real work. Seyed Mahed Mousavi, Simone Alghisi, and Giuseppe Riccardi. 2024. Dyknow: Dynamically verifying time-sensitive factual knowledge in llms. In Find-ings of the Association for Computational Linguistics: EMNLP 2024 , pages 8014–8029. Subhabrata Mukherjee, Arindam Mitra, Ganesh Jawa-har, Sahaj Agarwal, Hamid Palangi, and Ahmed Awadallah. 2023. Orca: Progressive learning from complex explanation traces of gpt-4. arXiv preprint arXiv:2306.02707 .National Comprehensive Cancer Network. 2025. NCCN clinical practice guidelines in oncology (nccn guidelines®). NCCN. 2026. NCCN Clinical Practice Guidelines in Oncology (NCCN Guidelines®): Thyroid Carcinoma ,version 1.2026 edition. Harsha Nori, Nicholas King, Scott Mayer McKinney, Dean Carignan, and Eric Horvitz. 2023. Capabili-ties of gpt-4 on medical challenge problems. arXiv preprint arXiv:2303.13375 .OpenAI. 2026. Introducing GPT-5.4. Ankit Pal, Logesh Kumar Umapathi, and Malaikannan Sankarasubbu. 2022. Medmcqa: A large-scale multi-subject multi-choice dataset for medical domain ques-tion answering. In Proceedings of the Conference on Health, Inference, and Learning , volume 174 of 
+
+Proceedings of Machine Learning Research , pages 248–260. PMLR. Pediatric Infection Group, Chinese Society of Infec-tious Diseases, Chinese Medical Association, Infec-tion Group, Pediatric Expert Committee of National Health Commission Capacity Building and Contin-uing Education, and China Clinical Practice Guide-lines Alliance Methodology Committee. 2024. Prac-tice guideline of influenza vaccination and antiviral drugs use in children (2024 edition). Zhonghua Yi Xue Za Zhi , 104(40):3705–3725. Fabio Petroni, Tim Rocktäschel, Sebastian Riedel, Patrick Lewis, Anton Bakhtin, Yuxiang Wu, and Alexander Miller. 2019. Language models as knowl-edge bases? In Proceedings of the 2019 Confer-ence on Empirical Methods in Natural Language Pro-cessing and the 9th International Joint Conference on Natural Language Processing (EMNLP-IJCNLP) ,pages 2463–2473, Hong Kong, China. Association for Computational Linguistics. Yue Qiu, Yujan Ting, Pei Dong, Terrence Chen, and Weijing Huang. 2025. Training medical QA models based on mixed rewards from multiple-choice and open-ended questions. In Findings of the Associa-tion for Computational Linguistics: EMNLP 2025 ,pages 8721–8729, Suzhou, China. Association for Computational Linguistics. Shu Quan, Tianfang Hao, Sitong Fang, He Geng, Jiayi Zhou, Boyuan Chen, Kaile Wang, Donghai Hong, Juntao Dai, Yaodong Yang, et al. 2026. A blind spot in alignment: Quantifying biosecurity risks in large language models. arXiv preprint arXiv:2608.02684 .Qwen Team. 2025a. Qwen3-14B. Hugging Face model card. Qwen Team. 2025b. Qwen3-1.7B. Hugging Face model card. Qwen Team. 2025c. Qwen3-235B-A22B-Instruct-2507. Hugging Face model card. Qwen Team. 2025d. Qwen3-4B-Instruct-2507. Hug-ging Face model card. Qwen Team. 2025e. Qwen3-8B. Hugging Face model card. Rabies Prevention and Control Committee of the Chi-nese Preventive Medicine Association, Branch of Animal Injury Treatment, and China Association for Disaster and Emergency Rescue Medicine. 2026. Ex-pert consensus on rabies post-exposure prophylaxis in children (2025 edition). Zhonghua Liu Xing Bing Xue Za Zhi , 47(3):381–392. Damien Sileo, Kanimozhi Uma, and Marie Francine Moens. 2024. Generating multiple-choice questions for medical question answering with distractors and cue-masking. In Proceedings of the 2024 Joint In-ternational Conference on Computational Linguis-tics, Language Resources and Evaluation (LREC-COLING 2024) , pages 7647–7653, Torino, Italia. ELRA and ICCL. Karan Singhal, Shekoofeh Azizi, Tao Tu, S Sara Mah-davi, Jason Wei, Hyung Won Chung, Nathan Scales, Ajay Tanwani, Heather Cole-Lewis, Stephen Pfohl, et al. 2023. Large language models encode clinical knowledge. Nature , 620(7972):172–180. Karan Singhal, Tao Tu, Juraj Gottweis, Rory Sayres, Ellery Wulczyn, Mohamed Amin, Le Hou, Kevin Clark, Stephen R Pfohl, Heather Cole-Lewis, et al. 2025. Toward expert-level medical question answer-ing with large language models. Nature medicine ,31(3):943–950. MAR Strobl, J Gallaher, M Robertson-Tessi, J West, and ARA Anderson. 2023. Treatment of evolving cancers will require dynamic decision support. Annals of Oncology , 34(10):867–884. Surveillance, Epidemiology, and End Results (SEER) Program. 2026. SEER*Stat Database: Incidence – SEER Research Data, 17 Registries, Nov 2025 Sub (2000–2023). Arun James Thirunavukarasu, Darren Shu Jeng Ting, Kabilan Elangovan, Laura Gutierrez, Ting Fang Tan, and Daniel Shu Wei Ting. 2023. Large language models in medicine. Nature medicine , 29(8):1930– 1940. A. G. van der Heijden, H. M. Bruins, A. Carrión, R. Cathomas, E. M. Compérat, K. Dimitropoulos, J. A. Efstathiou, R. Fietkau, A. Lorch, P. Mariap-pan, R. P. Meijer, L. S. Mertens, M. I. Milowsky, Y. Neuzillet, V. Panebianco, M. Rink, and G. N. Thal-mann. 2025. EAU Guidelines on Muscle-invasive and Metastatic Bladder Cancer . European Associa-tion of Urology, Arnhem, The Netherlands. Limited update, March 2025. Tu Vu, Mohit Iyyer, Xuezhi Wang, Noah Constant, Jerry Wei, Jason Wei, Chris Tar, Yun-Hsuan Sung, Denny Zhou, Quoc Le, and Thang Luong. 2024. Fresh-LLMs: Refreshing large language models with search engine augmentation. In Findings of the Association for Computational Linguistics: ACL 2024 , pages 13697–13720, Bangkok, Thailand. Association for Computational Linguistics. Peng Wang, Ningyu Zhang, Bozhong Tian, Zekun Xi, Yunzhi Yao, Ziwen Xu, Mengru Wang, Shengyu Mao, Xiaohan Wang, Siyuan Cheng, Kangwei Liu, Yuan-sheng Ni, Guozhou Zheng, and Huajun Chen. 2024. Easyedit: An easy-to-use knowledge editing frame-work for large language models. In Proceedings of the 62nd Annual Meeting of the Association for Com-putational Linguistics (Volume 3: System Demonstra-tions) , pages 82–93. Yizhong Wang, Hamish Ivison, Pradeep Dasigi, Jack Hessel, Tushar Khot, Khyathi Raghavi Chandu, David Wadden, Kelsey MacMillan, Noah A. Smith, Iz Beltagy, and Hannaneh Hajishirzi. 2023. How far can camels go? exploring the state of instruc-tion tuning on open resources. Advances in Neural Information Processing Systems , 36:74764–74786. J. A. Witjes, H. M. Bruins, A. Carrión, R. Cath-omas, E. M. Compérat, J. A. Efstathiou, R. Fietkau, G. Gakis, A. G. van der Heijden, A. Lorch, P. Mari-appan, R. P. Meijer, M. I. Milowsky, Y. Neuzillet, V. Panebianco, M. Rink, M. Rouanne, and G. N. Thal-mann. 2024. EAU Guidelines on Muscle-invasive and Metastatic Bladder Cancer . European Associa-tion of Urology, Arnhem, The Netherlands. Limited update, April 2024. Zhiling Yan, Dingjie Song, Zhe Fang, Yisheng Ji, Xiang Li, Quanzheng Li, and Lichao Sun. 2026. Livemed-bench: A contamination-free medical benchmark for llms with automated rubric evaluation. arXiv preprint arXiv:2602.10367 .An Yang, Anfeng Li, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chang Gao, Chengen Huang, Chenxu Lv, et al. 2025. Qwen3 technical report. arXiv preprint arXiv:2505.09388 .Aohan Zeng, Xin Lv, Zhenyu Hou, Zhengxiao Du, Qinkai Zheng, Bin Chen, Da Yin, Chendi Ge, Chenghua Huang, Chengxing Xie, et al. 2026. Glm-5: from vibe coding to agentic engineering. arXiv preprint arXiv:2602.15763 .Ce Zheng, Lei Li, Qingxiu Dong, Yuxuan Fan, Zhiyong Wu, Jingjing Xu, and Baobao Chang. 2023. Can we edit factual knowledge by in-context learning? In Proceedings of the 2023 Conference on Empiri-cal Methods in Natural Language Processing , pages 4862–4876. 
+
+A Data Construction Prompts 
+
+The data construction follows a two-stage prompt-ing pipeline. In the first stage (Figure 5), we use the current authoritative guideline text together with the target base model’s judgment of the current recommendation to construct structured triplets: the guideline-supported current recommendation, the non-current alternative produced by the base model when it rejects that recommendation, and a clinical explanation of the contrast. In the sec-ond stage, each extracted triplet and its source ref-erence material are rendered by Gemini 3.1 Pro into training items in four supervision formats (SAQ, MSQ, FITB, and EMQ; Figures 6, 7, 8, and 9). All format-rendering prompts require clinical case analysis rather than pure factual re-call and dual-perspective answering, with both the current-standard answer and the base-model alter-native. After generation, candidate items undergo model voting and expert inspection; the manual audit covers a stratified random 10% sample, and item-construction quality labels achieve Cohen’s 
+
+κ = 0 .85 .The first-stage prompt turns guideline passages into old/new/difference triplets, which are the atomic update units used by the later format ren-derers. The negative constraints avoid superficial artifacts such as trial-name memorization or meta-references to the source text. SAQ provides direct open-ended supervision for one clinical shift at a time. Its strength is concise answer-and-rationale training, but it does not force the model to compare several nearby old/new deci-sion boundaries within the same item. MSQ increases answer-space complexity by placing old-knowledge and new-knowledge op-tions in the same choice set. This makes the super-vision more contrastive than SAQ, although each instance still centers on a single scenario. FITB targets a specific entity, threshold, or man-agement decision. This makes the update signal highly localized, which is useful for slot-like facts but may provide less context for broader clinical reasoning. EMQ groups multiple related vignettes under a shared option pool. The resulting supervision asks the model to distinguish which cases truly changed and which cases should remain stable, matching the stability–plasticity issue analyzed below. Knowledge Triplet Extraction Prompt 
+
+Role: A senior oncologist and leading expert in multi-site cancer diagnosis, staging, and evidence-based treatment strategies. 
+
+Objective: Analyze the provided Reference Material to identify oncology-related medical inaccuracies or suspicious claims. Generate question-building knowledge where the distractor is based on the incorrect text, but the correct answer reflects the current authoritative clinical standard. 
+
+Reference Material: {guide} 
+
+Negative Constraints: 
+
+1. No Meta-References: never use phrases such as “According to the text”, “The provided material states”, or “Based on the reference”. 2. No Rote Memorization of Statistics: do not ask for specific percentages, p-values, hazard ratios, or study-specific response rates. 3. No Study-Specific Hooks: do not use a clinical-trial name as the primary premise; convert trial findings into generalized clinical decision-making or standard of care. 4. No Non-Medical Content: ignore formatting, dates, and page numbers; focus on diagnostic criteria, staging, and therapeutic interventions. 
+
+Knowledge Extraction Principles: 
+
+1. Clinical Standalone: the extracted medical knowledge must be understandable by a specialist without seeing the reference material. 2. Knowledge Triplet Mechanism: identify the current guideline-supported recommendation and the base model’s non-current alternative, then output a triplet. new_knowledge must state the current recommendation supported by the reference; old_knowledge must faithfully represent the base-model alternative rather than a claim from the reference material; difference must explain the clinically meaningful contrast between them. 3. Extraction Focus (Concept over Tone): extract only concrete factual shifts, such as drug indications, staging criteria, biomarker testing, or specific management steps. Do not extract differences based only on subjective degree, wording preferences, or modal verbs such as “should” versus “must”. 
+
+Output: Return only a strictly valid JSON array. Each object contains id and knowledge_triplet , where 
+
+knowledge_triplet contains new_knowledge , old_knowledge , and difference .
+
+Figure 5: Prompt template for knowledge triplet extraction (Stage 1). Given authoritative guideline text, Gemini 3.1 Pro identifies outdated or erroneous claims and outputs structured triplets used to construct clinically grounded distractors and updated answers. 
+
+B Expert Profile and Annotation Protocols 
+
+We used an iterative human-in-the-loop process to verify the generated update-supervision items. Af-ter each rendering round, a stratified 10% subset of generated items was reviewed by clinical ex-perts. Reviewer feedback was incorporated into the prompt and rendering process before the next generation round. The expert review team consisted of 10 review-ers with clinical or biomedical expertise. Review-ers were compensated at approximately $2 USD per annotated item. In the final audit, 94.8% of reviewed items passed human quality inspection. Inter-annotator agreement for binary item-quality labels was Cohen’s κ = 0 .85 . Items that failed the audit were revised or removed before training. 
+
+C Candidate-Level View of Format Structure 
+
+This appendix provides an analytical view of how different supervision formats organize contrastive information. All models in our experiments are trained with the same token-level autoregressive SFT objective. The candidate-level formulation be-low is therefore not an additional training loss; it is a diagnostic abstraction for comparing which clini-cally relevant alternatives are co-presented within each training instance. 
+
+Autoregressive scoring. For an input x and an answer string y, the autoregressive model assigns the length-normalized sequence score 
+
+ℓθ(x, y ) = 1
+
+|y|
+
+> |y|
+
+X
+
+> t=1
+
+log pθ(yt | x, y <t ), (4) SAQ Generation Prompt    
+
+> Role: Senior Oncology Medical Educator designing board-style Short Answer Questions (SAQs).
+> Objective: Design open-ended SAQs based on the provided Knowledge Triplet and Reference Material. Provide the ideal answer based strictly on the Reference Material (which represents the updated and current standard, i.e., New Knowledge), AND the answer based on the outdated standard (Old Knowledge).
+> Negative Constraints:
+> 1. No Meta-References (do not ask “What did the guideline change?”) 2. No Conceptual Repetition 3. No Pure Factual Recall—must be a clinical case analysis
+> Design Principles:
+> 1. Clinical Case Analysis (Mandatory): present a detailed patient vignette. The question stem MUST incorporate clinical contexts of both the outdated standard (Old Knowledge) and the updated standard (New Knowledge). Furthermore, the core of the question must explicitly revolve around the pivotal clinical changes between the old and new knowledge. 2. Depth of Knowledge: ask for recommended management and rationale 3. Dual-Perspective Answering: Reference Material standard (New Knowledge) vs. outdated standard (Old Knowl-edge)
+> Output: JSON with fields: question, new_knowledge_answer, new_knowledge_rationale, old_knowledge_answer, old_knowledge_rationale, construction_rationale, question_keywords.
+
+Figure 6: Prompt template for SAQ (Short Answer Question) generation. 
+
+Given an analytical candidate set Y, these scores induce a candidate-level distribution 
+
+pθ(y | x, Y) = exp ℓθ(x, y )
+
+P 
+
+> y′∈Y
+
+exp ℓθ(x, y ′) , (5) This distribution is used only to formalize how an-swer strings would compete under the same autore-gressive model when they are considered together. 
+
+Co-presented alternatives. For update item i, let 
+
+anew ,i denote the current guideline-supported rec-ommendation. Let N (f ) 
+
+> i
+
+denote the non-current or clinically plausible alternatives exposed by format 
+
+f through the vignette, rationale, answer options, blank completion context, or explanation. The co-presented contrast set for item i under format f
+
+is 
+
+Z(f ) 
+
+> i
+
+= {anew ,i } ∪ N (f ) 
+
+> i
+
+, (6) For SAQ, FITB, and MSQ, this contrast is local to a single clinical vignette: 
+
+Y(f ) 
+
+> i
+
+= Z(f ) 
+
+> i
+
+, f ∈ { SAQ , FITB , MSQ },
+
+(7) The formats differ in how the local alternatives are expressed: SAQ exposes them through the ra-tionale, FITB through the masked entity and ex-planation, and MSQ through item-specific answer options. EMQ changes the scope of co-presentation. For a block G of related update items, multiple vi-gnettes are presented together with a shared answer space. The analytical contrast set for each vignette in the block is therefore 
+
+Y(EMQ ) 
+
+> i,G
+
+= [
+
+> j∈G
+
+Z(EMQ ) 
+
+> j
+
+, i ∈ G. (8) Thus each vignette is interpreted not only against its own local alternatives, but also against clinically related alternatives from adjacent update items in the same block. 
+
+Representation-space surrogate. Let hθ(x) ∈
+
+Rd be the hidden representation of input x, and let 
+
+eθ(y) ∈ Rd be a representation of answer string y.We define a compatibility score 
+
+sθ(x, y ) = hθ(x)⊤eθ(y), (9) For a candidate set Y containing the correct current recommendation anew ,i , the corresponding surro-gate contrastive loss is 
+
+eL(i; Y) = − log exp sθ(xi, a new ,i )
+
+P 
+
+> y∈Y
+
+exp sθ(xi, y ) , (10) For an EMQ block G, this gives 
+
+eLEMQ (G) = 1
+
+|G|
+
+X
+
+> i∈G
+
+eL
+
+
+
+i; Y(EMQ )
+
+> i,G
+
+
+
+, (11) MSQ Generation Prompt 
+
+Role: Senior Oncology Medical Educator designing board-style Multiple Select Questions (MSQs). 
+
+Objective: Design clinical MSQs where options explicitly juxtapose the outdated standard (Old Knowledge) against the updated and current standard (New Knowledge). At least 5 options (A–F), with 1–4 correct answers. Provide correct choices based strictly on the Reference Material (which represents the updated and current standard, i.e., New Knowledge) AND choices based on the outdated standard (Old Knowledge). 
+
+Negative Constraints: 
+
+1. No Meta-References 2. No Conceptual Repetition across questions 3. No Subjective Tone Testing (“should” vs. “must”) 4. No Pure Factual Recall—must be a clinical case analysis 
+
+Design Principles: 
+
+1. Clinical Case Analysis (Mandatory): detailed patient presentation leading to a management dilemma. The question stem MUST incorporate clinical contexts of both the outdated standard (Old Knowledge) and the updated standard (New Knowledge). Furthermore, the core of the question must explicitly revolve around the pivotal clinical changes between the old and new knowledge. 2. Old/New Integration (Mandatory): options include practices based on the Reference Material (New Knowledge) AND practices based on the outdated standard (Old Knowledge). 3. Multiple Select: 5+ options, 1–4 correct answers 4. Dual-Perspective Answering: Reference Material standard (New Knowledge) vs. outdated standard (Old Knowl-edge) 
+
+Output: JSON with fields: scenario, options, new_knowledge_answers, new_knowledge_rationale, old_knowledge_answers, old_knowledge_rationale, construction_rationale, question_keywords. 
+
+Figure 7: Prompt template for MSQ (Multiple Select Question) generation. 
+
+Gradient interpretation. Let pθ(y | xi, Y) de-note the softmax distribution induced by the surro-gate compatibility scores. The gradient of eL(i; Y)
+
+with respect to the query representation is 
+
+∇hθ (xi) eL(i; Y) = X
+
+> y∈Y
+
+pθ(y | xi, Y)eθ(y)
+
+− eθ(anew ,i ),
+
+(12) Equivalently, 
+
+∇hθ (xi) eL(i; Y) = X
+
+> y∈Y\{ anew ,i }
+
+pθ(y | xi, Y)
+
+· (eθ(y) − eθ(anew ,i )) ,
+
+(13) This expression shows that the representation up-date is shaped by the alternatives co-presented with the current recommendation. Local formats expose alternatives tied to one vignette, whereas EMQ exposes alternatives across related vignettes in the same block. The resulting supervision signal is therefore broader and more relational, because clinically similar recommendations are contrasted within a shared instance. 
+
+Connection to diagnostics. This view motivates the diagnostics in Section 6. If EMQ’s advantage comes from networked clinical contrast rather than merely from longer text, then EMQ should expose more clinically relevant entities, place related en-tities closer together, and improve transfer under a fixed generation budget. If the shared structure guides updates toward task-relevant distinctions, it should also preserve discriminative representa-tions with less unnecessary movement from the base model. The signal-density and representation analyses test these observable implications. 
+
+D Vignette and Token-Budget Controls 
+
+This appendix examines whether the advantage of EMQ can be attributed mainly to larger vignette exposure or prompt-token efficiency. All supervi-sion formats are rendered from the same pool of 2,530 unique clinical vignettes. Thus, the compar-ison uses the same vignette pool across formats; what differs is how the vignettes and their associ-ated update contrasts are organized within training instances. FITB Generation Prompt 
+
+Role: Senior Oncology Medical Educator designing Fill-in-the-Blank (FITB) clinical questions. 
+
+Objective: Design clinical FITB questions where the blank precisely targets the core conceptual shift. Provide the correct fill based strictly on the Reference Material (which represents the updated and current standard, i.e., New Knowledge) AND the fill based on the outdated standard (Old Knowledge). 
+
+Negative Constraints: 
+
+1. No Meta-References 2. No Conceptual Repetition 3. No Grammar-based Blanks—must be a crucial medical entity or threshold 4. No Pure Factual Recall—must describe a specific clinical case scenario 
+
+Design Principles: 
+
+1. Clinical Case Analysis (Mandatory): concise patient vignette with demographics, presentation, prior therapies. The clinical statement MUST incorporate clinical contexts of both the outdated standard (Old Knowledge) and the updated standard (New Knowledge). Furthermore, the core of the question (and the targeted blank) must explicitly revolve around the pivotal clinical changes between the old and new knowledge. 2. Targeted Blanks: case concludes with a management decision where the key entity is [BLANK] 3. Dual-Perspective Answering: Reference Material standard (New Knowledge) vs. outdated standard (Old Knowl-edge) 
+
+Output: JSON with fields: clinical_statement, new_knowledge_fill, new_knowledge_rationale, old_knowledge_fill, old_knowledge_rationale, construction_rationale, question_keywords. 
+
+Figure 8: Prompt template for FITB (Fill-in-the-Blank) generation. 
+
+Format Avg. prompt tok./item Avg. vign./item Unique vign. Prompt tok./vign. Vign./1k prompt tok. 
+
+SAQ 261.5 1.00 2,530 261.5 3.82 MSQ 260.2 1.00 2,530 260.2 3.84 FITB 254.3 1.00 2,530 254.3 3.93 EMQ 258.7 2.72 2,530 95.1 10.51 
+
+Table 6: Token and vignette accounting across supervision formats. All formats are rendered from the same pool of 2,530 unique vignettes. Vignette density measures how efficiently a format exposes clinical vignettes under a fixed prompt-token budget. 
+
+Vignette and token accounting. Table 6 sum-marizes the training-token and vignette accounting for each format. We report the average number of training tokens per item, the average number of vignettes per item, the number of unique vignettes covered by the format, and the average prompt-token cost per vignette. Let ¯vf be the average num-ber of vignettes per item and ¯tf be the average number of prompt tokens per item for format f .We define vignette density as 
+
+VD( f ) = 1000 ¯vf
+
+¯tf
+
+, (14) where higher values indicate that more clinical vi-gnettes are exposed per 1,000 prompt tokens. The accounting shows that EMQ does not in-troduce additional unique clinical information. In-stead, it packages multiple related vignettes into shared-answer training instances, allowing the model to integrate more vignette-level contrasts per unit of prompt budget. 
+
+Exposure-matched scaling control. We further test whether the EMQ advantage can be matched by simply increasing the amount of single-vignette supervision. Since the full EMQ corpus contains 2,530 training instances with an average of 2.72 vignettes per instance, it exposes approximately 6,882 vignette-level decisions in total. We there-fore construct expanded SAQ, MSQ, and FITB corpora with 6,882 training instances each, while preserving their original single-vignette rendering rules. These expanded controls match EMQ’s vignette-level exposure but require substantially EMQ Generation Prompt                  
+
+> Role: Senior Oncology Medical Educator designing board-style Extended Matching Questions (EMQs).
+> Objective: Design clinical EMQs where the shared options list contains elements from BOTH the outdated standard (Old Knowledge) and the updated standard (New Knowledge). Provide the correct answer based strictly on the Reference Material (which represents the updated and current standard, i.e., New Knowledge) AND the answer based on the outdated standard (Old Knowledge), for each vignette.
+> Negative Constraints:
+> 1. No Meta-References 2. No Text-Matching (no wordplay or terminology formatting tests) 3. No Conceptual Repetition across vignettes 4. No Pure Factual Recall—must be clinical case analyses
+> Design Principles:
+> 1. EMQ Structure: single Theme, shared Options (A–H), ≥2 distinct Clinical Vignettes 2. Clinical Case Analysis (Mandatory): each vignette is a patient case requiring a clinical decision. Each vignette MUST incorporate clinical contexts of both the outdated standard (Old Knowledge) and the updated standard (New Knowledge). Furthermore, the core of the vignettes must explicitly revolve around the pivotal clinical changes between the old and new knowledge. 3. Old/New Integration (Mandatory): options include practices based on the Reference Material (New Knowledge) AND practices based on the outdated standard (Old Knowledge). 4. Dual-Perspective Answering per vignette: Reference Material standard (New Knowledge) vs. outdated standard (Old Knowledge)
+> Output: JSON with fields: theme, options, vignettes (each with scenario, new_knowledge_answer, new_knowledge_rationale, old_knowledge_answer, old_knowledge_rationale, construction_rationale, ques-tion_keywords).
+
+Figure 9: Prompt template for EMQ (Extended Matching Question) generation. 
+
+more supervised training tokens because each vi-gnette is serialized as a separate training item. Table 7 reports the resulting token cost and SEER-Bench performance. Total training tokens count both the prompt and supervised target tokens. Even after expanding the single-vignette formats to 6,882 instances, none matches the full EMQ result. The expanded controls require 2.66–2.74 times more training tokens than EMQ, yet remain lower on both SEER-Bench answer accuracy and rationale accuracy. Together, these controls show that EMQ’s ad-vantage is not explained by larger unique clinical content or by greater vignette-level exposure alone. Matching EMQ’s vignette exposure with single-vignette formats requires substantially more train-ing tokens and still yields weaker SEER-Bench transfer. This supports the interpretation that EMQ is more token-efficient because it organizes re-lated clinical vignettes and answer contrasts within shared training instances, rather than presenting each vignette as an isolated decision. 
+
+E SEER-Bench Construction 
+
+SEER-Bench is designed for temporal evaluation of medical knowledge: we curate cases from the latest versioned SEER Research Data release (Surveil-lance, Epidemiology, and End Results (SEER) Pro-gram, 2026). This appendix documents the co-hort filtering, cancer-site distribution, and quality-control details. 
+
+E.1 Construction Pipeline 
+
+The construction proceeds through three stages: 
+
+Stratified raw sampling and initial filtering. 
+
+We first construct a raw candidate pool by randomly sampling SEER patient records across the 16 tar-geted cancer-site groups. To ensure data viability prior to generation, we apply strict initial exclu-sion criteria: (1) cases with any missing or un-known NCCN staging variable (T, N, M, or Over-all Stage); (2) histopathologic types that cannot be unambiguously mapped to the NCCN staging scheme(National Comprehensive Cancer Network, 2025); and (3) cases that are in situ or non-invasive. Format Train Exposed Train tok. Tok. SEER Rat. items vign. (M) mult. Acc. Acc.                         
+
+> Expanded SAQ 6,882 6,882 4.56 2.74 ×63.4 53.4 Expanded MSQ 6,882 6,882 4.50 2.71 ×62.9 56.2 Expanded FITB 6,882 6,882 4.43 2.66 ×62.2 51.6 Full EMQ 2,530 6,882 1.66 1.00 ×64.8 59.6
+
+Table 7: Exposure-matched scaling control. The single-vignette formats are expanded to 6,882 training instances, matching the approximate number of vignette-level exposures in the full EMQ corpus. Token multiplier is computed relative to full EMQ. 
+
+Algorithm 1 Human-in-the-loop quality verifica-tion for update-supervision items.                                                    
+
+> Require: Update triplets U;format renderers
+> {Rf}f∈{ SAQ ,MSQ ,FITB ,EMQ };source references S;sampling rate ρ= 0 .10
+> Ensure: Verified training corpora {D f}
+> 1: Initialize format-specific rendering prompts and con-straints. 2: repeat
+> 3: for all formats f∈ { SAQ ,MSQ ,FITB ,EMQ }do
+> 4: Render candidate items ˜Df=Rf(U,S).5: Apply automatic checks for schema validity, du-plicate targets, source traceability, answer-space validity, and old/new consistency. 6: Revise or discard items that fail deterministic checks. 7: Draw a stratified sample Af⊂˜Dfwith |A f|=
+> ρ|˜Df|.8: end for
+> 9: Clinical reviewers independently assess sampled items for update-target alignment, vignette plausibility, answer correctness, rationale consistency, and clinically meaningful distractors or alternatives. 10: Aggregate reviewer labels and adjudicate disagree-ments. 11: Summarize recurrent failure modes and update the rendering prompts and constraints. 12: until review pass rates stabilize across formats 13: Conduct a final expert audit on the revised candidate corpora. 14: Revise correctable failures and remove unrecoverable failures. 15: Return the verified corpora {D f}used for supervised fine-tuning.
+
+This filtering yields a pre-review pool of 3,200 qualified raw candidates (200 cases per cancer-site group), representing the candidate pool before text synthesis and expert validation. 
+
+Vignette synthesis and item generation. Both steps are performed jointly in a single Gemini 3.1 Pro call (full prompt in Figure11 ). The model receives coded SEER patient records (including cancer size code tables and regional node coding rules), converts them into coherent clinical nar-ratives, randomly omits one staging variable (T, N, M, or Overall Stage) as the inference target, and provides an answer with rationale grounded in NCCN criteria. The synthesis is carefully con-strained to prevent label leakage while ensuring the narrative contains sufficient clinical evidence for staging derivation. 
+
+Physician review and final inclusion. Physi-cian reviewers then rigorously screen the 3,200 gen-erated items. Crucially, the gold labels are strictly derived from the structured fields of the source SEER records. An item is permanently discarded if: (1) any conflict arises between the model-generated text and these structured gold standard fields; or (2) the underlying SEER database records lack suffi-cient clinical details to robustly support a definitive TNM staging diagnosis. Following this expert fil-tering process, the final SEER-Bench dataset com-prises 1,992 highly reliable cases across the 16 cancer-site groups. 
+
+E.2 Statistics and Quality Control 
+
+Figure 10 summarizes the cancer-site composition of the curated subset. The distribution is intention-ally broad rather than dominated by a single ma-lignancy, which helps test whether updated models transfer staging knowledge across heterogeneous oncology settings. This design keeps the benchmark temporally ex-plicit: all items come from the same diagnosis-year cohort, each case masks exactly one staging target, and the final set is a physician-reviewed subset of the 3,200 stratified random candidates. As a result, the benchmark separates final-label prediction from rationale-level reasoning without mixing multiple temporal anchors. Quality control (QC) is strictly enforced to miti-gate specific dataset failure modes: (i) source trace-ability , maintaining unbroken provenance to ver-sioned SEER data; (ii) answer-space validation , en-suring all target labels are grammatically and medi-cally valid NCCN categories; (iii) omission consis-tency , programmatically verifying that the masked variable remains unambiguously inferable from the Kidney     
+
+> 9.4% Pancreas
+> 8.2%
+> Bladder
+> 7.7%
+> Melanoma
+> 7.5%
+> Esophagus
+> 7.3%
+> Thyroid
+> 7.0%
+> Breast
+> 6.7%
+> 6.7%
+> 6.5%
+> H&N (oral)
+> 6.4%
+> Colon 5.0%
+> Lung
+> 4.7%
+> 4.7%
+> Liver
+> 4.2%
+> 4.1% 3.9%
+> 1,992
+> cases
+> Rectum Stomach Cervix Uterus Ovary
+
+Figure 10: Cancer-site distribution in SEER-Bench. Donut slices report the percentage of cases in the 1,992-case curated subset. The H&N (oral) group aggregates oral-cavity sub-sites; the Colon and Rectum categories are reported separately. 
+
+unmasked text; and (iv) full double-blinded physi-cian review , in which physician reviewers are ran-domly assigned to independent review panels 
+
+and conduct a stratified 100% review of all candi-date items by cancer-site group and masked vari-able. All reviews are performed double-blind to eliminate annotation bias, verifying consistency among the generated vignette, gold answer, and rationale. Only items that pass this rigorous expert review are included in the final 1,992-case SEER-Bench set; failed items are permanently excluded. Across physician verification labels, raw inter-rater agreement was 96.9%, with Cohen’s κ = 0 .87 .
+
+E.3 Evaluation Protocol 
+
+SEER-Bench reports two metrics. Answer accu-racy measures whether the extracted final stag-ing/classification label matches the ground-truth masked target after case-insensitive normalization and common semantic variants (e.g., “Stage IA” and “Stage 1A”). Rationale accuracy is stricter: a response is correct only when the final answer is correct and the explanation demonstrates the same key clinical reasoning as the reference rationale, including the relevant T/N/M logic, staging cri-teria, and interpretation of the clinical findings. The GPT-5.4 judge achieved 98.2% raw agreement with human annotations, corresponding to Cohen’s 
+
+κ = 0 .88 .Let mi be the model response, ai = ans( mi)
+
+the extracted answer, gi the ground-truth answer, and ri the rationale-correctness judgment produced by GPT-5.4 using the grading prompt in Figure 12. Operationally, Acc averages 1[ai = gi] over all items, and RatAcc averages 1[ai = gi ∧ ri = 1] .If the final answer is incorrect, rationale correctness is forced to false. The vignette-generation prompt is where struc-tured SEER codes are converted into natural-language clinical cases. Its constraints reduce label leakage while still requiring enough clinical ev-idence for the omitted T, N, M, or overall-stage target to be inferred. The rationale grader makes rationale accuracy stricter than answer accuracy: once the final stag-ing label is wrong, the rationale is automatically treated as incorrect. This prevents fluent but clini-cally misaligned explanations from being counted as successful reasoning. 
+
+F Experimental Setup 
+
+Training data. The main English experiments construct 2,530 SFT instances from the 2026 NCCN oncology guidelines for each of the four su-pervision formats (EMQ, MSQ, FITB, and SAQ). Each model variant is updated exclusively on the 2,530-instance corpus corresponding to its assigned format. A separate supplementary Chinese trans-fer check uses 168 SFT instances constructed from recent updated public vaccine guidance(Rabies Pre-vention and Control Committee of the Chinese Pre-ventive Medicine Association et al., 2026; Pediatric Infection Group, Chinese Society of Infectious Dis-eases, Chinese Medical Association et al., 2024). Within each setting, the four supervision formats share the same update content and differ only in item structure. 
+
+Base model and adaptation. The base model is Qwen3-4B (qwen3-4B-2507). We evaluate SFT-LoRA and trained on the update content rendered into EMQ, MSQ, FITB, and SAQ. Within the adaptation route, we use the same training budget and LoRA configuration across formats. 
+
+Comparison methods. We compare the unmodi-fied Qwen3-4B base model with retrieval-based updating (Base RAG and CARE), knowledge-editing baselines (RECIPE and AlphaEdit), format-controlled LoRA updates, and larger reference LLMs. The Base RAG inference prompt is pro-vided in Figure 13; method-specific hyperparame-ters are reported in Tables 9–11. SEER-Bench Vignette Generation Prompt             
+
+> Role: Oncology Board Exam Developer and Clinical Educator. Synthesize high-quality clinical vignettes based on the SEER database to train medical students and residents on TNM staging and cancer prognosis.
+> Input Data Format: Patient records with: Gender, Age, Cancer Location, Pathological Diagnosis, Tumor Size (mm), Cancer Extension, Lymph Node Examined/Positive Status, Bone/Brain/Liver/Lung Metastatic Status, T/N/M/overall Stage.
+> Input Data Coding:
+> •Cancer Size : coded 0 (no mass), 001–988 (exact mm), 989 ( ≥989 mm), 990 (microscopic focus), 991–995 (range descriptions), 999 (unknown). •Regional nodes examined : coded as the exact number of nodes examined; exceptions include aspiration (coded 95), combinations of positive aspirated/biopsied/sampled/dissected nodes (coded 98), and unknown/not applicable (coded 99). •Regional nodes positive : coded as the exact number of positive nodes; exceptions include positive aspiration (coded 95), combinations (coded 97), and cases where no nodes were examined (coded 98).
+> Task Instructions:
+> 1. Scenario Generation : Convert the provided data into a professional clinical vignette. Do not just list the facts; describe the patient’s presentation. 2. The “Omission” Logic : For every record, randomly select ONE of the following variables to omit from the vignette and turn into the “Question”: the T-category, the N-category, the M-category, or the Overall Stage. Ask a clear lead-in question about the omitted variable. 3. Answer & Rationale : Provide the correct answer and a brief explanation using the latest NCCN guidelines.
+> Output: JSON with fields: Question ,Response ,Rationale .
+
+Figure 11: Prompt template for SEER-Bench vignette generation and item construction. The model receives coded SEER patient records, synthesizes clinical narratives, and constructs masked staging inference items. 
+
+Evaluation benchmarks. MedGUIDE-English contains HCC and NSCLC update slices built from historical NCCN guideline in 2024. SEER-Bench evaluates temporally anchored oncology staging with answer accuracy and rationale accuracy, de-fined in Appendix E.3. HealthBench Professional evaluates external professional medical-QA gen-eralization. The auxiliary Chinese transfer evalu-ation is reported separately and uses the vaccine-related subset of LLM-EvalMed (39 items) and the vaccine-related subset of LiveMedBench (204 items). 
+
+Automatic scoring and LLM judges. To keep comparisons controlled within each benchmark, we fix the same judge across all evaluated models and methods for a given benchmark. SEER-Bench rationale accuracy are graded with GPT-5.4 and MedGUIDE-English with Gemini 3.1 Pro; Health-Bench Professional, LiveMedBench, and LLM-EvalMed are graded with GPT-5.4. For Chinese benchmarks whose original reports use different judges, LiveMedBench with GPT-OSS and LLM-EvalMed with GPT-4o. Table 8 lists the foundation and API models used for updating, cross-scale validation, reference evaluation, data generation, and automatic grad-ing. Qwen3-4B is the main controlled backbone; Qwen3-1.7B, Qwen3-8B, and Qwen3-14B are used for the cross-scale SEER-Bench check; Llama-3.1-8B-Instruct is used as an additional backbone validation; and MediTron-70B and HuatuoGPT-O1-70B are included as medical reference sys-tems. API-based models were accessed via their default inference endpoints with no custom system prompts for evaluation; temperature was set to 0 when the endpoint exposes this parameter, and de-fault settings were used otherwise. Open-weight experiments were run locally in bf16. References point to technical reports, official model cards, or provider documentation. The table separates the roles of backbone model, medical reference model, general reference model, data-generation model, and automatic judge. Con-trolled rows share the same foundation checkpoint within each backbone, while external reference systems provide descriptive context rather than di-rectly comparable training-controlled variants. SEER-Bench Rationale Evaluation Prompt 
+
+Role: Expert medical AI evaluation assistant. Evaluate whether a model response demonstrates both a correct final answer and correct reasoning/rationale. 
+
+Inputs: 
+
+• Ground Truth Answer: {gt_answer} 
+
+• Ground Truth Rationale: {gt_rationale} 
+
+• Model Response: {model_response} 
+
+Evaluation Rules: 
+
+1. Extract the model’s final answer or conclusion from its response. 2. Check whether the final answer matches the ground-truth answer, case-insensitively and allowing semantically equivalent variants such as “Stage IA”, “Stage 1A”, and “stage ia”. 3. If and only if the answer is correct, evaluate whether the reasoning aligns with the ground-truth rationale. The wording need not be identical, but the response must demonstrate the same key clinical reasoning points, such as T/N/M classification logic, staging-criteria application, and interpretation of clinical findings. 4. Mark the rationale correct if it identifies the same critical factors and logical steps. Minor omissions of non-essential details are acceptable. If the model reaches the right answer through clearly wrong reasoning, mark the rationale incorrect. 
+
+Output Requirement: Output strictly in JSON with no other text: 
+
+{"extracted_answer": "The final answer extracted from model response", "answer_correct": true or false, "rationale_analysis": "Brief explanation of whether the model’s reasoning matches the ground truth rationale", "rationale_correct": true or false }
+
+Constraint: If answer_correct is false, rationale_correct must also be false. 
+
+Figure 12: Prompt template for SEER-Bench rationale-accuracy grading. The judge first verifies the final staging answer, then evaluates rationale correctness only for answer-correct responses. Table 8: Full model specifications for the foundation and API models used in the experiments.                                                                                           
+
+> Model Provider Version / Checkpoint Params Access Role Ref.
+> Qwen3-1.7B Alibaba Qwen/Qwen3-1.7B 1.7B HF/local Cross-scale backbone (Qwen Team, 2025b) Qwen3-4B Alibaba Qwen/Qwen3-4B-Instruct-2507 4.0B HF/local Main/update backbone (Qwen Team, 2025d) Qwen3-8B Alibaba Qwen/Qwen3-8B 8.2B HF/local Cross-scale backbone (Qwen Team, 2025e) Qwen3-14B Alibaba Qwen/Qwen3-14B 14.8B HF/local Cross-scale backbone (Qwen Team, 2025a) Qwen3-235B Alibaba Qwen/Qwen3-235B-A22B-Instruct-2507 235B API Reference system (Qwen Team, 2025c) Llama-3.1-8B-Instruct Meta meta-llama/Llama-3.1-8B-Instruct 8B HF/local Backbone validation (Grattafiori et al., 2024) MediTron-70B EPFL epfl-llm/meditron-70b 70B HF/local Medical reference (Chen et al., 2023) HuatuoGPT-O1-70B FreedomIntelligence FreedomIntelligence/HuatuoGPT-o1-70B 70B HF/local Medical reference (Chen et al., 2025) Kimi-2.5 Moonshot AI kimi-k2.5 –API Reference system (Moonshot AI, 2026) GLM-5 Zhipu AI glm-5 –API Reference system (Zeng et al., 2026) DeepSeek-R1 DeepSeek deepseek-r1 671B API Reference system (Guo et al., 2025) Claude-Opus-4.6 Anthropic claude-opus-4-6 –API Reference system (Anthropic, 2026) Gemini-3.1-Pro Google DeepMind gemini-3.1-pro –API Reference/generation/judge (Google DeepMind, 2026) GPT-5.4 OpenAI gpt-5.4 –API Reference/judge (OpenAI, 2026)
+
+F.1 Implementation Hyperparameters 
+
+Tables 9–11 list the implementation hyperparam-eters used for the reported LoRA, retrieval, and knowledge-editing baselines. Within each adapta-tion route, the same settings are held fixed across supervision formats. The LoRA settings are fixed within each adapta-tion route, and the retrieval baseline uses the same encoder and top-k setting across questions. Con-sequently, differences among EMQ, MSQ, FITB, and SAQ are intended to reflect supervision struc-ture rather than extra tuning budget. These settings document the editing baselines as reproducibility controls. They also clarify that the comparison is between different update mechanisms, not between independently optimized Method Hyperparameter Value         
+
+> SFT-LoRA LoRA rank / alpha / dropout 128 / 256 / 0.1 Training epochs 3Batch size 16 Warmup ratio 0.05 Learning rate 5e-5 Base RAG Embedding model MedEmbed-large-v0.1 Retrieved passages Top 3
+
+Table 9: Hyperparameters for LoRA-based adaptation and the Base RAG retrieval baseline.                              
+
+> Hyperparameter Value AlphaEdit
+> layers [4, 5, 6, 7, 8]
+> v_num_grad_steps 25
+> v_lr 1e-1
+> v_loss_layer 35
+> v_weight_decay 0.5
+> clamp_norm_factor 0.75
+> kl_factor 0.0625
+> mom2_adjustment true
+> mom2_update_weight 15000
+> mom2_n_samples 10,000
+> rewrite_module_tmp model.layers.{}.mlp.down_proj lm_head_module model.embed_tokens nullspace_threshold 2e-2
+> L2 10
+> RECIPE
+> edit_model_name qwen3-4b model_hidden_size 2560
+> knowledge_rep_dim 2560
+> know_rep_prot_token_n 10
+> prompt_token_n 3
+> krm_lr 1e-5
+> pt_lr 1e-5
+> batch_size 2
+> grad_accum_steps 8
+> max_epochs 1000
+> early_stop_patience 7
+> contra_lambda /relia_lambda 2 / 1
+
+Table 10: Hyperparameters for the AlphaEdit and RECIPE knowledge-editing baselines on Qwen3-4B. For RECIPE, pt_lr is listed for completeness but the implementation uses krm_lr ; batch size 2 with 8 accu-mulation steps gives an effective batch size of 16. 
+
+hidden-size or batch-size choices. The CARE configuration is reported separately because it includes both pretraining and finetuning phases. This distinction matters when comparing it with LoRA-only updates, which do not add an additional retrieval-compression pretraining stage. 
+
+G Inference Prompt 
+
+Figure 13 shows the inference prompt used for the Base RAG baseline. The prompt supplies the re-trieved background knowledge and the target ques-tion, without exposing the supervision-format la-bels used in training. The inference prompt intentionally exposes retrieved background knowledge but not the                                    
+
+> Hyperparameter Value CARE pretraining
+> Learning rate 2e-4 Number of training epochs 1Total batch size 384 (8 ×8×6) Max sequence length 336 Retrieval context length 180 ICAE memory size 16 Memory hidden size 2560
+> αNLL 1.0 LR scheduler / warmup ratio linear / 0.03 Weight decay 0.0 Seed 980406 LoRA rank / alpha / dropout 8 / 16 / 0.05 LoRA targets q/k/v/o/gate/up/down_proj
+> CARE finetuning
+> Learning rate 3e-4 Number of training epochs 1Total batch size 48 (8 ×6×1) Max sequence length 512
+> αNLL /αKL 1.0 / 2.0 KL temperature 1.0 ICAE memory size 16 Context teacher / student adaptive / gt Selection criterion / context selection closed_book_correct /nn
+
+Table 11: CARE hyperparameters for Qwen3-4B. Pre-training uses 8 Ascend 910B devices; finetuning uses the best configuration from run_finetune_full.sh .
+
+supervision-format labels used during training. This makes Base RAG a test-time knowledge-access baseline rather than another format-controlled update method. 
+
+H Auxiliary Chinese Evaluation 
+
+Table 12 reports an auxiliary Chinese transfer check on LLM-EvalMed and LiveMedBench, including both full-benchmark averages and vaccine-related subsets. This auxiliary transfer check should be inter-preted separately from the main oncology update evaluation. It uses vaccine-guidance updates and Chinese benchmarks, so it tests whether format-controlled updating carries cross-lingual signal rather than directly replicating the NCCN English setting. The large reference models provide exter-nal context rather than format-controlled variants of the same update procedure. 
+
+I Case Study: Knowledge Updating Challenges 
+
+We present two representative cases from MedGUIDE that illustrate the dual challenges of medical knowledge updating: stability mainte-nance and update learning . For each case, we show the clinical vignette, the correct answers from the outdated and latest versions, and the key guideline change that distinguishes the two versions. Fig-Base RAG Inference Prompt      
+
+> Role: Medical expert assistant.
+> Instruction: Please answer the following question based on the provided background knowledge.
+> Question: {question}
+> Background Knowledge: {background}
+> Response Requirement: Provide a comprehensive and accurate answer based on the above information.
+
+Figure 13: Prompt template for the Base RAG baseline.                                                         
+
+> Model / method LLM-EvalMed-All ↑LLM-EvalMed-Sub. ↑LiveMedBench-Sub. ↑LiveMedBench-All ↑
+> Qwen3-4B 3.479 3.558 0.4489 0.4023 SFT-LoRA + EMQ 3.559 3.967 0.5111 0.4213
+> SFT-LoRA + MSQ 3.490 3.806 0.4860 0.3903 SFT-LoRA + FITB 3.459 3.664 0.4405 0.3873 SFT-LoRA + SAQ 3.519 3.750 0.4991 0.4133 Qwen3-235B 3.814 4.114 0.5507 0.4616 Kimi-2.5 3.841 3.897 0.5644 0.5518 GLM-5 3.791 3.930 0.5208 0.5419 DeepSeek-R1 3.933 3.943 0.5077 0.4697 Claude-Opus-4.6 3.927 3.956 0.5634 0.5531 Gemini-3.1-Pro 3.975 4.297 0.5032 0.5596
+> GPT-5.4 3.941 3.973 0.5203 0.4697
+
+Table 12: Auxiliary Chinese transfer evaluation results. This supplementary setting uses vaccine-guidance updates and is separate from the main NCCN English experiments. LLM-EvalMed-All reports the full 667-item average, and LLM-EvalMed-Sub. reports the 39-item vaccine-related subset. LiveMedBench-Sub. reports the vaccine-related subset, and LiveMedBench-All reports the full benchmark average. Both Chinese benchmarks are re-scored with GPT-5.4; original benchmark reports use different judges, so scores are not directly interchangeable. 
+
+ures 14 and 15 present the detailed case analyses. We then add a SEER-Bench renal cell carcinoma (RCC) staging case to illustrate the intended output-length and correctness pattern across the four su-pervision formats. This case isolates stability: the surrounding guideline context changes, but the downstream an-swer should not. A model that changes away from C is not simply outdated; it is over-applying the update signal to an unchanged clinical decision path. This plasticity case tests whether the model can override the plausible outdated answer A and adopt B only when the guideline decision rule truly changes. 
+
+I.1 Analysis 
+
+These cases jointly illustrate why supervision for-mat matters for medical knowledge updating: Figure 16 holds the clinical vignette fixed and compares the outputs induced by the four super-vision formats. The panels show highlighted ex-cerpts, while the parenthetical word counts refer to the full original outputs. The example sepa-rates verbosity from correctness: EMQ, MSQ, and SAQ preserve the decisive renal-vein/perinephric-fat invasion cue and therefore recover T3aN0M0 and Stage III, whereas FITB produces the longest rationale but over-relies on the 9.0 cm tumor size, consequently overlooking the vein invasion to mis-classify the case as T2aN0M0, and selects Stage II. 
+
+Stability vs. Plasticity Dilemma. Case 1 re-quires the model to maintain its existing correct an-swer despite peripheral guideline revisions, while Case 2 requires the model to change its answer when the recommendation genuinely shifts. Bal-ancing these two demands is the core challenge of knowledge updating. 
+
+Failure Modes of Isolated Formats. Under SAQ, MSQ, and FITB supervision, each training sample establishes only a single knowledge corre-Case Study: Stability Maintenance (hcc-1)                  
+
+> 1. Source & Domain NCCN Hepatocellular Carcinoma (HCC) Screening
+> 2. Clinical Vignette
+> A 43-year-old male with a history of hepatitis B and liver cirrhosis presented for follow-up after being treated for HCC with ablation therapy two years ago. His last ultrasound (US), performed six months ago, showed no signs of cancer recurrence, and his alpha-fetoprotein (AFP) level was normal. He has been feeling well, with no new symptoms, but remains at high risk for HCC recurrence due to his underlying liver disease. His liver function is stable, and he has maintained regular surveillance. Today, an ultrasound and AFP test are repeated as part of his ongoing monitoring protocol. The ultrasound findings are negative for any lesions, and his AFP levels remain within the normal range.
+> 3. Question
+> Given these recent results and the necessity for continued vigilance in managing his condition, what should be the next step in his surveillance plan?
+> 4. Choices A: Repeat US + AFP in 3–6 mo
+> B: Additional workup (HCC-2)
+> C: Repeat US + AFP in 6 mo
+> 5. Answers From Outdated and Latest Versions Answer from outdated version: C(US negative →Repeat US + AFP in 6 mo)
+> Answer from latest version: C(Pathway preserved; answer unchanged )
+> 6. Guideline Change ( ∆)
+> The latest version updates the high-risk population definition , but the downstream screening pathway for US-negative, AFP-normal patients remains identical .
+> 7. Test Target: Stability
+> The model must retain the correct answer ( C) despite contextual guideline changes. Over-updating to A or B indicates failure to distinguish changed vs. unchanged knowledge.
+
+Figure 14: Case hcc-1: The guideline revision changes population criteria but not the screening pathway. A correctly updated model should maintain answer C across both versions. 
+
+spondence. This makes it difficult for models to learn the boundary between “what has changed” and “what has not.” Empirically, such models can under-update on Case 2 (persisting with the plau-sible outdated answer A), over-update on Case 1 (unnecessarily shifting away from the stable answer C), or produce long but incorrect slot-centered ra-tionales as in the RCC FITB example. 
+
+Why EMQ Helps. The EMQ format places multiple related clinical scenarios (including both changed and unchanged cases) within a single train-ing instance, requiring the model to jointly assign each scenario to its correct answer from a shared candidate pool. This contrastive structure encour-ages simultaneous discrimination between stable and updated knowledge, making useful decision boundaries more likely to emerge. 
+
+J Clinical Decision Failure Modes Under Guideline Obsolescence 
+
+Medical knowledge obsolescence can manifest as output-level failures with distinct downstream clin-ical consequences. These failure modes differ in how an LLM translates outdated knowledge into unsafe outputs. Incorrect staging can alter the model’s clinical conclusion and, in turn, redirect downstream treatment planning. Outdated treat-ment recommendations may preserve superseded interventions or treatment sequences, leading the model to recommend choices that are no longer supported by current guidelines. Overconfident rationales, by contrast, can make outdated recom-mendations harder to detect by presenting them with evidence that was valid under earlier clinical standards. Together, these failure modes motivate Failure Mode Clinical Vignette Clinical Consequence Incorrect staging Case: A patient has a 3.5-cm non-small cell lung cancer primary ( T2a ), metas-tases in multiple ipsilateral mediastinal nodal stations ( N2b ), and no distant metastasis ( M0 ). 
+
+AJCC 8th Edition: Under the eighth edition of the AJCC Cancer Staging Manual, which remained applicable to lung cancer through 2024, N2 disease was not subdivided into single- and multistation categories. The corresponding T2N2M0 presentation was therefore classified as stage IIIA (Kutob and Schneider, 2020). 
+
+AJCC 9th Edition: Effective January 1, 2025, the lung protocol distinguishes single-station N2a from multistation N2b disease. Under the updated stage grouping, T2aN2bM0 is classified as stage IIIB (Detterbeck et al., 2024). 
+
+Inappropriate treatment-pathway selection: Ac-cording to 8th edition protocol, stage IIIA is cat-egorized and thus neoadjuvant therapy followed by resection is an expected option. Recognition of multistation N2b disease and the updated stage IIIB grouping instead makes a definitive nonsurgi-cal pathway, commonly concurrent chemoradiation followed by consolidation systemic therapy when appropriate. The stale conclusion could therefore expose a patient to a potentially nonbeneficial tho-racic operation or delay definitive treatment. 
+
+Stale recommenda-tion Case: A patient has gross residual, unresectable follicular thyroid carcinoma with visceral locoregional invasion or rapid progression after surgery. 
+
+NCCN Thyroid Carcinoma Version 5.2024: The guideline did not contain an explicit upfront-treatment instruction for this subgroup. The clinical deci-sion relying on this version could be TSH-stimulated iodine-123 or iodine-131 whole-body imaging and defer treatment selection until radioiodine uptake was established (Haddad et al., 2025). 
+
+NCCN Thyroid Carcinoma Version 1.2025: The guideline added that, for viscerally locoregional invasive disease or rapid progression, upfront EBRT, neoadjuvant therapy, or systemic therapy may be most appropriate. Radioiodine imaging remains part of the pathway but should not automatically postpone active treatment in this clinical setting (Haddad et al., 2025). 
+
+Undertreatment or treatment delay: Treating radioiodine imaging as a prerequisite may delay EBRT or systemic therapy while invasive neck dis-ease progresses toward the airway, esophagus, or major neurovascular structures. The result may be reduced local control and an increased risk of critical-structure compromise. 
+
+Overconfident ratio-nale Case: A patient with metastatic urothelial carcinoma experiences progression after platinum chemotherapy and checkpoint-inhibitor therapy. 
+
+2024 EAU guideline: The guideline gave a recommendation to consider sac-ituzumab govitecan. It described a 27% objective response rate in previously treated metastatic urothelial carcinoma and noted the drug’s accelerated FDA approval (Witjes et al., 2024). 
+
+2025 EAU guideline: The 2025 EAU guideline removed its sacituzumab-govitecan recommendations after the withdrawal of the FDA-approved indication for urothelial cancer indication. The updated guideline retains the treatment his-tory but no longer presents the drug as a recommended option (van der Heijden et al., 2025). 
+
+Inappropriate and potentially toxic treatment: 
+
+A stale model could generate a persuasive ratio-nale by selectively recalling the earlier response rate and recommendation while omitting the sub-sequent withdrawal and negative confirmatory evi-dence. This error could expose the patient to toxici-ties such as severe neutropenia or diarrhea without confirmed survival benefit and delay an appropriate alternative or clinical trial. 
+
+Table 13: Clinical failure modes caused by stale oncology knowledge. Each case contrasts original, versioned guidelines used before and after a temporally bounded update. The examples show how an outdated staging conclusion, treatment pathway, or rationale can change a clinically relevant recommendation and how the resulting risk may vary across cancer subtypes. 
+
+temporally anchored evaluation of both model an-swers and their rationales, as well as supervision that explicitly captures contrasts between historical and revised clinical conditions. Persistent under-representation of specific cancer types, languages, and guideline regions further poses a deployment risk, as limited exposure to relevant update events may reduce the model’s ability to recognize and correct knowledge that has become outdated. 
+
+K Additional Backbone Results on Llama-3.1-8B-Instruct 
+
+To check whether the controlled-format pattern is specific to Qwen3-4B, we repeat the same update protocol on Llama-3.1-8B-Instruct. Table 14 shows that EMQ remains the strongest SFT format on SEER-Bench and HealthBench, while MedGUIDE again exhibits slice-specific behavior: EMQ is strongest on HCC, whereas FITB is strongest on NSCLC. 
+
+L Statistical Significance Testing 
+
+We assess statistical significance using paired tests over evaluation items. For SEER-Bench an-swer accuracy and rationale accuracy, we com-pute paired bootstrap confidence intervals with 10,000 resamples over the shared evaluation set. For HealthBench, we apply the same paired boot-strap procedure to item-level scores. For each comparison, we report the observed difference, a two-sided 95% confidence interval, and a Holm-Bonferroni adjusted p-value within each metric family. MedGUIDE NSCLC is excluded from monotonic improvement testing because it is used as an older diagnostic slice rather than as a primary current-knowledge metric. Table 15 shows that the main SEER-Bench gains of EMQ over other SFT formats are statistically significant across both Qwen3-4B and Llama-3.1-8B-Instruct. The gains are especially consistent for rationale accuracy, where all confidence intervals are well above zero. Answer-accuracy gains are System / update SEER-Bench HealthBench MedGUIDE                                                      
+
+> Acc. ↑Rat. Acc. ↑Score ↑HCC ↑NSCLC Base model 58.0 51.1 0.260 67.1 36.4 SFT, EMQ 65.2 60.0 0.276 86.1 26.9 SFT, MSQ 62.1 55.5 0.256 76.6 28.4 SFT, FITB 61.9 51.3 0.250 70.4 42.4
+> SFT, SAQ 63.1 52.5 0.266 71.9 30.5 RAG, Base RAG 60.0 47.6 0.160 70.3 28.7 RAG, CARE 60.4 52.4 0.108 73.8 23.9 Editing, RECIPE 64.2 49.6 0.112 69.5 29.3 Editing, AlphaEdit 58.3 48.4 0.100 59.7 24.5
+
+Table 14: Controlled update results on Llama-3.1-8B-Instruct. Best and second-best values among updated rows are shown in bold and underlined, respectively; the base-model row is reported for reference.                                                                                                                    
+
+> Backbone Comparison Metric ∆95% CI Adjusted p
+> Qwen3-4B EMQ −MSQ SEER Acc. +3.1 [+1 .4,+4 .9] 0.006 Qwen3-4B EMQ −MSQ Rat. Acc. +4.5 [+2 .4,+6 .6] <0.001
+> Qwen3-4B EMQ −MSQ HealthBench +0.020 [+0 .005 ,+0 .036] 0.024 Qwen3-4B EMQ −FITB SEER Acc. +3.3 [+1 .5,+5 .1] 0.004 Qwen3-4B EMQ −FITB Rat. Acc. +8.7 [+6 .4,+10 .9] <0.001
+> Qwen3-4B EMQ −SAQ SEER Acc. +2.1 [+0 .4,+3 .9] 0.041 Qwen3-4B EMQ −SAQ Rat. Acc. +7.5 [+5 .2,+9 .8] <0.001
+> Llama-3.1-8B-Instruct EMQ −MSQ SEER Acc. +2.8 [+1 .0,+4 .7] 0.013 Llama-3.1-8B-Instruct EMQ −MSQ Rat. Acc. +4.1 [+1 .9,+6 .4] 0.003 Llama-3.1-8B-Instruct EMQ −FITB SEER Acc. +3.6 [+1 .7,+5 .5] 0.003 Llama-3.1-8B-Instruct EMQ −FITB Rat. Acc. +8.3 [+5 .9,+10 .7] <0.001
+> Llama-3.1-8B-Instruct EMQ −SAQ SEER Acc. +1.8 [+0 .2,+3 .6] 0.047 Llama-3.1-8B-Instruct EMQ −SAQ Rat. Acc. +6.8 [+4 .4,+9 .3] <0.001
+
+Table 15: Paired significance tests for the main controlled-format comparisons. ∆ reports the absolute performance difference between EMQ and the comparison format. Confidence intervals are two-sided 95% paired bootstrap intervals over evaluation items, and p-values are adjusted within each metric family using the Holm-Bonferroni procedure. Positive values indicate higher performance for EMQ. 
+
+smaller but remain significant after correction, in-cluding the closest comparison against SAQ. The HealthBench comparison in the Qwen3-4B setting shows a smaller but positive retention gain over MSQ, supporting the view that EMQ’s transfer gains do not come at the cost of broader clinical-chat performance. 
+
+M Implementation Details 
+
+This appendix lists the hyperparameters and compu-tational details for the representation-level analysis in §6. All computations use the Qwen3-4B (qwen3-4B-2507) base model and its four LoRA-updated variants. 
+
+Representation probes. For the base model and the four format-updated variants, we extract last-non-padding hidden states from all 36 layers on a SEER cancer-type classification of 1,992 sam-ples covering 16 cancer types. We compute layer-wise L2 ratio, layer-wise linear CKA, layer-wise linear-probe accuracy for cancer-type prediction, and final-layer clustering geometry. Table 16 summarizes the fixed extraction and probing settings; the metric definitions are given below in prose. M.1 Representation Extraction and Probing                                   
+
+> Item Setting
+> Backbone Qwen3-4B (qwen3-4B-2507); 36 layers total; hidden size d= 2560 ; bf16. Variants Base model plus four LoRA-updated variants. Probe set SEER 16-class cancer-type subset; 1,992 sam-ples; separate from SEER-Bench. Hidden states Max length 512; batch size 4; last non-padding token at each layer; tensor shape
+> (1992 ,36 ,2560) per model. Linear probe Logistic regression; max_iter=300 ,C= 1 .0,
+> lbfgs ; stratified 80/20 split with seed 42; trained per layer and model. UMAP umap-learn ;nnbr = 30 ,min dist = 0 .1, co-sine metric, seed 42, njobs =−1; final, -2, -4, and -8 layers. Sensitivity nnbr ∈ { 15 ,30 ,50 } × min dist ∈ { 0.0,0.1}
+> with the same metric and seed.
+> Table 16: Fixed implementation settings for hidden-state extraction, linear probing, and UMAP visualization.
+
+The probe set is explicitly separate from SEER-Bench, so these diagnostics characterize represen-tation geometry rather than tune or train on the benchmark. The fixed extraction settings make the layer-wise comparisons meaningful across the base and updated variants. 
+
+M.2 Representation Metrics Layer-wise drift. Cosine distance is computed as 1 − cos( h(f ) 
+
+> ℓ
+
+, h (0)  
+
+> ℓ
+
+) and averaged over the 1,992 samples. The L2 ratio is ∥h(f ) 
+
+> ℓ
+
+− h(0)  
+
+> ℓ
+
+∥2/∥h(0)  
+
+> ℓ
+
+∥2,also averaged over samples. 
+
+CKA. Layer-wise CKA uses the linear HSIC for-mulation, 
+
+CKA( X, Y ) = HSIC( XX ⊤, Y Y ⊤)
+
+√AX AY
+
+,AX = HSIC( XX ⊤, XX ⊤),AY = HSIC( Y Y ⊤, Y Y ⊤),
+
+implemented as torch tensor operations in float32. 
+
+Clustering and compactness. Cosine silhouette is computed in the high-dimensional space with sklearn.metrics.silhouette_score ,
+
+metric=cosine , and a 2,000-point subsample using random_state=42 . UMAP silhouette is computed with Euclidean distance on the 2D UMAP embedding. Davies-Bouldin and Calinski-Harabasz use the standard scikit-learn implementations on all 1,992 samples. Intra-class cosine distance averages pairwise cosine distances within each class using up to 50 samples per class; inter-class cosine distance averages 5,000 random cross-class pairs. 
+
+Aggregated quantities. L2 mean (all 36) aver-ages the per-layer L2 ratio over layers 1 to 36. L2 deep avg averages layers 29 to 36, i.e., the eight deepest transformer layers excluding the final layer. L2 last is the L2 ratio at the final layer (layer 36), and CKA std is the standard deviation of layer-wise CKA over all 36 layers. 
+
+N Diagnostic Controls for Entity Density and Networked Structure 
+
+Section 6.1 shows that EMQ exposes denser clin-ical signals than the single-decision formats. Apotential confound is that entity density and net-worked structure co-vary in EMQ: the shared can-didate pool both increases exposure to related clin-ical entities and creates many-to-many correspon-dences across vignettes. We therefore construct two diagnostic controls to partially separate en-tity exposure from clinically coherent networked grouping. 
+
+Density-matched MSQ. This control increases the entity exposure of MSQ without introducing a shared multi-vignette answer pool. For each MSQ item, we augment the option set with clinically related distractors sampled from the same update cluster until the average number of cancer-related entities in the prompt and answer approximately matches EMQ. The item remains a single-vignette decision, so this control increases density while preserving the non-networked structure of MSQ. 
+
+Shuffled EMQ. This control preserves the sur-face form, candidate-pool size, and approximate entity density of EMQ, but disrupts clinically co-herent grouping. We construct each shuffled block by combining vignettes and answer options from different update clusters while preserving the num-ber of vignettes, options, and old/new answer types. This keeps the high-density shared-pool format but weakens the local clinical relation network. 
+
+Training and evaluation. Both controls use the same base model, update source, number of SFT instances, LoRA configuration, and training bud-get as the main format-controlled experiments. Evaluation follows the same SEER-Bench answer-accuracy and rationale-accuracy protocol. Ta-ble 17 reports training-side entity counts and SEER-Bench performance. 
+
+Interpretation. Increasing entity density alone yields only modest gains over standard MSQ: Variant Entity density Networked structure Q ent. ↑ A ent. ↑ SEER Acc. ↑ Rat. Acc. ↑
+
+MSQ Medium No 10.7 10.6 61.7 55.1 Density-matched MSQ High No 11.3 12.4 62.3 55.8 Shuffled EMQ High Disrupted 11.4 12.5 62.5 56.1 Full EMQ High Yes 11.4 12.6 64.8 59.6 
+
+Table 17: Diagnostic controls for partially decoupling entity density from networked structure. Q ent. and A ent. denote training-side cancer-related entity counts. Density-matched MSQ increases entity exposure without introducing many-to-many matching. Shuffled EMQ preserves high entity density and shared-pool surface form but disrupts clinically coherent grouping. 
+
+density-matched MSQ improves SEER-Bench an-swer accuracy from 61.7 to 62.3 and rationale accu-racy from 55.1 to 55.8. Preserving high density and shared-pool surface form while disrupting coherent grouping also remains below full EMQ: shuffled EMQ reaches 62.5 answer accuracy and 56.1 ra-tionale accuracy, compared with 64.8 and 59.6 for full EMQ. These controls suggest that the EMQ advantage is not explained by entity density alone; it depends on the combination of dense entity ex-posure and clinically coherent networked structure. 
+
+O Additional Analysis Tables 
+
+Table 18 reports final-layer clustering metrics used to examine the ranking disagreement between un-supervised compactness and linear-probe discrim-inability.                                  
+
+> Model Sil. (Cos) Sil. (UMAP) DB ↓CH ↑Probe Acc. ↑
+> Base −0.024 −0.013 4.451 47.88 0.9834 EMQ 0.002 0.014 4.130 55.26 0.9848
+> SAQ 0.008 0.020 4.042 57.61 0.9779 FITB 0.011 0.023 3.994 57.25 0.9834 MSQ 0.008 0.020 4.018 56.89 0.9848
+
+Table 18: Final-layer clustering and probe metrics on the SEER 16-class subset of 1,992 samples. Sil. (Cos) is cosine silhouette in the high-dimensional space; Sil. (UMAP) is Euclidean silhouette on a 2D UMAP embed-ding. Probe Acc. is the final-layer linear-probe accuracy. 
+
+The updated models generally improve cluster-ing compactness over the base model, but the best compactness scores do not perfectly align with the best probe accuracy. This supports the main-text caution that unsupervised geometry and discrimi-native utility capture related but non-identical prop-erties. Table 19 reports UMAP silhouette values for selected layers among the last 8 layers, allowing inspection of whether the clustering trend is consis-tent in the deep layers. The gains are largest at the final layer and                          
+
+> Layer Base EMQ SAQ FITB MSQ
+> Final (L36) −0.013 0.014 0.020 0.023 0.020
+> 2nd-to-last −0.026 −0.001 0.007 0.007 0.006
+> 4th-to-last −0.077 −0.065 −0.060 −0.062 −0.063
+> 8th-to-last −0.094 −0.090 −0.087 −0.089 −0.089
+
+Table 19: UMAP silhouette across selected layers among the last 8 layers. 
+
+shrink in earlier deep layers, suggesting that format-specific updates mainly reshape late representations rather than uniformly reorganizing the full stack. 
+
+P Cross-Scale SEER-Bench Results 
+
+Table 20 reports SEER-Bench answer and ratio-nale accuracy across Qwen3 backbones from 1.7B to 14B. All format-controlled rows use the same update content, adaptation procedure, and training budget within each backbone.                                              
+
+> Backbone Method Acc. ↑Rat. ↑
+> Qwen3-1.7B Base 54.2 46.5 EMQ 60.5 55.1
+> MSQ 58.0 51.2 FITB 57.5 47.5 SAQ 58.6 48.2 Qwen3-4B Base 57.6 50.7 EMQ 64.8 59.6
+> MSQ 61.7 55.1 FITB 61.5 50.9 SAQ 62.7 52.1 Qwen3-8B Base 58.2 51.2 EMQ 65.9 61.0
+> MSQ 63.8 57.6 FITB 62.5 52.8 SAQ 63.6 54.2 Qwen3-14B Base 58.7 51.8 EMQ 67.8 62.3
+> MSQ 64.6 55.5 FITB 63.2 54.2 SAQ 63.5 57.8
+
+Table 20: Cross-scale SEER-Bench results. Within each Qwen3 backbone, rows are compared under the same adaptation setup and training budget. Boldface marks the best value per backbone and metric. Case Study: Update Learning (nsclc-her2) 
+
+1. Source & Domain NCCN NSCLC ERBB2 (HER2) Mutation First-Line Therapy 
+
+2. Clinical Vignette 
+
+A 61-year-old woman, a never-smoker, presents with progressive dyspnea, fatigue, and a 10-pound weight loss over the past two months. Imaging reveals a 4.5 cm right lower lobe lung mass, a malignant pleural effusion, and multiple hepatic lesions. Biopsy confirms metastatic lung adenocarcinoma. Broad-panel molecular profiling of the cancer tissue is positive for an ERBB2 (HER2) mutation, with no other actionable driver alterations identified. She has not received prior systemic therapy for her cancer and maintains an ECOG performance status of 1. 
+
+3. Question 
+
+Given her treatment-naive status, what are the most appropriate first-line therapy options according to the latest version? 
+
+4. Choices A: Systemic therapy 
+
+B: Zongertinib or systemic therapy 
+
+C: Fam-trastuzumab deruxtecan-nxki or zongertinib 
+
+D: Zongertinib or sevabertinib 
+
+E: Ado-trastuzumab emtansine or systemic therapy 
+
+5. Answers From Historical and Latest Versions Answer from historical version: A (ERBB2-mutated metastatic NSCLC routed to standard systemic therapy) 
+
+Answer from latest version: B (Zongertinib is introduced as a preferred first-line option alongside systemic therapy) Answer Changed! 6. Guideline Change ( ∆)
+
+The latest guideline iteration introduces a targeted therapeutic option into the first-line option for treatment-naive metastatic NSCLC harboring an ERBB2 (HER2) mutation. While historical versions restricted initial management to non-targeted systemic therapy, the updated protocol formally includes zongertinib or systemic therapy as appropriate first-line options. 
+
+7. Test Target: Plasticity 
+
+This case evaluates the model’s capacity to successfully update its parametric knowledge and shift its preferred option from A to B . Because the historical answer (A) remains superficially clinically logical, this case serves as a highly challenging task to detect over-conservative model behavior. 
+
+Figure 15: Case nsclc-her2: The guideline revision substantively changes the correct answer from A to B. A correctly updated model must adopt the latest recommendation. Case Study: Four-Format RCC Staging Output Excerpts 
+
+Shared Clinical Vignette. A 70-year-old non-Hispanic white male presents with a two-month history of left-sided flank pain and intermittent painless gross hematuria. Contrast-enhanced CT reveals a 9.0 cm solid enhancing mass in the lower pole of the left kidney. He undergoes left radical nephrectomy and regional lymph-node dissection. Pathology shows ISUP grade 4 clear-cell renal cell carcinoma measuring 90 mm in greatest dimension. The tumor invades the perinephric fat and has gross extension into the main left renal vein, but does not extend beyond Gerota’s fascia. Four regional lymph nodes are examined and are negative. Staging chest CT and bone scan show no distant metastatic disease. What is the appropriate overall stage? 
+
+Choices. A: Stage II; B: Stage III; C: Stage IV; D: Stage I. 
+
+EMQ excerpt (full output: 264 words): B correct 
+
+To determine the appropriate overall stage, apply the applicable RCC TNM staging criteria. . . . The tumor invades the perinephric fat and extends into the main left renal vein , but does not extend beyond Gerota’s fascia. . . . 
+
+T3a includes renal-vein or perirenal-fat invasion without extension beyond Gerota’s fascia. Four regional lymph nodes are negative, so N0 ; chest CT and bone scan show no distant disease, so M0 . Therefore T3aN0M0 maps to 
+
+Stage III . Final answer: B. Stage III. MSQ excerpt (full output: 293 words): B correct 
+
+The appropriate overall prognostic stage is Stage III. . . . The tumor measures 90 mm (9.0 cm), but the decisive feature is that it has invaded the perinephric fat and the main left renal vein . Although it remains within Gerota’s fascia, this pattern is sufficient for a T3a designation . N0 and M0 are established by negative nodes and no distant metastasis, yielding T3aN0M0 and Stage III . Option A is incorrect because Stage II corresponds to T2 disease confined to the kidney; despite the large size, venous and fat invasion upgrade the tumor. Options C and D are rejected by the absence of T4/M1 disease and by tumor size/extension. 
+
+SAQ excerpt (full output: 432 words): B correct 
+
+The tumor is 90 mm, or 9.0 cm, so size alone could suggest T2a. But we cannot just look at size. The tumor invades the perinephric fat and extends into the main left renal vein, so it is no longer limited to the kidney. . . . Because it does not extend beyond Gerota’s fascia , renal-vein and perinephric-fat invasion make this T3a . Four nodes are negative, so N0 ; chest CT and bone scan are negative, so M0 . Gathering the data gives T3a, N0, M0 .Stage I is T1N0M0, Stage II is T2N0M0, and Stage III includes T3N0M0 . Thus the answer is Stage III , option B. FITB excerpt (full output: 450 words): A wrong 
+
+The primary determinants are tumor size, nodal status, and distant metastasis. The key quantitative finding is that 
+
+the tumor measures 9.0 cm, and the T category is determined primarily by the maximum diameter of the primary mass . At 9.0 cm, the tumor falls squarely within the T2a category . Although perinephric-fat invasion and renal-vein involvement are reported, these findings should be regarded as secondary features that do not alter the size-based T staging . The tumor is therefore assigned T2a ; together with negative regional lymph nodes and no distant metastases, this yields T2aN0M0 , corresponding to Stage II . Final answer: A. Stage II. 
+
+Figure 16: Representative RCC staging case rendered across four supervision formats. Each panel shows a highlighted excerpt, with parenthetical word counts reporting the full original output length. Green highlights mark the decisive T3aN0M0 reasoning preserved by EMQ, MSQ, and SAQ; red highlights mark the tumor-size shortcut that makes the FITB response select Stage II incorrectly.
